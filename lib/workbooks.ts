@@ -32,7 +32,7 @@ export async function previewOrders(s:State,m:Member,book:XLSX.WorkBook,sheetNam
  for(const row of body){try{
   const patch:Record<string,any>={};
   for(const [key] of fields){const h=mapping[key];if(!h)continue;const val=rawCell(row.values,headers,h);const cell=sheet[XLSX.utils.encode_cell({r:row.index-1,c:headers.indexOf(h)})];if(cell?.f)throw new Error(`${h}含公式，请先粘贴为值后导入。`);if(clean(val)!=='')patch[key]=normalizeField(key,val);}
-  for(const key of ['orderNo','drawing','color','lens'])if(!patch[key])throw new Error(`${fieldLabels[key]}不能为空。`);
+  for(const key of ['orderNo','drawing','color','lens'])if(!patch[key]&&!clean(rawCell(row.values,headers,'_明细编号')))throw new Error(`${fieldLabels[key]}不能为空。`);
   const rid=clean(rawCell(row.values,headers,'_明细编号')),exportId=clean(rawCell(row.values,headers,'_导出批次'));
   const matches=rid?orders.filter(o=>o.id===rid):orders.filter(o=>businessKey(o)===businessKey(patch));
   if(rid&&!matches.length)throw new Error('系统明细编号不存在，请核对来源。');if(matches.length>1)throw new Error('同键对应多条明细，请使用系统导出的明细编号消歧。');
@@ -58,7 +58,7 @@ export async function previewOrders(s:State,m:Member,book:XLSX.WorkBook,sheetNam
   result.push({index:row.index,status:!before?'new':!changes.length?'skip':conflicts.length?'conflict':'update',reason:conflicts.length?`需核对：${conflicts.map(k=>fieldLabels[k]||k).join('、')}${base?'（与导出后修改冲突）':'（原文件无可靠基线）'}`:'',before,after,changes,expectedVersion:before?.version||0});
  }catch(e){result.push({index:row.index,status:'error',reason:(e as Error).message});}}
  const byKey=new Map<string,PreviewRow[]>();for(const r of result)if(r.after){const key=businessKey(r.after);byKey.set(key,[...(byKey.get(key)||[]),r]);}
- for(const rows of byKey.values())if(rows.length>1)for(const r of rows){r.status='error';r.reason='本文件存在相同订单/图纸/圈色/镜片/批次，请补全交货批次或清除重复行。';}
+ for(const rows of byKey.values())if(rows.length>1&&!(rows.every(r=>r.before)&&new Set(rows.map(r=>r.after.id)).size===rows.length))for(const r of rows){r.status='error';r.reason='本文件存在相同订单/图纸/圈色/镜片/批次，请补全交货批次或清除重复行。';}
  return result;
 }
 export async function previewReports(s:State,m:Member,book:XLSX.WorkBook,sheetName:string,header:number,lensMapping:Record<string,string>,filename:string):Promise<PreviewRow[]>{

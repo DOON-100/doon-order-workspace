@@ -1,3 +1,6 @@
+import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
+import {departmentColumns} from '@/lib/departments';
+import {operationGet,operationPost} from '@/lib/operations';
 import {z} from 'zod';
 import {actor,audit,AppError,bucket,commit,enroll,failure,json,sameOrigin,snapshot} from '@/lib/store';
 import {all,allowedFields,broad,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
@@ -9,12 +12,13 @@ function requirePMC(m:Member){if(!broad(m))throw new AppError('此操作需要 P
 function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r.kind==='order') as Order|undefined;if(!o||!canRead(m,o))throw new AppError('没有此订单明细的访问权限。',403);return o;}
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function filterOrders(orders:Order[],reports:Report[],m:Member,f:Record<string,string>){return orders.filter(o=>{
- const q=clean(f.q).toLowerCase();return (!q||[o.orderNo,o.customer,o.customerPO,o.drawing,o.color,o.lens].some(v=>v.toLowerCase().includes(q)))&&(!f.customer||o.customer===f.customer)&&(!f.owner||o.ownerEmail===f.owner)&&(!f.mine||o.ownerEmail===m.email)&&(!f.status|| (f.status==='unfinished'?packed(o,reports)<o.quantity:f.status==='packed'?packed(o,reports)>=o.quantity: f.status==='late'?!!o.requestedDate&&o.requestedDate<new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})&&packed(o,reports)<o.quantity:true));});}
+ const q=clean(f.q).toLowerCase();return o.lifecycle!=='archived'&&(!q||[o.orderNo,o.customer,o.customerPO,o.drawing,o.color,o.lens].some(v=>v.toLowerCase().includes(q)))&&(!f.customer||o.customer===f.customer)&&(!f.owner||o.ownerEmail===f.owner||ownerLabel(o)===f.owner)&&(!f.mine||o.ownerEmail===m.email)&&(!f.status|| (f.status==='unfinished'?(balance(o,reports)??o.quantity)>0:f.status==='packed'?(balance(o,reports)??o.quantity)<=0: f.status==='late'?!!o.requestedDate&&o.requestedDate<new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})&&(balance(o,reports)??o.quantity)>0:true));});}
 function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.isArray(input))throw new AppError('字段内容无效。');const patch:Record<string,any>={};for(const [k,v] of Object.entries(input)){if(!fields.some(([key])=>key===k))throw new AppError('不支持的修改字段。');try{patch[k]=normalizeField(k,v);}catch(e){throw new AppError(`${fieldLabels[k]}：${(e as Error).message}`);}}return patch;}
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
- if(action==='data')return json({me:m,revision:s.revision,orders,reports:all(s,'report').filter(r=>broad(m)||ids.has(r.lineId)),members:all(s,'member').map(u=>m.role==='admin'?u:{id:u.id,name:u.name,email:u.email,active:u.active,role:u.role}),comments:all(s,'comment').filter(r=>ids.has(r.lineId)),corrections:all(s,'correction').filter(r=>ids.has(r.lineId)),attachments:all(s,'attachment').filter(r=>ids.has(r.lineId)),imports:all(s,'import').filter(r=>broad(m)||r.actorId===m.id).map(({rows,...r})=>({...r,counts:Object.fromEntries(['new','update','conflict','skip','error'].map(k=>[k,rows.filter((r:PreviewRow)=>r.status===k).length]))})).reverse(),audits:all(s,'audit').filter(r=>broad(m)||ids.has(r.lineId)).slice(-250).reverse(),exports:all(s,'export').filter(r=>r.actorId===m.id||broad(m)).map(({lines,...r})=>r).reverse(),asOf:now(),integration:{mode:'file',mesConnected:false,kingdeeConnected:false}});
+ const operation=await operationGet(action,req,s,m);if(operation)return operation;
+ if(action==='data')return json({ledgerImports:all(s,'ledger_import').filter(r=>broad(m)),outsource:all(s,'outsource').filter(r=>ids.has(r.lineId)),receipts:all(s,'receipt').filter(r=>r.lines.some((l:any)=>ids.has(l.lineId))).map(r=>({...r,lines:r.lines.filter((l:any)=>ids.has(l.lineId))})),me:m,revision:s.revision,orders,reports:all(s,'report').filter(r=>broad(m)||ids.has(r.lineId)),members:all(s,'member').map(u=>m.role==='admin'?u:{id:u.id,name:u.name,email:u.email,active:u.active,role:u.role}),comments:all(s,'comment').filter(r=>ids.has(r.lineId)),corrections:all(s,'correction').filter(r=>ids.has(r.lineId)),attachments:all(s,'attachment').filter(r=>ids.has(r.lineId)),imports:all(s,'import').filter(r=>broad(m)||r.actorId===m.id).map(({rows,...r})=>({...r,counts:Object.fromEntries(['new','update','conflict','skip','error'].map(k=>[k,rows.filter((r:PreviewRow)=>r.status===k).length]))})).reverse(),audits:all(s,'audit').filter(r=>broad(m)||ids.has(r.lineId)).slice(-250).reverse(),exports:all(s,'export').filter(r=>r.actorId===m.id||broad(m)).map(({lines,...r})=>r).reverse(),asOf:now(),integration:{mode:'file',mesConnected:false,kingdeeConnected:false}});
  if(action==='job'){const job=s.records.find(r=>r.id===url.searchParams.get('id')&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权访问导入批次。',403);return json(job);}
  if(action==='file'){
   const file=s.records.find(r=>r.id===url.searchParams.get('id')&&['attachment','import','export'].includes(r.kind));if(!file)throw new AppError('文件不存在。',404);
@@ -32,7 +36,7 @@ export async function GET(req:Request,ctx:Context){try{
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
- const m=await actor(s);
+ const m=await actor(s);const operation=await operationPost(action,req,s,m);if(operation)return operation;
  if(['inspect','preview','attachment'].includes(action)){
   const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size)throw new AppError('请选择非空文件。');if(file.size>10*1024*1024)throw new AppError('文件不能超过 10 MB。');
   const bytes=await file.arrayBuffer(),filename=file.name.replace(/[\\/\r\n]/g,'_').slice(0,180);
@@ -63,7 +67,7 @@ export async function POST(req:Request,ctx:Context){try{
   if(rows.some(r=>r.status==='conflict')&&!input.reason.trim())throw new AppError('提交冲突行前，请填写核对依据。');
   const updates:Entity[]=[];
   for(const r of rows){const current=s.records.find(x=>x.id===r.after.id);if((current?.version||0)!==r.expectedVersion)throw new AppError(`第 ${r.index} 行在预览后已被修改，请重新预览。`,409);
-   if(job.importType==='mes')requirePMC(m);else {if(all(s,'order').some(o=>o.id!==r.after.id&&businessKey(o as Order)===businessKey(r.after)))throw new AppError(`第 ${r.index} 行的订单明细已存在，请重新预览，避免重复建单。`,409);if(current){const o=line(s,m,current.id);if(!broad(m)&&r.changes?.some(k=>!allowedFields(m,o).includes(k)))throw new AppError('你的字段权限已改变，请重新预览。',403);}else requirePMC(m);}
+   if(job.importType==='mes')requirePMC(m);else {if(current?.lifecycle==='archived')throw new AppError('已归档订单不能通过工作表覆盖，请先恢复在制。',403);if((!current||businessKey(current as Order)!==businessKey(r.after))&&all(s,'order').some(o=>o.id!==r.after.id&&businessKey(o as Order)===businessKey(r.after)))throw new AppError(`第 ${r.index} 行的订单明细已存在，请重新预览，避免重复建单。`,409);if(current){const o=line(s,m,current.id);if(!broad(m)&&r.changes?.some(k=>!allowedFields(m,o).includes(k)))throw new AppError('你的字段权限已改变，请重新预览。',403);}else requirePMC(m);}
    const next={...r.after,version:(current?.version||0)+1,updatedAt:now(),updatedBy:m.name,source:job.filename};
    updates.push(next,audit(m,next,current||null,job.importType==='mes'?'导入包装报工':'合并工作表',`${job.filename} · ${input.reason||'确认预览'}`));
   }
@@ -81,14 +85,14 @@ export async function POST(req:Request,ctx:Context){try{
   Object.assign(next,{version:o.version+1,updatedAt:now(),updatedBy:m.name});await commit(s.revision,[next,audit(m,next,o,'更新订单跟进')]);return json({ok:true});
  }
  if(action==='comment'){
-  const input=z.object({lineId:z.string(),text:z.string().trim().min(1).max(3000),dueDate:z.string().default('')}).parse(body),o=line(s,m,input.lineId);if(!allowedFields(m,o).length)throw new AppError('没有跟进权限。',403);
+  const input=z.object({lineId:z.string(),text:z.string().trim().min(1).max(3000),dueDate:z.string().default('')}).parse(body),o=line(s,m,input.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);
   const item={id:newId('comment'),kind:'comment',lineId:o.id,text:input.text,dueDate:normalizeField('plannedDate',input.dueDate),done:false,actorId:m.id,actor:m.name,createdAt:now()};await commit(s.revision,[item,audit(m,item,null,'添加跟进')]);return json({ok:true});
  }
  if(action==='task'){
-  const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
+  const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
  }
  if(action==='member'){
-  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(['admin','pmc','clerk','sales','viewer']),customers:z.array(z.string().trim().min(1).max(100)).max(200),active:z.boolean()}).parse(body);
+  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(['admin','pmc','clerk','sales','viewer']),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
   const existing=input.id?s.records.find(r=>r.id===input.id&&r.kind==='member'):undefined;if(input.id&&!existing)throw new AppError('成员不存在。');
   if(existing?.owner&&(!input.active||input.role!=='admin'||email(input.email)!==existing.email))throw new AppError('初始管理员的角色、邮箱和启用状态不可在此更改。');
   if(existing&&email(input.email)!==existing.email)throw new AppError('已建立成员不能更换邮箱，请新增成员。');
@@ -117,11 +121,11 @@ export async function POST(req:Request,ctx:Context){try{
   if(input.type==='completion'){
    title='包装完工明细';rows=allReports.filter(r=>ids.has(r.lineId)&&validApproval(r)&&(!input.filters.from||r.reportedAt.slice(0,10)>=input.filters.from)&&(!input.filters.to||r.reportedAt.slice(0,10)<=input.filters.to)).map(r=>{const o=orders.find(o=>o.id===r.lineId)!;return {'客户':o.customer,'订单号':o.orderNo,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'报工编号':r.nativeId||r.id,'工单号':r.workOrder,'良品数':r.quantity,'报工时间':r.reportedAt,'审批状态':r.approval,'来源文件':r.source,'数据截止时间':createdAt};});
   }else if(input.type==='customer'||input.type==='progress'){
-   title=input.type==='customer'?'客户交期回复表':'客户订单进度表';rows=orders.map(o=>({'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'订单数量':o.quantity,'客户要求交期':o.requestedDate,'已确认回复交期':o.promiseConfirmed?o.promisedDate:'待确认','包装完成数量':packed(o,allReports),'剩余数量':Math.max(0,o.quantity-packed(o,allReports)),'分批交货安排':o.arrangement,'对客备注':o.customerNote,'数据截止时间':createdAt,'回复版本':exportId}));
+   title=input.type==='customer'?'客户交期回复表':'客户订单进度表';rows=orders.map(o=>({'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'订单数量':o.quantity,'客户要求交期':o.requestedDate,'已确认回复交期':o.promiseConfirmed?o.promisedDate:'待确认','包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'分批交货安排':o.arrangement,'对客备注':o.customerNote,'数据截止时间':createdAt,'回复版本':exportId}));
   }else if(input.type==='working'){
    if(m.role==='viewer')throw new AppError('只读成员可导出报表，不能导出可回传工作表。',403);
    title='订单工作表';rows=orders.map(o=>({...Object.fromEntries(fields.map(([k,l])=>[l,k==='promiseConfirmed'?(o[k]?'是':'否'):o[k]])),...o.extra,'_明细编号':o.id,'_版本':o.version,'_导出批次':exportId}));
-  }else{title='订单完工汇总';rows=orders.map(o=>({'订单号':o.orderNo,'客户':o.customer,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'负责人邮箱':o.ownerEmail,'订单数量':o.quantity,'包装完成数量':packed(o,allReports),'剩余数量':Math.max(0,o.quantity-packed(o,allReports)),'状态':progress(o,allReports),'客户要求交期':o.requestedDate,'数据截止时间':createdAt}));}
+  }else{title='订单进度汇总';rows=orders.map(o=>({'订单号':o.orderNo,'客户':o.customer,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'负责人邮箱':o.ownerEmail,'订单数量':o.quantity,'包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'状态':o.ledger?currentStage(o):progress(o,allReports),'客户要求交期':o.requestedDate,'数据截止时间':createdAt}));}
   const bytes=makeWorkbook(rows,title,rows.length?undefined:['当前筛选无数据']),filename=`${title}_${createdAt.slice(0,10)}.xlsx`,fileKey=newId('exportfile');
   await bucket().put(fileKey,bytes);await commit(s.revision,[{id:exportId,kind:'export',reportType:input.type,filename,fileKey,actorId:m.id,actor:m.name,createdAt,filters:input.filters,count:rows.length,orderIds:orders.map(o=>o.id),lines:input.type==='working'?orders:[],revision:s.revision}]);
   return fileResponse(bytes,filename);

@@ -12,7 +12,7 @@ for(const name of (await fs.readdir('drizzle')).filter(n=>n.endsWith('.sql')).so
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:db.prepare(this.sql).all(...this.args)};}async run(){return db.prepare(this.sql).run(...this.args);}}
 const files=new Map(),identity=new AsyncLocalStorage();
 globalThis.__testIdentity=identity;
-globalThis.__testEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=[];for(const s of statements)results.push(db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key)}:null}};
+globalThis.__testEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=[];for(const s of statements)results.push(db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key),json:async()=>JSON.parse(files.get(key))}:null}};
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:'test-output/api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'test-only-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'cloudflare',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return globalThis.__testIdentity.getStore()||null}':'export const env=globalThis.__testEnv;'}));}}]});
 const api=await import('../test-output/api.mjs');
 const admin={userId:'test_admin',email:'admin@test.invalid',displayName:'测试 PMC',fullName:'测试 PMC'},clerk={userId:'test_clerk',email:'clerk@test.invalid',displayName:'测试文员',fullName:'测试文员'},sales={userId:'test_sales',email:'sales@test.invalid',displayName:'测试客服',fullName:'测试客服'};
@@ -51,3 +51,39 @@ await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.lengt
 console.log(`\n${checks.length} business checks passed.`);
 const parallelRow={...initial[1],'订单号':'TEST-PARALLEL'};const pendingA=await preview([parallelRow]),pendingB=await preview([parallelRow]);await ok('commit-import',{id:pendingA.id,selected:[2]});assert.equal((await call('commit-import',{id:pendingB.id,selected:[2]})).status,409);pass('两个待提交预览不能各自创建同一业务明细');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
+
+// Departmental ledger, archive and supplier receipt regressions.
+const ledgerBook=XLSX.utils.book_new(),ledgerSheet={};
+const header={I:'订单号',M:'订单数量',BF:'包装入仓数量'};
+for(const [c,v] of Object.entries(header))ledgerSheet[c+'3']={t:'s',v};
+const ledgerValues={A:'测试厂',B:'测试跟单',C:'测试客户甲',D:'AAA',I:'LEDGER-TEST-01',J:'DN-LEDGER',L:'C1',H:'白片',M:100,T:46200,U:46200,AF:46100,AG:30,AH:46101,AI:20,AJ:46102,AL:10,AM:46103,AR:20,BF:5,P:90};
+for(const [c,v] of Object.entries(ledgerValues))ledgerSheet[c+'4']={t:typeof v==='number'?'n':'s',v};
+ledgerSheet['!ref']='A1:DH4';XLSX.utils.book_append_sheet(ledgerBook,ledgerSheet,'动态表');
+const ledgerBytes=XLSX.write(ledgerBook,{type:'buffer',bookType:'xlsx'});
+async function original(bytes,mode='active',name='测试原表.xlsx'){const form=new FormData();form.set('file',new File([bytes],name));form.set('mode',mode);return ok('ledger-preview',form);}
+let ledgerJob=await original(ledgerBytes);assert.equal(ledgerJob.total,1);ledgerJob=await ok('ledger-commit',{id:ledgerJob.id,offset:0});await ok('ledger-commit',{id:ledgerJob.id,offset:0});assert.equal(ledgerJob.status,'已完成');assert.equal((await original(ledgerBytes)).id,ledgerJob.id);
+let ledger=(await state()).orders.find(o=>o.orderNo==='LEDGER-TEST-01');assert.equal(ledger.ledger.columns.P,'90');assert.equal(ledger.quantity-Number(ledger.ledger.columns.BF),95);pass('原版工作簿重复导入幂等，原表欠数缓存独立保留');
+let member=(await state()).members.find(m=>m.email===clerk.email);await ok('member',{...member,departments:['plating'],customers:[],active:true});
+assert((await ok('data',undefined,clerk)).orders.some(o=>o.id===ledger.id));
+assert.equal((await call('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AG:'99'},reason:'跨部门修改'},clerk)).status,403);
+await ok('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AL:'12',AM:'2026-09-14'},reason:'本部门核对'},clerk);ledger=(await state()).orders.find(o=>o.id===ledger.id);
+assert.equal(ledger.ledger.columns.AL,'12');assert.equal((await call('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AP:'2026-09-01'},reason:'改自动字段'},clerk)).status,403);pass('电镀仓只可修改本部门字段，跨部门与自动字段均被拦截');
+assert.equal((await call('ledger-edit',{id:ledger.id,version:1,patch:{AL:'1'},reason:'旧版本'},clerk)).status,409);pass('部门工序拒绝过期版本覆盖');
+const outsource={lineId:ledger.id,supplier:'测试供应商',process:'plating',quantity:40,sentDate:'2026-09-10',dueDate:'2026-09-16',reference:'OUT-TEST-01',token:crypto.randomUUID()};await ok('outsource-create',outsource,clerk);await ok('outsource-create',outsource,clerk);let external=(await state()).outsource[0];assert.equal((await state()).outsource.length,1);
+const image=new FormData();image.set('file',new File([Uint8Array.from([0xff,0xd8,0xff,0xe0,1,2,3,4])],'delivery.jpg'));const photo=await ok('receipt-photo',image,clerk);
+const receipt={photoId:photo.id,supplier:'测试供应商',deliveryNo:'DEL-TEST-01',receivedDate:'2026-09-14',note:'验收记录',token:crypto.randomUUID(),lines:[{outsourceId:external.id,accepted:15,rejected:2}]};await ok('receipt-confirm',receipt,clerk);await ok('receipt-confirm',receipt,clerk);
+external=(await state()).outsource[0];ledger=(await state()).orders.find(o=>o.id===ledger.id);assert.equal(external.received,15);assert.equal(external.quantity-external.received,25);assert.equal(ledger.ledger.columns.AL,'27');assert.equal((await state()).receipts.length,1);pass('分批合格收货原子消数并累计到对应工序，不良数量不消数，重试不重复入账');
+assert.equal((await call('receipt-confirm',{...receipt,token:crypto.randomUUID()},clerk)).status,400);
+const photo2form=new FormData();photo2form.set('file',new File([Uint8Array.from([0xff,0xd8,0xff,0xe0,5,6,7])],'delivery2.jpg'));const photo2=await ok('receipt-photo',photo2form,clerk);
+assert.equal((await call('receipt-confirm',{...receipt,photoId:photo2.id,deliveryNo:'DEL-TEST-02',token:crypto.randomUUID(),lines:[{outsourceId:external.id,accepted:26,rejected:0}]},clerk)).status,400);assert.equal((await state()).outsource[0].received,15);pass('同张送货单与超外发余欠收货被拦截，失败无部分写入');
+await ok('ledger-lifecycle',{id:ledger.id,version:ledger.version,mode:'archived',reason:'客户确认短结测试',closedDate:'2026-09-14'});ledger=(await state()).orders.find(o=>o.id===ledger.id);
+assert.equal((await call('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AL:'30'},reason:'归档编辑'},clerk)).status,403);
+const workingExport=await call('export',{type:'summary',filters:{}});const wb2=XLSX.read(await workingExport.arrayBuffer());assert(!XLSX.utils.sheet_to_json(wb2.Sheets[wb2.SheetNames[0]]).some(r=>r['订单号']==='LEDGER-TEST-01'));
+const archiveExport=await call('ledger-export?mode=archived');const wb3=XLSX.read(await archiveExport.arrayBuffer());assert.equal(XLSX.utils.sheet_to_json(wb3.Sheets[wb3.SheetNames[0]]).length,1);
+await ok('ledger-lifecycle',{id:ledger.id,version:ledger.version,mode:'active',reason:'恢复在制测试',closedDate:''});assert.equal((await state()).orders.find(o=>o.id===ledger.id).lifecycle,'active');pass('归档保留凭证与余欠，排除在制报表，恢复沿用同一明细编号');
+if(process.env.DOON_TEST_ORIGINALS==='1'){
+ const manifestPath=process.env.DOON_TEST_ORIGINALS_MANIFEST;if(!manifestPath)throw new Error('Set DOON_TEST_ORIGINALS_MANIFEST to an ignored local JSON file of [path,mode,rowCount,quantity] entries.');const supplied=JSON.parse(await fs.readFile(manifestPath,'utf8'));
+ for(const [path,mode,count,quantity] of supplied){let j=await original(await fs.readFile(path),mode,path.split('/').at(-1));assert.equal(j.summary.rows,count);assert.equal(j.summary.quantity,quantity);while(j.status!=='已完成')j=await ok('ledger-commit',{id:j.id,offset:j.offset});const stateNow=await state();const imported=stateNow.orders.filter(o=>o.ledger?.sourceHash===j.hash&&o.lifecycle===mode);assert.equal(imported.length,count);console.log('Verified supplied workbook',mode,count,quantity);}
+ pass('另行提供的本地工作簿行数与数量校验通过');
+}
+console.log('Total business checks:',checks.length);

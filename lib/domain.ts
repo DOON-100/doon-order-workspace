@@ -1,12 +1,12 @@
 export type Role='admin'|'pmc'|'clerk'|'sales'|'viewer';
 export const roleLabels:Record<Role,string>={admin:'管理员',pmc:'PMC',clerk:'文员 / 跟单',sales:'客服 / 销售',viewer:'只读成员'};
-export type Member={id:string;kind:'member';email:string;name:string;role:Role;customers:string[];userId:string;active:boolean;owner?:boolean;createdAt:string};
+export type Member={id:string;kind:'member';email:string;name:string;role:Role;customers:string[];userId:string;active:boolean;owner?:boolean;departments?:string[];createdAt:string};
 export const fields = [
  ['orderNo','订单号'],['customer','客户'],['customerPO','客户 PO'],['drawing','图纸编号'],['color','圈色'],['lens','镜片类型'],['batch','交货批次'],['quantity','订单数量'],['requestedDate','客户要求交期'],['ownerEmail','负责人邮箱'],['stage','计划阶段'],['plannedDate','预计完工日'],['shipDate','预计可出货日'],['promisedDate','回复交期'],['promiseConfirmed','交期已确认'],['customerNote','对客备注'],['arrangement','分批交货安排'],['notes','内部跟进备注'],['sourceStatus','订单来源状态'],
 ] as const;
 export const fieldLabels:Record<string,string>=Object.fromEntries(fields);
 export const stages=['待下达','备料中','生产中','表面处理','装配中','包装中','待核验关闭','暂停'];
-export type Order={id:string;kind:'order';version:number;createdAt:string;updatedAt:string;updatedBy:string;source:string;orderNo:string;customer:string;customerPO:string;drawing:string;color:string;lens:string;batch:string;quantity:number;requestedDate:string;ownerEmail:string;stage:string;plannedDate:string;shipDate:string;promisedDate:string;promiseConfirmed:boolean;customerNote:string;arrangement:string;notes:string;sourceStatus:string;extra:Record<string,string>};
+export type Order={id:string;kind:'order';version:number;createdAt:string;updatedAt:string;updatedBy:string;source:string;orderNo:string;customer:string;customerPO:string;drawing:string;color:string;lens:string;batch:string;quantity:number;requestedDate:string;ownerEmail:string;stage:string;plannedDate:string;shipDate:string;promisedDate:string;promiseConfirmed:boolean;customerNote:string;arrangement:string;notes:string;sourceStatus:string;extra:Record<string,string>;ledger?:Ledger;lifecycle?:'active'|'archived';archivedAt?:string;closedDate?:string;archiveReason?:string};
 export type Report={id:string;kind:'report';version:number;lineId:string;orderNo:string;drawing:string;color:string;lens:string;workOrder:string;task:string;process:string;batch:string;startedAt:string;reportedAt:string;quantity:number;approval:string;nativeId:string;identityType:string;source:string;updatedAt:string;updatedBy:string};
 export type Entity={id:string;kind:string;[key:string]:any};
 export type State={revision:number;records:Entity[]};
@@ -18,8 +18,9 @@ export const clean=(x:unknown)=>String(x??'').normalize('NFKC').trim();
 export const email=(x:unknown)=>clean(x).toLowerCase();
 export const businessKey=(x:Partial<Order>)=>[x.orderNo,x.drawing,x.color,x.lens,x.batch].map(v=>clean(v).toUpperCase()).join('\u001f');
 export const broad=(m:Member)=>m.role==='admin'||m.role==='pmc';
-export function canRead(m:Member,o:Order){return broad(m)||o.ownerEmail===m.email||m.customers.includes(o.customer);}
+export function canRead(m:Member,o:Order){return broad(m)||o.ownerEmail===m.email||m.customers.includes(o.customer)||(m.role==='clerk'&&!!o.ledger&&!!m.departments?.length);}
 export function allowedFields(m:Member,o:Order):string[]{
+ if(o.lifecycle==='archived')return [];
  if(!canRead(m,o)||m.role==='viewer')return [];
  if(broad(m))return ['ownerEmail','stage','plannedDate','shipDate','notes','promisedDate','promiseConfirmed','customerNote','arrangement'];
  if(m.role==='sales')return ['notes','promisedDate','promiseConfirmed','customerNote','arrangement'];
@@ -55,3 +56,5 @@ export function mergeFields(current:Order,base:Order,patch:Record<string,any>){
  return {next,conflicts};
 }
 export const customerFields=['orderNo','customer','customerPO','drawing','color','lens','batch','quantity','requestedDate','promisedDate','arrangement','customerNote'];
+
+export type Ledger={columns:Record<string,string>;sourceRow:number;sheet:string;filename:string;sourceHash:string;issues:string[];ownerName:string;originalOutstanding:string};
