@@ -1,0 +1,6 @@
+import fs from 'node:fs/promises';
+import * as XLSX from 'xlsx';
+await fs.mkdir('test-output',{recursive:true});
+const rows=[{'订单号':'DEMO-2026-001','客户':'演示客户 A（测试）','客户 PO':'DEMO-PO-001','图纸编号':'DEMO-DN1731','圈色':'1YW1002A','镜片类型':'太阳片','交货批次':'首批','订单数量':120,'负责人邮箱':'seedy@sites.test','客户要求交期':'2026-09-28','回复交期':'2026-09-27','交期已确认':'是','计划阶段':'包装中','内部跟进备注':'演示数据，不用于生产','对客备注':'按确认交期安排','生产厂':'度昂（演示）'},{'订单号':'DEMO-2026-002','客户':'演示客户 B（测试）','客户 PO':'DEMO-PO-002','图纸编号':'DEMO-DN2079','圈色':'2BG01','镜片类型':'白片','订单数量':240,'负责人邮箱':'seedy@sites.test','客户要求交期':'2026-10-05','计划阶段':'装配中','内部跟进备注':'仅供功能验证，不代表真实订单','生产厂':'度昂（演示）'}];
+const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows),'测试订单');await fs.writeFile('test-output/演示订单_仅测试.xlsx',XLSX.write(book,{type:'buffer',bookType:'xlsx'}));
+const mes=XLSX.utils.book_new();XLSX.utils.book_append_sheet(mes,XLSX.utils.json_to_sheet([{'报工编号':'DEMO-MES-001','订单号':'DEMO-2026-001','图纸编号':'DEMO-DN1731','圈色':'1YW1002A','镜片类型':'太阳片','良品数':60,'报工时间':'2026-09-14 09:10:00','审批状态':'已审批','工单号':'DEMO-WO-001'}]),'测试包装');await fs.writeFile('test-output/演示包装_仅测试.xlsx',XLSX.write(mes,{type:'buffer',bookType:'xlsx'}));
