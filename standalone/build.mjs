@@ -1,0 +1,11 @@
+import {build as viteBuild} from 'vite';
+import react from '@vitejs/plugin-react';
+import {build} from 'esbuild';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const root=process.cwd(),dir=path.join(root,'standalone'),out=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist');
+await fs.mkdir(out,{recursive:true});
+await viteBuild({configFile:false,root:dir,plugins:[react()],resolve:{alias:{'@':root}},publicDir:path.join(root,'public'),css:{postcss:path.join(root,'postcss.config.mjs')},build:{outDir:path.join(out,'client'),emptyOutDir:true}});
+await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(out,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
+for(const file of ['runtime.mjs','auth.mjs','server.mjs','manage.mjs'])await fs.copyFile(path.join(dir,file),path.join(out,file));
+console.log('内网版构建完成：'+out);

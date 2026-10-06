@@ -1,10 +1,14 @@
+import {commitImport} from '@/lib/import-commit';
 import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
 import {departmentColumns} from '@/lib/departments';
 import {operationGet,operationPost} from '@/lib/operations';
+import {syncFollowColumns} from '@/lib/ledger-edit';
+import {orderExportExtras} from '@/lib/order-export';
 import {z} from 'zod';
 import {actor,audit,AppError,bucket,commit,enroll,failure,json,sameOrigin,snapshot} from '@/lib/store';
-import {all,allowedFields,broad,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
-import {makeWorkbook,openWorkbook,previewOrders,previewReports,sha,sheetRows,suggestMapping} from '@/lib/workbooks';
+import {all,allowedFields,broad,readsAllOrders,roles,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,productTypeOf,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
+import {makeWorkbook,openWorkbook,previewOrders,previewReports,sha,sheetRows,suggestMapping,isOriginalLedger,detectHeader} from '@/lib/workbooks';
+import {canSeeSupplierPrice} from '@/lib/suppliers';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -12,13 +16,13 @@ function requirePMC(m:Member){if(!broad(m))throw new AppError('此操作需要 P
 function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r.kind==='order') as Order|undefined;if(!o||!canRead(m,o))throw new AppError('没有此订单明细的访问权限。',403);return o;}
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function filterOrders(orders:Order[],reports:Report[],m:Member,f:Record<string,string>){return orders.filter(o=>{
- const q=clean(f.q).toLowerCase();return o.lifecycle!=='archived'&&(!q||[o.orderNo,o.customer,o.customerPO,o.drawing,o.color,o.lens].some(v=>v.toLowerCase().includes(q)))&&(!f.customer||o.customer===f.customer)&&(!f.owner||o.ownerEmail===f.owner||ownerLabel(o)===f.owner)&&(!f.mine||o.ownerEmail===m.email)&&(!f.status|| (f.status==='unfinished'?(balance(o,reports)??o.quantity)>0:f.status==='packed'?(balance(o,reports)??o.quantity)<=0: f.status==='late'?!!o.requestedDate&&o.requestedDate<new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})&&(balance(o,reports)??o.quantity)>0:true));});}
+ const q=clean(f.q).toLowerCase();return o.lifecycle!=='archived'&&(!q||[o.orderNo,o.customer,o.customerPO,o.drawing,o.color,o.lens,productTypeOf(o)].some(v=>v.toLowerCase().includes(q)))&&(!f.customer||o.customer===f.customer)&&(!f.owner||o.ownerEmail===f.owner||ownerLabel(o)===f.owner)&&(!f.mine||o.ownerEmail===m.email)&&(!f.status|| (f.status==='unfinished'?(balance(o,reports)??o.quantity)>0:f.status==='packed'?(balance(o,reports)??o.quantity)<=0: f.status==='late'?!!o.requestedDate&&o.requestedDate<new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})&&(balance(o,reports)??o.quantity)>0:true));});}
 function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.isArray(input))throw new AppError('字段内容无效。');const patch:Record<string,any>={};for(const [k,v] of Object.entries(input)){if(!fields.some(([key])=>key===k))throw new AppError('不支持的修改字段。');try{patch[k]=normalizeField(k,v);}catch(e){throw new AppError(`${fieldLabels[k]}：${(e as Error).message}`);}}return patch;}
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const operation=await operationGet(action,req,s,m);if(operation)return operation;
- if(action==='data')return json({ledgerImports:all(s,'ledger_import').filter(r=>broad(m)),outsource:all(s,'outsource').filter(r=>ids.has(r.lineId)),receipts:all(s,'receipt').filter(r=>r.lines.some((l:any)=>ids.has(l.lineId))).map(r=>({...r,lines:r.lines.filter((l:any)=>ids.has(l.lineId))})),me:m,revision:s.revision,orders,reports:all(s,'report').filter(r=>broad(m)||ids.has(r.lineId)),members:all(s,'member').map(u=>m.role==='admin'?u:{id:u.id,name:u.name,email:u.email,active:u.active,role:u.role}),comments:all(s,'comment').filter(r=>ids.has(r.lineId)),corrections:all(s,'correction').filter(r=>ids.has(r.lineId)),attachments:all(s,'attachment').filter(r=>ids.has(r.lineId)),imports:all(s,'import').filter(r=>broad(m)||r.actorId===m.id).map(({rows,...r})=>({...r,counts:Object.fromEntries(['new','update','conflict','skip','error'].map(k=>[k,rows.filter((r:PreviewRow)=>r.status===k).length]))})).reverse(),audits:all(s,'audit').filter(r=>broad(m)||ids.has(r.lineId)).slice(-250).reverse(),exports:all(s,'export').filter(r=>r.actorId===m.id||broad(m)).map(({lines,...r})=>r).reverse(),asOf:now(),integration:{mode:'file',mesConnected:false,kingdeeConnected:false}});
+ if(action==='data')return json({customerAccounts:all(s,'customer_account'),collaborationTemplates:all(s,'collaboration_template').map(({fileKey,...r})=>r),losses:all(s,'loss').filter(r=>ids.has(r.lineId)),suppliers:all(s,'supplier').filter(v=>readsAllOrders(m)||all(s,'outsource').some(x=>ids.has(x.lineId)&&x.supplier===v.name)),supplierQuotes:canSeeSupplierPrice(m)?all(s,'supplier_quote'):[],supplierFollowups:all(s,'supplier_followup').filter(v=>ids.has(v.lineId)),ledgerImports:all(s,'ledger_import').filter(r=>broad(m)),outsource:all(s,'outsource').filter(r=>ids.has(r.lineId)),receipts:all(s,'receipt').filter(r=>r.lines.some((l:any)=>ids.has(l.lineId))).map(r=>({...r,lines:r.lines.filter((l:any)=>ids.has(l.lineId))})),me:m,revision:s.revision,orders,reports:all(s,'report').filter(r=>readsAllOrders(m)||ids.has(r.lineId)),members:all(s,'member').map(u=>m.role==='admin'?u:{id:u.id,name:u.name,email:u.email,active:u.active,role:u.role}),comments:all(s,'comment').filter(r=>ids.has(r.lineId)),corrections:all(s,'correction').filter(r=>ids.has(r.lineId)),attachments:all(s,'attachment').filter(r=>ids.has(r.lineId)),imports:all(s,'import').filter(r=>broad(m)||r.actorId===m.id).map(({rows,...r})=>({...r,counts:Object.fromEntries(['new','update','conflict','skip','error'].map(k=>[k,rows.filter((r:PreviewRow)=>r.status===k).length]))})).reverse(),audits:all(s,'audit').filter(r=>broad(m)||ids.has(r.lineId)).slice(-250).reverse(),exports:all(s,'export').filter(r=>r.actorId===m.id||broad(m)).map(({lines,...r})=>r).reverse(),asOf:now(),integration:{mode:'file',mesConnected:false,kingdeeConnected:false}});
  if(action==='job'){const job=s.records.find(r=>r.id===url.searchParams.get('id')&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权访问导入批次。',403);return json(job);}
  if(action==='file'){
   const file=s.records.find(r=>r.id===url.searchParams.get('id')&&['attachment','import','export'].includes(r.kind));if(!file)throw new AppError('文件不存在。',404);
@@ -36,7 +40,7 @@ export async function GET(req:Request,ctx:Context){try{
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
- const m=await actor(s);const operation=await operationPost(action,req,s,m);if(operation)return operation;
+ const m=await actor(s);if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;
  if(['inspect','preview','attachment'].includes(action)){
   const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size)throw new AppError('请选择非空文件。');if(file.size>10*1024*1024)throw new AppError('文件不能超过 10 MB。');
   const bytes=await file.arrayBuffer(),filename=file.name.replace(/[\\/\r\n]/g,'_').slice(0,180);
@@ -46,10 +50,11 @@ export async function POST(req:Request,ctx:Context){try{
    const item={id:newId('file'),kind:'attachment',lineId:o.id,filename,fileKey:newId('attachment'),actorId:m.id,actor:m.name,size:file.size,createdAt:now(),contentType:'application/octet-stream'};
    await bucket().put(item.fileKey,bytes);await commit(s.revision,[item,audit(m,item,null,'添加附件')]);return json({ok:true});
   }
-  if(m.role==='viewer'||m.role==='sales')throw new AppError('此角色无工作表导入权限。',403);
+  if(!['admin','pmc','clerk','sales'].includes(m.role))throw new AppError('权限受限：业务、客服、PMC 或管理员可上传订单表。',403);
   if(!/\.(xlsx|xls|csv)$/i.test(filename))throw new AppError('请上传 XLSX、XLS 或 CSV 工作表。');
-  const book=openWorkbook(bytes),sheetName=clean(form.get('sheet'))||book.SheetNames[0],header=Number(form.get('header')||1),parsed=sheetRows(book,sheetName,header);
-  if(action==='inspect')return json({sheets:book.SheetNames,sheet:sheetName,header,headers:parsed.headers,rowCount:parsed.body.length,mapping:suggestMapping(parsed.headers),sample:parsed.body.slice(0,3)});
+  const book=openWorkbook(bytes),original=form.get('type')!=='mes'&&isOriginalLedger(book),sheetName=clean(form.get('sheet'))||(original?'动态表':book.SheetNames[0]),header=clean(form.get('header'))?Number(form.get('header')):(original?3:detectHeader(book,sheetName)),parsed=sheetRows(book,sheetName,header);
+  if(action==='preview'&&original)throw new AppError('已识别度昂原版工作簿，请使用“度昂原版工作簿导入”，由系统自动分批。');
+  if(action==='inspect')return json({format:original?'doon-ledger':'standard',sheets:book.SheetNames,sheet:sheetName,header,headers:parsed.headers,rowCount:parsed.body.length,mapping:suggestMapping(parsed.headers),sample:parsed.body.slice(0,3)});
   let map:Record<string,string>,lensMap:Record<string,string>;try{map=z.record(z.string().max(200)).parse(JSON.parse(clean(form.get('mapping'))||'{}'));lensMap=z.record(z.string().max(50)).parse(JSON.parse(clean(form.get('lensMapping'))||'{}'));}catch{throw new AppError('字段映射无效。');}
   const kind=form.get('type')==='mes'?'mes':'orders';
   const rows=kind==='mes'?await previewReports(s,m,book,sheetName,header,lensMap,filename):await previewOrders(s,m,book,sheetName,header,map,filename);
@@ -57,23 +62,7 @@ export async function POST(req:Request,ctx:Context){try{
   await bucket().put(job.fileKey,bytes);await commit(s.revision,[job]);return json(job);
  }
  const body=await req.json();
- if(action==='commit-import'){
-  const input=z.object({id:z.string(),selected:z.array(z.number().int()).max(200),reason:z.string().max(1000).default('')}).parse(body);
-  const job=s.records.find(r=>r.id===input.id&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权提交此导入批次。',403);
-  if(job.status==='已提交')return json({ok:true,reused:true,count:job.applied});
-  if(Date.now()-Date.parse(job.createdAt)>24*3600000)throw new AppError('预览已超过 24 小时，请重新上传核对。');
-  const selected=new Set(input.selected),rows=(job.rows as PreviewRow[]).filter(r=>selected.has(r.index));if(!rows.length)throw new AppError('请至少选择一条可提交记录。');
-  if(rows.some(r=>!['new','update','conflict'].includes(r.status)))throw new AppError('存在不可提交的行。');
-  if(rows.some(r=>r.status==='conflict')&&!input.reason.trim())throw new AppError('提交冲突行前，请填写核对依据。');
-  const updates:Entity[]=[];
-  for(const r of rows){const current=s.records.find(x=>x.id===r.after.id);if((current?.version||0)!==r.expectedVersion)throw new AppError(`第 ${r.index} 行在预览后已被修改，请重新预览。`,409);
-   if(job.importType==='mes')requirePMC(m);else {if(current?.lifecycle==='archived')throw new AppError('已归档订单不能通过工作表覆盖，请先恢复在制。',403);if((!current||businessKey(current as Order)!==businessKey(r.after))&&all(s,'order').some(o=>o.id!==r.after.id&&businessKey(o as Order)===businessKey(r.after)))throw new AppError(`第 ${r.index} 行的订单明细已存在，请重新预览，避免重复建单。`,409);if(current){const o=line(s,m,current.id);if(!broad(m)&&r.changes?.some(k=>!allowedFields(m,o).includes(k)))throw new AppError('你的字段权限已改变，请重新预览。',403);}else requirePMC(m);}
-   const next={...r.after,version:(current?.version||0)+1,updatedAt:now(),updatedBy:m.name,source:job.filename};
-   updates.push(next,audit(m,next,current||null,job.importType==='mes'?'导入包装报工':'合并工作表',`${job.filename} · ${input.reason||'确认预览'}`));
-  }
-  updates.push({...job,status:'已提交',applied:rows.length,committedAt:now(),committedBy:m.name,reviewReason:input.reason,selected:[...selected]});
-  await commit(s.revision,updates);return json({ok:true,count:rows.length});
- }
+ if(action==='commit-import')return await commitImport(body,s,m);
  if(action==='edit-order'){
   const input=z.object({id:z.string(),version:z.number().int(),patch:z.record(z.unknown())}).parse(body),o=line(s,m,input.id),patch=validatePatch(input.patch),permitted=allowedFields(m,o);
   for(const k of Object.keys(patch))if(!permitted.includes(k))throw new AppError(`无权在线修改${fieldLabels[k]}；正式订单信息请从金蝶源单更正后导入。`,403);
@@ -82,7 +71,7 @@ export async function POST(req:Request,ctx:Context){try{
   const {next,conflicts}=mergeFields(o,base,patch);if(conflicts.length)throw new AppError(`以下字段已被修改：${conflicts.map(k=>fieldLabels[k]).join('、')}。请刷新详情并核对。`,409);
   if(next.promiseConfirmed&&!next.promisedDate)throw new AppError('请先填写回复交期。');
   if(JSON.stringify({...next,version:0})===JSON.stringify({...o,version:0}))return json({ok:true,unchanged:true});
-  Object.assign(next,{version:o.version+1,updatedAt:now(),updatedBy:m.name});await commit(s.revision,[next,audit(m,next,o,'更新订单跟进')]);return json({ok:true});
+  Object.assign(next,{version:o.version+1,updatedAt:now(),updatedBy:m.name});const synced=syncFollowColumns(next);await commit(s.revision,[synced,audit(m,synced,o,'更新订单跟进')]);return json({ok:true});
  }
  if(action==='comment'){
   const input=z.object({lineId:z.string(),text:z.string().trim().min(1).max(3000),dueDate:z.string().default('')}).parse(body),o=line(s,m,input.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);
@@ -92,7 +81,7 @@ export async function POST(req:Request,ctx:Context){try{
   const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
  }
  if(action==='member'){
-  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(['admin','pmc','clerk','sales','viewer']),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
+  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
   const existing=input.id?s.records.find(r=>r.id===input.id&&r.kind==='member'):undefined;if(input.id&&!existing)throw new AppError('成员不存在。');
   if(existing?.owner&&(!input.active||input.role!=='admin'||email(input.email)!==existing.email))throw new AppError('初始管理员的角色、邮箱和启用状态不可在此更改。');
   if(existing&&email(input.email)!==existing.email)throw new AppError('已建立成员不能更换邮箱，请新增成员。');
@@ -119,13 +108,13 @@ export async function POST(req:Request,ctx:Context){try{
   const allReports=all(s,'report') as Report[],orders=filterOrders(visible(s,m),allReports,m,input.filters),ids=new Set(orders.map(o=>o.id));const exportId=newId('export'),createdAt=now();
   let rows:Record<string,any>[],title:string;
   if(input.type==='completion'){
-   title='包装完工明细';rows=allReports.filter(r=>ids.has(r.lineId)&&validApproval(r)&&(!input.filters.from||r.reportedAt.slice(0,10)>=input.filters.from)&&(!input.filters.to||r.reportedAt.slice(0,10)<=input.filters.to)).map(r=>{const o=orders.find(o=>o.id===r.lineId)!;return {'客户':o.customer,'订单号':o.orderNo,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'报工编号':r.nativeId||r.id,'工单号':r.workOrder,'良品数':r.quantity,'报工时间':r.reportedAt,'审批状态':r.approval,'来源文件':r.source,'数据截止时间':createdAt};});
+   title='包装完工明细';rows=allReports.filter(r=>ids.has(r.lineId)&&validApproval(r)&&(!input.filters.from||r.reportedAt.slice(0,10)>=input.filters.from)&&(!input.filters.to||r.reportedAt.slice(0,10)<=input.filters.to)).map(r=>{const o=orders.find(o=>o.id===r.lineId)!;return {'客户':o.customer,'订单号':o.orderNo,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'色号':o.color,'镜片类型':o.lens,'交货批次':o.batch,'报工编号':r.nativeId||r.id,'工单号':r.workOrder,'良品数':r.quantity,'报工时间':r.reportedAt,'审批状态':r.approval,'来源文件':r.source,'数据截止时间':createdAt};});
   }else if(input.type==='customer'||input.type==='progress'){
-   title=input.type==='customer'?'客户交期回复表':'客户订单进度表';rows=orders.map(o=>({'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'订单数量':o.quantity,'客户要求交期':o.requestedDate,'已确认回复交期':o.promiseConfirmed?o.promisedDate:'待确认','包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'分批交货安排':o.arrangement,'对客备注':o.customerNote,'数据截止时间':createdAt,'回复版本':exportId}));
+   title=input.type==='customer'?'客户交期回复表':'客户订单进度表';rows=orders.map(o=>({'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'色号':o.color,'镜片类型':o.lens,'交货批次':o.batch,'订单数量':o.quantity,'客户要求交期':o.requestedDate,'已确认回复交期':o.promiseConfirmed?o.promisedDate:'待确认','包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'分批交货安排':o.arrangement,'对客备注':o.customerNote,'数据截止时间':createdAt,'回复版本':exportId}));
   }else if(input.type==='working'){
-   if(m.role==='viewer')throw new AppError('只读成员可导出报表，不能导出可回传工作表。',403);
-   title='订单工作表';rows=orders.map(o=>({...Object.fromEntries(fields.map(([k,l])=>[l,k==='promiseConfirmed'?(o[k]?'是':'否'):o[k]])),...o.extra,'_明细编号':o.id,'_版本':o.version,'_导出批次':exportId}));
-  }else{title='订单进度汇总';rows=orders.map(o=>({'订单号':o.orderNo,'客户':o.customer,'图纸编号':o.drawing,'圈色':o.color,'镜片类型':o.lens,'交货批次':o.batch,'负责人邮箱':o.ownerEmail,'订单数量':o.quantity,'包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'状态':o.ledger?currentStage(o):progress(o,allReports),'客户要求交期':o.requestedDate,'数据截止时间':createdAt}));}
+   if(['viewer','finance','programmer'].includes(m.role))throw new AppError('此角色可导出查询报表，不能导出可回传工作表。',403);
+   title='订单工作表';rows=orders.map(o=>({...Object.fromEntries(fields.map(([k,l])=>[l,k==='promiseConfirmed'?(o[k]?'是':'否'):k==='productType'?productTypeOf(o):o[k]])),...orderExportExtras(o),'_明细编号':o.id,'_版本':o.version,'_导出批次':exportId}));
+  }else{title='订单进度汇总';rows=orders.map(o=>({'订单号':o.orderNo,'客户':o.customer,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'色号':o.color,'镜片类型':o.lens,'交货批次':o.batch,'负责人邮箱':o.ownerEmail,'订单数量':o.quantity,'包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'状态':o.ledger?currentStage(o):progress(o,allReports),'客户要求交期':o.requestedDate,'数据截止时间':createdAt}));}
   const bytes=makeWorkbook(rows,title,rows.length?undefined:['当前筛选无数据']),filename=`${title}_${createdAt.slice(0,10)}.xlsx`,fileKey=newId('exportfile');
   await bucket().put(fileKey,bytes);await commit(s.revision,[{id:exportId,kind:'export',reportType:input.type,filename,fileKey,actorId:m.id,actor:m.name,createdAt,filters:input.filters,count:rows.length,orderIds:orders.map(o=>o.id),lines:input.type==='working'?orders:[],revision:s.revision}]);
   return fileResponse(bytes,filename);

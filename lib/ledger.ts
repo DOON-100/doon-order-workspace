@@ -1,4 +1,5 @@
 import {type Order,type Report,packed,strictDate} from './domain';
+import {isFinishedOutsource} from './manufacturing';
 export const colLabels:Record<string,string>={A:'生产厂',B:'跟单员',C:'客户号',D:'客户等级',E:'质量等级',F:'订单类',G:'订单类型',H:'镜片类型',I:'订单号',J:'图纸编号 / 款号',K:'客款号',L:'色号',M:'订单数量',N:'投产数量',O:'业务下单日期',P:'原表出货欠数',Q:'半成品数',R:'采购收单日期',S:'收单月',T:'客原交货期',U:'PMC排期',V:'交期月',W:'产品类型',X:'圈色',Y:'腿色',Z:'金属色',AA:'其它色',AB:'状态备注',AC:'配件齐日期',AD:'板料齐期',AE:'配套齐料期',AF:'投产日',AG:'焊完成数',AH:'焊完成日',AI:'打磨出电数量',AJ:'打磨出电日期',AK:'焊磨备注',AL:'电回数量',AM:'电回日期',AN:'电镀备注',AO:'钛配套发成品数',AP:'钛齐套日',AQ:'钛配套发成品日',AR:'脾完成数',AS:'脾完成日',AT:'脾出桶数',AU:'脾出桶日',AV:'车房下桶数',AW:'车房下桶日',AX:'车房出桶数',AY:'车房出桶日',AZ:'车房备注',BA:'配套发钉胶数',BB:'胶齐套日',BC:'配套发钉胶日',BD:'钉装完成数',BE:'钉装完成日',BF:'包装入仓数量',BG:'包装入仓日期',BH:'结单日',BI:'成品备注',BJ:'是否准时',BK:'订单周期'};
 export const quantityCols=['N','Q','AG','AI','AL','AO','AR','AT','AV','AX','BA','BD','BF'];
 export const dateCols=['O','R','T','U','AC','AD','AE','AF','AH','AJ','AM','AP','AQ','AS','AU','AW','AY','BB','BC','BE','BG','BH'];
@@ -29,6 +30,7 @@ export const stageDefs=[
  {id:'packing',name:'包装入仓',done:'BF',prev:'PACK',start:'BE',end:'BG',limit:3},
 ] as const;
 export function stageNumbers(o:Order,def:typeof stageDefs[number]){
+ if(isFinishedOutsource(o))return {debt:null,wip:null,age:null,invalid:false};
  const c=o.ledger?.columns;if(!c)return {debt:null,wip:null,age:null,invalid:false};
  if(c[def.done]==='-'||(def.id==='plating'&&c.AI==='-')||(def.id==='titanium'&&c.AL==='-')||(def.id==='kit'&&c.AV==='-')||(def.id==='assembly'&&c.BA==='-'))return {debt:null,wip:null,age:null,invalid:false};
  const raw=def.id==='procurement'?(dateValue(c.AE)?o.quantity:0):(!c[def.done]?0:countValue(c[def.done]));
@@ -47,4 +49,4 @@ export function issues(o:Order){
  if(o.ledger.issues.includes('同键多行'))a.push('同键多行');}
  return [...new Set(a)];
 }
-export function currentStage(o:Order){if(o.lifecycle==='archived')return '已归档';if(!o.ledger)return o.stage;const n=outstanding(o);if(n!==null&&n<=0)return '入仓足量 · 待结单';for(const d of [...stageDefs].reverse()){const s=stageNumbers(o,d);if((s.wip||0)>0)return d.name;}return '待齐料 / 核对';}
+export function currentStage(o:Order){if(o.lifecycle==='archived')return '已归档';if(!o.ledger)return isFinishedOutsource(o)?'成品外发跟进':o.stage;const n=outstanding(o);if(n!==null&&n<=0)return '入仓足量 · 待结单';if(isFinishedOutsource(o))return (warehouse(o)||0)>0?'外厂部分交货':'外厂成品待交';for(const d of [...stageDefs].reverse()){const s=stageNumbers(o,d);if((s.wip||0)>0)return d.name;}return '待齐料 / 核对';}

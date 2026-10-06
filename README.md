@@ -64,4 +64,23 @@ node scripts/run-framework.mjs build
 
 多人工序使用版本校验，阻止旧表单覆盖新数据；源订单主数据仍通过 PMC 导入。归档/恢复需要 PMC 或管理员及明确依据，沿用同一明细编号与关联凭证。站点发布仍保持原有 owner-private 范围；添加成员后需在 Sites 分享设置中授权指定账号，未自行对外开放。
 
-验证：`node node_modules/typescript/bin/tsc --noEmit`、`node tests/run.mjs`。设置 `DOON_TEST_ORIGINALS=1（需另行提供本地测试清单）` 额外验证本机两份提供工作簿的完整导入与数量合计。测试中的账号、凭证和订单仅存在于临时内存数据库，不写入线上。
+验证：`node node_modules/typescript/bin/tsc --noEmit`、`node tests/run.mjs`。设置 `DOON_TEST_ORIGINALS=1` 额外验证本机两份提供工作簿的完整导入与数量合计。测试中的账号、凭证和订单仅存在于临时内存数据库，不写入线上。
+
+## GitHub 与公开源码
+
+仓库：https://github.com/DOON-100/doon-order-workspace 。此仓库只保存源码和合成测试数据；生产订单、采购原表、账号、附件、备份及构建输出均留在各自运行环境。
+
+`.openai/hosting.json` 中的 `project_id` 是示例值，使用 Sites 托管前需配置自己的项目；内网版不使用该项目编号。内网版需要 Node.js 22.18+，推荐 Node.js 24 LTS。
+
+```powershell
+npm run install:ci
+node tests/run.mjs
+node node_modules/typescript/bin/tsc --noEmit
+node standalone/build.mjs
+node standalone/test.mjs
+node standalone/test-service-host.mjs
+```
+
+在独立测试环境运行上述命令，业务测试使用合成采购表及内存数据库，HTTP 测试使用临时数据库和 18787 端口。正式启动参见 `standalone/内网版使用说明.md`。真实原表验收需设置 `DOON_TEST_ORIGINALS=1` 和 `DOON_TEST_ORIGINALS_MANIFEST`，后者指向不提交的 JSON 清单，每项为 `[文件路径, active或archived, 预期行数, 预期数量]`。
+
+后续改动按 `AGENTS.md` 完成检查后提交并推送到 `origin/main`；GitHub 同步不自动部署或重启正式服务。

@@ -47,3 +47,17 @@ next-env.d.ts
 /.npm-cache/
 /test-output/
 *.tsbuildinfo
+/lan-data/
+/lan-dist/
+
+# Local credentials, source documents, and migration backups
+/.openai/hosting.local.json
+/originals-manifest.json
+/import-expectations.json
+*.bundle
+*.sqlite*
+*.db
+*.key
+*.p12
+*.pfx
+*.log

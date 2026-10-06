@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import * as XLSX from 'xlsx';
+export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
+ const sheet={I3:{t:'s',v:'订单号'},M3:{t:'s',v:'订单数量'},BF3:{t:'s',v:'包装入仓数量'}};
+ for(let row=4;row<=6;row++)for(const [col,value] of Object.entries({B:'CANDY',C:'测试客户甲',I:'PMC-TEST',J:'DN-PMC',L:row===6?'C2':'C1',H:'白片',M:100,U:'2026-09-20',AB:'原备注',AC:'2026-09-18',BF:0}))sheet[col+row]={t:typeof value==='number'?'n':'s',v:value};
+ sheet['!ref']='A1:BF6';const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'动态表');const job=await original(XLSX.write(book,{type:'buffer',bookType:'xlsx'}),'active','PMC核对测试.xlsx');await ok('ledger-commit',{id:job.id,offset:0});
+ const getRows=async()=>(await state()).orders.filter(o=>o.orderNo==='PMC-TEST').sort((a,b)=>a.ledger.sourceRow-b.ledger.sourceRow);
+ let [a,b,c]=await getRows();const initialA=a;
+ const save=(o,col,value)=>({changes:[{id:o.id,version:o.version,col,value}]});
+ assert.equal((await call('pmc-save',save(a,'U','2026-09-22'),clerk)).status,403);assert.equal((await call('pmc-data',undefined,sales)).status,403);assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'BF',value:'999'}]})).status,400);
+ assert.equal((await call('pmc-save',save(a,'U','2026-02-30'))).status,400);pass('PMC总表服务端拦截越权、非PMC工序与非法日期');
+ await ok('pmc-save',save(a,'U','2026-09-22'));await ok('pmc-save',save(a,'AB','先排期再记录状态'));
+ [a,b,c]=await getRows();assert.equal(a.plannedDate,'2026-09-22');assert.equal(a.ledger.columns.U,a.plannedDate);assert.equal(a.notes,'先排期再记录状态');assert.equal(a.ledger.columns.AB,a.notes);assert.equal(b.notes,'原备注');
+ assert.equal((await call('pmc-save',save(initialA,'AB','旧输入覆盖'))).status,409);pass('同键多行按稳定编号编辑，不同字段合并，同一字段过期修改被拦截');
+ await ok('edit-order',{id:a.id,version:a.version,patch:{notes:'详情页新备注',plannedDate:'2026-09-24'}});[a]=await getRows();assert.equal(a.ledger.columns.AB,'详情页新备注');
+ await ok('ledger-edit',{id:a.id,version:a.version,patch:{AC:'2026-09-19'},reason:'部门齐料测试'});[a]=await getRows();assert.equal(a.notes,'详情页新备注');assert.equal(a.plannedDate,'2026-09-24');pass('详情和原表字段保持同步，部门报工不回退PMC排期或备注');
+ const oldB=b;await ok('pmc-save',save(b,'U','2026-09-25'));const beforeA=a.plannedDate;
+ assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'U',value:'2026-09-26'},{id:b.id,version:oldB.version,col:'U',value:'2026-09-26'}]})).status,409);
+ [a,b,c]=await getRows();assert.equal(a.plannedDate,beforeA);await ok('pmc-save',{changes:[{id:a.id,version:a.version,col:'AB',value:'批量备注'},{id:b.id,version:b.version,col:'AB',value:'批量备注'}]});[a,b,c]=await getRows();assert.equal(a.notes,b.notes);assert.equal(c.notes,'原备注');pass('批量修改仅影响指定明细，冲突时整批不保存');
+ const token=crypto.randomUUID(),roundInput={token,lineIds:[a.id,b.id],scope:'CANDY · 本轮两行'},round=(await ok('pmc-round',roundInput)).round;assert.equal((await ok('pmc-round',roundInput)).round.id,round.id);
+ assert.equal((await call('pmc-review',{roundId:round.id,lineId:c.id,version:c.version,status:'done'})).status,400);
+ assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'pending'})).status,400);
+ await ok('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'});
+ await ok('pmc-review',{roundId:round.id,lineId:b.id,version:b.version,status:'pending',note:'等仓库复核'});
+ let progress=await ok('pmc-data');assert.equal(progress.rounds.find(r=>r.id===round.id).lastLineId,b.id);assert.equal(progress.reviews.filter(r=>r.roundId===round.id).length,2);assert.equal((await getRows())[0].version,a.version);pass('核对轮次固定范围、重试不重复，已核对与待处理跨请求持久保存且不改订单');
+ await ok('pmc-save',save(a,'AB','核对后的新变化'));[a]=await getRows();progress=await ok('pmc-data');assert.notEqual(progress.reviews.find(r=>r.lineId===a.id).orderVersion,a.version);
+ assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version-1,status:'done'})).status,409);pass('核对后订单变化使旧标记失效，不能用旧版本再次确认');
+ const pmc2={userId:'test_pmc_two',email:'pmc2@test.invalid',displayName:'另一位PMC',fullName:'另一位PMC'};await ok('member',{name:'另一位PMC',email:pmc2.email,role:'pmc',customers:[],active:true});await ok('enroll',{},pmc2);
+ assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'},pmc2)).status,403);
+ const other=(await ok('pmc-round',{token:crypto.randomUUID(),lineIds:[a.id],scope:'另一位的核对'},pmc2)).round;await ok('pmc-review',{roundId:other.id,lineId:a.id,version:a.version,status:'done'},pmc2);assert.equal((await ok('pmc-data')).rounds.length,2);
+ await ok('pmc-round',{token:crypto.randomUUID(),lineIds:[a.id,b.id,c.id],scope:'新一轮包含新明细'});assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'})).status,409);pass('两位PMC进度独立且可互看，旧轮次不能污染新轮次');
+ const concurrent=await Promise.all([call('pmc-save',save(a,'U','2026-09-27')),call('pmc-save',save(a,'U','2026-09-28'))]);assert.deepEqual(concurrent.map(r=>r.status).sort(),[200,409]);
+ [a]=await getRows();await ok('ledger-lifecycle',{id:a.id,version:a.version,mode:'archived',reason:'PMC测试归档',closedDate:'2026-09-17'});assert.equal((await call('pmc-save',save(a,'U','2026-09-30'))).status,409);pass('真实并发只成功一个同字段提交，归档明细不能再排期');
+}

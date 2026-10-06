@@ -56,7 +56,7 @@ await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.lengt
 const ledgerBook=XLSX.utils.book_new(),ledgerSheet={};
 const header={I:'订单号',M:'订单数量',BF:'包装入仓数量'};
 for(const [c,v] of Object.entries(header))ledgerSheet[c+'3']={t:'s',v};
-const ledgerValues={A:'测试厂',B:'测试跟单',C:'测试客户甲',D:'AAA',I:'LEDGER-TEST-01',J:'DN-LEDGER',L:'C1',H:'白片',M:100,T:46200,U:46200,AF:46100,AG:30,AH:46101,AI:20,AJ:46102,AL:10,AM:46103,AR:20,BF:5,P:90};
+const ledgerValues={A:'度昂',B:'测试跟单',C:'测试客户甲',D:'AAA',I:'LEDGER-TEST-01',J:'DN-LEDGER',L:'C1',H:'白片',M:100,T:46200,U:46200,AF:46100,AG:30,AH:46101,AI:20,AJ:46102,AL:10,AM:46103,AR:20,BF:5,P:90};
 for(const [c,v] of Object.entries(ledgerValues))ledgerSheet[c+'4']={t:typeof v==='number'?'n':'s',v};
 ledgerSheet['!ref']='A1:DH4';XLSX.utils.book_append_sheet(ledgerBook,ledgerSheet,'动态表');
 const ledgerBytes=XLSX.write(ledgerBook,{type:'buffer',bookType:'xlsx'});
@@ -69,7 +69,7 @@ assert.equal((await call('ledger-edit',{id:ledger.id,version:ledger.version,patc
 await ok('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AL:'12',AM:'2026-09-14'},reason:'本部门核对'},clerk);ledger=(await state()).orders.find(o=>o.id===ledger.id);
 assert.equal(ledger.ledger.columns.AL,'12');assert.equal((await call('ledger-edit',{id:ledger.id,version:ledger.version,patch:{AP:'2026-09-01'},reason:'改自动字段'},clerk)).status,403);pass('电镀仓只可修改本部门字段，跨部门与自动字段均被拦截');
 assert.equal((await call('ledger-edit',{id:ledger.id,version:1,patch:{AL:'1'},reason:'旧版本'},clerk)).status,409);pass('部门工序拒绝过期版本覆盖');
-const outsource={lineId:ledger.id,supplier:'测试供应商',process:'plating',quantity:40,sentDate:'2026-09-10',dueDate:'2026-09-16',reference:'OUT-TEST-01',token:crypto.randomUUID()};await ok('outsource-create',outsource,clerk);await ok('outsource-create',outsource,clerk);let external=(await state()).outsource[0];assert.equal((await state()).outsource.length,1);
+const outsource={lineId:ledger.id,supplier:'测试供应商',process:'plating',quantity:40,sentDate:'2026-09-10',dueDate:'2026-09-16',reference:'OUT-TEST-01',token:crypto.randomUUID()};assert.equal((await call('outsource-create',outsource,sales)).status,403);await ok('outsource-create',outsource);await ok('outsource-create',outsource);let external=(await state()).outsource[0];assert.equal((await state()).outsource.length,1);
 const image=new FormData();image.set('file',new File([Uint8Array.from([0xff,0xd8,0xff,0xe0,1,2,3,4])],'delivery.jpg'));const photo=await ok('receipt-photo',image,clerk);
 const receipt={photoId:photo.id,supplier:'测试供应商',deliveryNo:'DEL-TEST-01',receivedDate:'2026-09-14',note:'验收记录',token:crypto.randomUUID(),lines:[{outsourceId:external.id,accepted:15,rejected:2}]};await ok('receipt-confirm',receipt,clerk);await ok('receipt-confirm',receipt,clerk);
 external=(await state()).outsource[0];ledger=(await state()).orders.find(o=>o.id===ledger.id);assert.equal(external.received,15);assert.equal(external.quantity-external.received,25);assert.equal(ledger.ledger.columns.AL,'27');assert.equal((await state()).receipts.length,1);pass('分批合格收货原子消数并累计到对应工序，不良数量不消数，重试不重复入账');
@@ -86,4 +86,9 @@ if(process.env.DOON_TEST_ORIGINALS==='1'){
  for(const [path,mode,count,quantity] of supplied){let j=await original(await fs.readFile(path),mode,path.split('/').at(-1));assert.equal(j.summary.rows,count);assert.equal(j.summary.quantity,quantity);while(j.status!=='已完成')j=await ok('ledger-commit',{id:j.id,offset:j.offset});const stateNow=await state();const imported=stateNow.orders.filter(o=>o.ledger?.sourceHash===j.hash&&o.lifecycle===mode);assert.equal(imported.length,count);console.log('Verified supplied workbook',mode,count,quantity);}
  pass('另行提供的本地工作簿行数与数量校验通过');
 }
+const {testLosses}=await import('./loss-cases.mjs');await testLosses({ok,call,state,original,admin,clerk,sales,pass});
+const {testPmc}=await import('./pmc-cases.mjs');await testPmc({ok,call,state,original,admin,clerk,sales,pass});
+const {testPurchases}=await import('./purchase-cases.mjs');await testPurchases({ok,call,sales,pass});
+const {testCollaborationFixes}=await import('./collaboration-fixes.mjs');await testCollaborationFixes({ok,call,state,original,admin,clerk,sales,pass,preview});
 console.log('Total business checks:',checks.length);
+await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
