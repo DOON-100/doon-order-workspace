@@ -68,7 +68,7 @@ node scripts/run-framework.mjs build
 
 ## GitHub 与公开源码
 
-仓库：https://github.com/DOON-100/doon-order-workspace 。此仓库只保存源码和合成测试数据；生产订单、采购原表、账号、附件、备份及构建输出均留在各自运行环境。
+仓库：https://github.com/DOON-100/doon-order-workspace 。此仓库保存源码、合成测试数据及用户授权的生产数据加密备份；未加密的生产订单、采购原表、账号、附件、备份及构建输出均留在各自运行环境。加密备份和还原说明见 `encrypted-backups/README.md`，解密密钥只留在本机。
 
 `.openai/hosting.json` 中的 `project_id` 是示例值，使用 Sites 托管前需配置自己的项目；内网版不使用该项目编号。内网版需要 Node.js 22.18+，推荐 Node.js 24 LTS。
 

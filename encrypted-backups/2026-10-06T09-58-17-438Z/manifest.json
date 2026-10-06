@@ -1,0 +1,12 @@
+{
+  "format": "DOONBAK1",
+  "createdAt": "2026-10-06T09:58:17.443Z",
+  "algorithm": "AES-256-GCM",
+  "compression": "gzip",
+  "keyId": "265fa6bc840fe408",
+  "archive": {
+    "name": "workspace.tar.gz.enc",
+    "bytes": 8698760,
+    "sha256": "2f49d52e94093e9eaf4b5925fbf8fec11291d1d92d622f6fba95fd4c8d97aec1"
+  }
+}

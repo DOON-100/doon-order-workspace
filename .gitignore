@@ -61,3 +61,8 @@ next-env.d.ts
 *.p12
 *.pfx
 *.log
+
+# Encrypted backup archives may be published; plaintext archives and keys may not.
+/encrypted-backups/**/*.tar
+/encrypted-backups/**/*.tar.gz
+/backup-keys/
