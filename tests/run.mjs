@@ -91,5 +91,6 @@ const {testPmc}=await import('./pmc-cases.mjs');await testPmc({ok,call,state,ori
 const {testPurchases}=await import('./purchase-cases.mjs');await testPurchases({ok,call,sales,pass});
 const {testCollaborationFixes}=await import('./collaboration-fixes.mjs');await testCollaborationFixes({ok,call,state,original,admin,clerk,sales,pass,preview});
 const {testCustomerQuotes}=await import('./customer-quote-cases.mjs');await testCustomerQuotes({ok,call,state,admin,clerk,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
+const {testCustomerQuoteReview}=await import('./customer-quote-review-cases.mjs');await testCustomerQuoteReview({ok,call,state,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
 console.log('Total business checks:',checks.length);
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

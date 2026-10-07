@@ -3,32 +3,34 @@ import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
 import {customerQuoteAccessPolicy,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {assertCustomerQuoteConfirmable,completedCustomerQuoteRows,visibleCompletedCustomerQuotes} from './customer-quote-review';
 import {
- canCreateCustomerQuote,canEditCustomerQuote,canReadCustomerQuote,canUseCustomerQuotes,customerQuoteInput,eligibleCustomerQuoteAccounts,mayChangeQuoteCustomer,publicCustomerQuote,quoteAccount,
+ canCreateCustomerQuote,canReadCustomerQuote,canUseCustomerQuotes,customerQuoteInput,eligibleCustomerQuoteAccounts,mayChangeQuoteCustomer,publicCustomerQuote,quoteAccount,
  type CustomerQuote,type CustomerQuoteRevision,
 } from './customer-quotes';
 
 function allowed(s:State,m:Member){if(!canUseCustomerQuotes(s,m))throw new AppError('没有客户报价权限，请联系管理员核对报价授权。',403);}
 function quoteFor(s:State,id:string){const q=all(s,'customer_quote').find(v=>v.id===id) as CustomerQuote|undefined;if(!q)throw new AppError('客户报价不存在。',404);return q;}
-function editable(s:State,m:Member,q:CustomerQuote){if(!canEditCustomerQuote(s,m,q))throw new AppError('只能修改客户责任清单中自己跟进客户的报价；未关联客户的报价须由管理员核对。',403);if(q.status!=='draft')throw new AppError('仅可编辑待确认报价草稿。',409);}
+function editable(s:State,m:Member,q:CustomerQuote){if(!canReadCustomerQuote(s,m,q))throw new AppError('只能修改客户责任清单中自己跟进客户的报价；未关联客户的报价须由管理员核对。',403);if(q.status!=='draft')throw new AppError('已确认报价不可覆盖，请先创建修订草稿。',409);}
 function current(q:CustomerQuote,version:number){if(q.version!==version)throw new AppError('报价已由其他同事更新，你的输入未覆盖新版本；请刷新核对后再保存。',409);}
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const result=schema.safeParse(value);if(!result.success)throw new AppError(result.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).slice(0,4).join('；'));return result.data;}
-async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string){
+async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]){
  // The current pointer may advance, but each snapshot has a new ID and is never overwritten.
  const revision:CustomerQuoteRevision={id:newId('customer_quote_revision'),kind:'customer_quote_revision',quoteId:q.id,version:q.version,action,updatedAt:q.updatedAt,updatedBy:m.name,snapshot:structuredClone(q)};
  const withoutStorageKey=(value:CustomerQuote|null)=>{if(!value)return null;const {sourceFileKey,...safe}=value;return safe;};
- const records:Entity[]=[q,revision,audit(m,q,withoutStorageKey(before),action,'客户报价工作台',withoutStorageKey(q))];
+ const records:Entity[]=[q,revision,audit(m,q,withoutStorageKey(before),action,'客户报价工作台',withoutStorageKey(q)),...additionalRecords];
  await commit(s.revision,records);
  return json({ok:true,quote:publicCustomerQuote({...s,records:[...s.records.filter(v=>v.id!==q.id),...records]},m,q)});
 }
 
 export async function customerQuoteGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quotes','customer-quote-file','customer-quote-access'].includes(action))return null;
+ if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed'].includes(action))return null;
  if(action==='customer-quote-access'){
   if(!isCustomerQuoteAdministrator(m))throw new AppError('仅管理员可查看客户报价授权配置。',403);
   return json({policy:customerQuoteAccessPolicy(s)});
  }
  allowed(s,m);
+ if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
  if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:eligibleCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canUseCustomerQuotes(s,m),canCreate:canCreateCustomerQuote(s,m),canUseUnbound:isCustomerQuoteAdministrator(m)});
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
  if(!canReadCustomerQuote(s,m,q))throw new AppError('无权读取该客户报价的原附件。',403);
@@ -38,8 +40,26 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
 }
 
 export async function customerQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quote-save','customer-quote-upload'].includes(action))return null;
+ if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise'].includes(action))return null;
  allowed(s,m);
+ if(action==='customer-quote-confirm'){
+  if(!isCustomerQuoteAdministrator(m))throw new AppError('最终英文报价须由管理员明确确认，业务成员可先修改并保存草稿。',403);
+  const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive(),acknowledgeEnglish:z.literal(true)}).strict(),await req.json()),before=quoteFor(s,input.id);
+  editable(s,m,before);current(before,input.version);assertCustomerQuoteConfirmable(before);
+  if(all(s,'customer_quote_completed').some(row=>row.quoteId===before.id&&row.quoteVersion===before.version+1))throw new AppError('该确认版本已存在归档，请刷新核对。',409);
+  const at=now(),quote:CustomerQuote={...before,status:'confirmed',version:before.version+1,confirmedAt:at,confirmedBy:m.name,confirmedById:m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  // Confirmation and immutable completed rows commit atomically under one
+  // optimistic workspace revision; double-clicks cannot create duplicates.
+  return persist(s,m,quote,before,'确认英文客户报价',completedCustomerQuoteRows(quote));
+ }
+ if(action==='customer-quote-revise'){
+  const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive()}).strict(),await req.json()),before=quoteFor(s,input.id);
+  if(!canReadCustomerQuote(s,m,before))throw new AppError('无权修订该客户报价。',403);
+  current(before,input.version);if(before.status!=='confirmed')throw new AppError('仅已确认的报价可以创建修订草稿。',409);
+  const at=now(),quote:CustomerQuote={...before,status:'draft',version:before.version+1,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  delete quote.confirmedAt;delete quote.confirmedBy;delete quote.confirmedById;
+  return persist(s,m,quote,before,'创建客户报价修订草稿');
+ }
  if(!canCreateCustomerQuote(s,m))throw new AppError('客户责任清单中尚未分配你跟进的有效客户，不能创建或修改报价。',403);
  if(action==='customer-quote-save'){
   const input=parse(customerQuoteInput,await req.json()),{id,version,...fields}=input;

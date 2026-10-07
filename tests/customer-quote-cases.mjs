@@ -93,9 +93,9 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  assert.equal(q.version,3);assert.equal(rawRecords().filter(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id).length,3);
  pass('同客户业务与客服可协作，历史版本不可变，旧版本和并发提交返回409，不覆盖他人保存');
 
- for(const bad of [{...fields(q),quoteDate:'2026-02-30'},{...fields(q),validUntil:'2026-09-01'},{...fields(q),status:'approved'},{...fields(q),lines:[{...q.lines[0],quantity:1.5}]},{...fields(q),lines:[{...q.lines[0],quantity:0}]},{...fields(q),lines:[{...q.lines[0],unitPrice:''}]},{...fields(q),lines:[{...q.lines[0],unitPrice:null}]},{...fields(q),lines:[{...q.lines[0],toolingFee:-1}]},{...fields(q),lines:[q.lines[0],q.lines[0]]}])assert.equal((await call('customer-quote-save',bad)).status,400);
+ for(const bad of [{...fields(q),quoteDate:'2026-02-30'},{...fields(q),validUntil:'2026-09-01'},{...fields(q),status:'approved'},{...fields(q),lines:[{...q.lines[0],quantity:1.5}]},{...fields(q),lines:[{...q.lines[0],quantity:0}]},{...fields(q),lines:[{...q.lines[0],unitPrice:''}]},{...fields(q),lines:[{...q.lines[0],quantity:''}]},{...fields(q),lines:[{...q.lines[0],toolingFee:''}]},{...fields(q),lines:[{...q.lines[0],toolingFee:-1}]},{...fields(q),lines:[q.lines[0],q.lines[0]]}])assert.equal((await call('customer-quote-save',bad)).status,400);
  assert.equal((await ok('customer-quotes')).quotes.find(v=>v.id===q.id).version,q.version);
- pass('数量、金额、有效日期和重复行严格校验，空价格不变成零且不能伪造发布状态');
+ pass('数量、金额、有效日期和重复行严格校验，空字符串不变成零且不能伪造发布状态');
 
  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Synthetic quotation'],['TEST',8,14,0]]),'Quotation');const bytes=XLSX.write(book,{type:'buffer',bookType:'xlsx'});
  const upload=(quote=q,data=bytes,name='synthetic-quotation.xlsx')=>{const f=new FormData();f.set('quoteId',quote.id);f.set('version',String(quote.version));f.set('file',new File([data],name));return f;};
