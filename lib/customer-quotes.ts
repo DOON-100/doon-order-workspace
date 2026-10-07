@@ -1,5 +1,7 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
+import {assignedCustomerQuoteAccount,canUseCustomerQuotes,isCustomerQuoteAdministrator} from './customer-quote-access';
+export {canCreateCustomerQuote,canUseCustomerQuotes,eligibleCustomerQuoteAccounts} from './customer-quote-access';
 
 const text=(max:number)=>z.string().trim().max(max);
 const required=(max:number)=>text(max).min(1);
@@ -32,29 +34,24 @@ export type CustomerQuote=Entity & CustomerQuoteFields & {
 };
 export type CustomerQuoteRevision=Entity & {kind:'customer_quote_revision';quoteId:string;version:number;action:string;updatedAt:string;updatedBy:string;snapshot:CustomerQuote};
 const key=(v:unknown)=>clean(v).toLowerCase();
-const privileged=(m:Member)=>m.role==='admin'||m.role==='pmc';
-export const canUseCustomerQuotes=(m:Member)=>m.active&&['admin','pmc','sales','finance'].includes(m.role);
-export const canCreateCustomerQuote=(m:Member)=>m.active&&(privileged(m)||m.role==='sales');
 
 export function quoteAccount(s:State,id:string|null){return id?all(s,'customer_account').find(a=>a.id===id) as CustomerAccount|undefined:undefined;}
 export function assignedCustomerQuote(s:State,m:Member,q:Pick<CustomerQuoteFields,'customerAccountId'|'customerName'|'customerCode'>){
  const a=quoteAccount(s,q.customerAccountId);
- const byAccount=!!a&&a.active&&[a.salesName,a.serviceName].some(name=>!!key(name)&&key(name)===key(m.name));
- const customers=(m.customers||[]).map(key).filter(Boolean);
- return byAccount||[q.customerName,q.customerCode].some(v=>!!key(v)&&customers.includes(key(v)));
+ return !!a&&assignedCustomerQuoteAccount(s,m,a);
 }
 export function canEditCustomerQuote(s:State,m:Member,q:CustomerQuote){
- return canCreateCustomerQuote(m)&&(privileged(m)||(m.role==='sales'&&(q.createdById===m.id||assignedCustomerQuote(s,m,q))));
+ return canReadCustomerQuote(s,m,q);
 }
 export function canReadCustomerQuote(s:State,m:Member,q:CustomerQuote){
- return canUseCustomerQuotes(m)&&(privileged(m)||m.role==='finance'||m.orderScope==='all'||canEditCustomerQuote(s,m,q));
+ return canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m)||assignedCustomerQuote(s,m,q));
 }
 export function changedQuoteCustomer(before:CustomerQuote,after:CustomerQuoteFields){return ['customerAccountId','customerName','customerCode'].some(field=>key(before[field])!==key(after[field as keyof CustomerQuoteFields]));}
-export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return privileged(m)||(m.role==='sales'&&assignedCustomerQuote(s,m,next));}
+export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return isCustomerQuoteAdministrator(m)||assignedCustomerQuote(s,m,next);}
 
 // Explicit response allowlist. Bucket keys and full historical snapshots remain server-side.
 export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
- const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id).sort((a,b)=>b.version-a.version).map(v=>({
+ const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&canReadCustomerQuote(s,m,v.snapshot)).sort((a,b)=>b.version-a.version).map(v=>({
   id:v.id,version:v.version,action:v.action,updatedAt:v.updatedAt,updatedBy:v.updatedBy,sourceFilename:v.snapshot.sourceFilename||'',sourceHash:v.snapshot.sourceHash||'',
  }));
  return {

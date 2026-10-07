@@ -1,0 +1,53 @@
+// Synthetic local-only coverage for the explicit maintenance command.
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {spawnSync} from 'node:child_process';
+import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
+import {build} from 'esbuild';
+
+await fs.mkdir('test-output',{recursive:true});
+const root=await fs.mkdtemp(path.resolve('test-output/quote-access-config-')),buildDir=path.join(root,'build'),dataDir=path.join(root,'data');
+await fs.mkdir(buildDir);await fs.mkdir(path.join(dataDir,'files'),{recursive:true});
+await fs.copyFile('standalone/runtime.mjs',path.join(buildDir,'runtime.mjs'));
+await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(buildDir,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
+const dbPath=path.join(dataDir,'workspace.sqlite'),db=new DatabaseSync(dbPath);
+db.exec("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT NOT NULL,data TEXT NOT NULL);CREATE TABLE workspace_revision(id TEXT PRIMARY KEY,revision INTEGER NOT NULL);INSERT INTO workspace_revision VALUES('main',1);CREATE TABLE local_accounts(id TEXT PRIMARY KEY,username TEXT UNIQUE NOT NULL,member_id TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,must_change INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL)");
+const at='2026-01-01T00:00:00.000Z',owner={id:'member_test_owner',kind:'member',name:'Synthetic Owner',email:'owner@test.invalid',userId:'local_test_owner',role:'admin',active:true,owner:true,customers:[],createdAt:at};
+const member={id:'member_test_scope',kind:'member',name:'Synthetic Sales',email:'sales@test.invalid',userId:'local_test_scope',role:'pmc',active:true,owner:false,customers:[],orderScope:'all',createdAt:at};
+const customer={id:'customer_test_access',kind:'customer_account',customer:'Synthetic customer',customerCode:'TEST-A',salesName:'Synthetic Alias',serviceName:'',pmcName:'',active:true,version:1,notes:'',createdAt:at,updatedAt:at,updatedBy:owner.name};
+const sourceKey='synthetic-source-key',source=Buffer.from('Synthetic immutable quotation source'),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
+await fs.writeFile(path.join(dataDir,'files',hash(sourceKey)),source);
+const quote={id:'quote_test_access',kind:'customer_quote',customerAccountId:null,customerName:'TEST-A',customerCode:'TEST-A',companyEn:'Synthetic Ltd',companyZh:'合成测试公司',collectionEn:'Synthetic collection',collectionZh:'测试系列',quoteNo:'TEST-ONLY-01',quoteDate:'2026-01-01',validUntil:'2026-01-31',currency:'USD',lines:[{id:'line-test',model:'MODEL-TEST',descriptionZh:'测试材质',descriptionEn:'Synthetic material',quantity:100,unitPrice:1,toolingFee:0}],terms:[],reviewNotes:[],status:'draft',version:1,sourceFileKey:sourceKey,sourceFilename:'synthetic.xlsx',sourceHash:hash(source),sourceContentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',createdAt:at,createdBy:owner.name,createdById:owner.id,updatedAt:at,updatedBy:owner.name,updatedById:owner.id};
+const revision={id:'revision_test_original',kind:'customer_quote_revision',quoteId:quote.id,version:1,action:'Synthetic fixture',updatedAt:at,updatedBy:owner.name,snapshot:quote};
+for(const value of [owner,member,customer,quote,revision,{id:'order_test_untouched',kind:'order',value:'Immutable synthetic unrelated record'}])db.prepare('INSERT INTO records VALUES(?,?,?)').run(value.id,value.kind,JSON.stringify(value));
+for(const [value,username] of [[owner,'owner'],[member,'sales']])db.prepare('INSERT INTO local_accounts VALUES(?,?,?,?,1,?)').run(value.userId,username,value.id,'unused-synthetic-placeholder',at);
+db.close();
+const config={memberIds:[member.id],aliasesByMember:{[member.id]:['Synthetic Alias']},expectedMembers:[{id:member.id,name:member.name,username:'sales'}],confirmedBindings:[{quoteId:quote.id,customerAccountId:customer.id,expectedVersion:1}]};
+const configPath=path.join(root,'private-test-config.json');
+const rows=()=>{const connection=new DatabaseSync(dbPath,{readOnly:true});try{return connection.prepare('SELECT id,kind,data FROM records ORDER BY id').all();}finally{connection.close();}};
+async function run(value=config,mode='--dry-run',success=true){
+ await fs.writeFile(configPath,JSON.stringify(value));
+ const result=spawnSync(process.execPath,['standalone/configure-customer-quote-access.mjs','--build-dir',buildDir,'--config',configPath,mode],{env:{...process.env,DOON_DATA_DIR:dataDir},encoding:'utf8',windowsHide:true});
+ assert.equal(result.status===0,success,result.stderr||result.stdout);
+ return result.stdout.trim()?JSON.parse(result.stdout.trim()):null;
+}
+const originalRows=rows(),fileBefore=await fs.readFile(path.join(dataDir,'files',hash(sourceKey)));
+const dry=await run();assert.equal(dry.mode,'dry-run');assert.equal(dry.policyAdded,false);assert.equal(dry.plannedBindings,1);assert.equal(dry.preserved,true);assert.deepEqual(rows(),originalRows);
+console.log('PASS explicit maintenance dry-run performs no record or attachment writes');
+await run({...config,expectedMembers:[{...config.expectedMembers[0],username:'different-login'}]},'--apply',false);assert.deepEqual(rows(),originalRows);
+await run({...config,confirmedBindings:[{...config.confirmedBindings[0],expectedVersion:9}]},'--apply',false);assert.deepEqual(rows(),originalRows);
+console.log('PASS identity mismatch and stale binding version stop before any policy or quotation write');
+const applied=await run(config,'--apply');assert.equal(applied.policyAdded,true);assert.equal(applied.bindingsApplied,1);assert.equal(applied.preserved,true);
+const savedRows=rows(),saved=savedRows.map(row=>JSON.parse(row.data)),current=saved.find(value=>value.id===quote.id);
+assert.equal(saved.filter(value=>value.kind==='customer_quote_access').length,1);assert.equal(saved.filter(value=>value.kind==='audit').length,2);assert.equal(current.version,2);assert.equal(current.customerAccountId,customer.id);assert.equal(current.sourceFileKey,sourceKey);assert.equal(current.sourceHash,quote.sourceHash);assert.deepEqual(saved.find(value=>value.id===revision.id),revision);
+for(const row of originalRows.filter(row=>row.id!==quote.id))assert.deepEqual(savedRows.find(value=>value.id===row.id),row);
+assert.deepEqual(await fs.readFile(path.join(dataDir,'files',hash(sourceKey))),fileBefore);
+console.log('PASS apply adds only policy/audit and versioned first binding while preserving source and history');
+const again=await run(config,'--apply');assert.equal(again.policyAlreadyPresent,true);assert.equal(again.bindingsAlreadyPresent,1);assert.equal(again.recordsAdded,0);assert.deepEqual(rows(),savedRows);
+console.log('PASS repeat apply is fully idempotent');
+await run({...config,aliasesByMember:{[member.id]:['Different Alias']}},'--apply',false);assert.deepEqual(rows(),savedRows);
+await run({...config,confirmedBindings:[{...config.confirmedBindings[0],expectedVersion:2}]},'--apply',false);assert.deepEqual(rows(),savedRows);
+console.log('PASS policy drift and already-bound version drift refuse to overwrite existing data');
+console.log(JSON.stringify({passed:5,root}));
