@@ -68,7 +68,7 @@ async function handle(req,res){
    let relative=decodeURIComponent(url.pathname).replace(/^\//,'');
    if(!relative||!path.extname(relative))relative='index.html';
    const target=path.resolve(root,relative);if(!target.startsWith(root+path.sep)||relative.split(/[\\/]/).some(p=>p.startsWith('.')))fail('文件不存在。',404);
-   const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
+   const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
    try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
   }
   res.writeHead(response.status,{...security,...Object.fromEntries(response.headers)});res.end(Buffer.from(await response.arrayBuffer()));
