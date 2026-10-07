@@ -5,11 +5,11 @@ import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import * as XLSX from 'xlsx';
-const dir=await fs.mkdtemp(path.resolve('test-output/lan-test-')),port=18787,origin=`http://127.0.0.1:${port}`;
+const dist=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist'),dir=await fs.mkdtemp(path.resolve('test-output/lan-test-')),port=18787,origin=`http://127.0.0.1:${port}`;
 const env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
-execFileSync(process.execPath,['lan-dist/manage.mjs','init'],{env,stdio:'pipe'});
+execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const text=await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8'),initial=text.match(/初始密码：([^\n]+)/)[1];
-const server=spawn(process.execPath,['lan-dist/server.mjs'],{env,stdio:'pipe'});let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
+const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 const checks=[];function pass(s){checks.push(s);console.log('PASS '+s);}
 let adminCookie='',clerkCookie='';
 async function request(route,body,cookie='',extra={}){return fetch(origin+route,{method:body===undefined?'GET':'POST',headers:{...(body===undefined?{}:{Origin:origin}),...(body instanceof FormData?{}:{'Content-Type':'application/json'}),...(cookie?{Cookie:cookie}:{}),...extra},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});}

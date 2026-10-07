@@ -9,6 +9,7 @@ import {actor,audit,AppError,bucket,commit,enroll,failure,json,sameOrigin,snapsh
 import {all,allowedFields,broad,readsAllOrders,roles,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,productTypeOf,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
 import {makeWorkbook,openWorkbook,previewOrders,previewReports,sha,sheetRows,suggestMapping,isOriginalLedger,detectHeader} from '@/lib/workbooks';
 import {canSeeSupplierPrice} from '@/lib/suppliers';
+import {customerQuoteGet,customerQuotePost} from '@/lib/customer-quote-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -21,6 +22,7 @@ function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
+ const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
  const operation=await operationGet(action,req,s,m);if(operation)return operation;
  if(action==='data')return json({customerAccounts:all(s,'customer_account'),collaborationTemplates:all(s,'collaboration_template').map(({fileKey,...r})=>r),losses:all(s,'loss').filter(r=>ids.has(r.lineId)),suppliers:all(s,'supplier').filter(v=>readsAllOrders(m)||all(s,'outsource').some(x=>ids.has(x.lineId)&&x.supplier===v.name)),supplierQuotes:canSeeSupplierPrice(m)?all(s,'supplier_quote'):[],supplierFollowups:all(s,'supplier_followup').filter(v=>ids.has(v.lineId)),ledgerImports:all(s,'ledger_import').filter(r=>broad(m)),outsource:all(s,'outsource').filter(r=>ids.has(r.lineId)),receipts:all(s,'receipt').filter(r=>r.lines.some((l:any)=>ids.has(l.lineId))).map(r=>({...r,lines:r.lines.filter((l:any)=>ids.has(l.lineId))})),me:m,revision:s.revision,orders,reports:all(s,'report').filter(r=>readsAllOrders(m)||ids.has(r.lineId)),members:all(s,'member').map(u=>m.role==='admin'?u:{id:u.id,name:u.name,email:u.email,active:u.active,role:u.role}),comments:all(s,'comment').filter(r=>ids.has(r.lineId)),corrections:all(s,'correction').filter(r=>ids.has(r.lineId)),attachments:all(s,'attachment').filter(r=>ids.has(r.lineId)),imports:all(s,'import').filter(r=>broad(m)||r.actorId===m.id).map(({rows,...r})=>({...r,counts:Object.fromEntries(['new','update','conflict','skip','error'].map(k=>[k,rows.filter((r:PreviewRow)=>r.status===k).length]))})).reverse(),audits:all(s,'audit').filter(r=>broad(m)||ids.has(r.lineId)).slice(-250).reverse(),exports:all(s,'export').filter(r=>r.actorId===m.id||broad(m)).map(({lines,...r})=>r).reverse(),asOf:now(),integration:{mode:'file',mesConnected:false,kingdeeConnected:false}});
  if(action==='job'){const job=s.records.find(r=>r.id===url.searchParams.get('id')&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权访问导入批次。',403);return json(job);}
@@ -40,7 +42,7 @@ export async function GET(req:Request,ctx:Context){try{
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
- const m=await actor(s);if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;
+ const m=await actor(s);if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const quotation=await customerQuotePost(action,req,s,m);if(quotation)return quotation;const operation=await operationPost(action,req,s,m);if(operation)return operation;
  if(['inspect','preview','attachment'].includes(action)){
   const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size)throw new AppError('请选择非空文件。');if(file.size>10*1024*1024)throw new AppError('文件不能超过 10 MB。');
   const bytes=await file.arrayBuffer(),filename=file.name.replace(/[\\/\r\n]/g,'_').slice(0,180);
