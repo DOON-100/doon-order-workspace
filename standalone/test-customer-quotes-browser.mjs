@@ -24,9 +24,10 @@ async function api(route,body){const r=await fetch(origin+'/api/'+route,{method:
 try{
  for(let i=0;i<50;i++){try{if((await fetch(origin+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
  await api('auth/login',{username:'admin',password:initial});await api('auth/password',{currentPassword:initial,password:'Quote-Synthetic-Personal-2026!'});
- // The legacy Excel importer deliberately handles the original field set. Add
- // this synthetic review fixture through the regular versioned API, not SQLite.
- const imported=(await api('workspace/customer-quotes')).quotes[0],{sourceSha256,...reviewFields}=draft;await api('workspace/customer-quote-save',{...reviewFields,id:imported.id,version:imported.version,customerAccountId:null});
+ // Check the full import, then round-trip it through the regular versioned API.
+ const imported=(await api('workspace/customer-quotes')).quotes[0],{sourceSha256,...reviewFields}=draft;
+ for(const field of ['contactName','internalNotesZh','exchangeRateCnyPerUsd','internalCosts','customerCharges'])assert.deepEqual(imported[field],draft[field]);
+ await api('workspace/customer-quote-save',{...reviewFields,id:imported.id,version:imported.version,customerAccountId:null});
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-proxy-server']});
  const context=await browser.newContext({viewport:{width:1510,height:1000}});await context.addInitScript(()=>Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true}));const page=await context.newPage();let acceptDialogs=true;page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>acceptDialogs?d.accept():d.dismiss());
  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);

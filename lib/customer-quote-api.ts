@@ -77,12 +77,14 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
  const form=await req.formData(),input=parse(z.object({quoteId:z.string().min(1),version:z.string().regex(/^[1-9]\d*$/).transform(Number).refine(Number.isSafeInteger)}),{quoteId:form.get('quoteId'),version:form.get('version')}),before=quoteFor(s,input.quoteId);
  editable(s,m,before);current(before,input.version);
  const file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的原报价单。');
- const ext=file.name.match(/\.(xlsx|xls|pdf)$/i)?.[1].toLowerCase();if(!ext)throw new AppError('原报价单支持 XLSX、XLS 或 PDF。');
+ const ext=file.name.match(/\.(xlsx|xls|pdf|png|jpe?g)$/i)?.[1].toLowerCase();if(!ext)throw new AppError('原报价附件支持 XLSX、XLS、PDF、PNG 或 JPEG。');
  const bytes=await file.arrayBuffer(),header=new Uint8Array(bytes).slice(0,8);
- const valid=ext==='xlsx'?header[0]===0x50&&header[1]===0x4b:ext==='xls'?[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1].every((v,i)=>header[i]===v):[0x25,0x50,0x44,0x46,0x2d].every((v,i)=>header[i]===v);
- if(!valid)throw new AppError('文件内容与扩展名不匹配，请上传原始 Excel 或 PDF 文件。');
+ const signatures:Record<string,number[]>={xls:[0xd0,0xcf,0x11,0xe0,0xa1,0xb1,0x1a,0xe1],pdf:[0x25,0x50,0x44,0x46,0x2d],png:[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a],jpg:[0xff,0xd8,0xff],jpeg:[0xff,0xd8,0xff]};
+ const valid=ext==='xlsx'?header[0]===0x50&&header[1]===0x4b:signatures[ext].every((v,i)=>header[i]===v);
+ if(!valid)throw new AppError('文件内容与扩展名不匹配，请上传原始 Excel、PDF、PNG 或 JPEG 文件。');
+ const contentTypes:Record<string,string>={xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',xls:'application/vnd.ms-excel',pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg'};
  const hash=await sha(bytes),fileKey=newId('customer_quote_source'),at=now();
- const quote:CustomerQuote={...before,version:before.version+1,sourceFileKey:fileKey,sourceFilename:file.name.replace(/[\\/\r\n\u0000-\u001f]/g,'_').slice(0,180),sourceHash:hash,sourceContentType:ext==='xlsx'?'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':ext==='xls'?'application/vnd.ms-excel':'application/pdf',updatedAt:at,updatedBy:m.name,updatedById:m.id};
+ const quote:CustomerQuote={...before,version:before.version+1,sourceFileKey:fileKey,sourceFilename:file.name.replace(/[\\/\r\n\u0000-\u001f]/g,'_').slice(0,180),sourceHash:hash,sourceContentType:contentTypes[ext],updatedAt:at,updatedBy:m.name,updatedById:m.id};
  // Write a new immutable object. A failed optimistic commit cannot replace any prior file.
  await bucket().put(fileKey,bytes);
  return persist(s,m,quote,before,'上传客户报价原附件');
