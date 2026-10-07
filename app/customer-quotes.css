@@ -33,7 +33,8 @@ body:has(.customer-quote-panel) .heading .actions{display:none!important}
  .cq-document-footer{margin-top:14px;padding-top:8px}
 }
 @media print{
- @page customerQuotation{size:A4 portrait;margin:10mm}
+ /* Keep whitespace inside the document so browser headers have no page-margin area. */
+ @page customerQuotation{size:A4 portrait;margin:0}
  body:has(.customer-quote-panel){background:#fff!important;page:customerQuotation}
  body:has(.customer-quote-panel) .rail,
  body:has(.customer-quote-panel) .topbar,
@@ -47,7 +48,7 @@ body:has(.customer-quote-panel) .heading .actions{display:none!important}
   display:block!important;width:100%!important;max-width:none!important;min-width:0!important;
   min-height:0!important;height:auto!important;margin:0!important;padding:0!important;background:#fff!important
  }
- body:has(.customer-quote-panel) .customer-quote-panel{display:block!important}
+ body:has(.customer-quote-panel) .customer-quote-panel{display:block!important;box-sizing:border-box!important;padding:10mm!important}
  .cq-document{
   margin:0 auto!important;padding:0!important;border:0!important;box-shadow:none!important;
   max-width:none!important;width:190mm!important;zoom:var(--cq-print-scale,1)
