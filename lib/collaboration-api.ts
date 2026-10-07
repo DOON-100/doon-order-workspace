@@ -28,7 +28,8 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
   const latest=new Map<string,Entity>();for(const v of all(s,'factory_order'))if(!latest.has(v.lineId)||latest.get(v.lineId)!.version<v.version)latest.set(v.lineId,v);
   const template=all(s,'collaboration_template').filter(t=>t.templateType==='factory-order'&&t.customer===orders[0].customer).at(-1);
   let bytes:ArrayBuffer|undefined;if(template){const f=await bucket().get(template.fileKey);if(!f)throw new AppError('内部订单模板文件缺失。');bytes=await new Response(f.body).arrayBuffer();}
-  return download(factoryWorkbook(orders,latest,bytes),`中英内部订单_${safe(orders[0].orderNo)}_${safe(orders[0].customerPO)}.xlsx`);
+  const reference=clean(new URL(req.url).searchParams.get('reference')||template?.reference);const projected=orders.map(o=>reference?{...o,extra:{...o.extra,'翻单参考':reference}}:o);
+  return download(factoryWorkbook(projected,latest,bytes),`中英内部订单_${safe(orders[0].orderNo)}_${safe(orders[0].customerPO)}.xlsx`);
  }
  if(action==='factory-order-templates'){if(!roles(m))throw new AppError('无权查看模板。',403);return json({templates:all(s,'collaboration_template').filter(t=>t.templateType==='factory-order'&&(broad(m)||m.customers.includes(t.customer))).map(t=>({customer:t.customer,filename:t.filename}))});}
  if(action==='factory-orders'){const ids=new Set((all(s,'order') as Order[]).filter(o=>canRead(m,o)).map(o=>o.id));return json({items:all(s,'factory_order').filter(v=>ids.has(v.lineId))});}
@@ -50,7 +51,7 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   if(!roles(m))throw new AppError('无权维护订单模板。',403);const form=await req.formData(),file=form.get('file'),customer=clean(form.get('customer'));
   if(!customer||(!broad(m)&&!m.customers.includes(customer)))throw new AppError('请填写你负责的客户。',403);
   if(!(file instanceof File)||!file.size||file.size>10*1024*1024||!/\.xlsx$/i.test(file.name))throw new AppError('请上传不超过10 MB的xlsx模板。');
-  const bytes=await file.arrayBuffer();inspectFactoryTemplate(bytes);const item={id:newId('template'),kind:'collaboration_template',templateType:'factory-order',customer,filename:safe(file.name),fileKey:newId('factory_template'),actor:m.name,createdAt:now()};await bucket().put(item.fileKey,bytes);await commit(s.revision,[item,audit(m,item,null,'上传中英内部订单模板')]);return json({ok:true});
+  const bytes=await file.arrayBuffer();inspectFactoryTemplate(bytes);const item={id:newId('template'),kind:'collaboration_template',templateType:'factory-order',customer,reference:clean(form.get('reference')),filename:safe(file.name),fileKey:newId('factory_template'),actor:m.name,createdAt:now()};await bucket().put(item.fileKey,bytes);await commit(s.revision,[item,audit(m,item,null,'上传中英内部订单模板')]);return json({ok:true});
  }
  if(action==='factory-order-table-preview'){
   if(!roles(m))throw new AppError('无权导入内部订单。',403);const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过10 MB的Excel。');
