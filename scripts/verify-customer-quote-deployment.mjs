@@ -4,7 +4,8 @@ import {createHash} from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 const mode=process.argv[2],checkpoint=process.argv[3];
-if(!['before','after'].includes(mode)||!checkpoint)throw new Error('Usage: before|after <private checkpoint path>');
+const unchanged=process.argv[4]==='--unchanged';
+if(!['before','after'].includes(mode)||!checkpoint||(process.argv[4]&&!unchanged)||process.argv.length>5)throw new Error('Usage: before|after <private checkpoint path> [--unchanged]');
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 const root=path.resolve('lan-data'),db=new DatabaseSync(path.join(root,'workspace.sqlite'),{readOnly:true});
 const rows=db.prepare('SELECT id,kind,data FROM records ORDER BY id').all();
@@ -21,7 +22,8 @@ else{
  if(prior.accountsHash!==current.accountsHash)throw new Error('Existing account metadata changed.');
  for(const [name,hash] of Object.entries(prior.files))if(files[name]!==hash)throw new Error('An existing attachment changed or disappeared.');
  const additions=rows.filter(r=>!prior.records[r.id]);
+ if(unchanged&&(additions.length||Object.keys(files).length!==Object.keys(prior.files).length))throw new Error('Code-only deployment added records or attachments.');
  const newQuoteIds=new Set(additions.filter(r=>r.kind==='customer_quote').map(r=>r.id));
  for(const row of additions){const value=JSON.parse(row.data);if(row.kind==='customer_quote'){if(value.status!=='draft'||value.customerAccountId)throw new Error('Only unbound new quote drafts may be seeded.');}else if(row.kind==='customer_quote_revision'){if(!newQuoteIds.has(value.quoteId))throw new Error('Unexpected historical revision target.');}else if(row.kind==='audit'){if(!newQuoteIds.has(value.targetId))throw new Error('Unexpected audit target.');}else throw new Error('Unexpected new record kind.');}
 }
-console.log(JSON.stringify({mode,integrity,preserved:mode==='after',recordCount:rows.length,fileCount:Object.keys(files).length,accountCount:accountMeta.length}));
+console.log(JSON.stringify({mode,integrity,preserved:mode==='after',unchanged:mode==='after'&&unchanged,recordCount:rows.length,fileCount:Object.keys(files).length,accountCount:accountMeta.length}));

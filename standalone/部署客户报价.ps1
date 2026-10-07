@@ -1,5 +1,7 @@
-param([Parameter(Mandatory=$true)][string]$DraftPath,[Parameter(Mandatory=$true)][string]$SourcePath,[string]$AccessConfigPath='')
+param([string]$DraftPath='',[string]$SourcePath='',[string]$AccessConfigPath='',[switch]$CodeOnly)
 $ErrorActionPreference='Stop'
+if ($CodeOnly -and ($DraftPath -or $SourcePath -or $AccessConfigPath)) { throw 'CodeOnly cannot import drafts or change access configuration.' }
+if (-not $CodeOnly -and (-not $DraftPath -or -not $SourcePath)) { throw 'DraftPath and SourcePath are required unless CodeOnly is selected.' }
 $projectRoot=(Resolve-Path -LiteralPath (Split-Path $PSScriptRoot -Parent)).Path
 Set-Location -LiteralPath $projectRoot
 $env:DOON_DATA_DIR=Join-Path $projectRoot 'lan-data'
@@ -7,8 +9,10 @@ $nodePath='C:\Program Files\nodejs\node.exe'
 $stage=(Resolve-Path -LiteralPath (Join-Path $projectRoot 'test-output\quote-review-build')).Path
 $live=(Resolve-Path -LiteralPath (Join-Path $projectRoot 'lan-dist')).Path
 if ($live -ne (Join-Path $projectRoot 'lan-dist') -or $stage -ne (Join-Path $projectRoot 'test-output\quote-review-build')) { throw 'Unexpected build paths.' }
-$DraftPath=(Resolve-Path -LiteralPath $DraftPath).Path
-$SourcePath=(Resolve-Path -LiteralPath $SourcePath).Path
+if (-not $CodeOnly) {
+ $DraftPath=(Resolve-Path -LiteralPath $DraftPath).Path
+ $SourcePath=(Resolve-Path -LiteralPath $SourcePath).Path
+}
 $browser=Get-Content -LiteralPath 'test-output\customer-quote-browser-result.json' -Raw | ConvertFrom-Json
 $business=Get-Content -LiteralPath 'test-output\result.json' -Raw | ConvertFrom-Json
 if ($browser.passed -lt 15 -or $business.passed -lt 73) { throw 'Required quotation checks have not passed.' }
@@ -54,18 +58,20 @@ try {
  & $nodePath 'scripts/verify-customer-quote-deployment.mjs' before $checkpoint
  if ($LASTEXITCODE -ne 0) { throw 'Pre-deployment preservation checkpoint failed.' }
  Get-ChildItem -LiteralPath $stage | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $live -Recurse -Force }
- & $nodePath 'scripts/verify-customer-quote-deployment.mjs' after $checkpoint
+ & $nodePath 'scripts/verify-customer-quote-deployment.mjs' after $checkpoint --unchanged
  if ($LASTEXITCODE -ne 0) { throw 'Code deployment changed data; stop and investigate.' }
- $dataWritesStarted=$true
- & $nodePath 'standalone/import-customer-quote.mjs' --build-dir $live --draft $DraftPath --source $SourcePath
- if ($LASTEXITCODE -ne 0) { throw 'Draft import did not finish. Existing data has not been rolled back; inspect any newly created draft.' }
- & $nodePath 'scripts/verify-customer-quote-deployment.mjs' after $checkpoint
- if ($LASTEXITCODE -ne 0) { throw 'Post-import preservation check failed. Do not roll back the database.' }
- # First customer binding is an explicitly approved, versioned change. Its own
- # preservation gate permits only that change and the dedicated access policy.
- if ($AccessConfigPath) {
-  $accessResult=& $nodePath 'standalone/configure-customer-quote-access.mjs' --build-dir $live --config $AccessConfigPath --apply
-  if ($LASTEXITCODE -ne 0) { throw 'Quotation access configuration failed; inspect the preservation report. Never restore old data.' }
+ if (-not $CodeOnly) {
+  $dataWritesStarted=$true
+  & $nodePath 'standalone/import-customer-quote.mjs' --build-dir $live --draft $DraftPath --source $SourcePath
+  if ($LASTEXITCODE -ne 0) { throw 'Draft import did not finish. Existing data has not been rolled back; inspect any newly created draft.' }
+  & $nodePath 'scripts/verify-customer-quote-deployment.mjs' after $checkpoint
+  if ($LASTEXITCODE -ne 0) { throw 'Post-import preservation check failed. Do not roll back the database.' }
+  # First customer binding is an explicitly approved, versioned change. Its own
+  # preservation gate permits only that change and the dedicated access policy.
+  if ($AccessConfigPath) {
+   $accessResult=& $nodePath 'standalone/configure-customer-quote-access.mjs' --build-dir $live --config $AccessConfigPath --apply
+   if ($LASTEXITCODE -ne 0) { throw 'Quotation access configuration failed; inspect the preservation report. Never restore old data.' }
+  }
  }
  $releaseReady=$true
 } finally {
@@ -83,6 +89,6 @@ $healthy=$false
 for ($i=0;$i -lt 30;$i++) { try { $health=Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2; if ($health.ok) { $healthy=$true;break } } catch {}; Start-Sleep -Milliseconds 500 }
 if (-not $healthy) { throw 'Post-deployment health check failed; code rollback is retained. Do not restore old data.' }
 $page=Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.176:8787/customer-quotes' -TimeoutSec 10
-$result=[pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$healthy;pageStatus=[int]$page.StatusCode;dataPreserved=$true;checkpoint=$checkpoint;rollback=$rollback;backup=($backup|ConvertFrom-Json);stoppedBackup=($stoppedBackup|ConvertFrom-Json);access=if($accessResult){$accessResult|ConvertFrom-Json}else{$null}}
+$result=[pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$healthy;pageStatus=[int]$page.StatusCode;codeOnly=[bool]$CodeOnly;dataPreserved=$true;checkpoint=$checkpoint;rollback=$rollback;backup=($backup|ConvertFrom-Json);stoppedBackup=($stoppedBackup|ConvertFrom-Json);access=if($accessResult){$accessResult|ConvertFrom-Json}else{$null}}
 $result|ConvertTo-Json -Depth 4|Set-Content -LiteralPath 'test-output\customer-quote-deployment.json' -Encoding utf8
 $result|ConvertTo-Json -Depth 4
