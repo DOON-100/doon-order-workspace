@@ -38,4 +38,5 @@ export async function testCustomerPriceSelection({ok,call,rawRecords,pass,assign
  const denied=await call('customer-price-archive?customerId='+account.id,undefined,other);assert.equal(denied.status,403);const otherResult=await ok('customer-price-archive',undefined,other);assert(!otherResult.selections.some(r=>r.customerAccountId===account.id));assert.equal((await call('customer-price-archive-export?customerId='+account.id,undefined,other)).status,403);
  const generic=await ok('data',undefined,assigned);assert(!JSON.stringify(generic).includes('customer_price_selection'));assert(!generic.audits.some(r=>r.action==='设置客户 SKU 发票价格规则'));assert(!Object.hasOwn(generic,'priceSelections'));
  pass('普通人员不能设置客户规则，规则查询和导出按客户名单过滤，通用 data / audit 不泄漏选择记录或别家规则');
+ const {testCustomerDualPrices}=await import('./customer-dual-price-cases.mjs');await testCustomerDualPrices({ok,call,rawRecords,pass,assigned,other,quoteAdmin,member,model,account,dataset,price,products});
 }
