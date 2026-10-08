@@ -26,9 +26,9 @@ export async function testCustomerPriceArchive({ok,call,state,pass,rawRecords}){
  const imported=await ok('customer-price-archive-import',payload,quoteAdmin),afterFirst=rawRecords();assert.equal((await ok('customer-price-archive-import',payload,quoteAdmin)).alreadyPresent,true);assert.deepEqual(rawRecords(),afterFirst);
  const importedById=new Map(rawRecords().map(r=>[r.id,r]));for(const [id,value] of originalIds)assert.equal(model.canonicalPriceJson(importedById.get(id)),value);assert(!Object.hasOwn(rawRecords().find(r=>r.id===imported.id).dataset.files[0],'path'));
  pass('历史档案明确绑定客户、批次幂等，不覆盖既有报价、客户资料或订单，不存私有绝对路径');
- assert.equal((await call('customer-price-archive',undefined,unlisted)).status,403);
- const mine=await ok('customer-price-archive?customerId='+a.id,undefined,assigned),row=mine.rows.find(r=>r.product.sku===product.sku);
- assert.equal(mine.rows.length,2);assert.equal(mine.summary.missingPrice,1);assert.equal((await ok('customer-price-archive',undefined,other)).rows.length,0);assert.equal((await call('customer-price-archive?customerId='+a.id,undefined,other)).status,403);
+ assert.equal((await call('customer-price-archive?view=history',undefined,unlisted)).status,403);
+ const mine=await ok('customer-price-archive?view=history&customerId='+a.id,undefined,assigned),row=mine.rows.find(r=>r.product.sku===product.sku);
+ assert.equal(mine.rows.length,2);assert.equal(mine.summary.missingPrice,1);assert.equal((await ok('customer-price-archive?view=history',undefined,other)).rows.length,0);assert.equal((await call('customer-price-archive?view=history&customerId='+a.id,undefined,other)).status,403);
  assert.equal(row.basis.lensVariant,'Synthetic RX demo'); assert.equal(row.basis.documentType,'invoice');assert.equal(row.basis.documentNo,'DOC-invoice-latest');assert.equal(row.basis.unitPrice,null);assert.equal(row.basis.reviewStatus,'needs_review');assert.equal(row.history.find(p=>p.documentNo==='DOC-quote').unitPrice,99);assert(!row.history.some(p=>p.documentType==='internal'));assert(!JSON.stringify(mine).includes('Private costing note'));assert(!JSON.stringify(mine).includes('_rawPrice'));assert.equal(row.bases.length,3);assert(row.bases.some(p=>p.quantity===500));assert.equal(row.basis.sentStatus,'unknown');
  pass('最新 INVOICE 待核对时不回退旧已核对价；保留报价、数量阶梯、缺价和独立发送事实，普通人员看不到内部价格');
  const accessory={...product,id:'accessory-product',productType:'accessory'},separation={id:'synthetic-type-separation',kind:'customer_price_archive',customerAccountId:a.id,dataset:{...dataset,products:[accessory],prices:[price('accessory-invoice','invoice',1,{productId:accessory.id})]},files:{}};
@@ -40,7 +40,7 @@ export async function testCustomerPriceArchive({ok,call,state,pass,rawRecords}){
  pass('稳定客户/member ID 同时约束历史档案和已有报价，不被姓名责任字段或全订单权限扩大');
  const bad={...dataset,prices:[...dataset.prices,price('invoice-conflict','invoice',13,{documentDate:'2026-10-01',reviewStatus:'needs_review'})]};
  const conflictImport=await ok('customer-price-archive-import',{customerAccountId:a.id,dataset:bad,datasetSha256:hash(bad)});
- const conflicted=(await ok('customer-price-archive?customerId='+a.id,undefined,assigned)).rows.find(r=>r.product.sku===product.sku);assert(conflicted.bases.some(p=>p.conflict));assert.equal(conflicted.status,'needs_review');
+ const conflicted=(await ok('customer-price-archive?view=history&customerId='+a.id,undefined,assigned)).rows.find(r=>r.product.sku===product.sku);assert(conflicted.bases.some(p=>p.conflict));assert.equal(conflicted.status,'needs_review');
  pass('价格冲突在原始数值层计算；普通账号看不到未核对金额仍能看到冲突标记');
  const form=()=>{const f=new FormData();f.set('archiveId',imported.id);f.set('fileId','source-a');f.set('file',new File([bytes],'synthetic.pdf'));return f;};
  assert.equal((await call('customer-price-archive-file-upload',form(),assigned)).status,403);await ok('customer-price-archive-file-upload',form(),quoteAdmin);assert.equal((await ok('customer-price-archive-file-upload',form(),quoteAdmin)).alreadyPresent,true);
@@ -49,7 +49,7 @@ export async function testCustomerPriceArchive({ok,call,state,pass,rawRecords}){
  for(const user of [assigned,other,unlisted])assert.equal((await call('customer-price-archive-file?archiveId='+imported.id+'&fileId=source-a',undefined,user)).status,403);
  const original=await call('customer-price-archive-file?archiveId='+imported.id+'&fileId=source-a',undefined,quoteAdmin);assert.equal(original.status,200);assert.deepEqual(Buffer.from(await original.arrayBuffer()),bytes);
  pass('混有成本或多客户原件只给独立报价管理员，重复原件按 hash 复用，普通账号只能查询摘录');
- const exportRes=await call('customer-price-archive-export?customerId='+a.id,undefined,assigned);assert.equal(exportRes.status,200);const book=XLSX.read(await exportRes.arrayBuffer(),{type:'array'}),exportRows=XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]]);assert(exportRows.some(r=>r['資料性质']==='quote'||r['资料性质']==='quote'));assert(!exportRows.some(r=>r['资料性质']==='internal'));assert.equal((await call('customer-price-archive-export?customerId='+a.id,undefined,other)).status,403);
+ const exportRes=await call('customer-price-archive-export?view=history&customerId='+a.id,undefined,assigned);assert.equal(exportRes.status,200);const book=XLSX.read(await exportRes.arrayBuffer(),{type:'array'}),exportRows=XLSX.utils.sheet_to_json(book.Sheets[book.SheetNames[0]]);assert(exportRows.some(r=>r['資料性质']==='quote'||r['资料性质']==='quote'));assert(!exportRows.some(r=>r['资料性质']==='internal'));assert.equal((await call('customer-price-archive-export?view=history&customerId='+a.id,undefined,other)).status,403);
  const audits=(await ok('data',undefined,assigned)).audits;assert(!audits.some(r=>[imported.id,conflictImport.id].includes(r.targetId)));
  pass('导出、统计、来源及通用审计按相同报价客户范围执行，不经通用 data 泄漏新档案');
  const legacyDraft={companyEn:'Synthetic Co',companyZh:'合成公司',collectionEn:'',collectionZh:'',customerCode:a.customerCode,customerName:a.customer,customerAccountId:a.id,quoteNo:'SYNTH-INTERNAL-KEEP',quoteDate:'2026-10-08',validUntil:'',currency:'USD',internalNotesZh:'DO-NOT-EXPOSE-COST',internalCosts:[{id:'private-cost',label:'Confidential synthetic factory',rmb:7,notes:'Secret factory note'}],exchangeRateCnyPerUsd:7,lines:[{id:'synthetic-line',model:'MODEL-SYNTH',descriptionZh:'合成描述',descriptionEn:'Synthetic',quantity:null,unitPrice:null,toolingFee:null}],terms:[],reviewNotes:[]};
@@ -59,6 +59,7 @@ export async function testCustomerPriceArchive({ok,call,state,pass,rawRecords}){
  const publicData=await ok('data',undefined,assigned);assert(!JSON.stringify(publicData.audits).includes('DO-NOT-EXPOSE-COST'));assert(!JSON.stringify(publicData.audits).includes('Confidential synthetic factory'));assert.equal((await call('customer-quote-file?id='+q.id,undefined,assigned)).status,403);
  pass('旧报价内部字段和审计后端隔离，普通客户端空字段不会清除成本，非空越权修改被拒绝');
  const currentPolicy=rawRecords().find(r=>r.kind==='customer_quote_access');await ok('customer-quote-access-update',{...next,expectedPolicySha256:hash(currentPolicy),customerMemberIds:{[a.id]:[member(other).id],[b.id]:[member(assigned).id]}});
- assert.equal((await ok('customer-price-archive',undefined,assigned)).rows.length,0);assert((await ok('customer-price-archive',undefined,other)).rows.length===2);assert(!(await ok('customer-quotes',undefined,assigned)).quotes.some(r=>r.id===q.id));
+ assert.equal((await ok('customer-price-archive?view=history',undefined,assigned)).rows.length,0);assert((await ok('customer-price-archive?view=history',undefined,other)).rows.length===2);assert(!(await ok('customer-quotes',undefined,assigned)).quotes.some(r=>r.id===q.id));
  pass('稳定客户责任转移同时移交历史档案、旧报价、导出和原件范围，原负责人立即失去查询权');
+ const {testCustomerPriceSelection}=await import('./customer-price-selection-cases.mjs');await testCustomerPriceSelection({ok,call,rawRecords,pass,assigned,other,quoteAdmin,member,model,hash});
 }

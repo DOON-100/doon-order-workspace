@@ -20,6 +20,9 @@ export type PriceDataset=z.infer<typeof customerPriceDatasetSchema>;
 export type ArchivePrice=PriceDataset['prices'][number];
 export type ArchiveProduct=PriceDataset['products'][number];
 export type PriceArchive=Entity&{kind:'customer_price_archive';customerAccountId:string;datasetSha256:string;dataset:PriceDataset;createdAt:string;createdById:string;files?:Record<string,{fileKey:string;filename:string;sha256:string}>};
+export type InvoicePreference='rx'|'solar'|'highest';
+export type CustomerPriceSelection=Entity&{kind:'customer_price_selection';customerAccountId:string;invoicePreference:InvoicePreference|null;version:number;updatedAt:string;updatedById:string};
+export function customerPriceSelection(s:State,customerId:string){const records=all(s,'customer_price_selection').filter(r=>r.customerAccountId===customerId);return records.length===1?records[0] as CustomerPriceSelection:null;}
 export const canReadPriceArchive=(s:State,m:Member,archive:PriceArchive)=>{
  const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId) as CustomerAccount|undefined;
  return !!account&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuoteAccount(s,m,account));
@@ -55,4 +58,34 @@ export function customerPriceArchiveRows(s:State,m:Member){
   const safe=(p:Record<string,any>)=>{const {_rawPrice,...publicPrice}=p;return publicPrice;};
   return {...row,history:row.history.map(safe),basis:bases[0]?safe(bases[0]):null,bases:bases.map(safe),status};
  }).sort((a,b)=>clean(a.product.factoryModel||a.product.customerModel).localeCompare(clean(b.product.factoryModel||b.product.customerModel))||clean(a.product.sku).localeCompare(clean(b.product.sku)));
+}
+
+// A compact view derived from the immutable evidence. Quantity, specifications and
+// lens variants never create another SKU row; their original facts remain in history.
+export function customerInvoiceSkuRows(s:State,m:Member){
+ const historical=customerPriceArchiveRows(s,m),groups=new Map<string,typeof historical>();
+ for(const row of historical){if(key(row.product.productType)!=='frame'||!clean(row.product.sku))continue;const id=row.customerAccountId+'|sku|'+key(row.product.sku);const list=groups.get(id)||[];list.push(row);groups.set(id,list);}
+ const raw=new Map<string,ArchivePrice>();for(const archive of (all(s,'customer_price_archive') as PriceArchive[]).filter(a=>canReadPriceArchive(s,m,a)))for(const price of archive.dataset.prices)raw.set(archive.id+':'+price.id,price);
+ return [...groups.entries()].map(([id,rows])=>{
+  const first=rows[0],history=rows.flatMap(r=>r.history),invoices=history.filter(p=>p.scope==='sku'&&p.documentType==='invoice'),selection=customerPriceSelection(s,first.customerAccountId),preference=selection?.invoicePreference||null,issues:string[]=[];
+  const latestDate=invoices.reduce((value,p)=>(p.documentDate||'')>value?p.documentDate:value,''),latest=invoices.filter(p=>(p.documentDate||'')===latestDate);
+  const variant=(p:Record<string,any>)=>{const config=key(p.configuration);if(config==='rx'||config==='optical')return 'rx';if(config==='solar'||config==='sun'||config==='sunglasses')return 'solar';const lens=key(p.lensVariant);return /\bsolar\b|\bsun\b|太阳/.test(lens)?'solar':/\brx\b|\boptical\b|光学/.test(lens)?'rx':null;};
+  const latestDenominations=new Set(latest.map(p=>canonicalPriceJson([p.currency,p.unit]))),latestPrices=new Set(latest.map(p=>raw.get(p.id)?.unitPrice??null));
+  const singleLatestValue=latestDenominations.size===1&&latestPrices.size===1&&!latestPrices.has(null);
+  let candidates=latest;if(!singleLatestValue&&(preference==='rx'||preference==='solar'))candidates=latest.filter(p=>variant(p)===preference);
+  const denominations=new Set(candidates.map(p=>canonicalPriceJson([p.currency,p.unit]))),prices=new Set(candidates.map(p=>raw.get(p.id)?.unitPrice??null));
+  let chosen:typeof history[number]|null=null,conflict=false;
+  if(!invoices.length)issues.push('没有 SKU 发票价格依据，未用报价或款级价补填');
+  else if(!candidates.length)issues.push('最新发票没有客户所选配置，未回退旧发票');
+  else if(denominations.size!==1){conflict=true;issues.push('最新发票币种或单位不同，须核对后选择，不能直接比较高低');}
+  else if(prices.has(null)){conflict=true;issues.push('最新发票缺少单价，须核对来源');}
+  else if(preference==='highest'){const highest=candidates.reduce((value,p)=>Math.max(value,raw.get(p.id)!.unitPrice!),0);chosen=candidates.find(p=>raw.get(p.id)!.unitPrice===highest)!;}
+  else if(prices.size===1)chosen=candidates[0];
+  else{conflict=true;issues.push(preference?'最新发票所选配置仍存在不同单价，须进一步核对':'最新发票存在不同单价，请管理员选择客户价格规则');}
+  const basis:Record<string,any>|null=chosen?{...chosen,documentNo:/^(?:invoice\s*(?:no\.?|number)|发票号)\s*[:：]?$/i.test(clean(chosen.documentNo))?null:chosen.documentNo,priceBasis:'INVOICE',conflict:false,applicabilityUnknown:false}:null;
+  const status=!invoices.length?'missing_price':!basis||basis.reviewStatus!=='verified'?'needs_review':'verified';
+  if(basis?.reviewStatus==='needs_review')issues.push('已选择最新发票依据，价格仍待核对');
+  const product=chosen?rows.find(row=>row.history.some(price=>price.id===chosen!.id))?.product||first.product:first.product;
+  return {...first,id,product,history,basis,bases:basis?[basis]:[],status,issues,selectionPreference:preference,selectionConflict:conflict,latestInvoiceDate:latestDate||null,latestInvoiceCurrencies:[...new Set(latest.map(p=>p.currency).filter(Boolean))],invoiceCount:invoices.length,mergedProductCount:rows.length};
+ }).sort((a,b)=>a.customer.localeCompare(b.customer)||clean(a.product.sku).localeCompare(clean(b.product.sku)));
 }

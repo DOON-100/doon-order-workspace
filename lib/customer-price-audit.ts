@@ -1,9 +1,10 @@
 import type {Entity,Member,State} from './domain';
-import {canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {canSeeCustomerQuoteInternal,eligibleCustomerQuoteAccounts,isCustomerQuoteAdministrator} from './customer-quote-access';
 import {canReadPriceArchive,type PriceArchive} from './customer-price-archive';
 export function canReadCustomerPriceAudit(s:State,m:Member,record:Entity):boolean|null{
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
  if(!parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('customer_price_')))return null;
+ const selection=parts.find(v=>v.kind==='customer_price_selection');if(selection)return isCustomerQuoteAdministrator(m,s)&&eligibleCustomerQuoteAccounts(s,m).some(a=>a.id===selection.customerAccountId)&&parts.every(v=>!v.customerAccountId||eligibleCustomerQuoteAccounts(s,m).some(a=>a.id===v.customerAccountId));
  const archive=target?.kind==='customer_price_archive'?target:s.records.find(v=>v.kind==='customer_price_archive'&&v.id===target?.archiveId);
  return !!archive&&canReadPriceArchive(s,m,archive as PriceArchive)&&isCustomerQuoteAdministrator(m,s);
 }
