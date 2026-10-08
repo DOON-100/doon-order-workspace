@@ -21,6 +21,7 @@ import {ImportsPanel} from './import-panel';
 import {LossPanel} from './loss-panel';
 import {PmcPanel} from './pmc-panel';
 import {CollaborationPanel,CustomerMasterPanel} from './collaboration-panel';
+import {ServiceWorkspacePanel} from './service-workspace-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
 import {CustomerQuotePanel} from './customer-quote-panel';
 import {lossBalance,type LossRecord} from '@/lib/losses';
@@ -80,7 +81,7 @@ function Surface({identity,signInUrl,initialView='orders',accountControls,Accoun
  {view==='dashboard'&&<Dashboard data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='sales'&&<CollaborationPanel side="sales" data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='customer-quotes'&&<CustomerQuotePanel data={data} onDirtyChange={setPmcDirty}/>}
- {view==='service'&&<CollaborationPanel side="service" data={data} act={action} busy={busy} openOrder={setSelected}/>}
+ {view==='service'&&<ServiceWorkspacePanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}><CollaborationPanel side="service" data={data} act={action} busy={busy} openOrder={setSelected}/></ServiceWorkspacePanel>}
  {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy}/>}
  {view==='pmc-handoff'&&<CollaborationPanel side="pmc" data={data} act={action} busy={busy} openOrder={setSelected}/>}
