@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {customerQuoteAccessPolicy} from './customer-quote-access';
+import {matchesCustomerResponsibility} from './customer-responsibility';
 
 export const serviceTypes=['customer_profile','followup','project','sample','shipment','receivable'] as const;
 export const serviceCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
@@ -36,8 +37,7 @@ export function assignedServiceCustomer(s:State,m:Member,account:CustomerAccount
  // are reused; broad order scopes and guessed English names never grant access.
  const policy=customerQuoteAccessPolicy(s);
  const aliases=policy&&Object.prototype.hasOwnProperty.call(policy.aliasesByMember,m.id)?policy.aliasesByMember[m.id]:[];
- const names=new Set([m.name,...aliases].map(nameKey).filter(Boolean));
- return [account.salesName,account.serviceName].some(value=>!!nameKey(value)&&names.has(nameKey(value)));
+ return matchesCustomerResponsibility(account,m,'sales',aliases)||matchesCustomerResponsibility(account,m,'service',aliases);
 }
 export function serviceCustomerAccounts(s:State,m:Member):CustomerAccount[]{
  return (all(s,'customer_account') as CustomerAccount[]).filter(account=>assignedServiceCustomer(s,m,account));

@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {all,clean,type CustomerAccount,type Entity,type Member,type State} from './domain';
+import {explicitCustomerResponsibility} from './customer-responsibility';
 
 // A separate grant prevents broad order/PMC roles from also exposing customer prices.
 // Names and account IDs are configuration data, never a source-code allowlist.
@@ -29,6 +30,7 @@ const nameKey=(value:unknown)=>clean(value).toLowerCase();
 export function assignedCustomerQuoteAccount(s:State,m:Member,account:CustomerAccount){
  if(!m.active||!account.active||!canUseCustomerQuotes(s,m))return false;
  if(isCustomerQuoteAdministrator(m))return true;
+ const explicit=explicitCustomerResponsibility(account,m,'quote');if(explicit!==undefined)return explicit;
  const policy=customerQuoteAccessPolicy(s)!;
  const aliases=Object.prototype.hasOwnProperty.call(policy.aliasesByMember,m.id)?policy.aliasesByMember[m.id]:[];
  const names=new Set([m.name,...aliases].map(nameKey).filter(Boolean));
