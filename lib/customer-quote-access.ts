@@ -6,12 +6,16 @@ import {explicitCustomerResponsibility} from './customer-responsibility';
 // Names and account IDs are configuration data, never a source-code allowlist.
 export type CustomerQuoteAccessPolicy=Entity & {
  kind:'customer_quote_access';memberIds:string[];aliasesByMember:Record<string,string[]>;
+ administratorMemberIds?:string[];internalMemberIds?:string[];customerMemberIds?:Record<string,string[]>;
 };
 const nonempty=z.string().trim().min(1).max(240);
 const accessPolicySchema=z.object({
  id:nonempty,kind:z.literal('customer_quote_access'),
  memberIds:z.array(nonempty).max(1000).refine(ids=>new Set(ids).size===ids.length),
- aliasesByMember:z.record(z.array(nonempty).max(30)),
+  aliasesByMember:z.record(z.array(nonempty).max(30)),
+  administratorMemberIds:z.array(nonempty).max(1000).optional(),
+  internalMemberIds:z.array(nonempty).max(1000).optional(),
+  customerMemberIds:z.record(z.array(nonempty).max(1000)).optional(),
 }).passthrough();
 
 export function customerQuoteAccessPolicy(s:State):CustomerQuoteAccessPolicy|null{
@@ -19,19 +23,25 @@ export function customerQuoteAccessPolicy(s:State):CustomerQuoteAccessPolicy|nul
  // Missing, duplicate or malformed configuration must never widen access.
  if(records.length!==1)return null;
  const result=accessPolicySchema.safeParse(records[0]);
- return result.success?result.data as CustomerQuoteAccessPolicy:null;
+ if(!result.success)return null;
+ const policy=result.data as CustomerQuoteAccessPolicy;
+ for(const ids of [policy.administratorMemberIds||[],policy.internalMemberIds||[],...Object.values(policy.customerMemberIds||{})])if(new Set(ids).size!==ids.length||ids.some(id=>!policy.memberIds.includes(id)))return null;
+ return policy;
 }
-export const isCustomerQuoteAdministrator=(m:Member)=>m.active&&m.role==='admin';
+export const isCustomerQuoteAdministrator=(m:Member,s?:State)=>!!m.active&&(m.role==='admin'||!!(s&&customerQuoteAccessPolicy(s)?.administratorMemberIds?.includes(m.id)));
+export const canSeeCustomerQuoteInternal=(s:State,m:Member)=>canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.internalMemberIds?.includes(m.id));
 export function canUseCustomerQuotes(s:State,m:Member){
- return !!m.active&&(isCustomerQuoteAdministrator(m)||!!customerQuoteAccessPolicy(s)?.memberIds.includes(m.id));
+ return !!m.active&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.memberIds.includes(m.id));
 }
 
 const nameKey=(value:unknown)=>clean(value).toLowerCase();
 export function assignedCustomerQuoteAccount(s:State,m:Member,account:CustomerAccount){
  if(!m.active||!account.active||!canUseCustomerQuotes(s,m))return false;
- if(isCustomerQuoteAdministrator(m))return true;
+ if(isCustomerQuoteAdministrator(m,s))return true;
  const explicit=explicitCustomerResponsibility(account,m,'quote');if(explicit!==undefined)return explicit;
  const policy=customerQuoteAccessPolicy(s)!;
+ // Once a stable customer/member binding exists, legacy names cannot widen it.
+ if(policy.customerMemberIds&&Object.prototype.hasOwnProperty.call(policy.customerMemberIds,account.id))return policy.customerMemberIds[account.id].includes(m.id);
  const aliases=Object.prototype.hasOwnProperty.call(policy.aliasesByMember,m.id)?policy.aliasesByMember[m.id]:[];
  const names=new Set([m.name,...aliases].map(nameKey).filter(Boolean));
  // Match an entire confirmed responsibility name: never substring-match, infer
@@ -42,5 +52,5 @@ export function eligibleCustomerQuoteAccounts(s:State,m:Member){
  return (all(s,'customer_account') as CustomerAccount[]).filter(account=>assignedCustomerQuoteAccount(s,m,account));
 }
 export function canCreateCustomerQuote(s:State,m:Member){
- return isCustomerQuoteAdministrator(m)||eligibleCustomerQuoteAccounts(s,m).length>0;
+ return isCustomerQuoteAdministrator(m,s)||eligibleCustomerQuoteAccounts(s,m).length>0;
 }

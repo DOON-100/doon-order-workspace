@@ -25,7 +25,9 @@ async function handle(req,res){
   const hostHeader=String(req.headers.host||'').toLowerCase();if(!hosts.has(hostHeader))fail('访问地址未获授权，请使用主机显示的内网地址。',403);
   const url=new URL(req.url,protocol+'://'+hostHeader);if(!['GET','POST','HEAD'].includes(req.method))fail('不支持的请求方法。',405);
   if(req.method==='POST'&&req.headers.origin!==url.origin)fail('不允许跨站提交，请刷新登录页面。',403);
-  const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>11*1024*1024)fail('文件不能超过 10 MB。',413);parts.push(part);}
+   const largeArchiveUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-price-archive-file-upload';
+   const requestLimit=(largeArchiveUpload?65:11)*1024*1024;
+   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(largeArchiveUpload?'归档原件不能超过 64 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
   let response;
   if(url.pathname==='/health')response=reply({ok:true,service:'度昂订单协作中台·内网版'});

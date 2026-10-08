@@ -6,10 +6,12 @@ import {spawn,execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import * as XLSX from 'xlsx';
+import {verifyCustomerPriceBuildEvidence} from '../scripts/customer-price-build-evidence.mjs';
 const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
 const root=await fs.mkdtemp(path.resolve('test-output/customer-quote-browser-')),dist=path.resolve(process.env.DOON_BUILD_DIR||'test-output/customer-quote-build');
 const origin='http://127.0.0.1:18797',env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18797',DOON_NO_AUTO_BACKUP:'1'};
 const checks=[],errors=[],pdfEvidence=[],pass=s=>{checks.push(s);console.log('PASS '+s);};
+const buildEvidence=await verifyCustomerPriceBuildEvidence(dist);
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Synthetic quotation'],['MODEL-TEST',200,10,5]]),'Quotation');
@@ -105,5 +107,6 @@ try{
  assert.deepEqual(errors,[]);pass('Chinese/English quotation renders without browser runtime errors.');
  const q=(await api('workspace/customer-quotes')).quotes.find(q=>q.quoteNo===draft.quoteNo);assert.equal(q.sourceHash,draft.sourceSha256);assert.equal(q.history.length,11);
  const download=await fetch(origin+'/api/workspace/customer-quote-file?id='+encodeURIComponent(q.id),{headers:{Cookie:cookie}});assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),bytes);pass('Authenticated original attachment downloads byte-identically.');
- await fs.writeFile('test-output/customer-quote-browser-result.json',JSON.stringify({passed:checks.length,checks,root,pdfEvidence,at:new Date().toISOString()},null,2));console.log(JSON.stringify({root,pdfEvidence,passed:checks.length}));
+ const {customerPriceArchiveBrowserCases}=await import('./customer-price-archive-browser-cases.mjs');await customerPriceArchiveBrowserCases({browser,origin,adminCookie:cookie,root,bytes,pass,errors});
+ await fs.writeFile('test-output/customer-quote-browser-result.json',JSON.stringify({passed:checks.length,checks,root,pdfEvidence,buildDir:dist,buildEvidence,at:new Date().toISOString()},null,2));console.log(JSON.stringify({root,pdfEvidence,passed:checks.length}));
 }catch(e){console.error(logs);for(const c of browser?.contexts()||[]){const p=c.pages()[0];if(p){await p.screenshot({path:path.join(root,'failure.png'),fullPage:true}).catch(()=>{});await fs.writeFile(path.join(root,'failure.txt'),await p.locator('body').innerText());}}console.error('Evidence: '+root);throw e;}finally{await browser?.close();server.kill();}

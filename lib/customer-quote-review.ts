@@ -50,7 +50,7 @@ export function visibleCompletedCustomerQuotes(s:State,m:Member){
   if(!snapshot||snapshot.status!=='confirmed'||snapshot.id!==q.id||snapshot.version!==row.quoteVersion||snapshot.customerAccountId!==row.customerAccountId||!canReadCustomerQuote(s,m,snapshot))return false;
   // Even a member who happens to follow both customers must not see a prior
   // customer's archive mixed into a quote that was reassociated by an admin.
-  return isCustomerQuoteAdministrator(m)||q.customerAccountId===snapshot.customerAccountId;
+  return isCustomerQuoteAdministrator(m,s)||q.customerAccountId===snapshot.customerAccountId;
  }).sort((a,b)=>b.confirmedAt.localeCompare(a.confirmedAt)||b.quoteVersion-a.quoteVersion).map(row=>({
   id:row.id,quoteId:row.quoteId,quoteVersion:row.quoteVersion,lineId:row.lineId,quoteNo:row.quoteNo,customerAccountId:row.customerAccountId,customerCode:row.customerCode,customerName:row.customerName,contactName:row.contactName,
   model:row.model,descriptionZh:row.descriptionZh,descriptionEn:row.descriptionEn,quantity:row.quantity,unitPriceUsd:row.unitPriceUsd,toolingFeeUsd:row.toolingFeeUsd,

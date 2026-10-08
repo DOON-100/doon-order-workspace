@@ -1,0 +1,58 @@
+import {z} from 'zod';
+import {all,clean,type CustomerAccount,type Entity,type Member,type State} from './domain';
+import {assignedCustomerQuoteAccount,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
+
+const nullableText=z.string().max(8000).nullable().optional().default(null);
+const amount=z.number().finite().min(0).max(1e12).nullable().optional().default(null);
+const id=z.string().trim().min(1).max(240);
+const sourceRef=z.object({fileId:id,sheet:nullableText,cell:nullableText,page:z.number().int().positive().nullable().optional().default(null)}).strict();
+const sourceRefs=z.array(sourceRef).max(1000).default([]);
+const fileSchema=z.object({id,relativePath:nullableText,path:nullableText,sha256:z.string().regex(/^[a-fA-F0-9]{64}$/).nullable().optional().default(null),category:nullableText,status:nullableText}).passthrough();
+const productSchema=z.object({id,factoryModel:nullableText,customerModel:nullableText,productName:nullableText,productType:nullableText,sku:nullableText,frameColor:nullableText,lens:nullableText,material:nullableText,size:nullableText,specVersion:nullableText,activity:nullableText,sourceRefs}).passthrough();
+const priceSchema=z.object({id,productId:id,scope:z.enum(['sku','model']),documentType:z.enum(['invoice','quote','order','internal','charge']),documentNo:nullableText,version:nullableText,documentDate:nullableText,currency:nullableText,unit:nullableText,configuration:nullableText,lensVariant:nullableText,invoiceKind:nullableText,quantity:amount,quantityMin:amount,quantityMax:amount,quantityBasis:nullableText,unitPrice:amount,toolingFee:amount,otherCharges:z.union([amount,z.string().max(8000),z.array(z.unknown()).max(100)]).optional().default(null),terms:nullableText,reviewStatus:z.enum(['verified','needs_review']),sentStatus:z.enum(['unknown','sent']),sourceRefs,notes:nullableText}).passthrough();
+export const customerPriceDatasetSchema=z.object({schemaVersion:z.literal(1),customer:z.object({code:id,name:id}).passthrough(),files:z.array(fileSchema).max(20000),products:z.array(productSchema).max(100000),prices:z.array(priceSchema).max(100000),issues:z.array(z.unknown()).max(100000).default([]),excluded:z.array(z.unknown()).max(20000).optional().default([])}).strict().superRefine((data,ctx)=>{
+ for(const field of ['files','products','prices'] as const)if(new Set(data[field].map(v=>v.id)).size!==data[field].length)ctx.addIssue({code:z.ZodIssueCode.custom,path:[field],message:'同批次 ID 不能重复'});
+ const products=new Map(data.products.map(v=>[v.id,v])),files=new Map(data.files.map(v=>[v.id,v]));
+ for(const item of [...data.products,...data.prices])for(const ref of item.sourceRefs){const file=files.get(ref.fileId);if(!file||file.status==='excluded')ctx.addIssue({code:z.ZodIssueCode.custom,path:['sourceRefs'],message:'引用文件不存在或已排除'});}
+ for(const price of data.prices){const product=products.get(price.productId);if(!product)ctx.addIssue({code:z.ZodIssueCode.custom,path:['prices'],message:'价格产品 ID 不存在'});if(price.scope==='sku'&&!clean(product?.sku))ctx.addIssue({code:z.ZodIssueCode.custom,path:['prices'],message:'SKU 价格须明确 SKU'});if(price.quantityMin!==null&&price.quantityMax!==null&&price.quantityMin>price.quantityMax)ctx.addIssue({code:z.ZodIssueCode.custom,path:['prices'],message:'数量下限大于上限'});}
+});
+export type PriceDataset=z.infer<typeof customerPriceDatasetSchema>;
+export type ArchivePrice=PriceDataset['prices'][number];
+export type ArchiveProduct=PriceDataset['products'][number];
+export type PriceArchive=Entity&{kind:'customer_price_archive';customerAccountId:string;datasetSha256:string;dataset:PriceDataset;createdAt:string;createdById:string;files?:Record<string,{fileKey:string;filename:string;sha256:string}>};
+export const canReadPriceArchive=(s:State,m:Member,archive:PriceArchive)=>{
+ const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId) as CustomerAccount|undefined;
+ return !!account&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuoteAccount(s,m,account));
+};
+export function canonicalPriceJson(value:unknown):string{return JSON.stringify(canonical(value));}
+function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,canonical(v)])):value;}
+const key=(v:unknown)=>clean(v).toLowerCase();
+// An unidentified row must never be merged solely because its descriptive text matches.
+export const archiveProductKey=(p:ArchiveProduct)=>clean(p.sku)?canonicalPriceJson([key(p.productType),key(p.sku),key(p.factoryModel),key(p.customerModel),key(p.frameColor),key(p.lens),key(p.material),key(p.size),key(p.specVersion)]):canonicalPriceJson(['model',key(p.productType),key(p.factoryModel),key(p.customerModel),key(p.frameColor),key(p.lens),key(p.material),key(p.size),key(p.specVersion),!p.factoryModel&&!p.customerModel?p.id:'']);
+const validDate=(v:string|null)=>!!v&&/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+export const verifiedArchivePrice=(p:ArchivePrice)=>p.reviewStatus==='verified'&&p.unitPrice!==null&&!!p.sourceRefs.length&&!!p.currency&&/^[A-Z]{3}$/.test(p.currency)&&!!p.unit&&!['unknown','待核对'].includes(key(p.unit))&&validDate(p.documentDate);
+const salesType=(type:string)=>['invoice','quote','order'].includes(type);
+const docRank=(type:string)=>type==='invoice'?0:type==='quote'?1:type==='order'?2:3;
+export function customerPriceArchiveRows(s:State,m:Member){
+ const internal=canSeeCustomerQuoteInternal(s,m),archives=(all(s,'customer_price_archive') as PriceArchive[]).filter(a=>canReadPriceArchive(s,m,a));
+ const grouped=new Map<string,{id:string;customerAccountId:string;customer:string;customerCode:string;product:Record<string,unknown>;history:Record<string,any>[];issues:string[]}>();
+ for(const archive of archives){const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId)!;const pricesByProduct=new Map<string,ArchivePrice[]>();for(const price of archive.dataset.prices){const list=pricesByProduct.get(price.productId)||[];list.push(price);pricesByProduct.set(price.productId,list);}
+  const source=(refs:ArchiveProduct['sourceRefs'])=>refs.map(ref=>{const file=archive.dataset.files.find(f=>f.id===ref.fileId);return {fileId:ref.fileId,archiveId:archive.id,filename:clean(file?.relativePath).split(/[\\/]/).pop()||ref.fileId,sheet:ref.sheet,cell:ref.cell,page:ref.page,sha256:file?.sha256||null,hasFile:!!archive.files?.[ref.fileId],canDownload:isCustomerQuoteAdministrator(m,s)&&!!archive.files?.[ref.fileId]};});
+  for(const p of archive.dataset.products){const groupKey=archive.customerAccountId+'|'+archiveProductKey(p);let row=grouped.get(groupKey);if(!row){const {id,factoryModel,customerModel,productName,productType,sku,frameColor,lens,material,size,specVersion,activity}=p;row={id:groupKey,customerAccountId:archive.customerAccountId,customer:account.customer,customerCode:account.customerCode||archive.dataset.customer.code,product:{id,factoryModel,customerModel,productName,productType,sku,frameColor,lens,material,size,specVersion,activity,sourceRefs:source(p.sourceRefs)},history:[],issues:[]};grouped.set(groupKey,row);}
+   for(const p0 of (pricesByProduct.get(p.id)||[]).filter(price=>internal||salesType(price.documentType))){const verified=verifiedArchivePrice(p0),{id,scope,documentType,documentNo,version,documentDate,currency,unit,configuration,lensVariant,invoiceKind,quantity,quantityMin,quantityMax,quantityBasis,terms,sentStatus}=p0;
+    row.history.push({id:archive.id+':'+id,scope,documentType,documentNo,version,documentDate,currency,unit,configuration,lensVariant,invoiceKind,quantity,quantityMin,quantityMax,quantityBasis,unitPrice:internal||verified?p0.unitPrice:null,toolingFee:internal||verified?p0.toolingFee:null,otherCharges:internal||verified?p0.otherCharges:null,terms,reviewStatus:verified?'verified':'needs_review',sentStatus,sourceRefs:source(p0.sourceRefs),...(internal?{notes:p0.notes}: {}),_rawPrice:p0.unitPrice});
+   }
+  }
+ }
+ return [...grouped.values()].map(row=>{
+  row.history.sort((a,b)=>docRank(a.documentType)-docRank(b.documentType)||(b.documentDate||'').localeCompare(a.documentDate||'')||(b.version||'').localeCompare(a.version||''));
+  // Keep quantity tiers and contractual terms alongside each other. Never substitute
+  // a verified old invoice for the latest invoice which still needs review.
+  const groups=new Map<string,typeof row.history>();for(const p of row.history.filter(p=>salesType(p.documentType))){const condition=canonicalPriceJson([p.currency||'unknown',p.unit||'unknown',p.scope,p.configuration,p.lensVariant,p.quantity,p.quantityMin,p.quantityMax,p.quantityBasis,p.terms]);const list=groups.get(condition)||[];list.push(p);groups.set(condition,list);}
+  const bases=[...groups.values()].map<Record<string,any>>(history=>{const invoice=history.filter(p=>p.documentType==='invoice');const candidates=invoice.length?invoice:history;const chosen=candidates[0];const relevant=history.filter(p=>p.documentType===chosen.documentType&&(p.documentDate||'')===(chosen.documentDate||''));const conflict=new Set(relevant.filter(p=>p._rawPrice!==null).map(p=>p._rawPrice)).size>1;return {...chosen,conflict,priceBasis:invoice.length?'INVOICE':'历史'+(chosen.documentType==='quote'?'报价':'订单'),applicabilityUnknown:!chosen.quantityBasis||chosen.quantityBasis==='unknown'||(chosen.quantity===null&&chosen.quantityMin===null)};}).sort((a,b)=>docRank(a.documentType)-docRank(b.documentType)||(b.documentDate||'').localeCompare(a.documentDate||''));
+  const status=!row.history.length?'missing_price':bases.some(p=>p.reviewStatus==='needs_review'||p.conflict||p.applicabilityUnknown)?'needs_review':bases.length?'verified':'missing_price';
+  if(!row.history.length)row.issues.push('没有销售价证据，不按款级价格推填 SKU');if(row.product.sku==null||row.product.sku==='')row.issues.push('款级记录，不能视为全部 SKU 已有价格');if(bases.some(p=>p.conflict))row.issues.push('同日期和数量条件存在不同价格，请核对来源版本');if(bases.some(p=>p.applicabilityUnknown))row.issues.push('数量计价适用条件待核对');
+  const safe=(p:Record<string,any>)=>{const {_rawPrice,...publicPrice}=p;return publicPrice;};
+  return {...row,history:row.history.map(safe),basis:bases[0]?safe(bases[0]):null,bases:bases.map(safe),status};
+ }).sort((a,b)=>clean(a.product.factoryModel||a.product.customerModel).localeCompare(clean(b.product.factoryModel||b.product.customerModel))||clean(a.product.sku).localeCompare(clean(b.product.sku)));
+}

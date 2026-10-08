@@ -1,0 +1,33 @@
+// Exact policy update, with reviewed member/account identity checks. No password/session queries.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
+
+const args=process.argv.slice(2),options={},flags=new Set(['--build-dir','--config','--dry-run','--apply']);
+for(let i=0;i<args.length;i++){const key=args[i];if(!flags.has(key)||Object.hasOwn(options,key))throw new Error('Unknown or repeated option');if(['--dry-run','--apply'].includes(key))options[key]=true;else{const v=args[++i];if(!v||v.startsWith('--'))throw new Error('Missing option value');options[key]=v;}}
+if(!options['--build-dir']||!options['--config']||(options['--apply']&&options['--dry-run']))throw new Error('Usage: --build-dir <validated build> --config <private reviewed JSON> [--dry-run|--apply]');
+const apply=!!options['--apply'],dataDir=path.resolve(process.env.DOON_DATA_DIR||'lan-data'),buildDir=path.resolve(options['--build-dir']);
+const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort((a,b)=>a.localeCompare(b)).map(k=>[k,canonical(v[k])])):v;
+const hash=v=>createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
+const config=JSON.parse((await fs.readFile(options['--config'],'utf8')).replace(/^\uFEFF/,''));
+const grants=[...(Array.isArray(config.memberIds)?config.memberIds:[]),...(config.administratorMemberIds||[]),...(config.internalMemberIds||[]),...Object.values(config.customerMemberIds||{}).flat()];
+if(!Array.isArray(config.expectedMembers)||config.expectedMembers.length<1||!Array.isArray(config.memberIds)||grants.some(id=>!config.expectedMembers.some(m=>m.id===id&&typeof m.name==='string'&&typeof m.username==='string'&&typeof m.accountId==='string')))throw new Error('Every granted member requires an explicit independent name, username and accountId check');
+if(!config.aliasesByMember||typeof config.aliasesByMember!=='object'||!config.customerMemberIds||typeof config.customerMemberIds!=='object'||!Array.isArray(config.administratorMemberIds)||!Array.isArray(config.internalMemberIds))throw new Error('Supply the complete reviewed policy, including empty explicit grant lists');
+for(const ids of [config.memberIds,config.administratorMemberIds,config.internalMemberIds,...Object.values(config.customerMemberIds)])if(!Array.isArray(ids)||new Set(ids).size!==ids.length||ids.some(id=>typeof id!=='string'||!id.trim()||!config.memberIds.includes(id)))throw new Error('Grant lists must be unique, nonempty IDs within the quotation member list');
+for(const [id,aliases] of Object.entries(config.aliasesByMember))if(!config.memberIds.includes(id)||!Array.isArray(aliases)||new Set(aliases).size!==aliases.length||aliases.some(a=>typeof a!=='string'||!a.trim()))throw new Error('Invalid or unconfirmed responsibility aliases');
+let db=new DatabaseSync(path.join(dataDir,'workspace.sqlite'),{readOnly:true}),baseline=db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),entities=baseline.map(r=>JSON.parse(r.data));
+const accounts=db.prepare('SELECT id,username,member_id FROM local_accounts ORDER BY id').all(),policies=entities.filter(r=>r.kind==='customer_quote_access');if(policies.length>1)throw new Error('Multiple policies exist');
+for(const id of Object.keys(config.customerMemberIds))if(!entities.some(r=>r.kind==='customer_account'&&r.id===id&&r.active))throw new Error('Confirmed stable customer ID does not exist or is inactive');
+const actual=policies.length?hash(policies[0]):null;if(actual!==config.expectedPolicySha256)throw new Error('Expected policy hash differs; no configuration was replaced');
+for(const expected of config.expectedMembers){const member=entities.find(m=>m.kind==='member'&&m.id===expected.id),account=accounts.find(a=>a.member_id===expected.id);if(!member?.active||member.name!==expected.name||!account||account.username!==expected.username||account.id!==expected.accountId||member.userId!==expected.accountId)throw new Error('Reviewed independent member/account identity differs');}
+const owners=entities.filter(r=>r.kind==='member'&&r.active&&r.owner&&r.role==='admin');if(owners.length!==1||!accounts.some(a=>a.member_id===owners[0].id&&a.id===owners[0].userId))throw new Error('Exactly one existing owner administrator with matching local account is required');
+const fields=['memberIds','aliasesByMember','administratorMemberIds','internalMemberIds','customerMemberIds'];const payload={expectedPolicySha256:config.expectedPolicySha256,...Object.fromEntries(fields.filter(k=>config[k]!==undefined).map(k=>[k,config[k]]))};
+const report={mode:apply?'apply':'dry-run',expectedPolicySha256:actual,memberCount:config.memberIds.length,administratorCount:(config.administratorMemberIds||[]).length,stableCustomerCount:Object.keys(config.customerMemberIds||{}).length,preserved:false};
+try{
+ if(apply){db.close();const runtime=await import(pathToFileURL(path.join(buildDir,'runtime.mjs'))),api=await import(pathToFileURL(path.join(buildDir,'workspace-api.mjs')));db=runtime.db;if(path.resolve(runtime.dataDir)!==dataDir)throw new Error('Runtime directory differs');const m=owners[0],request=new Request('http://localhost:8787/api/workspace/customer-quote-access-update',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const response=await runtime.context.run({identity:{userId:m.userId,email:m.email,displayName:m.name}},()=>api.POST(request,{params:Promise.resolve({action:'customer-quote-access-update'})}));const result=await response.json();if(!response.ok)throw new Error('Policy API rejected reviewed update ('+response.status+'): '+(result.error||''));report.alreadyPresent=result.alreadyPresent;}
+ const after=db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),byId=new Map(after.map(r=>[r.id,r])),oldIds=new Set(baseline.map(r=>r.id));for(const previous of baseline){const current=byId.get(previous.id);if(!current||current.kind!==previous.kind||previous.data!==current.data&&(!apply||previous.kind!=='customer_quote_access'))throw new Error('Unrelated record changed during access maintenance');}
+ for(const row of after.filter(r=>!oldIds.has(r.id))){const value=JSON.parse(row.data);if(!apply||!(row.kind==='customer_quote_access'||row.kind==='audit'&&value.action==='确认独立报价账号及稳定客户授权'))throw new Error('Unexpected access-maintenance addition');}
+ if(JSON.stringify(db.prepare('SELECT id,username,member_id FROM local_accounts ORDER BY id').all())!==JSON.stringify(accounts))throw new Error('Local account identity metadata changed');report.preserved=true;console.log(JSON.stringify(report));
+}finally{db.close();}

@@ -20,7 +20,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  const forAccount=(a,quoteNo)=>({...draft,customerAccountId:a.id,customerCode:a.customerCode,customerName:a.customer,quoteNo});
  assert.equal((await call('customer-quotes',undefined,assigned)).status,403);
  assert.equal((await call('customer-quote-save',draft,assigned)).status,403);
- const policy={id:'synthetic_customer_quote_access',kind:'customer_quote_access',memberIds:[assigned,other,service,empty].map(user=>memberFor(user).id),aliasesByMember:{[memberFor(service).id]:['TEST-SERVICE-ALIAS']}};
+ const policy={id:'synthetic_customer_quote_access',kind:'customer_quote_access',internalMemberIds:[memberFor(assigned).id,memberFor(other).id],memberIds:[assigned,other,service,empty].map(user=>memberFor(user).id),aliasesByMember:{[memberFor(service).id]:['TEST-SERVICE-ALIAS']}};
  rawInsert(policy);
  for(const user of [allSales,finance,pmc,clerk]){
   assert.equal((await call('customer-quotes',undefined,user)).status,403);assert.equal((await call('customer-quote-save',draft,user)).status,403);
@@ -101,8 +101,8 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  const upload=(quote=q,data=bytes,name='synthetic-quotation.xlsx')=>{const f=new FormData();f.set('quoteId',quote.id);f.set('version',String(quote.version));f.set('file',new File([data],name));return f;};
  assert.equal((await call('customer-quote-upload',upload(),other)).status,403);assert.equal((await call('customer-quote-upload',upload(q,new Uint8Array([1,2,3]),'fake.xlsx'))).status,400);
  const beforeUpload=q.version;q=(await ok('customer-quote-upload',upload(),assigned)).quote;
- assert.equal(q.version,beforeUpload+1);assert.equal(q.hasSource,true);assert.equal(q.sourceHash.length,64);assert.equal(q.sourceFilename,'synthetic-quotation.xlsx');assert(!JSON.stringify(q).includes('sourceFileKey'));
- const res=await call('customer-quote-file?id='+q.id,undefined,assigned);assert.equal(res.status,200);assert.deepEqual(Buffer.from(await res.arrayBuffer()),bytes);
+ assert.equal(q.version,beforeUpload+1);assert.equal(q.hasSource,false);assert.equal(q.sourceHash.length,64);assert.equal(q.sourceFilename,'synthetic-quotation.xlsx');assert(!JSON.stringify(q).includes('sourceFileKey'));
+ const res=await call('customer-quote-file?id='+q.id,undefined,assigned);assert.equal(res.status,403);const adminSource=await call('customer-quote-file?id='+q.id);assert.equal(adminSource.status,200);assert.deepEqual(Buffer.from(await adminSource.arrayBuffer()),bytes);
  for(const user of [other,empty,allSales,finance,pmc,clerk])assert.equal((await call('customer-quote-file?id='+q.id,undefined,user)).status,403);
  assert.equal((await call('customer-quote-upload',upload({...q,version:beforeUpload}))).status,409);
  const firstSourceRevision=structuredClone(rawRecords().find(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id&&v.version===q.version));
@@ -120,7 +120,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
   assert.equal((await call('customer-quote-upload',upload(),user)).status,403);assert.equal((await ok('data',undefined,user)).audits.some(a=>a.targetId===q.id),false);
  }
  const reassigned=(await ok('customer-quotes',undefined,other)).quotes.find(v=>v.id===q.id);assert.equal(reassigned.canEdit,true);assert.equal(reassigned.history.length,q.version);
- assert.equal((await call('customer-quote-file?id='+q.id,undefined,other)).status,200);assert.deepEqual(rawRecords().filter(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id),revisionsBeforeTransfer);
+ assert.equal((await call('customer-quote-file?id='+q.id,undefined,other)).status,403);assert.deepEqual(rawRecords().filter(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id),revisionsBeforeTransfer);
  pass('责任转移立即撤销原创建人及旧客服的报价、附件、历史和审计访问，不删除任何版本');
 
  assert.equal((await call('customer-quote-save',{...fields(q),customerCode:accountB.customerCode,customerName:accountB.customer,customerAccountId:accountB.id},other)).status,403);
@@ -128,7 +128,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  moved=(await ok('customer-quote-upload',upload(moved,bytes,'old-account-only.xlsx'))).quote;
  const movedOld=structuredClone(rawRecords().find(v=>v.kind==='customer_quote_revision'&&v.quoteId===moved.id&&v.version===moved.version));
  moved=(await ok('customer-quote-save',{...fields(moved),customerCode:accountB.customerCode,customerName:accountB.customer,customerAccountId:accountB.id})).quote;
- assert.equal(moved.hasSource,false);assert.equal((await call('customer-quote-file?id='+moved.id,undefined,other)).status,404);assert.deepEqual(rawRecords().find(v=>v.id===movedOld.id),movedOld);assert.equal(moved.history.length,3);
+ assert.equal(moved.hasSource,false);assert.equal((await call('customer-quote-file?id='+moved.id,undefined,other)).status,403);assert.deepEqual(rawRecords().find(v=>v.id===movedOld.id),movedOld);assert.equal(moved.history.length,3);
  // Removing responsibility for A must also hide its old revisions and audit snapshots on a quote now at B.
  await ok('customer-save',{...account,salesName:'无关合成人员',serviceName:''});
  const movedPublic=(await ok('customer-quotes',undefined,other)).quotes.find(v=>v.id===moved.id);
@@ -142,7 +142,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  const firstHash=first.sourceHash,firstRevision=structuredClone(rawRecords().find(v=>v.kind==='customer_quote_revision'&&v.quoteId===first.id&&v.version===first.version));
  first=(await ok('customer-quote-save',{...fields(first),customerAccountId:accountB.id,customerCode:accountB.customerCode,customerName:accountB.customer})).quote;
  assert.equal(first.hasSource,true);assert.equal(first.sourceHash,firstHash);assert.deepEqual(rawRecords().find(v=>v.id===firstRevision.id),firstRevision);
- assert.equal((await call('customer-quote-file?id='+first.id,undefined,other)).status,200);
+ assert.equal((await call('customer-quote-file?id='+first.id,undefined,other)).status,403);
  assert.deepEqual((await ok('customer-quotes',undefined,other)).quotes.find(v=>v.id===first.id).history.map(v=>v.version),[3]);
  pass('未绑定草稿由管理员首次确认归属后保留原附件，旧未绑定版本仅管理员可见');
 

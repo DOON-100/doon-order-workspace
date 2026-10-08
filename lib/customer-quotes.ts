@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {assignedCustomerQuoteAccount,canUseCustomerQuotes,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {assignedCustomerQuoteAccount,canUseCustomerQuotes,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
 export {canCreateCustomerQuote,canUseCustomerQuotes,eligibleCustomerQuoteAccounts} from './customer-quote-access';
 
 const text=(max:number)=>z.string().trim().max(max);
@@ -56,21 +56,22 @@ export function canEditCustomerQuote(s:State,m:Member,q:CustomerQuote){
  return q.status==='draft'&&canReadCustomerQuote(s,m,q);
 }
 export function canReadCustomerQuote(s:State,m:Member,q:CustomerQuote){
- return canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m)||assignedCustomerQuote(s,m,q));
+ return canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,q));
 }
 export function changedQuoteCustomer(before:CustomerQuote,after:CustomerQuoteFields){return ['customerAccountId','customerName','customerCode'].some(field=>key(before[field])!==key(after[field as keyof CustomerQuoteFields]));}
-export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return isCustomerQuoteAdministrator(m)||assignedCustomerQuote(s,m,next);}
+export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,next);}
 
 // Explicit response allowlist. Bucket keys and full historical snapshots remain server-side.
 export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
+ const internal=canSeeCustomerQuoteInternal(s,m),administrator=isCustomerQuoteAdministrator(m,s);
  const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&canReadCustomerQuote(s,m,v.snapshot)).sort((a,b)=>b.version-a.version).map(v=>({
   id:v.id,version:v.version,status:v.snapshot.status,action:v.action,updatedAt:v.updatedAt,updatedBy:v.updatedBy,sourceFilename:v.snapshot.sourceFilename||'',sourceHash:v.snapshot.sourceHash||'',
  }));
  return {
   id:q.id,version:q.version,status:q.status,companyEn:q.companyEn,companyZh:q.companyZh,collectionEn:q.collectionEn,collectionZh:q.collectionZh,
   customerCode:q.customerCode,customerName:q.customerName,customerAccountId:q.customerAccountId,contactName:q.contactName||'',quoteNo:q.quoteNo,quoteDate:q.quoteDate,validUntil:q.validUntil,currency:q.currency,
-  internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[],customerCharges:q.customerCharges||[],
+  ...(internal?{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[]}:{}),canSeeInternal:internal,customerCharges:q.customerCharges||[],
   lines:q.lines,terms:q.terms,reviewNotes:q.reviewNotes,createdAt:q.createdAt,createdBy:q.createdBy,updatedAt:q.updatedAt,updatedBy:q.updatedBy,
-  confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&isCustomerQuoteAdministrator(m),canRevise:q.status==='confirmed'&&canReadCustomerQuote(s,m,q),history,
+  confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:administrator&&!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&administrator,canRevise:q.status==='confirmed'&&canReadCustomerQuote(s,m,q),history,
  };
 }
