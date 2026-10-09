@@ -1,7 +1,8 @@
 param(
     [string]$StagePath = 'test-output\finished-supplier-build',
     [string]$AcceptancePath = 'test-output\finished-supplier-acceptance.json',
-    [string]$NodePath = 'C:\Program Files\nodejs\node.exe'
+    [string]$NodePath = 'C:\Program Files\nodejs\node.exe',
+    [ValidateRange(30,300)][int]$HealthTimeoutSeconds = 180
 )
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path -LiteralPath (Split-Path $PSScriptRoot -Parent)).Path
@@ -80,14 +81,15 @@ function Start-OwnedService {
     Start-ScheduledTask -TaskName $taskName
 }
 function Wait-Healthy {
-    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($HealthTimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
         try {
             $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
             if ($health.ok -and $health.service -eq '度昂订单协作中台·内网版') { Assert-PortOwner; return $true }
         } catch { }
         Start-Sleep -Milliseconds 500
     }
-    throw 'The company service did not become healthy on 8787.'
+    throw "The company service did not become healthy on 8787 within $HealthTimeoutSeconds seconds."
 }
 function Replace-Code([string]$SourceDirectory) {
     # The only recursive deletion is the checked build-output client directory.
