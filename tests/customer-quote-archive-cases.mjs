@@ -19,7 +19,12 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
  let account=(await ok('customer-save',{customer:'SYNTHETIC SENT ARCHIVE A',customerCode:'SYNTH-SENT-A',salesName:assigned.displayName,serviceName:service.displayName,pmcName:'',salesMemberIds:[member(assigned).id],serviceMemberIds:[member(service).id],quoteMemberIds:[member(assigned).id,member(service).id],active:true})).item;
  const accountB=(await ok('customer-save',{customer:'SYNTHETIC SENT ARCHIVE B',customerCode:'SYNTH-SENT-B',salesName:other.displayName,serviceName:'',quoteMemberIds:[member(other).id],active:true})).item;
  const draft={companyEn:'Synthetic Quotation Company',companyZh:'合成测试报价公司',collectionEn:'Synthetic collection',collectionZh:'合成测试系列',customerAccountId:account.id,customerName:account.customer,customerCode:account.customerCode,contactName:'Synthetic Contact',quoteNo:'SYNTH-ARCHIVE-TEST',quoteDate:'2026-01-01',validUntil:'2026-12-31',currency:'USD',internalNotesZh:'INTERNAL-ARCHIVE-COST-NOT-PUBLIC',exchangeRateCnyPerUsd:7,internalCosts:[{id:'synthetic-cost',label:'SECRET-SYNTHETIC-SUPPLIER',rmb:49,notes:'Internal only'}],lines:[{id:'synthetic-style-a',model:'SYNTH-MODEL-A',descriptionZh:'合成产品说明',descriptionEn:'Synthetic product description',quantity:300,quantityBasisZh:'每色每尺寸',quantityBasisEn:'per colour / size',unitPrice:11.11,toolingFee:0},{id:'synthetic-style-b',model:'SYNTH-MODEL-B',descriptionZh:'第二款合成产品说明',descriptionEn:'Second synthetic product description',quantity:300,unitPrice:22.22,toolingFee:0}],terms:[{id:'synthetic-term',labelZh:'测试条款',labelEn:'Synthetic terms',zh:'合成条款已核对',en:'Synthetic conditions reviewed',needsReview:false}],reviewNotes:[]};
+ draft.customerCharges=[{id:'synthetic-archive-charge',labelZh:'合成附加费用',labelEn:'Synthetic additional charge',amount:25,basisZh:'每套单列费用',basisEn:'Quoted separately per set',conditional:false,needsReview:false}];
+ for(const line of draft.lines)Object.assign(line,{factoryModel:'FACTORY-'+line.id,customerModel:'CUSTOMER-'+line.id,materialNumber:'MATERIAL-'+line.id,productType:'frame',component:'',side:'none',supplyStage:'finished',unit:'pair',scopeReviewed:true,scopeNotesZh:'完整成品供货',scopeNotesEn:'Complete finished frame supplied'});
  const fields=q=>Object.fromEntries([...Object.keys(draft),'customerCharges','id','version'].filter(key=>q[key]!==undefined).map(key=>[key,q[key]]));
+ // Every quotation field consumed by the customer-facing document renderer is
+ // selected explicitly; changing current drafts must not change this snapshot.
+ const documentFields=q=>Object.fromEntries(['id','version','status','companyEn','companyZh','collectionEn','collectionZh','customerAccountId','customerName','customerCode','contactName','quoteNo','quoteDate','validUntil','currency','brand','businessType','quoteMode','pricingBasis','currencyReviewed','lines','customerCharges','terms'].map(key=>[key,structuredClone(q[key])]));
  const version=(q,v=q.version,user=assigned)=>ok(`customer-quote-version?quoteId=${q.id}&quoteVersion=${v}`,undefined,user);
  const upload=(q,{quoteVersion=q.version,lineId=q.lines[0].id,category='image',bytes=png,filename='synthetic-style.png',title='',drawingNo=''}={})=>{
   const form=new FormData();form.set('quoteId',q.id);form.set('quoteVersion',String(quoteVersion));
@@ -84,6 +89,12 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
   const confirmedVersion=q.version,confirmedQuote=structuredClone(rawRecords().find(item=>item.id===q.id)),confirmedSnapshot=structuredClone(rawRecords().find(item=>item.kind==='customer_quote_revision'&&item.quoteId===q.id&&item.version===confirmedVersion));
   const confirmedRows=structuredClone(rawRecords().filter(item=>item.kind==='customer_quote_completed'&&item.quoteId===q.id));
   const confirmedView=await version(q);assert.deepEqual(confirmedView.media.map(item=>item.id).sort(),[first.id,second.id].sort());
+  const originalDocument=documentFields(confirmedView.quote);
+  for(const value of Object.values(originalDocument))assert.notEqual(value,undefined,'The complete public quotation document DTO must not be a summary row.');
+  assert.equal(confirmedView.quote.lines.length,2);assert.equal(confirmedView.quote.customerCharges[0].amount,25);
+  assert.equal(confirmedView.quote.lines[0].factoryModel,'FACTORY-synthetic-style-a');assert.equal(confirmedView.quote.lines[0].customerModel,'CUSTOMER-synthetic-style-a');assert.equal(confirmedView.quote.lines[0].materialNumber,'MATERIAL-synthetic-style-a');assert.equal(confirmedView.quote.lines[0].scopeNotesEn,'Complete finished frame supplied');
+  for(const key of ['canEdit','canConfirm','canRevise','canSeeInternal'])assert.equal(confirmedView.quote[key],false);
+  for(const key of ['internalCosts','internalNotesZh','exchangeRateCnyPerUsd'])assert.equal(Object.hasOwn(confirmedView.quote,key),false);
   let completed=(await ok('customer-quote-completed',undefined,service)).rows.filter(item=>item.quoteId===q.id);
   assert.equal(completed.length,2);assert(completed.every(item=>item.quotedCustomer===''));
   assert(completed.find(item=>item.lineId===q.lines[0].id).media.some(item=>item.id===first.id));
@@ -117,11 +128,16 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
   pass('登记发送严格校验实际日期、确认版与证据；同一请求重试幂等、同键不同内容409，Y按发送事件派生且不覆盖历史总表');
 
   q=(await ok('customer-quote-revise',{id:q.id,version:q.version},assigned)).quote;
-  q=(await ok('customer-quote-save',{...fields(q),lines:q.lines.map(line=>({...line,unitPrice:line.unitPrice+1}))},assigned)).quote;
+  q=(await ok('customer-quote-save',{...fields(q),contactName:'REVISED SYNTHETIC CONTACT',lines:q.lines.map(line=>({...line,descriptionEn:'Revised synthetic description '+line.id,unitPrice:line.unitPrice+1})),customerCharges:q.customerCharges.map(charge=>({...charge,amount:30})),terms:q.terms.map(term=>({...term,en:'Revised synthetic commercial conditions'}))},assigned)).quote;
   const alternatePng=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=','base64');
   q=(await ok('customer-quote-media-upload',upload(q,{filename:'revision-only-style.png',bytes:alternatePng}),assigned)).quote;
   const revisionOnly=(await version(q)).media.find(item=>item.filename==='revision-only-style.png');assert(revisionOnly);
-  assert(!(await version(q,confirmedVersion)).media.some(item=>item.id===revisionOnly.id));
+  const previousDocumentWhileDraft=await version(q,confirmedVersion),currentDraftDocument=await version(q);
+  assert.deepEqual(documentFields(previousDocumentWhileDraft.quote),originalDocument,'Clicking an old completed quotation number must return its complete confirmed document, not the latest draft.');
+  assert.equal(previousDocumentWhileDraft.quote.status,'confirmed');assert.equal(previousDocumentWhileDraft.quote.version,confirmedVersion);assert.equal(previousDocumentWhileDraft.quote.lines[0].unitPrice,11.11);
+  assert.equal(currentDraftDocument.quote.status,'draft');assert.equal(currentDraftDocument.quote.lines[0].unitPrice,12.11);assert.equal(currentDraftDocument.quote.customerCharges[0].amount,30);assert.equal(currentDraftDocument.quote.contactName,'REVISED SYNTHETIC CONTACT');
+  assert(previousDocumentWhileDraft.media.some(item=>item.id===first.id));assert(!(previousDocumentWhileDraft.media.some(item=>item.id===revisionOnly.id)));assertNoSecrets(previousDocumentWhileDraft);
+  pass('报价号按指定历史版本返回完整只读英文报价所需字段；新草稿的价格、联系人、附加费用、条款和图片不会替换已确认原版');
   const oldVersionSend=send(q,{quoteVersion:confirmedVersion,recipient:'second-recipient@test.invalid',mediaIds:[sentPdf.id]});
   await ok('customer-quote-record-sent',oldVersionSend,assigned);
   assert.equal((await version(q,confirmedVersion)).sentHistory.length,2,'A historical confirmed version can be registered while its replacement is still a draft.');
@@ -132,6 +148,8 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
   assert.equal(completed.length,4);assert(completed.filter(item=>item.quoteVersion===confirmedVersion).every(item=>item.quotedCustomer==='Y'));assert(completed.filter(item=>item.quoteVersion===q.version).every(item=>item.quotedCustomer===''));
   assert.equal(completed.find(item=>item.quoteVersion===confirmedVersion&&item.lineId===q.lines[0].id).unitPriceUsd,11.11);
   assert.equal(completed.find(item=>item.quoteVersion===q.version&&item.lineId===q.lines[0].id).unitPriceUsd,12.11);
+  const oldDocumentAfterNewConfirmation=await version(q,confirmedVersion),newConfirmedDocument=await version(q);
+  assert.deepEqual(documentFields(oldDocumentAfterNewConfirmation.quote),originalDocument);assert.equal(newConfirmedDocument.quote.status,'confirmed');assert.equal(newConfirmedDocument.quote.customerCharges[0].amount,30);assert.equal(newConfirmedDocument.quote.terms[0].en,'Revised synthetic commercial conditions');assert(newConfirmedDocument.media.some(item=>item.id===revisionOnly.id));assertNoSecrets(oldDocumentAfterNewConfirmation);
   for(const row of confirmedRows)assert.deepEqual(rawRecords().find(item=>item.id===row.id),row);
   pass('可明确登记历史确认版本；修订价、图片、发出状态各按版本隔离，不误标新草稿，不借用其他版本发送凭证');
 
