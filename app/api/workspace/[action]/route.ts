@@ -1,4 +1,5 @@
 import {commitImport} from '@/lib/import-commit';
+import {finishedSupplierGet,finishedSupplierPost,assertLegacyFinishedMutation} from '@/lib/finished-supplier-api';
 import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
 import {departmentColumns} from '@/lib/departments';
 import {operationGet,operationPost} from '@/lib/operations';
@@ -45,6 +46,8 @@ function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
+ const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
+ if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
  const service=await serviceWorkspaceGet(action,req,s,m);if(service)return service;
@@ -67,7 +70,11 @@ export async function GET(req:Request,ctx:Context){try{
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
- const m=await actor(s);const historicalPrice=await customerPriceArchivePost(action,req,s,m);if(historicalPrice)return historicalPrice;const quotePolicy=await customerQuotePolicyPost(action,req,s,m);if(quotePolicy)return quotePolicy;const quotation=await customerQuotePost(action,req,s,m);if(quotation)return quotation;const service=await serviceWorkspacePost(action,req,s,m);if(service)return service;if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;
+ const m=await actor(s);
+ const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
+ if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ if(['ledger-edit','ledger-lifecycle','pack'].includes(action))assertLegacyFinishedMutation(s,action,await req.clone().json());
+ const historicalPrice=await customerPriceArchivePost(action,req,s,m);if(historicalPrice)return historicalPrice;const quotePolicy=await customerQuotePolicyPost(action,req,s,m);if(quotePolicy)return quotePolicy;const quotation=await customerQuotePost(action,req,s,m);if(quotation)return quotation;const service=await serviceWorkspacePost(action,req,s,m);if(service)return service;if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;
  if(['inspect','preview','attachment'].includes(action)){
   const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size)throw new AppError('请选择非空文件。');if(file.size>10*1024*1024)throw new AppError('文件不能超过 10 MB。');
   const bytes=await file.arrayBuffer(),filename=file.name.replace(/[\\/\r\n]/g,'_').slice(0,180);
@@ -108,8 +115,16 @@ export async function POST(req:Request,ctx:Context){try{
   const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
  }
  if(action==='member'){
-  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
+  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),supplierId:z.string().optional(),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
   const existing=input.id?s.records.find(r=>r.id===input.id&&r.kind==='member'):undefined;if(input.id&&!existing)throw new AppError('成员不存在。');
+  if((existing?.role==='supplier')!==(input.role==='supplier')&&existing)throw new AppError('供应商账号与员工账号不能互换角色，请分别建立账号。',403);
+  if(input.role==='supplier'){
+   if(!existing)throw new AppError('请通过内网账号管理创建供应商账号。',403);
+   input.supplierId=input.supplierId||existing.supplierId;
+   if(input.supplierId!==existing.supplierId)throw new AppError('供应商账号不能更换所属供应商，请创建新账号。',403);
+   if(input.active&&!all(s,'supplier').some(v=>v.id===input.supplierId&&v.active!==false))throw new AppError('所属供应商不存在或已停用。');
+   input.orderScope='assigned';input.customers=[];input.departments=[];
+  }else if(input.supplierId)throw new AppError('员工账号不能绑定供应商。');
   if(existing?.owner&&(!input.active||input.role!=='admin'||email(input.email)!==existing.email))throw new AppError('初始管理员的角色、邮箱和启用状态不可在此更改。');
   if(existing&&email(input.email)!==existing.email)throw new AppError('已建立成员不能更换邮箱，请新增成员。');
   if(all(s,'member').some(u=>u.email===email(input.email)&&u.id!==existing?.id))throw new AppError('此邮箱已存在。');

@@ -43,6 +43,7 @@ export async function supplierPost(action:string,req:Request,s:State,m:Member){
   const prior=p.id?all(s,'supplier').find(x=>x.id===p.id):undefined;if(p.id&&!prior)throw new AppError('供应商不存在，请刷新。',404);if(prior&&prior.version!==p.version)throw new AppError('供应商资料已由另一位同事更新，请刷新后核对。',409);
   if(all(s,'supplier').some(x=>x.id!==p.id&&key(x.name)===key(p.name)))throw new AppError('此供应商已存在，请直接编辑现有资料。');
   if(prior&&p.name!==prior.name&&all(s,'outsource').some(x=>key(x.supplier)===key(prior.name)))throw new AppError('此名称已有外发凭证，请保留名称以便追溯；联系人、电话和备注仍可修改。');
+  if(prior&&p.name!==prior.name&&all(s,'finished_supplier_task').some(x=>x.supplierId===prior.id))throw new AppError('此供应商已有成品协作任务，请保留名称以便对账追溯；联系人、电话和备注仍可修改。');
   const item={...prior,...p,id:prior?.id||newId('supplier'),kind:'supplier',version:(prior?.version||0)+1,createdAt:prior?.createdAt||now(),updatedAt:now(),updatedBy:m.name};await commit(s.revision,[item,audit(m,item,prior||null,'维护供应商资料')]);return json(item);
  }
  const id=z.string().parse(body.id),x=all(s,'outsource').find(x=>x.id===id);if(!x)throw new AppError('外发单不存在。',404);

@@ -31,8 +31,10 @@ export async function actor(s:State):Promise<Member>{
 export async function enroll(s:State){
  const user=await getChatGPTUser();if(!user)throw new AppError('请先登录。',401);
  const members=all(s,'member') as Member[];
- if(members.some(m=>m.userId===user.userId))return;
- const invited=members.find(m=>m.email===email(user.email)&&!m.userId&&m.active);
+ const existing=members.find(m=>m.userId===user.userId);
+ if(existing?.role==='supplier')throw new AppError('供应商请使用专用填报工作台。',403);
+ if(existing)return;
+ const invited=members.find(m=>m.email===email(user.email)&&!m.userId&&m.active&&m.role!=='supplier');
  // The site is provisioned owner-private. Only that owner can perform initial enrollment.
  if(members.length&&!invited)throw new AppError('你的账号尚未获授权，请联系工作空间管理员。',403);
  const m:Member=invited?{...invited,userId:user.userId}:{id:newId('member'),kind:'member',email:email(user.email),name:user.displayName,role:'admin',customers:[],active:true,owner:true,userId:user.userId,createdAt:now()};

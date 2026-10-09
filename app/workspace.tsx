@@ -20,6 +20,7 @@ import {active,warehouse,outstanding,currentStage,issues,ownerLabel,balance} fro
 import {ImportsPanel} from './import-panel';
 import {LossPanel} from './loss-panel';
 import {PmcPanel} from './pmc-panel';
+import {FinishedSupplierPanel} from './finished-supplier-panel';
 import {CollaborationPanel,CustomerMasterPanel} from './collaboration-panel';
 import {ServiceWorkspacePanel} from './service-workspace-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
@@ -87,7 +88,7 @@ function Surface({identity,signInUrl,initialView='orders',accountControls,Accoun
  {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy}/>}
  {view==='pmc-handoff'&&<CollaborationPanel side="pmc" data={data} act={action} busy={busy} openOrder={setSelected}/>}
- {view==='finished-outsourcing'&&<PmcPanel productionScope="external" data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/>}
+ {view==='finished-outsourcing'&&<div className="space-y-6"><FinishedSupplierPanel data={data}/><PmcPanel productionScope="external" data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/></div>}
  {view==='pmc'&&<PmcPanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/>}
  {view==='completed'&&<ArchivePanel data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='department'&&<DepartmentPanel data={data} act={action} busy={busy} openOrder={setSelected}/>}

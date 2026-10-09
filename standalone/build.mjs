@@ -9,6 +9,6 @@ const expectedSources=await captureCustomerPriceSourceHashes();
 await fs.mkdir(out,{recursive:true});
 await viteBuild({configFile:false,root:dir,plugins:[react()],resolve:{alias:{'@':root}},publicDir:path.join(root,'public'),css:{postcss:path.join(root,'postcss.config.mjs')},build:{outDir:path.join(out,'client'),emptyOutDir:true}});
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(out,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
-for(const file of ['runtime.mjs','auth.mjs','server.mjs','manage.mjs'])await fs.copyFile(path.join(dir,file),path.join(out,file));
+for(const file of ['runtime.mjs','auth.mjs','server.mjs','manage.mjs','supplier-gateway.mjs'])await fs.copyFile(path.join(dir,file),path.join(out,file));
 await writeCustomerPriceBuildEvidence(out,expectedSources);
 console.log('内网版构建完成：'+out);

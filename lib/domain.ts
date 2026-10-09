@@ -1,8 +1,8 @@
-export const roles=['admin','pmc','production','clerk','sales','finance','programmer','viewer'] as const;
+export const roles=['admin','pmc','production','clerk','sales','finance','programmer','viewer','supplier'] as const;
 export type Role=typeof roles[number];
-export const roleLabels:Record<Role,string>={admin:'管理员',pmc:'PMC',production:'生产管理人员',clerk:'文员 / 跟单',sales:'客服 / 销售',finance:'财务人员',programmer:'程序员',viewer:'只读成员'};
-export const roleDescriptions:Record<Role,string>={admin:'管理全部订单、部门、账号与权限。',pmc:'兼任采购，维护供应商资料、外发单、回复交期和催交；维护源订单、排期、分工、工序和结单归档。',production:'查看全部订单，维护生产进度、各部门工序及供应商收货；源单、结单和账号权限由 PMC / 管理员处理。',clerk:'按设置查看总表；维护本人跟单与获分配部门的工序。',sales:'按设置查看总表和导出报表；只可维护负责客户或本人订单的回复交期和跟进。',finance:'查询全部订单、在制与归档、供应商收货和凭证，导出报表；不修改生产数据。',programmer:'查看系统运行与备份状态；业务订单需另行分配客户范围，只能查询和导出。',viewer:'只读查询和导出获授权范围内的报表。'};
-export type Member={id:string;kind:'member';email:string;name:string;role:Role;customers:string[];userId:string;active:boolean;owner?:boolean;departments?:string[];orderScope?:'all'|'assigned';createdAt:string};
+export const roleLabels:Record<Role,string>={admin:'管理员',pmc:'PMC',production:'生产管理人员',clerk:'文员 / 跟单',sales:'客服 / 销售',finance:'财务人员',programmer:'程序员',viewer:'只读成员',supplier:'供应商填报人'};
+export const roleDescriptions:Record<Role,string>={admin:'管理全部订单、部门、账号与权限。',pmc:'兼任采购，维护供应商资料、外发单、回复交期和催交；维护源订单、排期、分工、工序和结单归档。',production:'查看全部订单，维护生产进度、各部门工序及供应商收货；源单、结单和账号权限由 PMC / 管理员处理。',clerk:'按设置查看总表；维护本人跟单与获分配部门的工序。',sales:'按设置查看总表和导出报表；只可维护负责客户或本人订单的回复交期和跟进。',finance:'查询全部订单、在制与归档、供应商收货和凭证，导出报表；不修改生产数据。',programmer:'查看系统运行与备份状态；业务订单需另行分配客户范围，只能查询和导出。',viewer:'只读查询和导出获授权范围内的报表。',supplier:'仅查看公司发布给所属供应商的成品外发任务，填写进度、交期、送货和返工；公司入仓及结单由内部确认。'};
+export type Member={id:string;kind:'member';email:string;name:string;role:Role;customers:string[];userId:string;active:boolean;owner?:boolean;departments?:string[];orderScope?:'all'|'assigned';supplierId?:string;createdAt:string};
 export type CustomerAccount={id:string;kind:'customer_account';customer:string;customerCode:string;salesName:string;serviceName:string;pmcName:string;salesMemberIds?:string[];serviceMemberIds?:string[];quoteMemberIds?:string[];active:boolean;notes:string;version:number;createdAt:string;updatedAt:string;updatedBy:string};
 export const workflowStatuses=['业务待提交','客服待审核','退回业务补充','PMC待接单','PMC已接单','PMC已排期','生产中','待出货','已完成'] as const;
 export const fields = [
@@ -23,11 +23,11 @@ export const email=(x:unknown)=>clean(x).toLowerCase();
 export const businessKey=(x:Partial<Order>)=>[x.orderNo,x.drawing,x.color,x.lens,x.batch].map(v=>clean(v).toUpperCase()).join('\u001f');
 export const broad=(m:Member)=>m.role==='admin'||m.role==='pmc';
 export const managesProduction=(m:Member)=>broad(m)||m.role==='production';
-export const readsAllOrders=(m:Member)=>managesProduction(m)||m.role==='finance'||m.orderScope==='all';
+export const readsAllOrders=(m:Member)=>m.role!=='supplier'&&(managesProduction(m)||m.role==='finance'||m.orderScope==='all');
 // New and standard orders use productType; historical ledger orders retain the source value in column W.
 export const productTypeOf=(o:Order)=>clean(o.productType||o.ledger?.columns?.W||o.extra?.['W · 产品类型']||o.extra?.['产品类型']);
 export const assignedOrder=(m:Member,o:Order)=>o.ownerEmail===m.email||m.customers.includes(o.customer);
-export function canRead(m:Member,o:Order){return readsAllOrders(m)||assignedOrder(m,o)||(m.orderScope===undefined&&m.role==='clerk'&&!!o.ledger&&!!m.departments?.length);}
+export function canRead(m:Member,o:Order){return m.role!=='supplier'&&(readsAllOrders(m)||assignedOrder(m,o)||(m.orderScope===undefined&&m.role==='clerk'&&!!o.ledger&&!!m.departments?.length));}
 export function allowedFields(m:Member,o:Order):string[]{
  if(o.lifecycle==='archived')return [];
  if(!canRead(m,o)||m.role==='viewer'||m.role==='finance'||m.role==='programmer')return [];
