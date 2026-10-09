@@ -14,6 +14,7 @@ $acceptancePath = (Resolve-Path -LiteralPath $AcceptancePath).Path
 $live = (Resolve-Path -LiteralPath (Join-Path $projectRoot 'lan-dist')).Path
 $testRoot = (Resolve-Path -LiteralPath (Join-Path $projectRoot 'test-output')).Path
 $hostScript = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'service-host.mjs')).Path
+$bootstrapScript = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'service-host-start.ps1')).Path
 $taskName = 'DOON-Order-Workspace'
 $preservationScript = Join-Path $projectRoot 'scripts\verify-customer-quote-deployment.mjs'
 
@@ -30,7 +31,7 @@ function Contains-ExactPath([string]$Command, [string]$ExpectedPath) {
 function Assert-ProjectTask {
     $current = Get-ScheduledTask -TaskName $taskName
     $actions = @($current.Actions)
-    if ($actions.Count -ne 1 -or (Normalize-LocalPath $actions[0].WorkingDirectory) -ne (Normalize-LocalPath $projectRoot) -or -not (Contains-ExactPath $actions[0].Arguments $hostScript)) {
+    if ($actions.Count -ne 1 -or (Normalize-LocalPath $actions[0].WorkingDirectory) -ne (Normalize-LocalPath $projectRoot) -or -not ((Contains-ExactPath $actions[0].Arguments $hostScript) -or (Contains-ExactPath $actions[0].Arguments $bootstrapScript))) {
         throw 'The scheduled task does not exactly match this project and supervisor.'
     }
     $expectedShell = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
