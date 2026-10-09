@@ -1,21 +1,33 @@
 import {all,newId,type Member,type State} from './domain';
 import {isCustomerQuoteAdministrator} from './customer-quote-access';
-import {canReadCustomerQuote,customerQuoteInput,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
+import {canReadCustomerQuote,customerQuoteInput,customerQuoteLineDetails,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
 import {AppError} from './store';
 
 // Confirm the stored draft, never a second payload which has not been saved and
 // reviewed. Internal estimates are deliberately not a source of selling prices.
 export function assertCustomerQuoteConfirmable(q:CustomerQuote){
- const {id,version,companyEn,companyZh,collectionEn,collectionZh,customerCode,customerName,customerAccountId,contactName,quoteNo,quoteDate,validUntil,currency,lines,terms,reviewNotes,internalNotesZh,exchangeRateCnyPerUsd,internalCosts,customerCharges}=q;
- const check=customerQuoteInput.safeParse({id,version,companyEn,companyZh,collectionEn,collectionZh,customerCode,customerName,customerAccountId,contactName,quoteNo,quoteDate,validUntil,currency,lines,terms,reviewNotes,internalNotesZh,exchangeRateCnyPerUsd,internalCosts,customerCharges});
+ const {id,version,companyEn,companyZh,collectionEn,collectionZh,customerCode,customerName,customerAccountId,contactName,quoteNo,quoteDate,validUntil,currency,lines,terms,reviewNotes,internalNotesZh,exchangeRateCnyPerUsd,internalCosts,customerCharges,brand,businessType,quoteMode,pricingBasis,currencyReviewed}=q;
+ const check=customerQuoteInput.safeParse({id,version,companyEn,companyZh,collectionEn,collectionZh,customerCode,customerName,customerAccountId,contactName,quoteNo,quoteDate,validUntil,currency,lines,terms,reviewNotes,internalNotesZh,exchangeRateCnyPerUsd,internalCosts,customerCharges,brand,businessType,quoteMode,pricingBasis,currencyReviewed});
  if(!check.success)throw new AppError('报价草稿字段不完整或格式无效，请保存并核对后确认。');
  const fields=check.data,charges=fields.customerCharges||[],issues:string[]=[];
- if(fields.currency!=='USD')issues.push('本报价完成清单使用美元，请先核对对客报价币种');
+ const mode=fields.quoteMode||'order';
+ if(fields.pricingBasis==='pending')issues.push('报价计价方式仍待确认');
+ const special=mode==='price_list'||fields.businessType==='spare_parts'||fields.lines.some(line=>line.productType==='spare_part');
+ if(special&&fields.currencyReviewed!==true)issues.push('请明确复核本备件／价目表报价的币种');
+ if(special&&!fields.pricingBasis)issues.push('请明确复核本备件／价目表的计价方式');
+ if(fields.lines.some(line=>line.productType==='spare_part')&&(!fields.businessType||fields.businessType==='frame'))issues.push('备件报价须明确选择业务类型');
  if(!fields.validUntil)issues.push('请确认报价有效期');
  fields.lines.forEach((line,index)=>{
-  if(line.quantity===null)issues.push(`第 ${index+1} 项报价数量待确认`);
+  const scope=customerQuoteLineDetails(line,fields);
+  if(mode==='order'&&line.quantity===null)issues.push(`第 ${index+1} 项报价数量待确认`);
+  if(mode==='price_list'&&(!line.quantityBasisZh?.trim()||!line.quantityBasisEn?.trim()))issues.push(`第 ${index+1} 项价目表数量适用条件须填写中英文`);
+  if(scope.unit==='unknown')issues.push(`第 ${index+1} 项计价单位待确认`);
+  if(scope.productType==='unknown')issues.push(`第 ${index+1} 项产品类型待确认`);
+  if(scope.supplyStage==='unknown'||!scope.scopeReviewed)issues.push(`第 ${index+1} 项供货范围待复核`);
+  if((scope.productType==='spare_part'||scope.supplyStage==='raw'||scope.supplyStage==='semi_finished')&&(!scope.scopeNotesZh.trim()||!scope.scopeNotesEn.trim()))issues.push(`第 ${index+1} 项须说明中英文供货范围及包含／排除项`);
+  if(scope.productType==='spare_part'&&!scope.component&&!scope.materialNumber)issues.push(`第 ${index+1} 项须明确备件名称或物料编号`);
   if(line.unitPrice===null)issues.push(`第 ${index+1} 项对客单价待确认`);
-  if(!charges.length&&line.toolingFee===null)issues.push(`第 ${index+1} 项模具费待确认，免收请明确填 0`);
+  if((special||!charges.length)&&line.toolingFee===null)issues.push(`第 ${index+1} 项模具费待确认，免收或不适用请明确填 0`);
   if(!line.descriptionEn.trim())issues.push(`第 ${index+1} 项英文产品描述待确认`);
   if((line.quantityBasisZh||line.quantityBasisEn)&&(!line.quantityBasisZh?.trim()||!line.quantityBasisEn?.trim()))issues.push(`第 ${index+1} 项数量计价基准须填写中英文`);
  });
@@ -31,9 +43,12 @@ export function completedCustomerQuoteRows(q:CustomerQuote):CustomerQuoteComplet
  return q.lines.map(line=>({
   id:newId('customer_quote_completed'),kind:'customer_quote_completed',quoteId:q.id,quoteVersion:q.version,lineId:line.id,
   quoteNo:q.quoteNo,customerAccountId:q.customerAccountId,customerCode:q.customerCode,customerName:q.customerName,contactName:q.contactName||'',
-  model:line.model,descriptionZh:line.descriptionZh,descriptionEn:line.descriptionEn,quantity:line.quantity!,unitPriceUsd:line.unitPrice!,toolingFeeUsd:line.toolingFee,
+  model:line.model,descriptionZh:line.descriptionZh,descriptionEn:line.descriptionEn,quantity:line.quantity,unitPrice:line.unitPrice!,toolingFee:line.toolingFee,
+  unitPriceUsd:q.currency==='USD'?line.unitPrice!:null,toolingFeeUsd:q.currency==='USD'?line.toolingFee:null,...customerQuoteLineDetails(line,q),
+  brand:q.brand||'',businessType:q.businessType||'frame',quoteMode:q.quoteMode||'order',pricingBasis:q.pricingBasis||'row_item',currencyReviewed:q.currencyReviewed??false,
+  ...(q.templateBinding?{templateBinding:structuredClone(q.templateBinding)}:{}),
   ...(line.quantityBasisZh!==undefined?{quantityBasisZh:line.quantityBasisZh}:{}),...(line.quantityBasisEn!==undefined?{quantityBasisEn:line.quantityBasisEn}:{}),
-  currency:'USD',quoteDate:q.quoteDate,validUntil:q.validUntil,customerCharges:structuredClone(q.customerCharges||[]),
+  currency:q.currency,quoteDate:q.quoteDate,validUntil:q.validUntil,customerCharges:structuredClone(q.customerCharges||[]),
   confirmedAt:q.confirmedAt!,confirmedBy:q.confirmedBy!,confirmedById:q.confirmedById!,quotedCustomer:'',
  }));
 }
@@ -53,7 +68,11 @@ export function visibleCompletedCustomerQuotes(s:State,m:Member){
   return isCustomerQuoteAdministrator(m,s)||q.customerAccountId===snapshot.customerAccountId;
  }).sort((a,b)=>b.confirmedAt.localeCompare(a.confirmedAt)||b.quoteVersion-a.quoteVersion).map(row=>({
   id:row.id,quoteId:row.quoteId,quoteVersion:row.quoteVersion,lineId:row.lineId,quoteNo:row.quoteNo,customerAccountId:row.customerAccountId,customerCode:row.customerCode,customerName:row.customerName,contactName:row.contactName,
-  model:row.model,descriptionZh:row.descriptionZh,descriptionEn:row.descriptionEn,quantity:row.quantity,unitPriceUsd:row.unitPriceUsd,toolingFeeUsd:row.toolingFeeUsd,
+  model:row.model,descriptionZh:row.descriptionZh,descriptionEn:row.descriptionEn,quantity:row.quantity,
+  unitPrice:row.unitPrice??(row.currency==='USD'?row.unitPriceUsd:null),toolingFee:row.toolingFee??(row.currency==='USD'?row.toolingFeeUsd:null),
+  unitPriceUsd:row.currency==='USD'?row.unitPriceUsd:null,toolingFeeUsd:row.currency==='USD'?row.toolingFeeUsd:null,...customerQuoteLineDetails(row,row),
+  brand:row.brand||'',businessType:row.businessType||'frame',quoteMode:row.quoteMode||'order',pricingBasis:row.pricingBasis||'row_item',currencyReviewed:row.currencyReviewed??false,
+  ...(row.templateBinding?{templateBinding:row.templateBinding}:{}),
   ...(row.quantityBasisZh!==undefined?{quantityBasisZh:row.quantityBasisZh}:{}),...(row.quantityBasisEn!==undefined?{quantityBasisEn:row.quantityBasisEn}:{}),
   currency:row.currency,quoteDate:row.quoteDate,validUntil:row.validUntil,customerCharges:row.customerCharges,confirmedAt:row.confirmedAt,confirmedBy:row.confirmedBy,quotedCustomer:row.quotedCustomer,
  }));

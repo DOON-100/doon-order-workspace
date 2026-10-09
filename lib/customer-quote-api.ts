@@ -4,6 +4,7 @@ import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
 import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
 import {assertCustomerQuoteConfirmable,completedCustomerQuoteRows,visibleCompletedCustomerQuotes} from './customer-quote-review';
+import {customerQuoteTemplateGet,customerQuoteTemplatePost,detachChangedQuoteTemplate,assertQuoteTemplateMapping} from './customer-quote-template-api';
 import {
  canCreateCustomerQuote,canReadCustomerQuote,canUseCustomerQuotes,customerQuoteInput,eligibleCustomerQuoteAccounts,mayChangeQuoteCustomer,publicCustomerQuote,quoteAccount,
  type CustomerQuote,type CustomerQuoteRevision,
@@ -17,19 +18,20 @@ function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const
 async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]){
  // The current pointer may advance, but each snapshot has a new ID and is never overwritten.
  const revision:CustomerQuoteRevision={id:newId('customer_quote_revision'),kind:'customer_quote_revision',quoteId:q.id,version:q.version,action,updatedAt:q.updatedAt,updatedBy:m.name,snapshot:structuredClone(q)};
- const withoutStorageKey=(value:CustomerQuote|null)=>{if(!value)return null;const {sourceFileKey,...safe}=value;return safe;};
+ const withoutStorageKey=(value:CustomerQuote|null)=>{if(!value)return null;const {sourceFileKey,templateFileKey,templateMapping,...safe}=value;return safe;};
  const records:Entity[]=[q,revision,audit(m,q,withoutStorageKey(before),action,'客户报价工作台',withoutStorageKey(q)),...additionalRecords];
  await commit(s.revision,records);
  return json({ok:true,quote:publicCustomerQuote({...s,records:[...s.records.filter(v=>v.id!==q.id),...records]},m,q)});
 }
 
 export async function customerQuoteGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed'].includes(action))return null;
+ if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed','customer-quote-templates','customer-quote-template-export','customer-quote-template-output-file','customer-quote-completed-export'].includes(action))return null;
  if(action==='customer-quote-access'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('仅管理员可查看客户报价授权配置。',403);
   return json({policy:customerQuoteAccessPolicy(s)});
  }
  allowed(s,m);
+ const templateResponse=await customerQuoteTemplateGet(action,req,s,m);if(templateResponse)return templateResponse;
  if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
  if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:eligibleCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canUseCustomerQuotes(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
@@ -41,12 +43,13 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
 }
 
 export async function customerQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise'].includes(action))return null;
+ if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise','customer-quote-template-register','customer-quote-template-apply','customer-quote-template-archive'].includes(action))return null;
  allowed(s,m);
+ const templateResponse=await customerQuoteTemplatePost(action,req,s,m,persist);if(templateResponse)return templateResponse;
  if(action==='customer-quote-confirm'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('最终英文报价须由管理员明确确认，业务成员可先修改并保存草稿。',403);
   const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive(),acknowledgeEnglish:z.literal(true)}).strict(),await req.json()),before=quoteFor(s,input.id);
-  editable(s,m,before);current(before,input.version);assertCustomerQuoteConfirmable(before);
+  editable(s,m,before);current(before,input.version);assertCustomerQuoteConfirmable(before);assertQuoteTemplateMapping(before);
   if(all(s,'customer_quote_completed').some(row=>row.quoteId===before.id&&row.quoteVersion===before.version+1))throw new AppError('该确认版本已存在归档，请刷新核对。',409);
   const at=now(),quote:CustomerQuote={...before,status:'confirmed',version:before.version+1,confirmedAt:at,confirmedBy:m.name,confirmedById:m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   // Confirmation and immutable completed rows commit atomically under one
@@ -74,6 +77,7 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
   // to another customer's source. First administrator-confirmed binding retains
   // its source; immutable snapshots and stored bytes always remain intact.
   if(before?.customerAccountId&&before.customerAccountId!==fields.customerAccountId){delete quote.sourceFileKey;delete quote.sourceFilename;delete quote.sourceHash;delete quote.sourceContentType;}
+  detachChangedQuoteTemplate(before,quote);
   return persist(s,m,quote,before,before?'更新客户报价草稿':'创建客户报价草稿');
  }
  const form=await req.formData(),input=parse(z.object({quoteId:z.string().min(1),version:z.string().regex(/^[1-9]\d*$/).transform(Number).refine(Number.isSafeInteger)}),{quoteId:form.get('quoteId'),version:form.get('version')}),before=quoteFor(s,input.quoteId);

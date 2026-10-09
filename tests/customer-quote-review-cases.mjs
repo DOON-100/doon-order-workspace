@@ -78,7 +78,6 @@ export async function testCustomerQuoteReview({ok,call,state,pass,rawRecords,raw
   {lines:[{...complete.lines[0],quantityBasisEn:''}]},
   {lines:[{...complete.lines[0],toolingFee:null}],customerCharges:[]},
   {validUntil:''},
-  {currency:'CNY'},
   {terms:[]},
   {terms:[{...complete.terms[0],needsReview:true}]},
   {terms:[{...complete.terms[0],en:''}]},
@@ -96,7 +95,7 @@ export async function testCustomerQuoteReview({ok,call,state,pass,rawRecords,raw
  for(const amount of ['',-1])await denyWithoutMutation('customer-quote-save',{...complete,customerCharges:[{...charge,amount}]},400,assigned);
  await denyWithoutMutation('customer-quote-save',{...complete,customerCharges:[charge,charge]},400,assigned);
  for(const exchangeRateCnyPerUsd of [0,-1,''])await denyWithoutMutation('customer-quote-save',{...complete,exchangeRateCnyPerUsd},400,assigned);
- pass('确认逐项核验英文、数量基准、有效期、USD币种、条款和附加费；待审核和未填值不生成正式记录');
+ pass('确认逐项核验英文、数量基准、有效期、条款和附加费；待审核和未填值不生成正式记录');
 
  q=(await ok('customer-quote-save',{...fields(q),...complete,id:q.id,version:q.version,lines:[{...complete.lines[0],toolingFee:null},{...complete.lines[0],id:'review-line-b',model:'TEST-REVIEW-MODEL-B',quantity:60,unitPrice:0,toolingFee:0}],customerCharges:[charge,{...charge,id:'review-charge-conditional',labelZh:'合成条件费',labelEn:'Synthetic conditional charge',amount:3,conditional:true,basisZh:'仅低于合成条件时每色收取',basisEn:'Per colour only below the synthetic threshold'}]},assigned)).quote;
  const draftVersion=q.version,priorSnapshots=rawRecords().filter(item=>item.kind==='customer_quote_revision'&&item.quoteId===q.id).map(item=>structuredClone(item));
