@@ -66,6 +66,10 @@ function open(value:Uint8Array|ArrayBuffer,output=false):Package{
   if(!allowed.test(name)&&!(directories.has(name)&&!content.length))fail('此模板含图片、批注、宏、嵌入对象或其他额外内容，第一期不能安全保留，请先提供仅含客户报价表的模板。');
   if(name.endsWith('.xml')||name.endsWith('.rels')){
    const source=strFromU8(content);
+   if(name.startsWith('xl/worksheets/')){
+    const tags=new Set(['worksheet','sheetPr','outlinePr','pageSetUpPr','tabColor','dimension','sheetViews','sheetView','selection','pane','sheetFormatPr','cols','col','sheetData','row','c','v','f','is','t','mergeCells','mergeCell','pageMargins','pageSetup','printOptions','headerFooter','autoFilter','sheetCalcPr','ignoredErrors','ignoredError']);
+    if(source.includes('<!--')||[...source.matchAll(/<\/?([\w:]+)/g)].some(match=>!tags.has(match[1].split(':').pop()!)))fail('报价工作表含不支持的附加 XML 内容，须先核对以免泄漏。');
+   }
    if(name==='xl/metadata.xml'){if(source.replace(/<\?xml[^>]*\?>/,'').replace(/\s+/g,'')!==SAFE_METADATA.replace(/\s+/g,''))fail('模板含额外单元格元数据，第一期不能安全保留。');continue;}
    if(name==='docProps/custom.xml'){
     const properties=[...source.matchAll(/<property\b[^>]*>[\s\S]*?<\/property>/g)];
@@ -144,7 +148,7 @@ function mapping(pkg:Package):Omit<CustomerQuoteTemplate,'sourceHash'>{
 }
 export async function parseCustomerQuoteTemplate(bytes:Uint8Array|ArrayBuffer):Promise<CustomerQuoteTemplate>{const pkg=open(bytes);return {...mapping(pkg),sourceHash:await digest(bytesOf(bytes))};}
 
-function date(value:string){if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||new Date(value+'T00:00:00Z').toISOString().slice(0,10)!==value)fail('报价日期及有效期必须为有效的 YYYY-MM-DD 日期。');return value;}
+function date(value:string){const parsed=new Date(value+'T00:00:00Z');if(!/^\d{4}-\d{2}-\d{2}$/.test(value)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==value)fail('报价日期及有效期必须为有效的 YYYY-MM-DD 日期。');return value;}
 function confirmed(input:CustomerQuoteTemplateExportInput){
  const {template,prices,metadata}=input;
  if(template.adapterId!=='metropolitan-spare-parts-v1'||!template.items.length||template.items.length>MAX_ITEMS||template.items.some(i=>i.conflicts.length)||new Set(template.items.map(i=>i.id)).size!==template.items.length)fail('模板含未解决的物料冲突，请先修正并重新登记。');

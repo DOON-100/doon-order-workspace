@@ -38,6 +38,7 @@ export async function testCustomerQuoteTemplateApi({ok,call,state,pass,rawRecord
  await denied('customer-quote-template-apply',{quoteId:q.id,version:saved,templateId:template.id},409,identity);
  await denied('customer-quote-confirm',{id:q.id,version:q.version,acknowledgeEnglish:true},400);
  const payload=quote=>Object.fromEntries([...Object.keys(base),'quoteMode','pricingBasis','currencyReviewed','id','version'].filter(key=>quote[key]!==undefined).map(key=>[key,quote[key]]));
+ q.terms=q.terms.map(term=>({...term,needsReview:false}));
  q=(await ok('customer-quote-save',{...payload(q),pricingBasis:'row_item',currencyReviewed:true,reviewNotes:[],lines:q.lines.map((line,index)=>({...line,factoryModel:'SYNTH-FACTORY-'+index,component:index===1?'temple_tip':'frame',productType:index===1?'spare_part':'frame',side:index===1?'left':'none',supplyStage:index===0?'raw':'finished',unit:index===1?'piece':'pair',scopeReviewed:true,scopeNotesZh:'仅列示合成物料；不包含其他配件',scopeNotesEn:'Listed synthetic item only; excludes other components',quantityBasisZh:'测试价目，数量待订单确认',quantityBasisEn:'Synthetic price list; quantity to be confirmed per order',unitPrice:10+index,toolingFee:0}))},identity)).quote;
  q=(await ok('customer-quote-confirm',{id:q.id,version:q.version,acknowledgeEnglish:true})).quote;
  const confirmed=q.version,rows=(await ok('customer-quote-completed',undefined,identity)).rows.filter(row=>row.quoteId===q.id);
@@ -53,7 +54,18 @@ export async function testCustomerQuoteTemplateApi({ok,call,state,pass,rawRecord
  const upload=bytes=>{const form=new FormData();form.set('quoteId',q.id);form.set('quoteVersion',String(confirmed));form.set('file',new File([bytes],'synthetic-actual-customer.xlsx'));return form;};
  const archive=await ok('customer-quote-template-archive',upload(exported),identity);assert(archive.output.uploaded);assert(!Object.hasOwn(archive.output,'fileKey'));
  const download=await call('customer-quote-template-output-file?id='+archive.output.id,undefined,identity);assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),Buffer.from(exported));
+ const sentUpload=bytes=>{const form=upload(bytes);form.set('category','sent_quote');return form;};
+ const sentMedia=(await ok('customer-quote-media-upload',sentUpload(exported),identity)).media;
+ assert.equal(sentMedia.contentType,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+ assert.equal((await call('customer-quote-media-file?id='+sentMedia.id,undefined,identity)).status,200);
+ assert.equal((await ok('customer-quote-completed',undefined,identity)).rows.find(row=>row.quoteId===q.id).quotedCustomer,'');
+ const actualSend={quoteId:q.id,quoteVersion:confirmed,sentDate:new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}),recipient:'synthetic-recipient@test.invalid',channel:'email',mediaIds:[sentMedia.id],idempotencyKey:'synthetic-template-send-once'};
+ await ok('customer-quote-record-sent',actualSend,identity);assert((await ok('customer-quote-record-sent',actualSend,identity)).alreadyPresent);
+ assert((await ok('customer-quote-completed',undefined,identity)).rows.filter(row=>row.quoteId===q.id).every(row=>row.quotedCustomer==='Y'&&row.sentHistory.length===1));
+ pass('已发XLSX经确认快照回读后才能关联发送记录，文件归档不标已发、真实发送登记及重试只生成一条事实');
  customerSheet.D5.v=99;const changed=XLSX.write(output,{type:'buffer',bookType:'xlsx'});await denied('customer-quote-template-archive',upload(changed),400,identity);
+ await denied('customer-quote-media-upload',sentUpload(changed),400,identity);
+ const wrongCategory=sentUpload(exported);wrongCategory.set('category','evidence');await denied('customer-quote-media-upload',wrongCategory,400,identity);
  const total=await call('customer-quote-completed-export',undefined,identity);assert.equal(total.status,200);const totalBook=XLSX.read(await total.arrayBuffer()),totalRows=XLSX.utils.sheet_to_json(totalBook.Sheets[totalBook.SheetNames[0]]);assert.equal(totalRows.filter(r=>r['报价单号']===q.quoteNo).length,3);assert(totalRows.filter(r=>r['报价单号']===q.quoteNo).every(r=>r['币种']==='EUR'));assert(!JSON.stringify(totalRows).includes('SECRET-SYNTHETIC'));
  pass('实际对客Excel必须与确认版本的物料、价格及计价条件一致，手改价格须修订；总表Excel执行权限并排除内部成本');
  q=(await ok('customer-quote-revise',{id:q.id,version:q.version},identity)).quote;
@@ -61,6 +73,7 @@ export async function testCustomerQuoteTemplateApi({ok,call,state,pass,rawRecord
  await denied(`customer-quote-template-export?quoteId=${q.id}&quoteVersion=${q.version}`,undefined,403,identity);
  q=(await ok('customer-quote-save',{...payload(q),customerAccountId:other.id,customerName:other.customer,customerCode:other.customerCode})).quote;assert(!q.templateBinding);
  await denied('customer-quote-template-output-file?id='+archive.output.id,undefined,403,identity);
+ await denied('customer-quote-media-file?id='+sentMedia.id,undefined,403,identity);
  assert(rawRecords().some(r=>r.kind==='customer_quote_revision'&&r.quoteId===q.id&&r.version===confirmed&&r.snapshot.templateBinding?.id===template.id));
  pass('修订保留确认快照与客户成品，草稿不能冒充正式文件，重绑定客户后旧客户文件权限即时收回');
 }

@@ -16,6 +16,7 @@ type Persist=(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:
 const id=z.string().trim().min(1).max(120),short=z.string().trim().min(1).max(240);
 const version=z.number().int().positive().refine(Number.isSafeInteger);
 function parse<T extends z.ZodTypeAny>(schema:T,input:unknown):z.output<T>{const result=schema.safeParse(input);if(!result.success)throw new AppError(result.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).slice(0,4).join('；'));return result.data;}
+const scopeKey=(value:unknown)=>String(value||'').trim().toLowerCase();
 async function engine<T>(action:()=>Promise<T>):Promise<T>{try{return await action();}catch(error){if(error instanceof AppError)throw error;throw new AppError(error instanceof Error?error.message:'客户工作簿内容无效，请核对模板。');}}
 function compatibleTemplate(template:CustomerQuoteTemplate){if(template.items.length>200||template.items.some(item=>item.id.length>100||(item.modelNames[0]||item.materialNumber).length>200||item.modelNames.join(' / ').length>200))throw new AppError('模板超出本期报价限制：最多 200 个物料，行编号不超过 100 字符、父款名称不超过 200 字符。请先核对客户模板。');}
 function accountFor(s:State,m:Member,accountId:string){const account=quoteAccount(s,accountId);if(!account||!assignedCustomerQuoteAccount(s,m,account))throw new AppError('没有此客户模板的权限或客户已停用。',403);return account;}
@@ -36,9 +37,13 @@ function exportInput(q:TemplateQuote){
  const template=q.templateMapping!,mapped=new Set(template.items.map(item=>item.id));
  if(q.lines.length!==mapped.size||q.lines.some(line=>!mapped.has(line.id)))throw new AppError('报价行与模板映射不一致，请重新核对模板及修订版本。');
  const prices=q.lines.map(line=>({itemId:line.id,materialNumber:line.materialNumber||'',description:line.descriptionEn,unit:line.unit||'unknown',unitPrice:line.unitPrice!,status:'confirmed' as const,quantity:line.quantity,quantityBasisEn:line.quantityBasisEn||'',scopeNotesEn:line.scopeNotesEn||'',factoryModel:line.factoryModel||'',customerModel:line.customerModel||'',component:line.component||'',side:line.side||'none',supplyStage:line.supplyStage||'unknown'}));
- return {template,prices,metadata:{quoteNo:q.quoteNo,quoteDate:q.quoteDate,validUntil:q.validUntil,currency:q.currency,brand:q.brand||'',businessType:q.businessType||'',quantityMode:q.quoteMode||'order',terms:['Pricing basis: each material-number item separately; prices on component rows are item prices.',...q.terms.map(term=>`${term.labelEn}: ${term.en}`)].concat((q.customerCharges||[]).map(charge=>`${charge.conditional?'Conditional charge - ':''}${charge.labelEn}: ${charge.amount} ${q.currency}; ${charge.basisEn}`),q.lines.map(line=>`${line.materialNumber}: ${line.component||'item'}; side: ${line.side||'none'}; supply stage: ${line.supplyStage||'unknown'}; quantity basis: ${line.quantityBasisEn||'not specified'}; supply scope: ${line.scopeNotesEn||line.descriptionEn}; tooling fee: ${line.toolingFee===null?'not separately specified; see listed charges':`${line.toolingFee} ${q.currency} per quoted item`}.`))}};
+ return {template,prices,metadata:{quoteNo:q.quoteNo,quoteDate:q.quoteDate,validUntil:q.validUntil,currency:q.currency,brand:q.brand||'',businessType:q.businessType||'',quantityMode:q.quoteMode||'order',terms:[`Customer: ${q.customerName} (${q.customerCode}); contact: ${q.contactName||'not specified'}`,`Quote version: R${q.version}`,'Pricing basis: each material-number item separately; prices on component rows are item prices.',...q.terms.map(term=>`${term.labelEn}: ${term.en}`)].concat((q.customerCharges||[]).map(charge=>`${charge.conditional?'Conditional charge - ':''}${charge.labelEn}: ${charge.amount} ${q.currency}; ${charge.basisEn}`),q.lines.map(line=>`${line.materialNumber}: ${line.component||'item'}; side: ${line.side||'none'}; supply stage: ${line.supplyStage||'unknown'}; quantity basis: ${line.quantityBasisEn||'not specified'}; supply scope: ${line.scopeNotesEn||line.descriptionEn}; tooling fee: ${line.toolingFee===null?'not separately specified; see listed charges':`${line.toolingFee} ${q.currency} per quoted item`}.`))}};
 }
 export function assertQuoteTemplateMapping(q:TemplateQuote){if(q.templateBinding){try{assertCustomerQuoteTemplateExportable(exportInput(q));}catch(error){if(error instanceof AppError)throw error;throw new AppError(error instanceof Error?error.message:'模板报价映射无效。');}}}
+export async function validateTemplateQuoteArchive(q:TemplateQuote,bytes:ArrayBuffer){
+ if(q.status!=='confirmed'||!q.templateBinding||!q.templateMapping)throw new AppError('已发 XLSX 必须绑定本期支持的客户模板及已确认报价版本。');
+ return engine(()=>validateCustomerQuoteTemplateOutput(bytes,exportInput(q)));
+}
 async function outputRecord(s:State,m:Member,q:TemplateQuote,bytes:ArrayBuffer,uploaded:boolean,originalName?:string){
  const sourceHash=await sha(bytes),existing=(all(s,'customer_quote_template_output') as OutputRecord[]).find(record=>record.quoteId===q.id&&record.quoteVersion===q.version&&record.sourceHash===sourceHash&&record.uploaded===uploaded);
  if(existing)return existing;
@@ -59,6 +64,10 @@ export async function customerQuoteTemplateGet(action:string,req:Request,s:State
  if(action==='customer-quote-completed-export'){
   const rows=visibleCompletedCustomerQuotes(s,m),book=XLSX.utils.book_new();
   const data=rows.map(row=>({'客户编号':row.customerCode,'客户名称':row.customerName,'品牌':row.brand||'','业务类型':row.businessType||'','报价单号':row.quoteNo,'确认版本':row.quoteVersion,'报价日期':row.quoteDate,'有效期':row.validUntil,'厂款':row.factoryModel||row.model,'客款':row.customerModel||'','客户物料号':row.materialNumber||'','部件':row.component||'','左右':row.side||'none','供货状态':row.supplyStage||'finished','产品类型':row.productType||'frame','报价模式':row.quoteMode||'order','数量':row.quantity,'数量基准':row.quantityBasisEn||'','币种':row.currency,'单位':row.unit||'pair','对客单价':row.unitPrice??row.unitPriceUsd,'产品说明':row.descriptionEn,'确认时间':row.confirmedAt,'客户模板':row.templateBinding?.title||'','客户文件下载':row.templateBinding?`/api/workspace/customer-quote-template-export?quoteId=${encodeURIComponent(row.quoteId)}&quoteVersion=${row.quoteVersion}`:''}));
+  for(const [index,row] of rows.entries()){
+   Object.assign(data[index],{'模具费':row.toolingFee??row.toolingFeeUsd,'数量条件中文':row.quantityBasisZh||'','供货范围中文':row.scopeNotesZh||'','供货范围英文':row.scopeNotesEn||'','已报价客户':row.quotedCustomer,'已发报价附件下载':row.media.filter(media=>media.category==='sent_quote').map(media=>`${url.origin}/api/workspace/customer-quote-media-file?id=${encodeURIComponent(media.id)}&download=1`).join('\n')});
+   if(data[index]['客户文件下载'])data[index]['客户文件下载']=url.origin+data[index]['客户文件下载'];
+  }
   XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(data),'已完成报价总表');
   return download(XLSX.write(book,{type:'array',bookType:'xlsx'}),'已完成报价总表.xlsx');
  }
@@ -69,6 +78,8 @@ export async function customerQuoteTemplateGet(action:string,req:Request,s:State
   return download(await readObject(output.fileKey),output.filename);
  }
  const input=parse(z.object({quoteId:id,quoteVersion:version}),{quoteId:url.searchParams.get('quoteId'),quoteVersion:Number(url.searchParams.get('quoteVersion'))}),q=confirmedVersion(s,m,input.quoteId,input.quoteVersion),params=exportInput(q);
+ const cached=(all(s,'customer_quote_template_output') as OutputRecord[]).find(output=>output.quoteId===q.id&&output.quoteVersion===q.version&&output.customerAccountId===q.customerAccountId&&output.templateId===q.templateBinding!.id&&!output.uploaded);
+ if(cached){const bytes=await readObject(cached.fileKey);if(await sha(bytes)!==cached.sourceHash)throw new AppError('客户成品归档摘要不一致，请联系管理员核对。',409);return download(bytes,cached.filename);}
  const original=await readObject(q.templateFileKey!),bytes=await engine(()=>exportCustomerQuoteTemplate(original,params)),buffer=bytes.slice().buffer as ArrayBuffer;
  const output=await outputRecord(s,m,q,buffer,false);
  return download(buffer,output.filename);
@@ -78,7 +89,7 @@ export async function customerQuoteTemplatePost(action:string,req:Request,s:Stat
  if(!['customer-quote-template-register','customer-quote-template-apply','customer-quote-template-archive'].includes(action))return null;
  if(action==='customer-quote-template-register'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('客户模板须由报价管理员核对后登记。',403);
-  const form=await req.formData(),input=parse(z.object({customerAccountId:id,brand:short,businessType:short,title:short}),Object.fromEntries(['customerAccountId','brand','businessType','title'].map(key=>[key,form.get(key)])));
+  const form=await req.formData(),input=parse(z.object({customerAccountId:id,brand:short,businessType:short.max(120),title:short}),Object.fromEntries(['customerAccountId','brand','businessType','title'].map(key=>[key,form.get(key)])));
   accountFor(s,m,input.customerAccountId);
   const file=form.get('file');if(!(file instanceof File)||!file.name.toLowerCase().endsWith('.xlsx')||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的客户 XLSX 原模板。');
   const bytes=await file.arrayBuffer(),mapping=await engine(()=>parseCustomerQuoteTemplate(bytes)),sourceHash=await sha(bytes);compatibleTemplate(mapping);
@@ -102,16 +113,19 @@ export async function customerQuoteTemplatePost(action:string,req:Request,s:Stat
  const template=all(s,'customer_quote_template').find(item=>item.id===input.templateId) as TemplateRecord|undefined;
  if(!template||before.customerAccountId!==template.customerAccountId)throw new AppError('客户模板必须与报价关联到同一客户档案。',403);
  accountFor(s,m,template.customerAccountId);
- if(before.brand!==template.brand||before.businessType!==template.businessType)throw new AppError('请先保存与模板一致的品牌和业务类型，避免跨品牌误用。');
+ if(scopeKey(before.brand)!==scopeKey(template.brand)||scopeKey(before.businessType)!==scopeKey(template.businessType))throw new AppError('请先保存与模板一致的品牌和业务类型，避免跨品牌误用。');
  const original=await readObject(template.fileKey),mapping=await engine(()=>parseCustomerQuoteTemplate(original));compatibleTemplate(mapping);if(mapping.sourceHash!==template.sourceHash)throw new AppError('客户模板原件摘要不一致，请联系管理员。',409);
  const at=now(),quote:TemplateQuote={...before,version:before.version+1,quoteMode:'price_list',pricingBasis:'pending',currencyReviewed:false,templateBinding:{id:template.id,title:template.title,brand:template.brand,businessType:template.businessType,rowCount:mapping.rowMappings.length,sourceHash:template.sourceHash,version:template.version},templateMapping:mapping,templateFileKey:template.fileKey,
   lines:mapping.items.map(item=>({id:item.id,model:item.modelNames[0]||item.materialNumber,factoryModel:'',customerModel:item.modelNames.join(' / '),materialNumber:item.materialNumber,productType:item.partType==='frame'?'frame':'spare_part',component:item.partType,side:item.side,supplyStage:item.supplyStage,unit:'unknown',scopeReviewed:false,scopeNotesZh:'',scopeNotesEn:'',descriptionZh:item.description,descriptionEn:item.description,quantity:null,quantityBasisZh:'',quantityBasisEn:'',unitPrice:null,toolingFee:null})),
   reviewNotes:[...new Set([...before.reviewNotes,'客户模板：逐项确认币种、单位、部件计价及供货范围；整架定义不能套用于零件。',...mapping.issues])].slice(0,50),updatedAt:at,updatedBy:m.name,updatedById:m.id};
+ quote.terms=before.terms.map(term=>({...term,needsReview:true}));
+ quote.customerCharges=(before.customerCharges||[]).map(charge=>({...charge,needsReview:true}));
+ if(before.mediaIds)quote.mediaIds=[];
  const names=['id','version','companyEn','companyZh','collectionEn','collectionZh','customerCode','customerName','customerAccountId','contactName','brand','businessType','quoteMode','pricingBasis','currencyReviewed','quoteNo','quoteDate','validUntil','currency','internalNotesZh','exchangeRateCnyPerUsd','internalCosts','customerCharges','lines','terms','reviewNotes'];
  parse(customerQuoteInput,Object.fromEntries(names.filter(name=>quote[name]!==undefined).map(name=>[name,quote[name]])));
  return persist(s,m,quote,before,'应用客户报价模板');
 }
 
 export function detachChangedQuoteTemplate(before:TemplateQuote|null,after:TemplateQuote){
- if(before?.templateBinding&&['customerAccountId','customerName','customerCode','brand','businessType'].some(key=>before[key]!==after[key])){delete after.templateBinding;delete after.templateMapping;delete after.templateFileKey;}
+ if(before?.templateBinding&&(['customerAccountId','customerName','customerCode'].some(key=>before[key]!==after[key])||['brand','businessType'].some(key=>scopeKey(before[key])!==scopeKey(after[key])))){delete after.templateBinding;delete after.templateMapping;delete after.templateFileKey;}
 }

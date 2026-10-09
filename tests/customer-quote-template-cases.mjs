@@ -97,6 +97,7 @@ export async function testCustomerQuoteTemplate({pass=()=>{}}={}){
  const extraSheet=withFile(source,'xl/worksheets/sheet2.xml','<worksheet/>');await assert.rejects(()=>parseCustomerQuoteTemplate(extraSheet),/未登记/);
  const customData=withFile(source,'docProps/custom.xml','<Properties><property fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2" name="PrivateNote"><vt:lpwstr>unexpected extra data</vt:lpwstr></property></Properties>');await assert.rejects(()=>parseCustomerQuoteTemplate(customData),/属性内容/);
  const extraExtension=edit(source,'xl/workbook.xml',x=>x.replace('</workbook>','<extLst><ext uri="test"><privateNote>unexpected extra data</privateNote></ext></extLst></workbook>'));await assert.rejects(()=>parseCustomerQuoteTemplate(extraExtension),/附加内容/);
+ const unsupportedXml=edit(source,template.worksheetPath,x=>x.replace('</worksheet>','<privateNote>unexpected extra data</privateNote></worksheet>'));await assert.rejects(()=>parseCustomerQuoteTemplate(unsupportedXml),/附加 XML/);
  pass('模板公式、宏外链、隐藏表及未登记附加表明确阻止导出');
  const inflated=withFile(source,'xl/sharedStrings.xml',new Uint8Array(9*1024*1024));await assert.rejects(()=>parseCustomerQuoteTemplate(inflated),/压缩内容超过/);
  const traversal=withFile(source,'../outside.xml','test');await assert.rejects(()=>parseCustomerQuoteTemplate(traversal),/不安全/);

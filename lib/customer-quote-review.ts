@@ -1,6 +1,6 @@
 import {all,newId,type Member,type State} from './domain';
 import {isCustomerQuoteAdministrator} from './customer-quote-access';
-import {canReadCustomerQuote,customerQuoteInput,customerQuoteLineDetails,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
+import {canReadCustomerQuote,customerQuoteInput,customerQuoteLineDetails,customerQuoteVersion,customerQuoteMedia,publicCustomerQuoteMedia,customerQuoteSentHistory,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
 import {AppError} from './store';
 
 // Confirm the stored draft, never a second payload which has not been saved and
@@ -66,7 +66,10 @@ export function visibleCompletedCustomerQuotes(s:State,m:Member){
   // Even a member who happens to follow both customers must not see a prior
   // customer's archive mixed into a quote that was reassociated by an admin.
   return isCustomerQuoteAdministrator(m,s)||q.customerAccountId===snapshot.customerAccountId;
- }).sort((a,b)=>b.confirmedAt.localeCompare(a.confirmedAt)||b.quoteVersion-a.quoteVersion).map(row=>({
+ }).sort((a,b)=>b.confirmedAt.localeCompare(a.confirmedAt)||b.quoteVersion-a.quoteVersion).flatMap(row=>{
+  const snapshot=customerQuoteVersion(s,m,row.quoteId,row.quoteVersion);if(!snapshot)return [];
+  const media=customerQuoteMedia(s,m,snapshot).filter(item=>!item.lineId||item.lineId===row.lineId).map(publicCustomerQuoteMedia),sentHistory=customerQuoteSentHistory(s,m,snapshot);
+  return [{
   id:row.id,quoteId:row.quoteId,quoteVersion:row.quoteVersion,lineId:row.lineId,quoteNo:row.quoteNo,customerAccountId:row.customerAccountId,customerCode:row.customerCode,customerName:row.customerName,contactName:row.contactName,
   model:row.model,descriptionZh:row.descriptionZh,descriptionEn:row.descriptionEn,quantity:row.quantity,
   unitPrice:row.unitPrice??(row.currency==='USD'?row.unitPriceUsd:null),toolingFee:row.toolingFee??(row.currency==='USD'?row.toolingFeeUsd:null),
@@ -74,6 +77,7 @@ export function visibleCompletedCustomerQuotes(s:State,m:Member){
   brand:row.brand||'',businessType:row.businessType||'frame',quoteMode:row.quoteMode||'order',pricingBasis:row.pricingBasis||'row_item',currencyReviewed:row.currencyReviewed??false,
   ...(row.templateBinding?{templateBinding:row.templateBinding}:{}),
   ...(row.quantityBasisZh!==undefined?{quantityBasisZh:row.quantityBasisZh}:{}),...(row.quantityBasisEn!==undefined?{quantityBasisEn:row.quantityBasisEn}:{}),
-  currency:row.currency,quoteDate:row.quoteDate,validUntil:row.validUntil,customerCharges:row.customerCharges,confirmedAt:row.confirmedAt,confirmedBy:row.confirmedBy,quotedCustomer:row.quotedCustomer,
- }));
+  currency:row.currency,quoteDate:row.quoteDate,validUntil:row.validUntil,customerCharges:row.customerCharges,confirmedAt:row.confirmedAt,confirmedBy:row.confirmedBy,quotedCustomer:sentHistory.length?'Y' as const:'' as const,
+  media,sentHistory,canRegisterSent:true,canSupplementArchive:true,
+ }];});
 }
