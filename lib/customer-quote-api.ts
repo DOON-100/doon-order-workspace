@@ -1,12 +1,13 @@
 import {z} from 'zod';
-import {all,newId,now,type Entity,type Member,type State} from './domain';
+import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
 import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
 import {assertCustomerQuoteConfirmable,completedCustomerQuoteRows,visibleCompletedCustomerQuotes} from './customer-quote-review';
 import {
  canCreateCustomerQuote,canReadCustomerQuote,canUseCustomerQuotes,customerQuoteInput,eligibleCustomerQuoteAccounts,mayChangeQuoteCustomer,publicCustomerQuote,quoteAccount,
- type CustomerQuote,type CustomerQuoteRevision,
+ changedQuoteCustomer,customerQuoteVersion,customerQuoteMedia,publicCustomerQuoteMedia,customerQuoteSentHistory,
+ type CustomerQuote,type CustomerQuoteRevision,type CustomerQuoteMedia,type CustomerQuoteSend,
 } from './customer-quotes';
 
 function allowed(s:State,m:Member){if(!canUseCustomerQuotes(s,m))throw new AppError('没有客户报价权限，请联系管理员核对报价授权。',403);}
@@ -24,12 +25,26 @@ async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|nul
 }
 
 export async function customerQuoteGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed'].includes(action))return null;
+ if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed','customer-quote-version','customer-quote-media-file'].includes(action))return null;
  if(action==='customer-quote-access'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('仅管理员可查看客户报价授权配置。',403);
   return json({policy:customerQuoteAccessPolicy(s)});
  }
  allowed(s,m);
+ if(action==='customer-quote-version'){
+  const url=new URL(req.url),q=archiveVersion(s,m,url.searchParams.get('quoteId'),url.searchParams.get('quoteVersion'));
+  const quote=publicCustomerQuote(s,m,q);
+  return json({quote:{...quote,canEdit:false,canConfirm:false,canRevise:false},media:quote.media,sentHistory:quote.sentHistory});
+ }
+ if(action==='customer-quote-media-file'){
+  const url=new URL(req.url),media=all(s,'customer_quote_media').find(item=>item.id===url.searchParams.get('id')) as CustomerQuoteMedia|undefined;
+  if(!media)throw new AppError('报价附件不存在。',404);
+  const q=customerQuoteVersion(s,m,media.quoteId,media.quoteVersion);
+  if(!q||!customerQuoteMedia(s,m,q).some(item=>item.id===media.id))throw new AppError('无权读取该客户或版本的报价附件。',403);
+  if(!['image/png','image/jpeg','application/pdf'].includes(media.contentType))throw new AppError('附件类型无效。',400);
+  const object=await bucket().get(media.fileKey);if(!object)throw new AppError('归档附件暂不可用。',404);
+  return new Response(object.body,{headers:{'Content-Type':media.contentType,'Content-Disposition':`${url.searchParams.get('download')==='1'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(media.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'; frame-ancestors 'self'",'Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer'}});
+ }
  if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
  if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:eligibleCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canUseCustomerQuotes(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
@@ -41,8 +56,10 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
 }
 
 export async function customerQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise'].includes(action))return null;
+ if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise','customer-quote-media-upload','customer-quote-record-sent'].includes(action))return null;
  allowed(s,m);
+ if(action==='customer-quote-media-upload')return uploadQuoteMedia(req,s,m);
+ if(action==='customer-quote-record-sent')return recordQuoteSent(req,s,m);
  if(action==='customer-quote-confirm'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('最终英文报价须由管理员明确确认，业务成员可先修改并保存草稿。',403);
   const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive(),acknowledgeEnglish:z.literal(true)}).strict(),await req.json()),before=quoteFor(s,input.id);
@@ -74,6 +91,12 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
   // to another customer's source. First administrator-confirmed binding retains
   // its source; immutable snapshots and stored bytes always remain intact.
   if(before?.customerAccountId&&before.customerAccountId!==fields.customerAccountId){delete quote.sourceFileKey;delete quote.sourceFilename;delete quote.sourceHash;delete quote.sourceContentType;}
+  // A new customer's quote must never inherit customer-facing files from the
+  // prior customer, including when an unbound prospect is first reassociated.
+  if(before?.mediaIds){
+   const lineIds=new Set(quote.lines.map(line=>line.id));
+   quote.mediaIds=changedQuoteCustomer(before,quote)?[]:before.mediaIds.filter(id=>{const media=all(s,'customer_quote_media').find(item=>item.id===id);return !!media&&(!media.lineId||lineIds.has(media.lineId));});
+  }
   return persist(s,m,quote,before,before?'更新客户报价草稿':'创建客户报价草稿');
  }
  const form=await req.formData(),input=parse(z.object({quoteId:z.string().min(1),version:z.string().regex(/^[1-9]\d*$/).transform(Number).refine(Number.isSafeInteger)}),{quoteId:form.get('quoteId'),version:form.get('version')}),before=quoteFor(s,input.quoteId);
@@ -90,4 +113,62 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
  // Write a new immutable object. A failed optimistic commit cannot replace any prior file.
  await bucket().put(fileKey,bytes);
  return persist(s,m,quote,before,'上传客户报价原附件');
+}
+
+const archiveId=z.string().trim().min(1).max(120);
+const archiveVersionInput=z.union([z.number().int().positive(),z.string().regex(/^[1-9]\d*$/).transform(Number)]).refine(Number.isSafeInteger);
+function archiveVersion(s:State,m:Member,id:unknown,version:unknown){
+ const input=parse(z.object({quoteId:archiveId,quoteVersion:archiveVersionInput}),{quoteId:id,quoteVersion:version});
+ const q=customerQuoteVersion(s,m,input.quoteId,input.quoteVersion);
+ if(!q)throw new AppError('报价版本不存在或没有此客户版本的权限。',403);
+ return q;
+}
+function archiveIdentity(q:CustomerQuote){return {quoteId:q.id,customerAccountId:q.customerAccountId,customerName:q.customerName,customerCode:q.customerCode};}
+async function uploadQuoteMedia(req:Request,s:State,m:Member){
+ const form=await req.formData(),input=parse(z.object({quoteId:archiveId,quoteVersion:archiveVersionInput,lineId:z.string().trim().max(100),category:z.enum(['image','drawing','sent_quote','evidence']),title:z.string().trim().max(200),drawingNo:z.string().trim().max(200)}).strict(),{
+  quoteId:form.get('quoteId'),quoteVersion:form.get('quoteVersion'),lineId:form.get('lineId')||'',category:form.get('category'),title:form.get('title')||'',drawingNo:form.get('drawingNo')||'',
+ }),before=archiveVersion(s,m,input.quoteId,input.quoteVersion),currentQuote=quoteFor(s,input.quoteId);
+ const lineMedia=input.category==='image'||input.category==='drawing';
+ if(lineMedia&&!before.lines.some(line=>line.id===input.lineId))throw new AppError('款式图片和图纸须关联本报价版本中的有效产品行。');
+ if(!lineMedia&&input.lineId)throw new AppError('已发报价和发送凭证属于整份报价版本，请勿关联产品行。');
+ if(before.status==='draft'){
+  if(!lineMedia)throw new AppError('请先最终确认英文报价，再归档已发报价或发送凭证。',409);
+  editable(s,m,currentQuote);current(currentQuote,input.quoteVersion);
+ }else if(before.status!=='confirmed')throw new AppError('该版本不能归档附件。',409);
+ const file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的 PNG、JPEG 或 PDF 文件。');
+ const ext=file.name.match(/\.(png|jpe?g|pdf)$/i)?.[1].toLowerCase();
+ if(!ext||(input.category==='image'&&ext==='pdf'))throw new AppError('款式主图仅支持 PNG/JPEG；图纸、已发报价及凭证支持 PNG/JPEG/PDF。');
+ const bytes=await file.arrayBuffer(),header=new Uint8Array(bytes).slice(0,8),signatures:Record<string,number[]>={png:[0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a],jpg:[0xff,0xd8,0xff],jpeg:[0xff,0xd8,0xff],pdf:[0x25,0x50,0x44,0x46,0x2d]};
+ if(!signatures[ext].every((byte,index)=>header[index]===byte))throw new AppError('文件内容与扩展名不匹配，请上传原始图片或 PDF。');
+ const hash=await sha(bytes),filename=file.name.replace(/[\\/\r\n\u0000-\u001f]/g,'_').slice(0,180),existing=customerQuoteMedia(s,m,before).find(item=>item.sha256===hash&&item.filename===filename&&item.lineId===input.lineId&&item.category===input.category&&item.title===input.title&&item.drawingNo===input.drawingNo);
+ if(existing)return json({ok:true,alreadyPresent:true,quoteVersion:before.version,...(before.status==='draft'?{quote:publicCustomerQuote(s,m,before)}:{}),media:publicCustomerQuoteMedia(existing)});
+ const at=now(),media:CustomerQuoteMedia={id:newId('customer_quote_media'),kind:'customer_quote_media',...archiveIdentity(before),quoteVersion:before.version+(before.status==='draft'?1:0),lineId:input.lineId,category:input.category,supplement:before.status==='confirmed',filename,contentType:ext==='pdf'?'application/pdf':ext==='png'?'image/png':'image/jpeg',size:file.size,sha256:hash,fileKey:newId('customer_quote_media_file'),title:input.title,drawingNo:input.drawingNo,uploadedAt:at,uploadedBy:m.name,uploadedById:m.id};
+ // Always write a fresh object; an optimistic conflict can only leave an
+ // unreferenced object, never change bytes behind an existing version.
+ await bucket().put(media.fileKey,bytes);
+ const log=audit(m,{id:media.id,kind:media.kind,quoteId:media.quoteId},null,before.status==='draft'?'添加客户报价款式附件':'补充归档已确认报价附件','客户报价工作台',publicCustomerQuoteMedia(media));
+ if(before.status==='draft'){
+  const quote:CustomerQuote={...before,version:before.version+1,mediaIds:[...(before.mediaIds||[]),media.id],updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  const response=await persist(s,m,quote,before,'添加客户报价款式附件',[media,log]),body=await response.json() as Record<string,unknown>;
+  return json({...body,media:publicCustomerQuoteMedia(media),quoteVersion:quote.version,alreadyPresent:false});
+ }
+ await commit(s.revision,[media,log]);
+ return json({ok:true,alreadyPresent:false,quoteVersion:before.version,media:publicCustomerQuoteMedia(media)});
+}
+async function recordQuoteSent(req:Request,s:State,m:Member){
+ const input=parse(z.object({quoteId:archiveId,quoteVersion:z.number().int().positive(),sentDate:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(date=>{try{return strictDate(date)===date;}catch{return false;}},'发送日期无效'),recipient:z.string().trim().min(1).max(240),channel:z.enum(['email','whatsapp','wechat','other']),mediaIds:z.array(archiveId).max(30).default([]),idempotencyKey:z.string().trim().min(8).max(120)}).strict(),await req.json());
+ if(input.sentDate>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}))throw new AppError('发送日期不能晚于今天。');
+ if(new Set(input.mediaIds).size!==input.mediaIds.length)throw new AppError('发送凭证编号不能重复。');
+ const q=archiveVersion(s,m,input.quoteId,input.quoteVersion);
+ if(q.status!=='confirmed')throw new AppError('只有已最终确认的英文报价版本才能登记已发送。',409);
+ const media=customerQuoteMedia(s,m,q);
+ if(input.mediaIds.some(id=>!media.some(item=>item.id===id&&item.quoteVersion===q.version&&['sent_quote','evidence'].includes(item.category))))throw new AppError('只能关联本报价确认版本的已发报价文件或发送凭证。',403);
+ const {idempotencyKey,...payload}=input,normalized={...payload,mediaIds:[...input.mediaIds].sort()},payloadHash=await sha(new TextEncoder().encode(JSON.stringify(normalized)).buffer);
+ const events=(all(s,'customer_quote_send') as CustomerQuoteSend[]).filter(event=>event.quoteId===q.id&&event.quoteVersion===q.version),sameKey=events.find(event=>event.idempotencyKey===idempotencyKey);
+ if(sameKey&&sameKey.payloadHash!==payloadHash)throw new AppError('相同登记请求编号对应不同内容，请核对后重新登记。',409);
+ if(sameKey||events.some(event=>event.payloadHash===payloadHash))return json({ok:true,alreadyPresent:true,sentHistory:customerQuoteSentHistory(s,m,q)});
+ const event:CustomerQuoteSend={id:newId('customer_quote_send'),kind:'customer_quote_send',...archiveIdentity(q),quoteVersion:q.version,sentDate:input.sentDate,recipient:input.recipient,channel:input.channel,mediaIds:normalized.mediaIds,idempotencyKey,payloadHash,createdAt:now(),createdBy:m.name,createdById:m.id};
+ const after={...s,records:[...s.records,event]},history=customerQuoteSentHistory(after,m,q),publicEvent=history.find(row=>row.id===event.id)!;
+ await commit(s.revision,[event,audit(m,{id:event.id,kind:event.kind,quoteId:event.quoteId},null,'登记客户报价已发送','客户报价工作台',publicEvent)]);
+ return json({ok:true,alreadyPresent:false,sentHistory:history});
 }

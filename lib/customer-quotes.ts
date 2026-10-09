@@ -37,8 +37,21 @@ export type CustomerQuote=Entity & CustomerQuoteFields & {
  kind:'customer_quote';status:'draft'|'confirmed';version:number;createdAt:string;createdBy:string;createdById:string;updatedAt:string;updatedBy:string;updatedById:string;
  confirmedAt?:string;confirmedBy?:string;confirmedById?:string;
  sourceFilename?:string;sourceHash?:string;sourceFileKey?:string;sourceContentType?:string;
+ // Server-maintained references: never accepted from a save payload.
+ mediaIds?:string[];
 };
 export type CustomerQuoteRevision=Entity & {kind:'customer_quote_revision';quoteId:string;version:number;action:string;updatedAt:string;updatedBy:string;snapshot:CustomerQuote};
+export type CustomerQuoteMedia=Entity & {
+ kind:'customer_quote_media';quoteId:string;quoteVersion:number;customerAccountId:string|null;customerName:string;customerCode:string;
+ lineId:string;category:'image'|'drawing'|'sent_quote'|'evidence';supplement:boolean;
+ filename:string;contentType:'image/png'|'image/jpeg'|'application/pdf';size:number;sha256:string;fileKey:string;
+ title:string;drawingNo:string;uploadedAt:string;uploadedBy:string;uploadedById:string;
+};
+export type CustomerQuoteSend=Entity & {
+ kind:'customer_quote_send';quoteId:string;quoteVersion:number;customerAccountId:string|null;customerName:string;customerCode:string;
+ sentDate:string;recipient:string;channel:'email'|'whatsapp'|'wechat'|'other';mediaIds:string[];
+ idempotencyKey:string;payloadHash:string;createdAt:string;createdBy:string;createdById:string;
+};
 export type CustomerQuoteCompleted=Entity & {
  kind:'customer_quote_completed';quoteId:string;quoteVersion:number;lineId:string;quoteNo:string;customerAccountId:string|null;customerCode:string;customerName:string;contactName:string;
  model:string;descriptionZh:string;descriptionEn:string;quantity:number;unitPriceUsd:number;toolingFeeUsd:number|null;currency:'USD';quoteDate:string;validUntil:string;
@@ -61,10 +74,41 @@ export function canReadCustomerQuote(s:State,m:Member,q:CustomerQuote){
 export function changedQuoteCustomer(before:CustomerQuote,after:CustomerQuoteFields){return ['customerAccountId','customerName','customerCode'].some(field=>key(before[field])!==key(after[field as keyof CustomerQuoteFields]));}
 export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,next);}
 
+export function customerQuoteVersion(s:State,m:Member,quoteId:string,version:number):CustomerQuote|null{
+ const current=all(s,'customer_quote').find(q=>q.id===quoteId) as CustomerQuote|undefined;
+ if(!current||!canReadCustomerQuote(s,m,current))return null;
+ const revisions=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(r=>r.quoteId===quoteId&&r.version===version);
+ const snapshot=current.status==='draft'&&current.version===version?current:revisions.length===1?revisions[0].snapshot:null;
+ if(!snapshot||snapshot.id!==quoteId||snapshot.version!==version||!canReadCustomerQuote(s,m,snapshot))return null;
+ // Following both customers does not allow an old customer's archive to leak
+ // through a quote that was subsequently assigned to another customer.
+ if(!isCustomerQuoteAdministrator(m,s)&&changedQuoteCustomer(current,snapshot))return null;
+ return snapshot;
+}
+function sameMediaCustomer(record:CustomerQuoteMedia|CustomerQuoteSend,q:CustomerQuote){return !changedQuoteCustomer(q,record as unknown as CustomerQuoteFields);}
+export function customerQuoteMedia(s:State,m:Member,q:CustomerQuote){
+ if(!customerQuoteVersion(s,m,q.id,q.version))return [];
+ const included=new Set(q.mediaIds||[]),lineIds=new Set(q.lines.map(l=>l.id));
+ return (all(s,'customer_quote_media') as CustomerQuoteMedia[]).filter(media=>media.quoteId===q.id&&sameMediaCustomer(media,q)&&(!media.lineId||lineIds.has(media.lineId))&&(media.supplement?media.quoteVersion===q.version:included.has(media.id)&&media.quoteVersion<=q.version)).sort((a,b)=>a.uploadedAt.localeCompare(b.uploadedAt));
+}
+export function publicCustomerQuoteMedia(media:CustomerQuoteMedia){
+ const {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,title,drawingNo,uploadedAt,uploadedBy,supplement}=media;
+ return {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,title,drawingNo,uploadedAt,uploadedBy,supplement,url:'/api/workspace/customer-quote-media-file?id='+encodeURIComponent(id)};
+}
+export function customerQuoteSentHistory(s:State,m:Member,q:CustomerQuote){
+ if(q.status!=='confirmed'||!customerQuoteVersion(s,m,q.id,q.version))return [];
+ const media=new Map(customerQuoteMedia(s,m,q).map(item=>[item.id,item]));
+ return (all(s,'customer_quote_send') as CustomerQuoteSend[]).filter(event=>event.quoteId===q.id&&event.quoteVersion===q.version&&sameMediaCustomer(event,q)).sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).map(event=>{
+  const {id,quoteId,quoteVersion,sentDate,recipient,channel,mediaIds,createdAt,createdBy}=event;
+  return {id,quoteId,quoteVersion,sentDate,recipient,channel,mediaIds,createdAt,createdBy,media:mediaIds.flatMap(id=>media.has(id)?[publicCustomerQuoteMedia(media.get(id)!)]:[])};
+ });
+}
+
 // Explicit response allowlist. Bucket keys and full historical snapshots remain server-side.
 export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
  const internal=canSeeCustomerQuoteInternal(s,m),administrator=isCustomerQuoteAdministrator(m,s);
- const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&canReadCustomerQuote(s,m,v.snapshot)).sort((a,b)=>b.version-a.version).map(v=>({
+ const archiveWritable=q.status==='confirmed'&&!!customerQuoteVersion(s,m,q.id,q.version);
+ const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&!!customerQuoteVersion(s,m,q.id,v.version)).sort((a,b)=>b.version-a.version).map(v=>({
   id:v.id,version:v.version,status:v.snapshot.status,action:v.action,updatedAt:v.updatedAt,updatedBy:v.updatedBy,sourceFilename:v.snapshot.sourceFilename||'',sourceHash:v.snapshot.sourceHash||'',
  }));
  return {
@@ -73,5 +117,6 @@ export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
   ...(internal?{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[]}:{}),canSeeInternal:internal,customerCharges:q.customerCharges||[],
   lines:q.lines,terms:q.terms,reviewNotes:q.reviewNotes,createdAt:q.createdAt,createdBy:q.createdBy,updatedAt:q.updatedAt,updatedBy:q.updatedBy,
   confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:administrator&&!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&administrator,canRevise:q.status==='confirmed'&&canReadCustomerQuote(s,m,q),history,
+  media:customerQuoteMedia(s,m,q).map(publicCustomerQuoteMedia),sentHistory:customerQuoteSentHistory(s,m,q),canRegisterSent:archiveWritable,canSupplementArchive:archiveWritable,
  };
 }
