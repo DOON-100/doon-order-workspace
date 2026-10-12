@@ -9,7 +9,7 @@ All POST JSON schemas are strict. Updates use target `id,version`; append/create
 | suffix | body |
 |---|---|
 | team-save | id?,version?,token?,name,leaderIds[],salesMemberIds[],serviceMemberIds[],customerIds[],active |
-| save | id?,version?,token?,customerId,code,title,description,teamId,salesMemberId,serviceMemberId,dueDate,status(active/paused/cancelled/archived) |
+| save | id?,version?,token?,customerId,code,title,description,teamId,salesMemberId,serviceMemberIds[]?,serviceMemberId?(legacy),dueDate,status(active/paused/cancelled/archived) |
 | item-save | id?,version?,token?,projectId,model,customerModel,drawing,color,lens,material,requirements,quantity |
 | round-save | id?,version?,token?,projectId,title,type(development/revision/sales_sample/preproduction/bulk),parentRoundId,scope:[{itemId,quantity}],stage,requiredDrawingTypes:[2d/3d],requireQuote:boolean,requiredSampleIds[],sampleGateStage(order/before_production/not_required),sampleGateNote,dueDate,reason; cancellation via status=cancelled, derived partial/transferred cannot be set |
 | communication | token,projectId,roundId,channel,contact,occurredAt(YYYY-MM-DD),content,nextAction,ownerId,dueDate,visibility(internal/customer),attachmentIds[] |
@@ -27,6 +27,8 @@ All POST JSON schemas are strict. Updates use target `id,version`; append/create
 | bulk-link | token,projectId,roundId,roundVersion,orderLinks:[{itemId,orderId,quantity,orderVersion}],drawingIds[],quoteLinkId; only existing non-draft same-customer formal order lines |
 
 Optional string fields default empty, arrays default empty where appropriate. Server checks internal staff, customer/round/item/file relations, version, financial paymentGate and approved selected drawings before release. All quantity scopes are positive integers. Team save is admin-only organizational metadata; no old records changed. Sample execution jobs remain separate `customer_project_sample` records, NEVER flow into existing bulk PMC quantities.
+
+Project service owners support multiple existing customer-responsibility members. Every selected member must be active and already authorized to write for that customer; assigning staff does not grant customer, order, quote or finance access. New saves store `serviceMemberIds` and keep `serviceMemberId` equal to its first entry for existing single-owner task defaults. Reads of old projects fall back to the legacy ID without migration. An explicit empty array clears the service selection. Older forms submitting an unchanged legacy ID preserve all selected staff; attempting to replace a multiple-staff selection through the legacy field returns 409 and requires refreshing the form.
 
 Bulk lines must have sourceStatus exactly 正式订单 and not a draft business workflow; code does not change sourceStatus for the user. Required sample approval at order-stage checks every affected item. before_production creates explicit handover task naming the configured production checkpoint; this release does NOT automatically block original PMC operations. Sample dispatch counts manufactured quantity once: repair/resend cannot be disguised as new delivery; establish an explicit revision/new sample run for newly manufactured samples and preserve original dispatch.
 

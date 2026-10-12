@@ -28,10 +28,18 @@ try{
  for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
  await api('auth/login',{username:'admin',password});
  await api('auth/password',{currentPassword:password,password:'Synthetic-Project-Only-2026!'});
- const admin=(await workspace('data')).me;
- await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-A 合成客户甲',customerCode:'QA-A',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic browser fixture',active:true});
+ const admin=(await workspace('data')).me,adminCookie=cookie,serviceSessions=[];
+ for(const [username,name] of [['synthetic_service_a','合成客服甲'],['synthetic_service_b','合成客服乙'],['synthetic_other','合成无关客服']]){
+  await api('auth/accounts',{username,name,role:'sales',password:'Synthetic-Service-Initial-2026!',customers:[]});
+  await api('auth/login',{username,password:'Synthetic-Service-Initial-2026!'});
+  await api('auth/password',{currentPassword:'Synthetic-Service-Initial-2026!',password:'Synthetic-Service-Personal-2026!'});
+  serviceSessions.push({name,cookie,member:(await workspace('data')).me});cookie=adminCookie;
+ }
+ const serviceMembers=serviceSessions.slice(0,2).map(session=>session.member);
+ await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-A 合成客户甲',customerCode:'QA-A',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:serviceMembers.map(member=>member.id),quoteMemberIds:[],notes:'Synthetic browser fixture',active:true});
  await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-B 合成客户乙',customerCode:'QB-B',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic search alternative',active:true});
  const customer=(await workspace('data')).customerAccounts.find(c=>c.customerCode==='QA-A');
+ const team=(await workspace('customer-project-team-save',{token:token(),name:'合成双客服组',leaderIds:[admin.id],salesMemberIds:[admin.id],serviceMemberIds:serviceMembers.map(member=>member.id),customerIds:[customer.id],active:true})).item;
  const originals=originalRows();
  await workspace('customer-project-data');await workspace('project-finance-data');
  assert.deepEqual(originalRows(),originals);pass('首次打开项目和财务查询不创建或改写任何记录');
@@ -48,7 +56,9 @@ try{
  await dialog.getByLabel('项目编号',{exact:false}).fill('SYNTH-PROJECT-01');
  await dialog.getByLabel('项目名称',{exact:false}).fill('合成测试客户项目');
  await dialog.getByLabel('业务主负责人',{exact:false}).selectOption(admin.id);
- await dialog.getByLabel('客服主负责人',{exact:false}).selectOption(admin.id);
+ await dialog.getByLabel('业务客服组',{exact:true}).selectOption(team.id);
+ const serviceChoices=dialog.getByRole('group',{name:'客服负责人（可多选）',exact:true});
+ for(const member of serviceMembers)await serviceChoices.getByRole('checkbox',{name:member.name,exact:true}).check();
  const customerInput=dialog.getByRole('combobox',{name:'所属客户',exact:true});
  await customerInput.fill('qa-a');
  await page.getByRole('option',{name:/QA-A/}).click();
@@ -69,7 +79,37 @@ try{
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
  let project=(await workspace('customer-project-data')).projects.find(p=>p.code==='SYNTH-PROJECT-01');assert(project);assert.equal(project.customerId,customer.id);
- await page.getByRole('button',{name:'维护项目',exact:true}).click();assert.equal(await dialog.getByRole('combobox',{name:'所属客户',exact:true}).isDisabled(),true);await dialog.getByRole('button',{name:'关闭表单',exact:true}).click();
+ assert.deepEqual(project.serviceMemberIds,serviceMembers.map(member=>member.id));
+ assert.match(await page.locator('.cp-project-meta').innerText(),/客服：合成客服甲、合成客服乙/);
+ await page.getByRole('button',{name:'维护项目',exact:true}).click();
+ assert.equal(await dialog.getByRole('combobox',{name:'所属客户',exact:true}).isDisabled(),true);
+ for(const member of serviceMembers)assert.equal(await serviceChoices.getByRole('checkbox',{name:member.name,exact:true}).isChecked(),true);
+ await page.screenshot({path:path.join(dir,'project-multiple-service.png'),fullPage:true});
+ await serviceChoices.getByRole('checkbox',{name:serviceMembers[1].name,exact:true}).uncheck();
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ project=(await workspace('customer-project-data')).projects.find(p=>p.id===project.id);assert.deepEqual(project.serviceMemberIds,[serviceMembers[0].id]);
+ await page.getByRole('button',{name:'维护项目',exact:true}).click();
+ assert.equal(await serviceChoices.getByRole('checkbox',{name:serviceMembers[0].name,exact:true}).isChecked(),true);
+ assert.equal(await serviceChoices.getByRole('checkbox',{name:serviceMembers[1].name,exact:true}).isChecked(),false);
+ await serviceChoices.getByRole('checkbox',{name:serviceMembers[1].name,exact:true}).check();
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ pass('客服负责人支持多人保存和编辑回显，取消勾选准确移除该负责人');
+ for(const [index,session] of serviceSessions.entries()){
+  const serviceContext=await browser.newContext({viewport:{width:1536,height:1050}}),at=session.cookie.indexOf('=');
+  await serviceContext.addCookies([{name:session.cookie.slice(0,at),value:session.cookie.slice(at+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
+  const servicePage=await serviceContext.newPage();servicePage.on('pageerror',e=>errors.push(e.message));
+  await servicePage.goto(origin+'/customer-projects');await servicePage.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+  if(index<2){
+   const row=servicePage.getByRole('row').filter({hasText:'合成测试客户项目'});await row.waitFor();assert.match(await row.innerText(),/合成客服甲、合成客服乙/);
+   await row.getByRole('button',{name:'打开项目'}).click();await servicePage.getByRole('button',{name:'维护项目',exact:true}).waitFor();
+   await servicePage.screenshot({path:path.join(dir,'project-service-'+(index+1)+'.png'),fullPage:true});
+  }else{
+   await servicePage.getByText('当前范围没有新项目。点击“新建项目”开始跟进；旧订单仍在原中台。',{exact:true}).waitFor();
+   assert.equal(await servicePage.getByRole('row').filter({hasText:'合成测试客户项目'}).count(),0);
+  }
+  await serviceContext.close();
+ }
+ pass('两位客服分别登录均能看到和跟进同一项目，无关账号看不到项目');
  await page.screenshot({path:path.join(dir,'project-created.png'),fullPage:true});pass('浏览器新建客户项目成功，真实保存到隔离数据库');
  await page.getByRole('button',{name:'增加款色',exact:true}).click();
  for(const [label,value] of [['内部款号','MODEL-X'],['客户款号','CLIENT-X'],['图纸编号','DRAW-X'],['色号','C1'],['镜片','RX'],['材质','Synthetic'],['开发目标数量（副）','10'],['该款色要求','Fixture only']])await dialog.getByLabel(label,{exact:false}).fill(value);

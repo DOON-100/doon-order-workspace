@@ -3,23 +3,39 @@ import assert from 'node:assert/strict';
 // Synthetic API integration suite. No production files, accounts or workbooks.
 export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawInsert,admin}){
  const original=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),current=id=>rawRecords().find(r=>r.id===id);
- const users={};for(const [key,role] of [['sales','sales'],['service','clerk'],['other','sales'],['pmc','pmc']]){
+ const users={};for(const [key,role] of [['sales','sales'],['service','clerk'],['service2','sales'],['inactive','clerk'],['other','sales'],['pmc','pmc']]){
   const user={userId:'synthetic_project_'+key,email:'synthetic-project-'+key+'@test.invalid',displayName:'合成项目-'+key,fullName:'合成项目-'+key};await ok('member',{name:user.displayName,email:user.email,role,orderScope:'all',customers:[],active:true});await ok('enroll',{},user);users[key]=user;
  }
  const members=(await state()).members,mid=key=>members.find(m=>m.email===users[key].email).id;
- const customer=(await ok('customer-save',{customer:'合成项目客户甲',customerCode:'TEST-PROJECT-A',salesName:users.sales.displayName,serviceName:users.service.displayName,pmcName:users.pmc.displayName,salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service')],active:true})).item;
+ const customer=(await ok('customer-save',{customer:'合成项目客户甲',customerCode:'TEST-PROJECT-A',salesName:users.sales.displayName,serviceName:users.service.displayName,pmcName:users.pmc.displayName,salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service'),mid('service2'),mid('inactive')],active:true})).item;
+ await ok('member',{...members.find(m=>m.id===mid('inactive')),active:false});
  const otherCustomer=(await ok('customer-save',{customer:'合成项目客户乙',customerCode:'TEST-PROJECT-B',salesName:users.other.displayName,serviceName:'',pmcName:'',salesMemberIds:[mid('other')],serviceMemberIds:[],active:true})).item;
  const customerBefore=structuredClone(current(customer.id));
- const team=(await ok('customer-project-team-save',{token:token(),name:'合成项目小组',leaderIds:[mid('sales')],salesMemberIds:[mid('sales'),mid('other')],serviceMemberIds:[mid('service')],customerIds:[customer.id],active:true})).item;
+ const team=(await ok('customer-project-team-save',{token:token(),name:'合成项目小组',leaderIds:[mid('sales')],salesMemberIds:[mid('sales'),mid('other')],serviceMemberIds:[mid('service'),mid('service2')],customerIds:[customer.id],active:true})).item;
  assert.deepEqual(current(customer.id),customerBefore);assert.equal((await ok('customer-project-data',undefined,users.other)).customers.some(c=>c.id===customer.id),false);
  const denied=async(action,body,user=users.other,status=403)=>{const before=structuredClone(rawRecords()),res=await call(action,body,user);assert.equal(res.status,status,await res.text());assert.deepEqual(rawRecords(),before);};
- const projectPayload={token:token(),customerId:customer.id,title:'合成新品开发',code:'TEST-PROJECT-001',description:'只在合成测试数据库',teamId:team.id,salesMemberId:mid('sales'),serviceMemberId:mid('service'),dueDate:'2026-11-30',status:'active'};
+ const serviceIds=[mid('service'),mid('service2')];
+ const projectPayload={token:token(),customerId:customer.id,title:'合成新品开发',code:'TEST-PROJECT-001',description:'只在合成测试数据库',teamId:team.id,salesMemberId:mid('sales'),serviceMemberId:mid('service'),serviceMemberIds:serviceIds,dueDate:'2026-11-30',status:'active'};
  let project=(await ok('customer-project-save',projectPayload,users.sales)).item;
  assert.equal((await ok('customer-project-save',projectPayload,users.sales)).item.id,project.id);
- assert((await ok('customer-project-data',undefined,users.service)).projects.some(p=>p.id===project.id));assert(!(await ok('customer-project-data',undefined,users.other)).projects.some(p=>p.id===project.id));
- await denied('customer-project-save',{...projectPayload,token:token(),id:project.id,version:1},users.other);
+ for(const key of ['service','service2']){const visible=(await ok('customer-project-data',undefined,users[key])).projects.find(p=>p.id===project.id);assert(visible?.canWrite);assert.deepEqual(visible.serviceMemberIds,serviceIds);}
+ assert(!(await ok('customer-project-data',undefined,users.other)).projects.some(p=>p.id===project.id));
+ await denied('customer-project-save',{...projectPayload,token:token(),id:project.id,version:current(project.id).version},users.other);
  await denied('customer-project-team-save',{id:team.id,version:team.version,name:team.name,customerIds:team.customerIds,token:token()},users.sales);
  pass('客户项目小组仅作组织视图，不改旧客户权限；同组既有责任人共享，其他组及小组未授权成员隔离');
+ const editProject=patch=>({...projectPayload,token:token(),id:project.id,version:current(project.id).version,...patch});
+ for(const invalidIds of [[mid('service'),mid('other')],[mid('service'),mid('inactive')],[mid('service'),mid('service')]])await denied('customer-project-save',editProject({serviceMemberIds:invalidIds}),users.sales,400);
+ const legacyPayload=()=>{const body=editProject({});delete body.serviceMemberIds;return body;};
+ project=(await ok('customer-project-save',legacyPayload(),users.service)).item;assert.deepEqual(project.serviceMemberIds,serviceIds);
+ await denied('customer-project-save',{...legacyPayload(),serviceMemberId:mid('service2')},users.service,409);
+ project=(await ok('customer-project-save',editProject({serviceMemberIds:[]}),users.sales)).item;
+ assert.deepEqual(project.serviceMemberIds,[]);assert.equal(project.serviceMemberId,'');
+ assert.deepEqual((await ok('customer-project-data',undefined,users.service)).projects.find(p=>p.id===project.id).serviceMemberIds,[]);
+ project=(await ok('customer-project-save',editProject({serviceMemberIds:serviceIds}),users.sales)).item;
+ const legacyProject={...project,id:'synthetic_project_legacy_single_service',code:'TEST-PROJECT-LEGACY',serviceMemberId:mid('service2')};delete legacyProject.serviceMemberIds;rawInsert(legacyProject);
+ assert.deepEqual((await ok('customer-project-data',undefined,users.service2)).projects.find(p=>p.id===legacyProject.id).serviceMemberIds,[mid('service2')]);
+ assert.equal(Object.hasOwn(current(legacyProject.id),'serviceMemberIds'),false,'读取旧单客服记录不能触发数据迁移');
+ pass('多客服逐人校验既有客户权限，拒绝未授权、停用及重复成员；旧单人兼容且清空与旧客户端保存不会误改多客服');
  const makeItem=async(model,color)=> (await ok('customer-project-item-save',{token:token(),projectId:project.id,model,drawing:model,color,lens:'白片',quantity:10},users.sales)).item;
  const itemA=await makeItem('SYN-PROJ-A','C1'),itemB=await makeItem('SYN-PROJ-B','C2');
  const roundPayload={token:token(),projectId:project.id,title:'R1首次开发',type:'development',scope:[{itemId:itemA.id,quantity:2},{itemId:itemB.id,quantity:2}],stage:'图纸确认',requiredDrawingTypes:['2d'],requireQuote:true,requiredSampleIds:[],sampleGateStage:'order'};
@@ -33,6 +49,19 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  pass('款色与轮次按客户项目校验，旧版本拒绝；沟通追加与待办生成重试不重复');
  const form=new FormData();form.set('projectId',project.id);form.set('roundId',round.id);form.set('file',new File(['synthetic STEP contents'],'synthetic.step'));const attachment=(await ok('customer-project-attachment',form,users.sales)).item;
  await denied('customer-project-file?id='+attachment.id,undefined,users.other);assert.equal((await call('customer-project-file?id='+attachment.id,undefined,users.service)).status,200);
+ const sharedAttachments=[],sharedCommunications=[];
+ for(const key of ['service','service2']){
+  const upload=new FormData();upload.set('projectId',project.id);upload.set('roundId',round.id);upload.set('file',new File(['synthetic STEP '+key],key+'.step'));
+  const sharedAttachment=(await ok('customer-project-attachment',upload,users[key])).item;sharedAttachments.push(sharedAttachment);
+  sharedCommunications.push((await ok('customer-project-communication',{...comm,token:token(),content:'合成客服协同跟进 '+key,ownerId:mid(key),nextAction:'',attachmentIds:[sharedAttachment.id]},users[key])).item);
+ }
+ for(const key of ['service','service2']){
+  const sharedData=await ok('customer-project-data',undefined,users[key]),history=(await ok('customer-project-history?projectId='+project.id,undefined,users[key])).history;
+  for(const record of sharedCommunications){assert(sharedData.communications.some(r=>r.id===record.id));assert(history.some(h=>h.targetId===record.id));}
+  for(const file of [attachment,...sharedAttachments]){assert(sharedData.attachments.some(r=>r.id===file.id));assert.equal((await call('customer-project-file?id='+file.id,undefined,users[key])).status,200);}
+ }
+ assert.deepEqual(current(customer.id),customerBefore);
+ pass('两名客服以各自账号追加沟通和上传资料，双方均能读取项目、对方沟通、附件及历史，客户主档保持原样');
  const drawing=(await ok('customer-project-drawing',{token:token(),projectId:project.id,roundId:round.id,itemIds:[itemA.id,itemB.id],type:'2d',drawingNo:'SYN-2D',revision:'V1',attachmentIds:[attachment.id]},users.service)).item;
  const quote={id:'synthetic_project_quote',kind:'customer_quote',customerAccountId:customer.id,customerName:customer.customer,customerCode:customer.customerCode,status:'confirmed',version:2,quoteNo:'SYN-PROJECT-Q',lines:[{id:'syn-line-a',model:itemA.model},{id:'syn-line-b',model:itemB.model}]};rawInsert(quote);rawInsert({id:'synthetic_project_quote_revision',kind:'customer_quote_revision',quoteId:quote.id,version:2,snapshot:quote});
  const linkPayload={token:token(),projectId:project.id,roundId:round.id,itemIds:[itemA.id,itemB.id],quoteId:quote.id,quoteVersion:2,lineIds:['syn-line-a','syn-line-b'],acceptedBy:'合成客户',acceptedDate:'2026-10-12',evidence:'合成客户邮件已接受报价V2'};
@@ -45,11 +74,13 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  await ok('customer-project-confirmation',{token:token(),projectId:project.id,roundId:round.id,drawingId:drawing.id,itemIds:[itemA.id,itemB.id],decision:'approved',contact:'合成客户',date:'2026-10-12',evidence:'合成客户明确确认V1与款色范围'},users.service);
  await denied('customer-project-sample-release',releasePayload,users.service,400);
  await denied('project-payment-requirement',{token:token(),projectId:project.id,roundId:round.id,mode:'free',version:0,reason:'合成免费开发'},users.service);
+ await denied('project-payment-requirement',{token:token(),projectId:project.id,roundId:round.id,mode:'free',version:0,reason:'第二客服不能借协作获得收款核实权'},users.service2);
  await ok('project-payment-requirement',{token:token(),projectId:project.id,roundId:round.id,mode:'free',version:0,reason:'管理员批准合成免费开发'});
  const sample=(await ok('customer-project-sample-release',releasePayload,users.service)).item;assert.equal((await ok('customer-project-sample-release',releasePayload,users.service)).item.id,sample.id);
  assert.equal(current(round.id).status,'partial');assert.equal(current(project.id).status,'active');assert(!rawRecords().some(r=>r.kind==='order'&&r.id===sample.id));
  const pmcData=await ok('customer-project-data',undefined,users.pmc);assert(pmcData.samples.some(x=>x.id===sample.id));assert.equal(pmcData.projects.length,0);assert.equal(pmcData.quoteLinks.length,0);assert.equal(pmcData.communications.length,0);assert(!('paymentSnapshot' in pmcData.samples[0]));assert.equal((await call('customer-project-file?id='+attachment.id,undefined,users.pmc)).status,200);
  const serviceData=await ok('customer-project-data',undefined,users.service);assert.equal(serviceData.quoteLinks[0].restricted,true);assert(!('quoteNo' in serviceData.quoteLinks[0]));
+ const service2Data=await ok('customer-project-data',undefined,users.service2);assert(service2Data.drawings.some(d=>d.id===drawing.id));assert.equal(service2Data.quoteLinks[0].restricted,true);assert(!('quoteNo' in service2Data.quoteLinks[0]));
  pass('准确图纸版本、客户报价接受与财务核实同时满足才放样办；部分款色只完成已转范围，独立样办不污染PMC大货统计');
  await denied('customer-project-sample-update',{id:sample.id,version:1,status:'accepted',note:'越权制作'},users.service);
  let internal=(await ok('customer-project-sample-update',{id:sample.id,version:1,status:'accepted',plannedDate:'2026-10-22',note:'内部已核对排期'},users.pmc)).item;

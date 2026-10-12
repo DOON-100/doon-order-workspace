@@ -4,7 +4,7 @@ import {AppError} from './store';
 
 export type ProjectMeta={version:number;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string};
 export type ProjectScope={itemId:string;quantity:number};
-export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;dueDate:string;status:'active'|'paused'|'cancelled'|'archived'};
+export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;serviceMemberIds?:string[];dueDate:string;status:'active'|'paused'|'cancelled'|'archived'};
 export type CustomerProjectItem=Entity&ProjectMeta&{kind:'customer_project_item';projectId:string;customerId:string;model:string;customerModel:string;drawing:string;color:string;lens:string;material:string;requirements:string;quantity:number};
 export type CustomerProjectRound=Entity&ProjectMeta&{kind:'customer_project_round';projectId:string;customerId:string;title:string;type:'development'|'revision'|'sales_sample'|'preproduction'|'bulk';parentRoundId:string;scope:ProjectScope[];stage:string;requiredDrawingTypes:('2d'|'3d')[];requireQuote:boolean;requiredSampleIds?:string[];sampleGateStage?:'order'|'before_production'|'not_required';sampleGateNote?:string;dueDate:string;status:'open'|'partial'|'transferred'|'cancelled';reason:string};
 export type CustomerProjectTeam=Entity&ProjectMeta&{kind:'customer_project_team';name:string;leaderIds:string[];salesMemberIds:string[];serviceMemberIds:string[];customerIds:string[];active:boolean};
@@ -23,6 +23,10 @@ export function projectAccess(s:State,m:Member,customerId:string){
  const customer=all(s,'customer_account').find(a=>a.id===customerId) as CustomerAccount|undefined;
  const read=!!m.active&&!!customer&&assignedServiceCustomer(s,m,customer);
  return {read,write:read&&!!customer?.active&&['admin','sales','clerk','pmc'].includes(m.role),internal:!!m.active&&['admin','pmc','production'].includes(m.role),customer};
+}
+/** Old projects retain their single service owner until explicitly edited. An empty array clears it. */
+export function projectServiceMemberIds(project:Pick<CustomerProject,'serviceMemberId'|'serviceMemberIds'>):string[]{
+ return Array.isArray(project.serviceMemberIds)?project.serviceMemberIds:project.serviceMemberId?[project.serviceMemberId]:[];
 }
 export function canReadProject(s:State,m:Member,record:Entity){
  const project=record.kind==='customer_project'?record:all(s,'customer_project').find(p=>p.id===record.projectId);
