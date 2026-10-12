@@ -6,6 +6,7 @@ import {factoryWorkbook,inspectFactoryTemplate,readFactoryRows} from './factory-
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {customerResponsibilityFields,customerResponsibilityListsChanged,matchesCustomerResponsibility,mergeCustomerResponsibilities,type CustomerResponsibilityInput} from './customer-responsibility';
+import {matchesOrderIdentity,orderIdentityKey} from './order-identity';
 
 const excelType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const roles=(m:Member)=>broad(m)||m.role==='sales';
@@ -95,11 +96,12 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   const parsed=rows.map(r=>{
    if(!r.customer||!r.orderNo||!r.lens||!Number.isSafeInteger(r.quantity)||r.quantity<=0||r.quantity>10000000)throw new AppError(`第${r.index}行缺少客户、订单号、镜片或有效大货数量。`);
    if(r.requestedDate)try{r.requestedDate=strictDate(r.requestedDate);}catch{throw new AppError(`第${r.index}行交期须为有效的YYYY-MM-DD日期。`);}
-   const key=JSON.stringify([r.orderNo,r.drawing,r.color,r.lens,r.batch]);if(seen.has(key))throw new AppError(`第${r.index}行业务明细重复。`);seen.add(key);
-   const matches=(all(s,'order') as Order[]).filter(o=>r.lineId?o.id===r.lineId:JSON.stringify([o.orderNo,o.drawing,o.color,o.lens,o.batch])===key);
+   const key=orderIdentityKey(r);if(seen.has(key))throw new AppError(`第${r.index}行业务明细重复。`);seen.add(key);
+   const matches=(all(s,'order') as Order[]).filter(o=>r.lineId?o.id===r.lineId:matchesOrderIdentity(o,r));
    if(matches.length>1||(r.lineId&&!matches.length))throw new AppError(`第${r.index}行明细编号不明确。`);const before=matches[0];
    if(before&&!canRead(m,before)||!before&&!broad(m)&&!m.customers.includes(r.customer))throw new AppError('文件包含无权维护的客户订单。',403);
    if(before?.lifecycle==='archived')throw new AppError(`第${r.index}行已归档，不能导入新草稿。`);
+   if(before&&before.drawing!==r.drawing)throw new AppError(`第${r.index}行图纸编号与当前订单不一致，请重新导出；更正图号须在订单详情的“修改图纸编号”入口办理。`);
    // Changing source quantities or identities requires the normal source-order workflow.
    if(before&&[before.customer,before.orderNo,before.customerPO,before.drawing,before.color,before.lens,before.quantity,before.requestedDate,before.batch].join('\u001f')!==[r.customer,r.orderNo,r.customerPO,r.drawing,r.color,r.lens,r.quantity,r.requestedDate,r.batch].join('\u001f'))throw new AppError(`第${r.index}行源订单字段已变化，请在订单表导入入口核对后更新。`);
    const prior=all(s,'factory_order').filter(v=>v.lineId===before?.id).sort((a,b)=>b.version-a.version)[0];
@@ -113,7 +115,8 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   if(!roles(m))throw new AppError('无权导入内部订单。',403);const {id}=z.object({id:z.string()}).parse(await req.json()),job=s.records.find(r=>r.kind==='factory_import'&&r.id===id);if(!job||job.actorId!==m.id)throw new AppError('导入预览不存在或不属于你。',403);if(job.status==='已提交')return json({ok:true,count:job.rows.length,repeated:true});const updates:Entity[]=[];
   for(const r of job.rows){const before=all(s,'order').find(o=>o.id===r.order.id) as Order|undefined,prior=all(s,'factory_order').filter(v=>v.lineId===r.order.id).sort((a,b)=>b.version-a.version)[0];
    if(before&&!canRead(m,before)||!before&&!broad(m)&&!m.customers.includes(r.order.customer))throw new AppError('订单权限已变化。',403);
-   if((before?.version||0)!==r.expectedOrderVersion||(prior?.version||0)!==r.expectedFactoryVersion||!before&&all(s,'order').some(o=>[o.orderNo,o.drawing,o.color,o.lens,o.batch].join('|')===[r.order.orderNo,r.order.drawing,r.order.color,r.order.lens,r.order.batch].join('|')))throw new AppError('预览后订单已变化，请重新上传核对。',409);
+   if((before?.version||0)!==r.expectedOrderVersion||(prior?.version||0)!==r.expectedFactoryVersion||!before&&all(s,'order').some(o=>matchesOrderIdentity(o as Order,r.order)))throw new AppError('预览后订单已变化或历史图号已有对应明细，请重新上传核对。',409);
+   if(before&&before.drawing!==r.order.drawing)throw new AppError('图纸编号已更正，请重新导出；内部订单导入不能回退图号。',409);
    if(!before)updates.push(r.order,audit(m,r.order,null,'表格导入内部订单',job.filename));updates.push(r.item,audit(m,r.item,prior||null,'表格保存双语草稿',job.filename));
   }updates.push({...job,status:'已提交',submittedAt:now()});await commit(s.revision,updates);return json({ok:true,count:job.rows.length});
  }

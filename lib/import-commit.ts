@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {all,allowedFields,broad,businessKey,canRead,now,type Entity,type Member,type Order,type PreviewRow,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {syncFollowColumns} from './ledger-edit';
+import {isLedgerDrawingExtra,matchesOrderIdentity} from './order-identity';
 
 export async function commitImport(body:unknown,s:State,m:Member){
  const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional()}).parse(body);
@@ -24,7 +25,9 @@ export async function commitImport(body:unknown,s:State,m:Member){
   if(importType==='mes'){if(!broad(m))throw new AppError('此操作需要 PMC 或管理员权限。',403);}
   else {
    if(current?.lifecycle==='archived')throw new AppError('已归档订单不能通过工作表覆盖，请先恢复在制。',403);
-   if((!current||businessKey(current as Order)!==businessKey(r.after))&&all(s,'order').some(o=>o.id!==r.after.id&&businessKey(o as Order)===businessKey(r.after)))throw new AppError(`第 ${r.index} 行的订单明细已存在，请重新预览，避免重复建单。`,409);
+   if(current&&(current.ledger||current.identityHistory?.length)&&r.after.drawing!==current.drawing)throw new AppError(`第 ${r.index} 行图纸编号不能通过工作表覆盖，请使用订单详情的“修改图纸编号”入口。`,409);
+   if(current?.ledger&&(r.after.ledger?.columns?.J!==current.ledger.columns.J||[...new Set([...Object.keys(current.extra||{}),...Object.keys(r.after.extra||{})])].some(key=>isLedgerDrawingExtra(key)&&r.after.extra?.[key]!==current.extra?.[key])))throw new AppError(`第 ${r.index} 行原表 J 列已变化，请重新导出；工作表不能覆盖图纸编号。`,409);
+   if((!current||businessKey(current as Order)!==businessKey(r.after))&&all(s,'order').some(o=>o.id!==r.after.id&&matchesOrderIdentity(o as Order,r.after)))throw new AppError(`第 ${r.index} 行的订单明细或历史图号已存在，请重新预览，避免重复建单。`,409);
    if(current){if(!canRead(m,current as Order)||(!broad(m)&&r.changes?.some(k=>!allowedFields(m,current as Order).includes(k))))throw new AppError('你的字段权限已改变，请重新预览。',403);}
    else if(!broad(m)&&!(m.role==='sales'&&m.customers.includes(r.after.customer)))throw new AppError('仅该客户的业务/客服、PMC 或管理员可新建订单。',403);
   }
@@ -32,7 +35,7 @@ export async function commitImport(body:unknown,s:State,m:Member){
  }
  // Fail early before starting, then validate each remaining batch against fresh state.
  if(!offset)for(const r of allRows)validate(r);
- for(const r of rows){const current=validate(r),raw={...r.after,version:(current?.version||0)+1,updatedAt:now(),updatedBy:m.name,source:job.filename},next=job.importType==='orders'?syncFollowColumns(raw):raw;updates.push(next,audit(m,next,current||null,job.importType==='mes'?'导入包装报工':'合并工作表',`${job.filename} · ${input.reason||'确认预览'}`));}
+ for(const r of rows){const current=validate(r),raw={...r.after,version:(current?.version||0)+1,updatedAt:now(),updatedBy:m.name,source:job.filename};if(job.importType==='orders'){if(current?.identityHistory)raw.identityHistory=current.identityHistory;else delete raw.identityHistory;}const next=job.importType==='orders'?syncFollowColumns(raw):raw;updates.push(next,audit(m,next,current||null,job.importType==='mes'?'导入包装报工':'合并工作表',`${job.filename} · ${input.reason||'确认预览'}`));}
  const nextOffset=offset+rows.length,status=nextOffset===allRows.length?'已提交':'部分已提交';
  updates.push({...job,status,offset:nextOffset,applied:nextOffset,committedAt:now(),committedBy:m.name,reviewReason:input.reason,selected});
  await commit(s.revision,updates);return json({ok:true,count:nextOffset,offset:nextOffset,total:allRows.length,status});

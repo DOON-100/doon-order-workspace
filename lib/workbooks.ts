@@ -3,6 +3,7 @@ import * as cptable from 'xlsx/dist/cpexcel.full.mjs';
 XLSX.set_cptable(cptable);
 import {AppError} from './store';
 import {all,clean,email,fields,fieldLabels,normalizeField,businessKey,canRead,allowedFields,broad,mergeFields,newId,now,strictDate,type State,type Member,type Order,type Report,type PreviewRow} from './domain';
+import {isLedgerDrawingExtra,matchesOrderIdentity,sameOrderIdentity} from './order-identity';
 const aliases:Record<string,string[]>={orderNo:['订单号','销售订单号','订单编号'],customer:['客户','客户号','客户编号'],customerPO:['客户 PO','客户PO','客户订单号'],drawing:['图纸编号','图号','款号','产品'],color:['色号','L · 色号','圈色','颜色','颜色代码'],lens:['镜片类型','镜片'],productCode:['产品编码','物料编码','成品编码'],productType:['产品类型','品类'],specialRequirements:['特殊要求','客户特殊要求'],quantity:['订单数量','数量','订购数量'],requestedDate:['客户要求交期','客户交期','交货日期'],ownerEmail:['负责人邮箱'],batch:['交货批次'],stage:['计划阶段','生产状态'],plannedDate:['预计完工日'],shipDate:['预计可出货日'],promisedDate:['回复交期','承诺交期'],promiseConfirmed:['交期已确认'],notes:['内部跟进备注','备注'],customerNote:['对客备注'],arrangement:['分批交货安排'],sourceStatus:['订单来源状态']};
 export function openWorkbook(bytes:ArrayBuffer){
  if(bytes.byteLength>10*1024*1024)throw new AppError('文件超过 10 MB，请分批上传。');
@@ -43,7 +44,7 @@ export async function previewOrders(s:State,m:Member,book:XLSX.WorkBook,sheetNam
   for(const key of ['orderNo','drawing','color','lens'])if(!patch[key]&&!clean(rawCell(row.values,headers,'_明细编号')))throw new Error(`${fieldLabels[key]}不能为空。`);
   const codes=['色号','L · 色号',...(headers.includes('_导出批次')?['圈色']:[])].filter(h=>headers.includes(h)).map(h=>clean(rawCell(row.values,headers,h))).filter(Boolean);if(new Set(codes).size>1)throw new Error('色号与旧版圈色/原表 L 色号不一致，请核对后保留正确的色号。');
   const rid=clean(rawCell(row.values,headers,'_明细编号')),exportId=clean(rawCell(row.values,headers,'_导出批次'));
-  const matches=rid?orders.filter(o=>o.id===rid):orders.filter(o=>businessKey(o)===businessKey(patch));
+  const matches=rid?orders.filter(o=>o.id===rid):orders.filter(o=>matchesOrderIdentity(o,patch));
   if(rid&&!matches.length)throw new Error('系统明细编号不存在，请核对来源。');if(matches.length>1)throw new Error('同键对应多条明细，请使用系统导出的明细编号消歧。');
   const before=matches[0];
   if(before&&!canRead(m,before))throw new Error('此明细不在你的授权范围内。');
@@ -53,13 +54,16 @@ export async function previewOrders(s:State,m:Member,book:XLSX.WorkBook,sheetNam
   const baseExport=exportId?s.records.find(e=>e.id===exportId&&e.kind==='export'):undefined;
   const base=baseExport?.lines?.find((o:Order)=>o.id===before?.id);
   if(exportId&&!base)throw new Error('导出基线不存在或与明细不符，请重新导出。');
+  if(before&&!rid&&!base&&!sameOrderIdentity(before,patch))throw new Error('此行使用已更正的旧图纸编号，请重新导出工作表；不能用旧图号新建或回退订单。');
   if(before&&!broad(m)){const allowed=allowedFields(m,before);for(const k of Object.keys(patch))if(JSON.stringify(patch[k])!==JSON.stringify((base||before as any)[k])&&!allowed.includes(k))throw new Error(`你无权修改${fieldLabels[k]}。`);}
   const extras:Record<string,string>=Object.fromEntries(headers.map((h,i)=>[h,clean(row.values[i])]).filter(([h,v])=>h&&v&&!Object.values(mapping).includes(h)&&!h.startsWith('_')));
   let after:Order=before?{...before}:{id:newId('line'),kind:'order',version:0,createdAt:now(),updatedAt:now(),updatedBy:m.name,source:filename,orderNo:'',customer:'',customerPO:'',drawing:'',color:'',lens:'',batch:'',quantity:0,requestedDate:'',ownerEmail:m.role==='sales'?m.email:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:{}};
   let conflicts:string[]=[];
   if(before&&base){const merged=mergeFields(before,base,patch);after=merged.next;conflicts=merged.conflicts;for(const k of conflicts)(after as any)[k]=patch[k];}
   else{after={...after,...patch};if(before)conflicts=Object.keys(patch).filter(k=>JSON.stringify(patch[k])!==JSON.stringify((before as any)[k]));}
+  if(before&&(before.ledger||before.identityHistory?.length)&&after.drawing!==before.drawing)throw new Error('图纸编号不能通过工作表覆盖，请由 PMC / 管理员在订单详情的“修改图纸编号”入口更正后重新导出。');
   if(broad(m)){after.extra={...after.extra};for(const [key,value] of Object.entries(extras)){if(base&&value===base.extra?.[key])continue;if(base&&before?.extra?.[key]!==base.extra?.[key]&&before?.extra?.[key]!==value&&!conflicts.includes('extra'))conflicts.push('extra');after.extra[key]=value;}}
+  if(before?.ledger&&Object.keys(after.extra).some(key=>isLedgerDrawingExtra(key)&&after.extra[key]!==before.extra?.[key]))throw new Error('原表 J 列不能通过额外字段覆盖，请使用“修改图纸编号”入口并重新导出工作表。');
   if(patch.promisedDate!==undefined&&patch.promisedDate!==(base||before)?.promisedDate&&after.promisedDate!==before?.promisedDate&&patch.promiseConfirmed!==true)after.promiseConfirmed=false;
   if(after.promiseConfirmed&&!after.promisedDate)throw new Error('确认交期前必须填写回复交期。');
   if(!broad(m)&&m.role!=='sales'&&after.promiseConfirmed!==before?.promiseConfirmed)throw new Error('交期确认须由 PMC、客服/销售或管理员操作。');
@@ -85,9 +89,12 @@ export async function previewReports(s:State,m:Member,book:XLSX.WorkBook,sheetNa
   const identity=official?[get('工单号'),get('工序编号'),get('生产任务号'),get('生产批号'),startedAt,reportedAt]:[nativeId];
   if(identity.some(v=>!v))throw new Error('缺少稳定报工标识所需字段。');
   const id='mes_'+await sha(JSON.stringify(identity));const before=reports.find(r=>r.id===id);
-  if(!before&&reports.some(r=>r.reportedAt===reportedAt&&r.workOrder===get('工单号')&&r.orderNo===orderNo&&r.drawing===drawing&&r.color===color&&r.identityType!==(official?'本地复合标识（非原生报工编号）':'MES 报工编号')))throw new Error('另一种导出格式中已有相同订单/工单/报工时间，请沿用原来源格式，避免同笔报工重复计数。');
-  const candidates=lens?(all(s,'order') as Order[]).filter(o=>[o.orderNo,o.drawing,o.color,o.lens].map(v=>v.toUpperCase()).join('|')===[orderNo,drawing,color,lens].map(v=>v.toUpperCase()).join('|')):[];
-  const after:Report={id,kind:'report',version:before?.version||0,lineId:before?.lineId||(candidates.length===1?candidates[0].id:''),orderNo,drawing,color,lens,workOrder:get('工单号'),task:get('生产任务号'),process,batch:get('生产批号'),startedAt,reportedAt,quantity:normalizeField('quantity',get(official?'产出良品数':'良品数')),approval:get('审批状态'),nativeId,identityType:official?'本地复合标识（非原生报工编号）':'MES 报工编号',source:filename,updatedAt:now(),updatedBy:m.name};
+  const candidates=lens?(all(s,'order') as Order[]).filter(o=>matchesOrderIdentity(o,{orderNo,drawing,color,lens},{ignoreBatch:true})):[];
+  const resolvedLineId=candidates.length===1?candidates[0].id:'',productionBatch=get('生产批号');
+  // A corrected drawing still identifies the same report when another export
+  // format changes its report ID. Never resolve ambiguous order identities.
+  if(!before&&reports.some(r=>r.reportedAt===reportedAt&&r.workOrder===get('工单号')&&r.orderNo===orderNo&&r.color===color&&r.identityType!==(official?'本地复合标识（非原生报工编号）':'MES 报工编号')&&(r.drawing===drawing||!!resolvedLineId&&r.lineId===resolvedLineId&&clean(r.lens).toUpperCase()===clean(lens).toUpperCase()&&(!r.batch||!productionBatch||clean(r.batch).toUpperCase()===productionBatch.toUpperCase()))))throw new Error('另一种导出格式中已有相同订单/工单/报工时间，请沿用原来源格式，避免同笔报工重复计数。');
+  const after:Report={id,kind:'report',version:before?.version||0,lineId:before?.lineId||resolvedLineId,orderNo,drawing,color,lens,workOrder:get('工单号'),task:get('生产任务号'),process,batch:productionBatch,startedAt,reportedAt,quantity:normalizeField('quantity',get(official?'产出良品数':'良品数')),approval:get('审批状态'),nativeId,identityType:official?'本地复合标识（非原生报工编号）':'MES 报工编号',source:filename,updatedAt:now(),updatedBy:m.name};
   if(!['审批完成','已审批','待审批','未审批','已撤销','已作废','已驳回','已反审核'].includes(after.approval))throw new Error('审批状态无法识别，请核对后按支持状态映射。');
   const compare=['lineId','quantity','approval','orderNo','drawing','color','lens','reportedAt'];const changes=compare.filter(k=>(before as any)?.[k]!== (after as any)[k]);
   result.push({index:row.index,status:!before?'new':!changes.length?'skip':'conflict',reason:before&&changes.length?'报工数量或状态有变，请核对更正/撤销来源。':!after.lineId?'未匹配：保留报工，关联明细后才计入包装数量。':'',before,after,changes,expectedVersion:before?.version||0});

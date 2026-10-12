@@ -16,6 +16,7 @@ import {orderExportExtras} from './order-export';
 import {pmcOrder,reviewState,type PmcRound} from './pmc';
 import {collaborationGet,collaborationPost} from './collaboration-api';
 import {canCreateOutsource,outsourceApprover} from './suppliers';
+import {matchesOrderIdentity,orderIdentities,orderIdentityKey} from './order-identity';
 const getOrder=(s:State,m:Member,id:string)=>{const o=s.records.find(r=>r.kind==='order'&&r.id===id) as Order|undefined;if(!o||!canRead(m,o))throw new AppError('无权访问此订单。',403);return o;};
 const pmc=(m:Member)=>{if(!broad(m))throw new AppError('需要 PMC 或管理员权限。',403);};
 const work=(m:Member,o:Order)=>{if(!active(o)||!allowedFields(m,o).length||m.role==='sales')throw new AppError('仅负责此单的文员、PMC 或管理员可办理在制业务。',403);};
@@ -54,8 +55,8 @@ export async function operationPost(action:string,req:Request,s:State,m:Member):
   const mode=form.get('mode')==='archived'?'archived':'active',bytes=await file.arrayBuffer(),parsed=await parseLedger(bytes,file.name,mode,m);
   const previous=all(s,'ledger_import').find(j=>j.hash===parsed.hash&&j.mode===mode);if(previous)return json(previous);
   // Original rows retain individual identities; ambiguous old keys never overwrite collaborative records.
-  const existing=(all(s,'order') as Order[]).filter(o=>(o.lifecycle||'active')===mode),key=(o:Order)=>[o.orderNo,o.drawing,o.color,o.lens].join('|');
-  const oldKeys=new Set(existing.map(key)),conflicts=parsed.rows.filter(o=>oldKeys.has(key(o))),rows=parsed.rows.filter(o=>!oldKeys.has(key(o)));
+  const existing=(all(s,'order') as Order[]).filter(o=>(o.lifecycle||'active')===mode||!!o.identityHistory?.length),key=(o:Partial<Order>)=>orderIdentityKey(o,{ignoreBatch:true});
+  const oldKeys=new Set(existing.flatMap(o=>orderIdentities(o).map(key))),conflicts=parsed.rows.filter(o=>oldKeys.has(key(o))),rows=parsed.rows.filter(o=>!oldKeys.has(key(o)));
   const job={id:newId('ledger_import'),kind:'ledger_import',mode,filename:file.name.replace(/[\\/]/g,'_'),hash:parsed.hash,fileKey:newId('ledger_source'),rowsKey:newId('ledger_rows'),summary:{...parsed.summary,newRows:rows.length,heldRows:conflicts.length},sample:rows.slice(0,5).map(o=>({row:o.ledger!.sourceRow,orderNo:o.orderNo,productType:o.productType||o.ledger?.columns.W||'',drawing:o.drawing,quantity:o.quantity})),heldSample:conflicts.slice(0,10).map(o=>({row:o.ledger!.sourceRow,orderNo:o.orderNo})),offset:0,total:rows.length,status:'待确认',actorId:m.id,actor:m.name,createdAt:now()};
   await bucket().put(job.fileKey,bytes);await bucket().put(job.rowsKey,JSON.stringify(rows));await commit(s.revision,[job]);return json(job);
  }
@@ -63,7 +64,7 @@ export async function operationPost(action:string,req:Request,s:State,m:Member):
   pmc(m);const input=z.object({id:z.string(),offset:z.number().int().min(0)}).parse(await req.json()),job=all(s,'ledger_import').find(r=>r.id===input.id);if(!job)throw new AppError('导入批次不存在。');
   if(job.status==='已完成'||job.offset!==input.offset)return json(job);
   const blob=await bucket().get(job.rowsKey);if(!blob)throw new AppError('导入预览已失效。');const rows=await blob.json<Order[]>(),batch=rows.slice(job.offset,job.offset+35);
-  for(const o of batch){if(s.records.some(r=>r.id===o.id))throw new AppError('明细已导入，请刷新批次。',409);if(s.records.some(r=>r.kind==='order'&&(r.lifecycle||'active')===job.mode&&r.ledger?.sourceHash!==job.hash&&[r.orderNo,r.drawing,r.color,r.lens].join('|')===[o.orderNo,o.drawing,o.color,o.lens].join('|')))throw new AppError('另一批次刚新增了相同订单组合，本批次暂停，请核对后重新导入。',409);}
+  for(const o of batch){if(s.records.some(r=>r.id===o.id))throw new AppError('明细已导入，请刷新批次。',409);if(s.records.some(r=>r.kind==='order'&&((r.lifecycle||'active')===job.mode||!!r.identityHistory?.length)&&(r.ledger?.sourceHash!==job.hash||!!r.identityHistory?.length&&(r.lifecycle||'active')!==job.mode)&&matchesOrderIdentity(r as Order,o,{ignoreBatch:true})))throw new AppError('另一批次已存在相同订单组合或更正前图号，本批次暂停，请核对后重新导入。',409);}
   const next={...job,offset:job.offset+batch.length,status:job.offset+batch.length>=job.total?'已完成':'导入中',updatedAt:now()};
   await commit(s.revision,[...batch,next]);return json(next);
  }

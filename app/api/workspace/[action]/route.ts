@@ -1,4 +1,5 @@
 import {commitImport} from '@/lib/import-commit';
+import {drawingCorrectionPost} from '@/lib/drawing-correction-api';
 import {finishedSupplierGet,finishedSupplierPost,assertLegacyFinishedMutation} from '@/lib/finished-supplier-api';
 import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
 import {departmentColumns} from '@/lib/departments';
@@ -73,6 +74,7 @@ export async function POST(req:Request,ctx:Context){try{
  const m=await actor(s);
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ const drawingCorrection=await drawingCorrectionPost(action,req,s,m);if(drawingCorrection)return drawingCorrection;
  if(['ledger-edit','ledger-lifecycle','pack'].includes(action))assertLegacyFinishedMutation(s,action,await req.clone().json());
  const historicalPrice=await customerPriceArchivePost(action,req,s,m);if(historicalPrice)return historicalPrice;const quotePolicy=await customerQuotePolicyPost(action,req,s,m);if(quotePolicy)return quotePolicy;const quotation=await customerQuotePost(action,req,s,m);if(quotation)return quotation;const service=await serviceWorkspacePost(action,req,s,m);if(service)return service;if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;
  if(['inspect','preview','attachment'].includes(action)){
