@@ -37,8 +37,9 @@ async function handle(req,res){
    if(!allowed)fail('供应商入口不提供此功能。',403);
   }
    const largeArchiveUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-price-archive-file-upload';
-   const requestLimit=(largeArchiveUpload?65:11)*1024*1024;
-   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(largeArchiveUpload?'归档原件不能超过 64 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
+   const projectUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-attachment';
+   const requestLimit=(largeArchiveUpload?65:projectUpload?51:11)*1024*1024;
+   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目工程附件不能超过 50 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});

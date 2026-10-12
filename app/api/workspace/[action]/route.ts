@@ -17,6 +17,8 @@ import {customerQuotePolicyPost} from '@/lib/customer-quote-policy-api';
 import {canReadCustomerPriceAudit,publicCustomerPriceAudit} from '@/lib/customer-price-audit';
 import {eligibleCustomerQuoteAccounts} from '@/lib/customer-quote-access';
 import {serviceWorkspaceGet,serviceWorkspacePost} from '@/lib/service-workspace-api';
+import {customerProjectGet,customerProjectPost} from '@/lib/customer-project-api';
+import {customerProjectFinanceGet,customerProjectFinancePost} from '@/lib/customer-project-finance-api';
 import {canReadServiceRecord} from '@/lib/service-workspace';
 import {collaborationAssignments} from '@/lib/collaboration-api';
 import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/lib/customer-quotes';
@@ -28,6 +30,9 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ // Project histories have their own customer/finance authorization. Broad PMC
+ // order access must never expose project commercial or receipt snapshots.
+ if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('customer_project')||v.kind.startsWith('project_'))))return false;
  const priceArchive=canReadCustomerPriceAudit(s,m,record);if(priceArchive!==null)return priceArchive;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('service_'))){
   const serviceRecord=target?.kind==='service_record'?target:s.records.find(v=>v.kind==='service_record'&&v.id===target?.recordId);
@@ -49,6 +54,8 @@ export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const projectFinance=await customerProjectFinanceGet(action,req,s,m);if(projectFinance)return projectFinance;
+ const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
  const service=await serviceWorkspaceGet(action,req,s,m);if(service)return service;
@@ -74,6 +81,8 @@ export async function POST(req:Request,ctx:Context){try{
  const m=await actor(s);
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ const projectFinance=await customerProjectFinancePost(action,req,s,m);if(projectFinance)return projectFinance;
+ const projects=await customerProjectPost(action,req,s,m);if(projects)return projects;
  const drawingCorrection=await drawingCorrectionPost(action,req,s,m);if(drawingCorrection)return drawingCorrection;
  if(['ledger-edit','ledger-lifecycle','pack'].includes(action))assertLegacyFinishedMutation(s,action,await req.clone().json());
  const historicalPrice=await customerPriceArchivePost(action,req,s,m);if(historicalPrice)return historicalPrice;const quotePolicy=await customerQuotePolicyPost(action,req,s,m);if(quotePolicy)return quotePolicy;const quotation=await customerQuotePost(action,req,s,m);if(quotation)return quotation;const service=await serviceWorkspacePost(action,req,s,m);if(service)return service;if(['finance','programmer'].includes(m.role)&&action!=='export')throw new AppError('此角色仅可查询与导出授权报表，不能修改业务数据。',403);const operation=await operationPost(action,req,s,m);if(operation)return operation;

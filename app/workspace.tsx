@@ -23,6 +23,7 @@ import {PmcPanel} from './pmc-panel';
 import {FinishedSupplierPanel} from './finished-supplier-panel';
 import {CollaborationPanel,CustomerMasterPanel} from './collaboration-panel';
 import {ServiceWorkspacePanel} from './service-workspace-panel';
+import {CustomerProjectPanel} from './customer-project-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
 import {CustomerQuotePanel} from './customer-quote-panel';
 import {CustomerPriceArchivePanel} from './customer-price-archive-panel';
@@ -32,7 +33,7 @@ import {MesPanel,MembersPanel,ReportsPanel} from './support-panels';
 import {packed,productTypeOf,progress,roleLabels,now,type Member,type Order,type Report,type Entity,type CustomerAccount} from '@/lib/domain';
 export type Data={collaborationAssignments?:Array<{customerId:string;orderKeys:string[];sales:boolean;service:boolean;pmc:boolean}>;customerQuoteAccess?:boolean;quoteAuthorizedCustomerIds?:string[];customerAccounts?:CustomerAccount[];collaborationTemplates?:Entity[];losses?:LossRecord[];suppliers?:Entity[];supplierQuotes?:Entity[];supplierFollowups?:Entity[];me:Member;orders:Order[];reports:Report[];members:Member[];comments:Entity[];corrections:Entity[];attachments:Entity[];imports:Entity[];audits:Entity[];exports:Entity[];ledgerImports:Entity[];outsource:Entity[];receipts:Entity[];revision:number;asOf:string};
 type Props={identity:{id:string;name:string;email:string}|null;signInUrl:string;initialView?:string;accountControls?:React.ReactNode;AccountPanel?:React.ComponentType<{data:Data;act:Act;busy:boolean}>;MaintenancePanel?:React.ComponentType<{data:Data}>};
-const navigation=[['sales','业务工作台',BriefcaseBusiness],['customer-quotes','客户报价',FileBarChart2],['customer-price-archive','历史报价档案',FileText],['service','客服工作台',Headphones],['factory-orders','中英内部订单',Languages],['customers','客户责任清单',ContactRound],['pmc-handoff','PMC 交接工作台',Users],['pmc','PMC 排期总表',ClipboardList],['finished-outsourcing','成品外发跟进总表',Factory],['orders','动态订单总表',LayoutGrid],['dashboard','欠数与异常看板',FileBarChart2],['department','部门录入工作台',Factory],['losses','部门损耗月报',FileBarChart2],['receiving','供应商收货',UploadCloud],['completed','已完成订单档案',ClipboardList],['mine','我的订单',ClipboardList],['imports','上传与更新',UploadCloud],['mes','MES 核对',Factory],['reports','报表中心',FileBarChart2],['members','成员与权限',Users],['maintenance','系统维护',SlidersHorizontal]] as const;
+const navigation=[['customer-projects','客户项目开发',BriefcaseBusiness],['sales','业务工作台',BriefcaseBusiness],['customer-quotes','客户报价',FileBarChart2],['customer-price-archive','历史报价档案',FileText],['service','客服工作台',Headphones],['factory-orders','中英内部订单',Languages],['customers','客户责任清单',ContactRound],['pmc-handoff','PMC 交接工作台',Users],['pmc','PMC 排期总表',ClipboardList],['finished-outsourcing','成品外发跟进总表',Factory],['orders','动态订单总表',LayoutGrid],['dashboard','欠数与异常看板',FileBarChart2],['department','部门录入工作台',Factory],['losses','部门损耗月报',FileBarChart2],['receiving','供应商收货',UploadCloud],['completed','已完成订单档案',ClipboardList],['mine','我的订单',ClipboardList],['imports','上传与更新',UploadCloud],['mes','MES 核对',Factory],['reports','报表中心',FileBarChart2],['members','成员与权限',Users],['maintenance','系统维护',SlidersHorizontal]] as const;
 export default function Workspace(props:Props){const [client]=useState(()=>new QueryClient({defaultOptions:{queries:{retry:false,refetchOnWindowFocus:true},mutations:{retry:false}}}));return <QueryClientProvider client={client}><Surface {...props}/></QueryClientProvider>;}
 function Surface({identity,signInUrl,initialView='orders',accountControls,AccountPanel,MaintenancePanel}:Props){
  const [metric,setMetric]=useState<MetricKey|null>(null);
@@ -85,6 +86,7 @@ function Surface({identity,signInUrl,initialView='orders',accountControls,Accoun
  {view==='customer-quotes'&&<CustomerQuotePanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data}/>}
  {view==='service'&&<ServiceWorkspacePanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}><CollaborationPanel side="service" data={data} act={action} busy={busy} openOrder={setSelected}/></ServiceWorkspacePanel>}
+ {view==='customer-projects'&&<CustomerProjectPanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/>}
  {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy}/>}
  {view==='pmc-handoff'&&<CollaborationPanel side="pmc" data={data} act={action} busy={busy} openOrder={setSelected}/>}

@@ -1,0 +1,115 @@
+// All records, accounts and files are synthetic, in an isolated temporary database.
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+import {spawn,execFileSync} from 'node:child_process';
+import {DatabaseSync} from 'node:sqlite';
+import {pathToFileURL} from 'node:url';
+import {verifyCustomerPriceBuildEvidence} from '../scripts/customer-price-build-evidence.mjs';
+const dist=path.resolve(process.env.DOON_BUILD_DIR||'test-output/customer-project-build');
+const evidence=await verifyCustomerPriceBuildEvidence(dist);
+const dir=await fs.mkdtemp(path.resolve('test-output/customer-project-browser-'));
+assert(dir.startsWith(path.resolve('test-output')+path.sep));
+const origin='http://127.0.0.1:18798',env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:'18798',DOON_NO_AUTO_BACKUP:'1'};
+execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
+const password=(await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
+const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});
+let logs='',cookie='',browser;server.stdout.on('data',()=>{});server.stderr.on('data',b=>logs+=b);
+const checks=[],errors=[],pass=name=>{checks.push(name);console.log('PASS '+name);};
+const token=()=>crypto.randomUUID(),day=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
+async function api(route,body,expected=200){
+ const response=await fetch(origin+'/api/'+route,{method:body===undefined?'GET':'POST',headers:{Origin:origin,Cookie:cookie,...(body instanceof FormData?{}:{'Content-Type':'application/json'})},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});
+ if(response.headers.get('set-cookie'))cookie=response.headers.get('set-cookie').split(';')[0];
+ const data=await response.json();assert.equal(response.status,expected,route+' '+JSON.stringify(data));return data;
+}
+const workspace=(action,body,expected)=>api('workspace/'+action,body,expected);
+function originalRows(){const db=new DatabaseSync(path.join(dir,'workspace.sqlite'),{readOnly:true});try{return db.prepare('SELECT id,data FROM records ORDER BY id').all();}finally{db.close();}}
+try{
+ for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
+ await api('auth/login',{username:'admin',password});
+ await api('auth/password',{currentPassword:password,password:'Synthetic-Project-Only-2026!'});
+ const admin=(await workspace('data')).me;
+ await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-A',customerCode:'QA-A',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic browser fixture',active:true});
+ const customer=(await workspace('data')).customerAccounts.find(c=>c.customerCode==='QA-A');
+ const originals=originalRows();
+ await workspace('customer-project-data');await workspace('project-finance-data');
+ assert.deepEqual(originalRows(),originals);pass('首次打开项目和财务查询不创建或改写任何记录');
+ const playwright=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
+ browser=await playwright.chromium.launch({headless:true,...(process.env.DOON_CHROMIUM_PATH?{executablePath:process.env.DOON_CHROMIUM_PATH}:{channel:'chrome'}),args:['--no-proxy-server']});
+ const context=await browser.newContext({viewport:{width:1536,height:1050}});
+ await context.addInitScript(()=>Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true}));
+ const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
+ const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ await page.goto(origin+'/customer-projects');
+ await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.getByRole('button',{name:'新建项目',exact:true}).click();
+ const dialog=page.getByRole('dialog');
+ await dialog.getByLabel('所属客户',{exact:false}).selectOption(customer.id);
+ await dialog.getByLabel('项目编号',{exact:false}).fill('SYNTH-PROJECT-01');
+ await dialog.getByLabel('项目名称',{exact:false}).fill('合成测试客户项目');
+ await dialog.getByLabel('业务主负责人',{exact:false}).selectOption(admin.id);
+ await dialog.getByLabel('客服主负责人',{exact:false}).selectOption(admin.id);
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
+ await dialog.waitFor({state:'hidden'});
+ let project=(await workspace('customer-project-data')).projects.find(p=>p.code==='SYNTH-PROJECT-01');assert(project);
+ await page.screenshot({path:path.join(dir,'project-created.png'),fullPage:true});pass('浏览器新建客户项目成功，真实保存到隔离数据库');
+ await page.getByRole('button',{name:'增加款色',exact:true}).click();
+ for(const [label,value] of [['内部款号','MODEL-X'],['客户款号','CLIENT-X'],['图纸编号','DRAW-X'],['色号','C1'],['镜片','RX'],['材质','Synthetic'],['开发目标数量（副）','10'],['该款色要求','Fixture only']])await dialog.getByLabel(label,{exact:false}).fill(value);
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const item=(await workspace('customer-project-data')).items.find(i=>i.projectId===project.id&&i.model==='MODEL-X');assert(item);
+ await page.getByRole('button',{name:'新建轮次',exact:true}).first().click();
+ await dialog.getByLabel('轮次名称',{exact:false}).fill('R1 合成样办');
+ await dialog.getByLabel('当前前期阶段',{exact:false}).selectOption('payment');
+ await dialog.locator('input[type="number"]').fill('2');
+ await dialog.getByRole('checkbox',{name:'2D 工程图',exact:true}).uncheck();
+ await dialog.getByRole('checkbox',{name:/必须关联已接受报价/}).uncheck();
+ await dialog.getByLabel('样办确认门槛',{exact:false}).selectOption('not_required');
+ await dialog.getByLabel('本轮目标日',{exact:false}).fill(day);
+ await dialog.getByLabel('开发 / 修改原因',{exact:false}).fill('Synthetic fixture');
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const round=(await workspace('customer-project-data')).rounds.find(r=>r.projectId===project.id);assert(round);assert.equal(round.scope[0].quantity,2);
+ pass('浏览器款色与开发轮次表单保存成功，数量和适用门槛准确');
+ const release={token:token(),projectId:project.id,roundId:round.id,roundVersion:round.version,purpose:'development',scope:[{itemId:item.id,quantity:2}],drawingIds:[],quoteLinkId:'',ownerId:admin.id,requiredDate:day,note:'Synthetic sample'};
+ await workspace('customer-project-sample-release',release,400);pass('未核定收费条件不能直接下样办单');
+ const charges=[];
+ for(const [title,category,amount] of [['Sample fee','sample','500'],['Tooling fee','tooling','1500']]){
+  const charge=(await workspace('project-charge-save',{token:token(),projectId:project.id,roundId:round.id,title,category,currency:'USD',amount,prepayAmount:amount,dueDate:day,note:'Synthetic charge'})).record;
+  charges.push((await workspace('project-charge-confirm',{token:token(),id:charge.id,version:charge.version})).record);
+ }
+ await workspace('project-payment-requirement',{token:token(),projectId:project.id,roundId:round.id,mode:'charges',reason:'Synthetic agreed sample and tooling fees',version:0});
+ const receipt=(await workspace('project-receipt-verify',{token:token(),customerId:customer.id,amount:'2000',currency:'USD',date:day,reference:'SYNTHETIC-BANK-01',account:'SYNTHETIC-USD',payer:'Synthetic Customer',note:'Test only'})).record;
+ for(const charge of charges)await workspace('project-allocation',{token:token(),receiptId:receipt.id,chargeId:charge.id,amount:(charge.amountCents/100).toFixed(2)});
+ const doc=(await workspace('project-document-save',{token:token(),customerId:customer.id,documentType:'PI',documentNo:'SYNTHETIC-PI-01',chargeIds:charges.map(c=>c.id),currency:'USD',date:day,customerAddress:'Synthetic address',company:'DOON',terms:'Synthetic quotation only'})).record;
+ await workspace('project-document-confirm',{token:token(),id:doc.id,version:doc.version});
+ const print=await context.newPage();await print.goto(origin+'/api/workspace/project-document-print?id='+encodeURIComponent(doc.id));
+ const printed=await print.locator('body').innerText();assert.match(printed,/2,?000\.00/);assert.match(printed,/Prepayment before order/);assert.doesNotMatch(printed,/下单前预收|尾款 \/ 账期/);await print.screenshot({path:path.join(dir,'sample-pi.png'),fullPage:true});await print.close();
+ pass('样办和模具收费独立核实分配，PI通过真实打印页面核验');
+ const sampleResult=await workspace('customer-project-sample-release',release);
+ const repeated=await workspace('customer-project-sample-release',release);assert(repeated.idempotent);
+ const state=await workspace('customer-project-data');assert.equal(state.rounds.find(r=>r.id===round.id).status,'transferred');assert.equal(state.samples.length,1);
+ assert.equal((await workspace('data')).orders.length,0);pass('样办正式下达关闭本轮，重试不重复，旧大货订单总表不新增样办');
+ await workspace('customer-project-communication',{token:token(),projectId:project.id,roundId:round.id,channel:'email',contact:'Synthetic Contact',occurredAt:day,content:'客户需要核对合成样办交期',nextAction:'回复预计寄样日期',ownerId:admin.id,dueDate:day,visibility:'customer',attachmentIds:[]});
+ await page.reload();await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.getByRole('row').filter({hasText:'合成测试客户项目'}).waitFor();
+ await page.getByRole('row').filter({hasText:'合成测试客户项目'}).getByRole('button',{name:'打开项目'}).click();
+ await page.screenshot({path:path.join(dir,'project-transferred.png'),fullPage:true});
+ for(const label of ['需求与款色','沟通与待办','图纸与客批','报价版本','样办与寄样','费用与收款','PI / CI 单据','大货交接','售后与额外费用']){
+  const tab=page.getByRole('button',{name:label,exact:true});await tab.click();await page.waitForTimeout(150);
+ }
+ await page.getByRole('button',{name:'沟通与待办',exact:true}).click();
+ await page.getByRole('button',{name:'登记沟通',exact:true}).click();
+ await dialog.getByLabel('客户联系人 / 对方姓名',{exact:false}).fill('Synthetic browser contact');
+ await dialog.getByLabel('原始沟通内容 / 结论',{exact:false}).fill('浏览器登记客户确认寄样地址');
+ await dialog.getByLabel('下一步行动',{exact:false}).fill('浏览器待办核对运单');
+ await dialog.getByLabel('下一跟进日',{exact:false}).fill(day);
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const communicated=await workspace('customer-project-data');assert(communicated.communications.some(c=>c.content==='浏览器登记客户确认寄样地址'));assert(communicated.tasks.some(t=>t.title==='浏览器待办核对运单'));
+ pass('浏览器沟通表单成功生成对应行动项');
+ assert.equal(errors.length,0,errors.join('\n'));pass('已转内部项目、沟通、费用与售后页面加载无脚本错误');
+ await page.setViewportSize({width:1280,height:900});await page.screenshot({path:path.join(dir,'project-desktop.png'),fullPage:true});
+ const current=new Map(originalRows().map(r=>[r.id,r.data]));for(const row of originals)assert.equal(current.get(row.id),row.data,'Existing record changed: '+row.id);
+ pass('完整新项目流程未改写任何既有客户、账号或其他原记录');
+ await fs.writeFile('test-output/customer-project-browser-result.json',JSON.stringify({passed:checks.length,checks,errors,manifestSha256:evidence.manifestSha256,at:new Date().toISOString(),artifacts:dir},null,2));
+ console.log(JSON.stringify({passed:checks.length,artifacts:dir}));
+}catch(e){await fs.writeFile(path.join(dir,'failure-log.txt'),logs);throw e;}
+finally{if(browser)await browser.close();server.kill();}
