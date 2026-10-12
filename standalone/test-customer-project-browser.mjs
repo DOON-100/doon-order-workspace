@@ -14,7 +14,7 @@ const origin='http://127.0.0.1:18798',env={...process.env,DOON_DATA_DIR:dir,DOON
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const password=(await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});
-let logs='',cookie='',browser;server.stdout.on('data',()=>{});server.stderr.on('data',b=>logs+=b);
+let logs='',cookie='',browser,page;server.stdout.on('data',()=>{});server.stderr.on('data',b=>logs+=b);
 const checks=[],errors=[],pass=name=>{checks.push(name);console.log('PASS '+name);};
 const token=()=>crypto.randomUUID(),day=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 async function api(route,body,expected=200){
@@ -29,7 +29,8 @@ try{
  await api('auth/login',{username:'admin',password});
  await api('auth/password',{currentPassword:password,password:'Synthetic-Project-Only-2026!'});
  const admin=(await workspace('data')).me;
- await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-A',customerCode:'QA-A',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic browser fixture',active:true});
+ await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-A 合成客户甲',customerCode:'QA-A',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic browser fixture',active:true});
+ await workspace('customer-save',{customer:'SYNTHETIC-CUSTOMER-B 合成客户乙',customerCode:'QB-B',salesName:admin.name,serviceName:admin.name,pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[admin.id],quoteMemberIds:[],notes:'Synthetic search alternative',active:true});
  const customer=(await workspace('data')).customerAccounts.find(c=>c.customerCode==='QA-A');
  const originals=originalRows();
  await workspace('customer-project-data');await workspace('project-finance-data');
@@ -39,19 +40,36 @@ try{
  const context=await browser.newContext({viewport:{width:1536,height:1050}});
  await context.addInitScript(()=>Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true}));
  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
- const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
+ page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  await page.goto(origin+'/customer-projects');
  await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
  await page.getByRole('button',{name:'新建项目',exact:true}).click();
  const dialog=page.getByRole('dialog');
- await dialog.getByLabel('所属客户',{exact:false}).selectOption(customer.id);
  await dialog.getByLabel('项目编号',{exact:false}).fill('SYNTH-PROJECT-01');
  await dialog.getByLabel('项目名称',{exact:false}).fill('合成测试客户项目');
  await dialog.getByLabel('业务主负责人',{exact:false}).selectOption(admin.id);
  await dialog.getByLabel('客服主负责人',{exact:false}).selectOption(admin.id);
+ const customerInput=dialog.getByRole('combobox',{name:'所属客户',exact:true});
+ await customerInput.fill('qa-a');
+ await page.getByRole('option',{name:/QA-A/}).click();
+ assert.match(await customerInput.inputValue(),/QA-A.*合成客户甲/);
+ await customerInput.fill('没有这个客户');
+ await page.getByText('没有匹配的客户，请更换编码或名称。',{exact:true}).waitFor();
+ await customerInput.press('Escape');
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
+ assert.equal(await customerInput.evaluate(input=>input.validity.valid),false);
+ assert.equal((await workspace('customer-project-data')).projects.length,0,'Changing search text must clear the old customer ID');
+ await customerInput.fill('客户甲');
+ await page.getByRole('option',{name:/QA-A/}).waitFor();
+ assert.equal(await page.getByRole('option',{name:/QB-B/}).count(),0);
+ await page.screenshot({path:path.join(dir,'customer-search.png'),fullPage:true});
+ await customerInput.press('Enter');
+ assert.match(await customerInput.inputValue(),/QA-A.*合成客户甲/);
+ pass('客户选择支持编码忽略大小写和中文片段查询；改搜索词清空旧客户，未选中不得保存');
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
- let project=(await workspace('customer-project-data')).projects.find(p=>p.code==='SYNTH-PROJECT-01');assert(project);
+ let project=(await workspace('customer-project-data')).projects.find(p=>p.code==='SYNTH-PROJECT-01');assert(project);assert.equal(project.customerId,customer.id);
+ await page.getByRole('button',{name:'维护项目',exact:true}).click();assert.equal(await dialog.getByRole('combobox',{name:'所属客户',exact:true}).isDisabled(),true);await dialog.getByRole('button',{name:'关闭表单',exact:true}).click();
  await page.screenshot({path:path.join(dir,'project-created.png'),fullPage:true});pass('浏览器新建客户项目成功，真实保存到隔离数据库');
  await page.getByRole('button',{name:'增加款色',exact:true}).click();
  for(const [label,value] of [['内部款号','MODEL-X'],['客户款号','CLIENT-X'],['图纸编号','DRAW-X'],['色号','C1'],['镜片','RX'],['材质','Synthetic'],['开发目标数量（副）','10'],['该款色要求','Fixture only']])await dialog.getByLabel(label,{exact:false}).fill(value);
@@ -111,5 +129,5 @@ try{
  pass('完整新项目流程未改写任何既有客户、账号或其他原记录');
  await fs.writeFile('test-output/customer-project-browser-result.json',JSON.stringify({passed:checks.length,checks,errors,manifestSha256:evidence.manifestSha256,at:new Date().toISOString(),artifacts:dir},null,2));
  console.log(JSON.stringify({passed:checks.length,artifacts:dir}));
-}catch(e){await fs.writeFile(path.join(dir,'failure-log.txt'),logs);throw e;}
+}catch(e){await fs.writeFile(path.join(dir,'failure-log.txt'),logs);if(page){await page.screenshot({path:path.join(dir,'failure.png'),fullPage:true});await fs.writeFile(path.join(dir,'failure-ui.txt'),await page.locator('body').ariaSnapshot());}console.error('Browser artifacts:',dir);throw e;}
 finally{if(browser)await browser.close();server.kill();}
