@@ -50,7 +50,7 @@ try{
  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
  await page.goto(origin+'/customer-projects');
- await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.getByTestId('customer-project-list-nav').waitFor();
  await page.getByRole('button',{name:'新建项目',exact:true}).click();
  const dialog=page.getByRole('dialog');
  await dialog.getByLabel('项目编号',{exact:false}).fill('SYNTH-PROJECT-01');
@@ -58,7 +58,6 @@ try{
  await dialog.getByLabel('业务主负责人',{exact:false}).selectOption(admin.id);
  await dialog.getByLabel('业务客服组',{exact:true}).selectOption(team.id);
  const serviceChoices=dialog.getByRole('group',{name:'客服负责人（可多选）',exact:true});
- for(const member of serviceMembers)await serviceChoices.getByRole('checkbox',{name:member.name,exact:true}).check();
  const customerInput=dialog.getByRole('combobox',{name:'所属客户',exact:true});
  await customerInput.fill('qa-a');
  await page.getByRole('option',{name:/QA-A/}).click();
@@ -75,6 +74,7 @@ try{
  await page.screenshot({path:path.join(dir,'customer-search.png'),fullPage:true});
  await customerInput.press('Enter');
  assert.match(await customerInput.inputValue(),/QA-A.*合成客户甲/);
+ for(const member of serviceMembers)await serviceChoices.getByRole('checkbox',{name:member.name,exact:true}).check();
  pass('客户选择支持编码忽略大小写和中文片段查询；改搜索词清空旧客户，未选中不得保存');
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
  await dialog.waitFor({state:'hidden'});
@@ -98,13 +98,13 @@ try{
   const serviceContext=await browser.newContext({viewport:{width:1536,height:1050}}),at=session.cookie.indexOf('=');
   await serviceContext.addCookies([{name:session.cookie.slice(0,at),value:session.cookie.slice(at+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
   const servicePage=await serviceContext.newPage();servicePage.on('pageerror',e=>errors.push(e.message));
-  await servicePage.goto(origin+'/customer-projects');await servicePage.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+  await servicePage.goto(origin+'/customer-projects');await servicePage.getByTestId('customer-project-list-nav').waitFor();
   if(index<2){
    const row=servicePage.getByRole('row').filter({hasText:'合成测试客户项目'});await row.waitFor();assert.match(await row.innerText(),/合成客服甲、合成客服乙/);
    await row.getByRole('button',{name:'打开项目'}).click();await servicePage.getByRole('button',{name:'维护项目',exact:true}).waitFor();
    await servicePage.screenshot({path:path.join(dir,'project-service-'+(index+1)+'.png'),fullPage:true});
   }else{
-   await servicePage.getByText('当前范围没有新项目。点击“新建项目”开始跟进；旧订单仍在原中台。',{exact:true}).waitFor();
+   await servicePage.getByText('当前范围没有项目。点击“新建项目”开始跟进；已有关联订单可在订单页面查看。',{exact:true}).waitFor();
    assert.equal(await servicePage.getByRole('row').filter({hasText:'合成测试客户项目'}).count(),0);
   }
   await serviceContext.close();
@@ -128,7 +128,7 @@ try{
  let releaseCore;const coreGate=new Promise(resolve=>{releaseCore=resolve;});
  const coreRoute=async route=>{await coreGate;await route.continue().catch(()=>{});};
  await page.route('**/api/workspace/customer-project-data',coreRoute);
- await page.reload();await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.reload();await page.getByTestId('customer-project-list-nav').waitFor();
  await page.getByTestId('customer-project-loading').waitFor();
  assert.equal(await page.locator('.cp-metrics').count(),0,'Initial pending data must not display zero project totals');
  await page.getByRole('alert').filter({hasText:/超时/}).waitFor({timeout:25000});
@@ -193,7 +193,7 @@ try{
  const state=await workspace('customer-project-data');assert.equal(state.rounds.find(r=>r.id===round.id).status,'transferred');assert.equal(state.samples.length,1);
  assert.equal((await workspace('data')).orders.length,0);pass('样办正式下达关闭本轮，重试不重复，旧大货订单总表不新增样办');
  await workspace('customer-project-communication',{token:token(),projectId:project.id,roundId:round.id,channel:'email',contact:'Synthetic Contact',occurredAt:day,content:'客户需要核对合成样办交期',nextAction:'回复预计寄样日期',ownerId:admin.id,dueDate:day,visibility:'customer',attachmentIds:[]});
- await page.reload();await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.reload();await page.getByTestId('customer-project-list-nav').waitFor();
  await page.getByRole('row').filter({hasText:'合成测试客户项目'}).waitFor();
  await page.getByRole('row').filter({hasText:'合成测试客户项目'}).getByRole('button',{name:'打开项目'}).click();
  await page.screenshot({path:path.join(dir,'project-transferred.png'),fullPage:true});
@@ -224,7 +224,7 @@ try{
   const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());await p.goto(origin+'/customer-projects');return p;
  }
  async function openQueue(p,label){
-  await p.reload();await p.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+  await p.reload();await p.getByTestId('customer-project-list-nav').waitFor();
   await p.getByRole('button',{name:'跟进与审核',exact:true}).click();
   await p.locator('.cp-task-queues').getByRole('button',{name:new RegExp('^'+label)}).click();
   await p.getByRole('textbox',{name:'搜索跟进与审核事项',exact:true}).fill(taskTitle);
@@ -262,6 +262,72 @@ try{
  await page.screenshot({path:path.join(dir,'task-completed-history.png'),fullPage:true});
  for(const ctx of taskContexts)await ctx.close();
  pass('业务审核人独立队列通过后最终完成；完整保留跟进结果、退回与两级审核意见');
+ // Add isolated filter fixtures only after the original workflow assertions.
+ const filterProjects=[];
+ for(const [index,member] of serviceMembers.entries()){
+  const customerCode='SYNTH-FILTER-C'+(index+1);
+  await workspace('customer-save',{customer:'合成筛选客户'+(index+1),customerCode,salesName:member.name,serviceName:member.name,pmcName:'',salesMemberIds:[member.id],serviceMemberIds:[member.id],quoteMemberIds:[],notes:'Synthetic column-filter browser fixture',active:true});
+  const filterCustomer=(await workspace('data')).customerAccounts.find(row=>row.customerCode===customerCode);assert(filterCustomer);
+  filterProjects.push((await workspace('customer-project-save',{token:token(),customerId:filterCustomer.id,code:'SYNTH-FILTER-P'+(index+1),title:'合成筛选验收项目'+(index+1),salesMemberId:member.id,serviceMemberIds:[member.id],status:index?'paused':'active'})).item);
+ }
+ const [filterA,filterB]=filterProjects;
+ await workspace('customer-project-entry-save',{token:token(),entryType:'item',projectId:filterB.id,model:'SYNTH-FILTER-MODEL'});
+ await workspace('customer-project-entry-save',{token:token(),entryType:'round',projectId:filterB.id,title:'合成筛选轮次'});
+ await workspace('customer-project-entry-save',{token:token(),entryType:'task',projectId:filterB.id,title:'合成筛选逾期行动',ownerId:serviceMembers[1].id,dueDate:'2000-01-01'});
+ await page.reload();await page.getByTestId('customer-project-list-nav').waitFor();
+ const filterControl=label=>page.getByLabel(label,{exact:true});
+ const projectTable=page.getByRole('table').filter({has:filterControl('筛选项目客户')});
+ const clearFilters=()=>projectTable.getByRole('button',{name:'清空筛选',exact:true}).click();
+ const projectCodes=[project.code,filterA.code,filterB.code];
+ async function assertVisibleProjects(expected){
+  for(const code of projectCodes)await projectTable.locator('tbody tr').filter({hasText:code}).waitFor({state:expected.includes(code)?'visible':'hidden'});
+  assert.equal(await projectTable.getByRole('button',{name:'打开项目',exact:false}).count(),expected.length);
+ }
+ await assertVisibleProjects(projectCodes);
+ // The shell enrolls its session on reload. Observe only filter interactions
+ // after the authenticated list is ready; every subsequent workspace write fails.
+ const beforeFilters=originalRows(),filterWrites=[];
+ const recordFilterWrite=request=>{if(request.url().startsWith(origin+'/api/workspace/')&&!['GET','HEAD'].includes(request.method()))filterWrites.push(request.method()+' '+new URL(request.url()).pathname);};
+ page.on('request',recordFilterWrite);
+ const serviceChoicesBefore=await filterControl('筛选项目客服').locator('option').evaluateAll(options=>options.map(option=>option.value));
+ await filterControl('筛选项目客户').selectOption(filterA.customerId);
+ await filterControl('筛选项目业务').selectOption(serviceMembers[0].id);
+ await filterControl('筛选项目客服').selectOption(serviceMembers[0].id);
+ await assertVisibleProjects([filterA.code]);
+ assert.deepEqual(await filterControl('筛选项目客服').locator('option').evaluateAll(options=>options.map(option=>option.value)),serviceChoicesBefore,'Combining filters must preserve authorized choices');
+ await page.screenshot({path:path.join(dir,'project-list-column-filters.png'),fullPage:true});
+ await filterControl('筛选项目客服').selectOption(serviceMembers[1].id);
+ await assertVisibleProjects([]);
+ await projectTable.getByText('没有符合当前筛选条件的项目，可调整条件或点击“清空筛选”。',{exact:true}).waitFor();
+ await clearFilters();await assertVisibleProjects(projectCodes);
+ pass('项目清单客户、业务、客服按交集筛选，候选稳定，空结果有提示并可清空恢复');
+ await filterControl('筛选项目名称或编号').fill('synth-filter-p1');await assertVisibleProjects([filterA.code]);
+ await filterControl('筛选项目名称或编号').fill('筛选验收项目');await assertVisibleProjects([filterA.code,filterB.code]);
+ const createdDay=new Date(filterA.createdAt).toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
+ await filterControl('创建开始日期').fill(createdDay);await filterControl('创建结束日期').fill(createdDay);
+ await assertVisibleProjects([filterA.code,filterB.code]);
+ await filterControl('创建开始日期').fill('2000-01-01');await filterControl('创建结束日期').fill('2000-01-02');await assertVisibleProjects([]);
+ await clearFilters();
+ await filterControl('筛选项目状态').selectOption('待建立开发轮次');
+ await filterControl('筛选开发轮次数').selectOption('0');await filterControl('筛选款色数量').selectOption('0');
+ await filterControl('筛选下一行动').selectOption('none');await assertVisibleProjects([filterA.code]);
+ await clearFilters();
+ await filterControl('筛选项目状态').selectOption('已暂停');
+ await filterControl('筛选开发轮次数').selectOption('1');await filterControl('筛选款色数量').selectOption('1');
+ await filterControl('筛选下一行动').selectOption('has');
+ await filterControl('筛选行动负责人').selectOption(serviceMembers[1].id);
+ await filterControl('筛选行动期限').selectOption('overdue');
+ await filterControl('搜索下一行动').fill('筛选逾期');await assertVisibleProjects([filterB.code]);
+ await filterControl('搜索下一行动').fill('2000-01-01');await assertVisibleProjects([filterB.code]);
+ await page.screenshot({path:path.join(dir,'project-list-action-filters.png'),fullPage:true});
+ await clearFilters();await assertVisibleProjects(projectCodes);
+ for(const control of await projectTable.locator('thead input,thead select').all())assert.equal(await control.inputValue(),'');
+ assert.equal(await projectTable.getByRole('button',{name:'清空筛选',exact:true}).isDisabled(),true);
+ assert.equal(await page.locator('.cp-filter-count').innerText(),'显示 3 / 3 个项目');
+ page.off('request',recordFilterWrite);
+ assert.deepEqual(filterWrites,[],'Reading and combining project filters must not call workspace mutations');
+ assert.deepEqual(originalRows(),beforeFilters,'Reading and combining project filters must not change any database record');
+ pass('项目名称编号、创建日期、状态、0轮0款及行动负责人日期均可筛选，清空全部恢复且不写数据库');
  assert.equal(errors.length,0,errors.join('\n'));pass('已转内部项目、沟通、费用与售后页面加载无脚本错误');
  await page.setViewportSize({width:1280,height:900});await page.screenshot({path:path.join(dir,'project-desktop.png'),fullPage:true});
  const current=new Map(originalRows().map(r=>[r.id,r.data]));for(const row of originals)assert.equal(current.get(row.id),row.data,'Existing record changed: '+row.id);
