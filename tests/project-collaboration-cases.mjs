@@ -18,12 +18,13 @@ export async function testProjectCollaboration({ok,call,pass,rawRecords,rawInser
  const project={id:id('project'),kind:'customer_project',customerId:customer.id,code:'SYN-COLLAB-P',title:'合成跨部门项目',description:'SYNTHETIC_PRIVATE_PROJECT_DESCRIPTION',teamId:team.id,salesMemberId:mid('sales_manager'),serviceMemberId:mid('service_manager'),serviceMemberIds:[mid('service_manager'),mid('clerk_manager')],serviceReviewerId:mid('clerk_manager'),salesReviewerId:mid('sales_manager'),dueDate:'',status:'active',version:1,createdAt:at,createdBy:'synthetic',updatedAt:at,updatedBy:'synthetic'};
  const otherProject={...project,id:id('other_project'),code:'SYN-COLLAB-OTHER',title:'合成其他项目'};
  const round={id:id('round'),kind:'customer_project_round',projectId:project.id,customerId:customer.id,title:'合成开发轮次',type:'development',scope:[],stage:'图纸',requiredDrawingTypes:[],requireQuote:false,requiredSampleIds:[],sampleGateStage:'not_required',status:'open',version:1};
- const otherRound={...round,id:id('other_round'),projectId:otherProject.id};
+ const otherRound={...round,id:id('other_round'),projectId:otherProject.id,title:'合成其他项目专有轮次'};
+ const wrongCustomerRound={...round,id:id('wrong_customer_round'),customerId:id('unrelated_customer'),title:'合成其他客户专有轮次'};
  const attachment={id:id('attachment'),kind:'customer_project_attachment',projectId:project.id,customerId:customer.id,roundId:round.id,category:'general',filename:'synthetic-private-original.pdf',contentType:'application/pdf',size:10,fileKey:id('private_file_key'),note:'SYNTHETIC_PRIVATE_ATTACHMENT_NOTE',version:1};
  const quote={id:id('quote'),kind:'customer_quote',customerAccountId:customer.id,customerName:customer.customer,customerCode:customer.customerCode,quoteNo:'SYN-PRIVATE-QUOTE',quoteDate:'2026-11-01',currency:'USD',status:'confirmed',version:1,lines:[{id:id('quote_line'),model:'SYN',unitPrice:9182.77,internalNote:'SYNTHETIC_PRIVATE_QUOTE_COST'}],createdAt:at,updatedAt:at,createdBy:'synthetic',createdById:'synthetic',updatedBy:'synthetic',updatedById:'synthetic'};
  const receipt={id:id('receipt'),kind:'project_receipt',customerId:customer.id,amountCents:12345,currency:'USD',date:'2026-11-01',reference:'SYN-PRIVATE-RECEIPT',payer:'SYNTHETIC_PRIVATE_PAYER',account:'SYNTHETIC_PRIVATE_BANK_ACCOUNT',note:'',version:1,createdAt:at,updatedAt:at,updatedBy:'synthetic'};
  const oldTask={id:id('old_review_task'),kind:'customer_project_task',projectId:project.id,customerId:customer.id,roundId:'',title:'合成旧双审历史',description:'Original review workflow',ownerId:mid('clerk_manager'),serviceReviewerId:mid('service_manager'),salesReviewerId:mid('sales_manager'),waitingFor:'',dueDate:'',status:'sales_review',result:'原处理结果不得改写',reviewCycle:1,reviewHistory:[{action:'submit',stage:'followup',actorId:mid('clerk_manager'),actor:'synthetic',at,comment:'原处理结果不得改写',cycle:1}],version:3};
- const protectedFixtures=[customer,team,otherTeam,project,otherProject,round,otherRound,attachment,quote,receipt,oldTask];
+ const protectedFixtures=[customer,team,otherTeam,project,otherProject,round,otherRound,wrongCustomerRound,attachment,quote,receipt,oldTask];
  protectedFixtures.forEach(rawInsert);
  const rejected=async(action,body,actor,status=403,pattern)=>{const before=structuredClone(rawRecords()),response=await call(action,body,actor),message=await response.text();assert((Array.isArray(status)?status:[status]).includes(response.status),`${action}: expected ${status}, got ${response.status}: ${message}`);if(pattern)assert.match(message,pattern);assert.deepEqual(rawRecords(),before,'Rejected request must not write: '+action);};
  const data=(actor,query='')=>ok('project-collaboration-data'+query,undefined,actor);
@@ -40,8 +41,9 @@ export async function testProjectCollaboration({ok,call,pass,rawRecords,rawInser
 
  const workerTasks=new Map();
  for(const role of ['sales','clerk','pmc','production','finance','programmer','viewer']){
-  const key='worker_'+role,body=create(key,{title:'合成跨部门-'+role}),task=(await save(body)).item;workerTasks.set(role,task);
+  const key='worker_'+role,body=create(key,{title:'合成跨部门-'+role,roundId:role==='clerk'?round.id:''}),task=(await save(body)).item;workerTasks.set(role,task);
   const dto=await taskDto(task.id,users[key]);assert(dto);assert.equal(dto.ownerId,mid(key));assert.equal(dto.canOpenProject,false);assert.equal(dto.canComplete,true);assert.equal(dto.canReply,true);assert.equal(dto.canAssign,false);
+  assert.equal(task.roundTitle,role==='clerk'?round.title:'项目级（不指定轮次）');assert.equal(dto.roundTitle,task.roundTitle);
   assert((await data(users[key])).tasks.some(t=>t.id===task.id));assert.equal((await data(users[key])).members.length,0);
   for(const hidden of ['SYNTHETIC_PRIVATE_CUSTOMER_NOTES','SYNTHETIC_PRIVATE_PROJECT_DESCRIPTION','SYNTHETIC_PRIVATE_ATTACHMENT_NOTE','SYNTHETIC_PRIVATE_QUOTE_COST','SYNTHETIC_PRIVATE_BANK_ACCOUNT','SYNTHETIC_PRIVATE_PAYER',attachment.fileKey])assert(!JSON.stringify(dto).includes(hidden));
   for(const field of ['customer','quote','quotes','bank','account','paymentSnapshot','sourceSnapshot','fileKey','attachments','members'])assert(!Object.hasOwn(dto,field),'Task projection must not expose '+field);
@@ -60,13 +62,18 @@ export async function testProjectCollaboration({ok,call,pass,rawRecords,rawInser
  pass('七类内部人员仅凭精确指派收到最小任务正文，不扩大项目、报价、财务、原件权限；未指派者及供应商无任务访问且管理人不可代完成');
 
  for(const patch of [{ownerId:mid('worker_supplier')},{ownerId:mid('disabled')},{ownerId:id('missing_member')}])await rejected('project-collaboration-save',create('worker_production',patch),users.sales_manager,403);
- for(const patch of [{roundId:otherRound.id},{stepKey:'unknown_step'},{department:'unknown_department'},{status:'done'}])await rejected('project-collaboration-save',create('worker_production',patch),users.sales_manager,400);
+ for(const patch of [{roundId:otherRound.id},{roundId:wrongCustomerRound.id},{stepKey:'unknown_step'},{department:'unknown_department'},{status:'done'}])await rejected('project-collaboration-save',create('worker_production',patch),users.sales_manager,400);
+ for(const badRound of [otherRound,wrongCustomerRound]){
+  const historical={...structuredClone(current(productionTask.id)),id:id('historical_bad_round_'+badRound.id),roundId:badRound.id,status:'cancelled'};rawInsert(historical);
+  const beforeRead=structuredClone(rawRecords()),dto=await taskDto(historical.id,users.worker_production);
+  assert.equal(dto.roundTitle,'待核查轮次');assert(!JSON.stringify(dto).includes(badRound.title),'Historical invalid association must never borrow another project/customer round label');assert.deepEqual(rawRecords(),beforeRead,'Reading a malformed historical association must not repair or rewrite it');
+ }
  for(const action of ['project-collaboration-followup','project-collaboration-complete','project-collaboration-cancel'])await rejected(action,actionBody(productionTask.id,'  \n '),action.endsWith('cancel')?users.sales_manager:users.worker_production,400);
  await rejected('project-collaboration-followup',{...actionBody(productionTask.id),status:'done'},users.worker_production,400);
  await rejected('project-collaboration-complete',{...actionBody(productionTask.id),ownerId:mid('worker_finance')},users.worker_production,400);
  await rejected('customer-project-entry-save',{token:token(),projectId:project.id,entryType:'collaboration',status:'done'},users.sales_manager,400);
  await rejected('customer-project-entry-save',{token:token(),projectId:project.id,entryType:'task',id:productionTask.id,version:productionTask.version,status:'done'},users.sales_manager,403);
- pass('协作字段严格校验：空完成/跟进/取消备注、停用或供应商接收人、跨项目轮次、非法环节和状态注入被拒；独立资料入口不能写新任务');
+ pass('协作字段严格校验；项目级和指定轮次准确显示，历史跨项目或跨客户轮次显示待核查且不改写；独立资料入口不能写新任务');
 
  const ownerReply={...actionBody(productionTask.id,'已检查尺寸，正在处理'),status:'in_progress'};
  let item=(await ok('project-collaboration-followup',ownerReply,users.worker_production)).item;assert.equal(item.status,'in_progress');
