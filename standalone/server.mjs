@@ -40,7 +40,7 @@ async function handle(req,res){
    const projectUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-attachment';
    const followupImport=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-followup-import';
    const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:11)*1024*1024;
-   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目工程附件不能超过 50 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
+   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});

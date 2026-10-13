@@ -107,6 +107,7 @@ const {testDrawingCorrection}=await import('./drawing-correction-cases.mjs');awa
 const projectHarness={ok,call,state,pass,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))};
 const {testCustomerProjects}=await import('./customer-project-cases.mjs');await testCustomerProjects(projectHarness);
 const {testCustomerProjectEntries}=await import('./customer-project-entry-cases.mjs');await testCustomerProjectEntries(projectHarness);
+const {testCustomerProjectOriginalDocuments}=await import('./customer-project-original-documents-cases.mjs');await testCustomerProjectOriginalDocuments(projectHarness);
 const {testCustomerProjectTaskReview}=await import('./customer-project-task-review-cases.mjs');await testCustomerProjectTaskReview(projectHarness);
 const {testCustomerProjectFinance}=await import('./customer-project-finance-cases.mjs');await testCustomerProjectFinance(projectHarness);
 const {testCustomerProjectFinanceEntries}=await import('./customer-project-finance-entry-cases.mjs');await testCustomerProjectFinanceEntries(projectHarness);

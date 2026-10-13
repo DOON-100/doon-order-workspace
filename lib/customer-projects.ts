@@ -19,7 +19,7 @@ export type CustomerProjectSample=Entity&ProjectMeta&{kind:'customer_project_sam
 export type CustomerProjectDispatch=Entity&ProjectMeta&{kind:'customer_project_dispatch';projectId:string;customerId:string;roundId:string;sampleId:string;lines:ProjectScope[];carrier:string;trackingNo:string;recipient:string;address:string;shipDate:string;receivedDate:string;note:string;attachmentIds:string[]};
 export type CustomerProjectFeedback=Entity&ProjectMeta&{kind:'customer_project_feedback';projectId:string;customerId:string;roundId:string;sampleId:string;itemId:string;decision:'approved'|'conditional'|'revise'|'rejected';contact:string;date:string;evidence:string;note:string;attachmentIds:string[]};
 export type CustomerProjectHandover=Entity&ProjectMeta&{kind:'customer_project_handover';projectId:string;customerId:string;roundId:string;type:'sample'|'bulk';scope:ProjectScope[];sampleId:string;orderLinks:{itemId:string;orderId:string;quantity:number;orderVersion:number}[];drawingIds:string[];quoteLinkId:string;paymentSnapshot:unknown};
-export type CustomerProjectAttachment=Entity&ProjectMeta&{kind:'customer_project_attachment';projectId:string;customerId:string;roundId:string;filename:string;contentType:string;size:number;hash:string;fileKey:string;note:string};
+export type CustomerProjectAttachment=Entity&ProjectMeta&{kind:'customer_project_attachment';projectId:string;customerId:string;roundId:string;category?:'general'|'original-communication';filename:string;contentType:string;size:number;hash:string;fileKey:string;note:string};
 
 export function projectAccess(s:State,m:Member,customerId:string){
  const customer=all(s,'customer_account').find(a=>a.id===customerId) as CustomerAccount|undefined;

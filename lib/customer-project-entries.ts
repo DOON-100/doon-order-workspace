@@ -49,6 +49,7 @@ export function projectEntryPublic(row:Entity){const {fileKey,requestFingerprint
 function quoteReadable(s:State,m:Member,row:Entity){if(!row.quoteId)return true;const quote=all(s,'customer_quote').find(q=>q.id===row.quoteId) as CustomerQuote|undefined;return !!quote&&canReadCustomerQuote(s,m,quote);}
 function projectReference(s:State,p:CustomerProject,kind:string,recordId:string){if(!recordId)return;const found=all(s,kind).find(row=>row.id===recordId&&row.projectId===p.id&&row.customerId===p.customerId);if(!found)throw new AppError('关联记录不存在或不属于当前客户项目。');return found;}
 function validateReferences(s:State,m:Member,p:CustomerProject,item:Entity,before?:Entity){
+ if(item.kind==='customer_project_attachment'&&item.category==='original-communication'&&item.roundId)throw new AppError('原始沟通文档保存在项目级，不能关联开发轮次。');
  projectReference(s,p,'customer_project_round',item.roundId||'');
  projectReference(s,p,'customer_project_round',item.parentRoundId||'');
  if(item.kind==='customer_project_round'&&item.parentRoundId===item.id)throw new AppError('源轮次不能是当前轮次。');

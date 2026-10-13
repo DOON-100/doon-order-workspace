@@ -67,7 +67,7 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
   const technical=samples.some(sample=>all(s,'customer_project_drawing').some(d=>sample.drawingIds.includes(d.id)&&d.attachmentIds.includes(attachment.id)));
   if(!canReadProject(s,m,attachment)&&!technical)throw new AppError('无权读取当前项目附件。',403);
   const object=await bucket().get(attachment.fileKey);if(!object)throw new AppError('原附件暂不可用，请核对存储。',404);
-  return new Response(object.body,{headers:{'Content-Type':attachment.contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+  return new Response(object.body,{headers:{'Content-Type':attachment.category==='original-communication'?'application/octet-stream':attachment.contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
  }
  if(action==='customer-project-history'){
   const project=requireProject(s,m,new URL(req.url).searchParams.get('projectId')||'');
@@ -259,13 +259,15 @@ async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:
 }
 
 async function upload(req:Request,s:State,m:Member){
- const form=await req.formData(),project=requireProject(s,m,String(form.get('projectId')||''));if(!projectAccess(s,m,project.customerId).write)throw new AppError('没有当前客户项目的修改权限。',403);const roundId=String(form.get('roundId')||'');if(roundId)requireRound(s,project,roundId);
- const file=form.get('file');if(!(file instanceof File)||file.size<=0||file.size>50*1024*1024)throw new AppError('请选择不超过50MB的项目资料。');
+ const form=await req.formData(),project=requireProject(s,m,String(form.get('projectId')||''));if(!projectAccess(s,m,project.customerId).write)throw new AppError('没有当前客户项目的修改权限。',403);
+ const category=parse(z.enum(['general','original-communication']).default('general'),form.get('category')??undefined),original=category==='original-communication',roundId=String(form.get('roundId')||'');
+ if(original&&roundId)throw new AppError('原始沟通文档保存在项目级，请不要关联开发轮次。');if(roundId)requireRound(s,project,roundId);
+ const file=form.get('file');if(!(file instanceof File)||file.size<=0||file.size>50*1024*1024)throw new AppError('请选择非空且不超过 50 MiB 的项目资料。');
  const allowed:Record<string,string>={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',xls:'application/vnd.ms-excel',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',dwg:'application/octet-stream',dxf:'application/octet-stream',step:'application/octet-stream',stp:'application/octet-stream',iges:'application/octet-stream',igs:'application/octet-stream',stl:'application/octet-stream',eml:'message/rfc822'};
- const ext=file.name.split('.').at(-1)?.toLowerCase()||'';if(!allowed[ext])throw new AppError('不支持此附件格式；支持工程图纸、图片、PDF、办公文件及邮件EML。');
- const note=parse(text(3000),String(form.get('note')||'')),filename=file.name.replace(/[\\/\u0000-\u001f\u007f]/g,'_').slice(0,240),bytes=await file.arrayBuffer(),hash=await sha(bytes);
- const prior=all(s,'customer_project_attachment').find(a=>a.projectId===project.id&&a.roundId===roundId&&a.hash===hash&&a.filename===filename&&a.note===note);if(prior)return json({ok:true,item:safeRecord(prior),idempotent:true});
- const item={...newRecord('customer_project_attachment',project,m,{roundId,filename,note}),contentType:allowed[ext],size:file.size,hash,fileKey:newId('customer_project_file')};await bucket().put(item.fileKey,bytes);return persist(s,m,'attachment',{},item);
+ const ext=file.name.split('.').at(-1)?.toLowerCase()||'';if(!original&&!Object.prototype.hasOwnProperty.call(allowed,ext))throw new AppError('不支持此附件格式；支持工程图纸、图片、PDF、办公文件及邮件EML。');
+ const note=parse(text(3000),String(form.get('note')||'')),safeName=Array.from(file.name.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g,'_')).slice(0,240).join('').replace(/[. ]+$/g,''),filename=(/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(safeName)?'_'+safeName:safeName)||(original?'未命名原始文档':'未命名资料'),bytes=await file.arrayBuffer(),hash=await sha(bytes);
+ const prior=all(s,'customer_project_attachment').find(a=>a.projectId===project.id&&a.customerId===project.customerId&&a.roundId===roundId&&(a.category||'general')===category&&a.hash===hash&&a.filename===filename&&a.note===note);if(prior)return json({ok:true,item:safeRecord(prior),idempotent:true});
+ const item={...newRecord('customer_project_attachment',project,m,{roundId,category,filename,note}),contentType:original?'application/octet-stream':allowed[ext],size:file.size,hash,fileKey:newId('customer_project_file')};await bucket().put(item.fileKey,bytes);return persist(s,m,'attachment',{},item);
 }
 
 function checkScope(s:State,p:CustomerProject,r:CustomerProjectRound,lines:ProjectScope[]){checkItems(s,p,lines.map(l=>l.itemId),r);const remaining=new Map(remainingRoundScope(s,r).map(l=>[l.itemId,l.quantity]));for(const l of lines)if(l.quantity>(remaining.get(l.itemId)||0))throw new AppError('本次下单超过该轮款色尚未转单数量。',409);}
