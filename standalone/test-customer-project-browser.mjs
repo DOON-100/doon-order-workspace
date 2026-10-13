@@ -111,6 +111,34 @@ try{
  }
  pass('两位客服分别登录均能看到和跟进同一项目，无关账号看不到项目');
  await page.screenshot({path:path.join(dir,'project-created.png'),fullPage:true});pass('浏览器新建客户项目成功，真实保存到隔离数据库');
+ // The core project list must not wait for a delayed finance catalogue.
+ let releaseFinance;const financeGate=new Promise(resolve=>{releaseFinance=resolve;});
+ const financeRoute=async route=>{await financeGate;await route.continue().catch(()=>{});};
+ await page.route('**/api/workspace/project-finance-data',financeRoute);
+ await page.reload();
+ const loadedRow=page.getByRole('row').filter({hasText:'合成测试客户项目'});
+ await loadedRow.waitFor({timeout:10000});
+ assert.equal(await page.getByRole('button',{name:'新建项目',exact:true}).isEnabled(),true);
+ await loadedRow.getByRole('button',{name:'打开项目'}).click();
+ await page.getByRole('button',{name:'维护项目',exact:true}).waitFor();
+ await page.screenshot({path:path.join(dir,'project-while-finance-pending.png'),fullPage:true});
+ releaseFinance();await page.unroute('**/api/workspace/project-finance-data',financeRoute);
+ pass('财务请求未完成时核心项目已可见且可打开维护，不阻塞项目列表');
+ // A stalled core request must show a loading/error state instead of a false zero.
+ let releaseCore;const coreGate=new Promise(resolve=>{releaseCore=resolve;});
+ const coreRoute=async route=>{await coreGate;await route.continue().catch(()=>{});};
+ await page.route('**/api/workspace/customer-project-data',coreRoute);
+ await page.reload();await page.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await page.getByTestId('customer-project-loading').waitFor();
+ assert.equal(await page.locator('.cp-metrics').count(),0,'Initial pending data must not display zero project totals');
+ await page.getByRole('alert').filter({hasText:/超时/}).waitFor({timeout:25000});
+ assert.equal(await page.locator('.cp-metrics').count(),0,'Failed initial data must not be shown as an empty project list');
+ releaseCore();await page.unroute('**/api/workspace/customer-project-data',coreRoute);
+ await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await loadedRow.waitFor({timeout:10000});
+ await loadedRow.getByRole('button',{name:'打开项目'}).click();
+ await page.getByRole('button',{name:'维护项目',exact:true}).waitFor();
+ pass('项目请求超时明确提示且不显示虚假零记录，刷新后恢复查看和修改');
  const taskTitle='合成两级审核跟进事项';
  await page.getByRole('button',{name:'沟通与待办',exact:true}).click();
  await page.getByRole('button',{name:'新增行动',exact:true}).click();
