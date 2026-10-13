@@ -117,7 +117,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='dashboard'&&<Dashboard data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='sales'&&<CollaborationPanel side="sales" data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='customer-quotes'&&<CustomerQuotePanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
- {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data}/>}
+ {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='workbench'&&<FrameworkWorkbench data={data} onNavigate={setView}/>}
  {view==='communications'&&<UnifiedCommunicationPanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='documents'&&<HandoffBusinessPanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty} initialSection="documents" initialContext={navigationContext}/>}

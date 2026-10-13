@@ -69,4 +69,26 @@ export async function runBusinessTeamScopeCases({api,identity,admin,rawInsert,ra
  assert.equal(filterBusinessTeamRows(state,[{kind:'purchase',customerOrder:oa.orderNo}],t1.id).length,1);
  assert.equal(filterBusinessTeamRows({...state,records:[...state.records,{...ob,id:'duplicate_order_number',orderNo:oa.orderNo}]},[{kind:'purchase',customerOrder:oa.orderNo}],t1.id).length,0);
  pass('多客户同组邮件保留、混组邮件及财务单据完整留待关联；PMC轮次和导出批次不混组，采购仅精确订单关联');
+
+ // A grant editor submits the complete customerIds array. Display scopes must
+ // never turn that complete configuration into a lossy partial edit payload.
+ const verifier={...reader,id:id('grant_verifier'),userId:id('grant_verifier_user'),email:'scope-verifier@test.invalid',role:'finance'};
+ const grant={id:id('cross_group_grant'),kind:'project_finance_grant',memberId:verifier.id,customerIds:[a.id,b.id],active:true,version:1};
+ rawInsert(verifier);rawInsert(grant);
+ const config=await read('project-finance-data?projectId='+p1.id,t1.id),editableGrant=config.grants.find(row=>row.id===grant.id);
+ assert.deepEqual(editableGrant.customerIds,[a.id,b.id]);
+ assert(config.grantCustomers.some(row=>row.id===a.id));assert(config.grantCustomers.some(row=>row.id===b.id));
+ assert(config.grantCustomers.every(row=>Object.keys(row).every(key=>['id','customer','customerCode','active'].includes(key))));
+ assert(!config.customers.some(row=>row.id===b.id),'Full grant editor catalog must not broaden ordinary grouped financial data');
+ const postGrant=(input,user=admin)=>identity.run(user,()=>api.POST(new Request('https://orders.test/api/workspace/project-finance-grant-save',{method:'POST',headers:{'Content-Type':'application/json','X-Workspace-Team':t1.id},body:JSON.stringify(input)}),{params:Promise.resolve({action:'project-finance-grant-save'})}));
+ const change={token:crypto.randomUUID(),id:editableGrant.id,version:editableGrant.version,memberId:editableGrant.memberId,customerIds:editableGrant.customerIds,active:false};
+ let response=await postGrant(change);assert.equal(response.status,200,JSON.stringify(await response.json()));
+ let persisted=rawRecords().find(row=>row.id===grant.id);assert.deepEqual(persisted.customerIds,[a.id,b.id]);assert.equal(persisted.version,2);assert.equal(persisted.active,false);
+ // Editing the visible A checkbox must retain the pre-selected B from the full catalog.
+ response=await postGrant({...change,token:crypto.randomUUID(),version:2,customerIds:persisted.customerIds.filter(customerId=>customerId!==a.id),active:true});
+ assert.equal(response.status,200,JSON.stringify(await response.json()));persisted=rawRecords().find(row=>row.id===grant.id);assert.deepEqual(persisted.customerIds,[b.id]);
+ const beforeRejected=structuredClone(rawRecords());response=await postGrant({...change,token:crypto.randomUUID()});assert.equal(response.status,409);assert.deepEqual(rawRecords(),beforeRejected);
+ const readerConfig=await (await call('project-finance-data',t1.id,readerUser)).json();assert.deepEqual(readerConfig.grants,[]);assert.deepEqual(readerConfig.grantCustomers,[]);
+ response=await postGrant({...change,token:crypto.randomUUID(),version:persisted.version},readerUser);assert.equal(response.status,403);assert.deepEqual(rawRecords(),beforeRejected);
+ pass('跨组财务授权完整编辑：改启用状态不撤销隐藏客户，客户选项完整且仅管理员可见，旧版本与非管理员写入仍拒绝');
 }

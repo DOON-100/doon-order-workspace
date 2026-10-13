@@ -120,7 +120,9 @@ export function scopeBusinessTeamPayload(action:string,payload:Row,s:State,teamI
  // Service/project team catalogs intentionally retain all authorized choices for switching.
  if(Array.isArray(data.members))data.members=data.members.map(nested);
  if(Array.isArray(data.ownerCandidates))data.ownerCandidates=data.ownerCandidates.map(nested).filter((row:Row)=>row.customerIds.length);
- if(Array.isArray(data.grants))data.grants=data.grants.map(nested).filter((row:Row)=>row.customerIds.length);
+ // Financial grants are complete editable configuration, already admin-only in
+ // the source DTO. Cropping customerIds here would revoke hidden customers on save.
+ // Keep grants and their separate grantCustomers editor catalog intact.
  if(Array.isArray(data.quoteAuthorizedCustomerIds))data.quoteAuthorizedCustomerIds=data.quoteAuthorizedCustomerIds.filter(customerBelongs);
  if(action==='data'){
   // Import/export batches and their cached counts can span groups. They are available in the full view.
