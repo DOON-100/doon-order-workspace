@@ -19,6 +19,7 @@ import {canReadCustomerPriceAudit,publicCustomerPriceAudit} from '@/lib/customer
 import {eligibleCustomerQuoteAccounts} from '@/lib/customer-quote-access';
 import {serviceWorkspaceGet,serviceWorkspacePost} from '@/lib/service-workspace-api';
 import {customerProjectGet,customerProjectPost} from '@/lib/customer-project-api';
+import {customerProjectFollowupGet,customerProjectFollowupPost} from '@/lib/customer-project-followup-api';
 import {customerProjectFinanceGet,customerProjectFinancePost} from '@/lib/customer-project-finance-api';
 import {canReadServiceRecord} from '@/lib/service-workspace';
 import {collaborationAssignments} from '@/lib/collaboration-api';
@@ -60,6 +61,7 @@ export async function GET(req:Request,ctx:Context){try{
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
  const engineering=await engineeringDrawingGet(action,req,s,m);if(engineering)return engineering;
  const projectFinance=await customerProjectFinanceGet(action,req,s,m);if(projectFinance)return projectFinance;
+ const followup=await customerProjectFollowupGet(action,req,s,m);if(followup)return followup;
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
@@ -88,6 +90,7 @@ export async function POST(req:Request,ctx:Context){try{
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
  const engineering=await engineeringDrawingPost(action,req,s,m);if(engineering)return engineering;
  const projectFinance=await customerProjectFinancePost(action,req,s,m);if(projectFinance)return projectFinance;
+ const followup=await customerProjectFollowupPost(action,req,s,m);if(followup)return followup;
  const projects=await customerProjectPost(action,req,s,m);if(projects)return projects;
  const drawingCorrection=await drawingCorrectionPost(action,req,s,m);if(drawingCorrection)return drawingCorrection;
  if(['ledger-edit','ledger-lifecycle','pack'].includes(action))assertLegacyFinishedMutation(s,action,await req.clone().json());

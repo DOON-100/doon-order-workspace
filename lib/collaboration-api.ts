@@ -131,13 +131,14 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
  }
  if(action==='customer-save'){
   if(!manageCustomers(m))throw new AppError('仅管理员或 PMC 可修改客户责任。',403);
-  const input=z.object({id:z.string().optional(),expectedVersion:z.number().int().positive().optional(),customer:z.string().trim().min(1).max(120),customerCode:z.string().trim().max(80).default(''),salesName:z.string().trim().max(80).default(''),serviceName:z.string().trim().max(80).default(''),pmcName:z.string().trim().max(80).default(''),...customerResponsibilityFields,notes:z.string().max(1000).default(''),active:z.boolean().default(true)}).parse(await req.json());
+  const input=z.object({id:z.string().optional(),expectedVersion:z.number().int().positive().optional(),createOnly:z.boolean().optional(),customer:z.string().trim().min(1).max(120),customerCode:z.string().trim().max(80).default(''),salesName:z.string().trim().max(80).default(''),serviceName:z.string().trim().max(80).default(''),pmcName:z.string().trim().max(80).default(''),...customerResponsibilityFields,notes:z.string().max(1000).default(''),active:z.boolean().default(true)}).parse(await req.json());
   const before=(input.id?all(s,'customer_account').find(v=>v.id===input.id):customerAccountByName(s,input.customer)) as CustomerAccount|undefined;
+  if(input.createOnly&&before)throw new AppError('客户名称已存在，本次仅新增，不覆盖已有客户。',409);
   if(input.id&&!before)throw new AppError('客户记录不存在。');
   if(before&&input.expectedVersion!==undefined&&input.expectedVersion!==before.version)throw new AppError('客户资料或责任已由其他管理员修改，本次未覆盖；请刷新后重新确认。',409);
   if(all(s,'customer_account').some(v=>v.id!==before?.id&&clean(v.customer).toLowerCase()===clean(input.customer).toLowerCase()))throw new AppError('客户名称已存在。');
   requireResponsibilityAdministrator(m,before,input);
-  const {expectedVersion,...fields}=input;
+  const {expectedVersion,createOnly,...fields}=input;
   const item={...before,...fields,...responsibilityLists(s,before,input),id:before?.id||newId('customer'),kind:'customer_account',version:(before?.version||0)+1,createdAt:before?.createdAt||now(),updatedAt:now(),updatedBy:m.name};
   await commit(s.revision,[item,audit(m,item,before||null,'维护客户责任')]);return json({ok:true,item});
  }

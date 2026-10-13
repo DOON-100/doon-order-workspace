@@ -38,8 +38,9 @@ async function handle(req,res){
   }
    const largeArchiveUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-price-archive-file-upload';
    const projectUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-attachment';
-   const requestLimit=(largeArchiveUpload?65:projectUpload?51:11)*1024*1024;
-   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目工程附件不能超过 50 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
+   const followupImport=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-followup-import';
+   const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:11)*1024*1024;
+   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目工程附件不能超过 50 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});
@@ -88,7 +89,8 @@ async function handle(req,res){
    const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
    try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
   }
-  res.writeHead(response.status,{...security,...Object.fromEntries(response.headers)});res.end(Buffer.from(await response.arrayBuffer()));
+  const outgoing=new Headers(security);for(const [name,value] of response.headers)outgoing.set(name,value);
+  res.writeHead(response.status,Object.fromEntries(outgoing));res.end(Buffer.from(await response.arrayBuffer()));
  }catch(e){const status=e.status||500;if(status===500)console.error('请求失败',e.message);res.writeHead(status,{...security,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:status===500?'服务暂不可用，请稍后重试。':e.message}));}
 }
 const server=localTLS?https.createServer({cert:await fs.readFile(process.env.DOON_TLS_CERT),key:await fs.readFile(process.env.DOON_TLS_KEY)},handle):http.createServer(handle);
