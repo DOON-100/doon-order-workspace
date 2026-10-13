@@ -62,17 +62,17 @@ export async function testCustomerProjectFinance({ok,call,state,pass,rawRecords,
  assert.equal((await data()).totalsByCurrency.USD.receivableCents,210000);
  const print=await call('project-document-print?id='+pi.id,undefined,sales),printed=await print.text();assert.equal(print.status,200);assert(printed.includes('&lt;script&gt;unsafe&lt;/script&gt;'));assert(!printed.includes('<script>'));
  await deny('project-document-print?id='+pi.id,undefined,403,other);
- await deny('project-document-save',{token:token(),id:pi.id,version:pi.version,customerId:a.id,documentType:'PI',documentNo:'SYNTH-PI-1',chargeIds:[sample.id],currency:'USD',date:'2026-10-12',customerAddress:'',company:'',terms:''},409,sales);
- pass('PI与CI引用同一收费且不复制应收；单据核对锁定、受权限控制打印并转义输入');
+ const revisedPi=(await ok('project-document-save',{token:token(),id:pi.id,version:pi.version,customerId:a.id,documentType:'PI',documentNo:'SYNTH-PI-1',chargeIds:[sample.id],currency:'USD',date:'2026-10-12',customerAddress:'',company:'',terms:''},sales)).record;assert.equal(revisedPi.status,'draft');assert.equal(revisedPi.version,pi.version+1);
+ pass('PI与CI引用同一收费且不复制应收；单据直接修订留存版本、受权限控制打印并转义输入');
 
  let bulk=(await ok('project-charge-save',{token:token(),projectId:p2.id,roundId:r2.id,title:'合成大货',category:'bulk',currency:'USD',amount:'10000',prepayAmount:'3000',dueDate:'',note:'',plan:[{title:'订金',amount:'3000',beforeOrder:true,dueDate:''},{title:'尾款',amount:'7000',beforeOrder:false,dueDate:''}]},sales)).record;
  bulk=(await ok('project-charge-confirm',{token:token(),id:bulk.id,version:bulk.version},finance)).record;
  assert.equal((await data()).totalsByCurrency.USD.receivableCents,1210000);
- await deny('project-charge-save',{token:token(),projectId:p2.id,roundId:r2.id,title:'错误分期',category:'bulk',currency:'USD',amount:'10000',prepayAmount:'3000',dueDate:'',note:'',plan:[{title:'订金',amount:'3000',beforeOrder:true,dueDate:''},{title:'错误全额尾款',amount:'10000',beforeOrder:false,dueDate:''}]},400,sales);
+ const incompletePlan=(await ok('project-charge-save',{token:token(),projectId:p2.id,roundId:r2.id,title:'错误分期',category:'bulk',currency:'USD',amount:'10000',prepayAmount:'3000',dueDate:'',note:'',plan:[{title:'订金',amount:'3000',beforeOrder:true,dueDate:''},{title:'错误全额尾款',amount:'10000',beforeOrder:false,dueDate:''}]},sales)).record;await deny('project-charge-confirm',{token:token(),id:incompletePlan.id,version:incompletePlan.version},400,finance);
  await ok('project-credit-apply',{token:token(),sourceChargeId:extra.id,targetChargeId:bulk.id,amount:'100',reason:'合成样办费抵大货',evidence:'合成协议'},finance);
  await deny('project-credit-apply',{token:token(),sourceChargeId:extra.id,targetChargeId:bulk.id,amount:'0.01',reason:'不得重复抵扣',evidence:'合成'},400,finance);
  assert.equal((await data()).totalsByCurrency.USD.receivableCents,1200000);assert.equal((await data()).totalsByCurrency.USD.receivedCents,210000);
- pass('大货订金与尾款只作为总额分期，付款计划超出全额在后端拒绝');
+ pass('大货订金与尾款只作为总额分期，付款计划草稿可后补，超出全额在核实时拒绝');
 
  const caseBody={token:token(),projectId:p.id,roundId:r.id,orderId:'',shipmentReference:'SYNTH-SHIP',title:'合成售后',description:'合成折让',quantity:1,resolution:'discount',status:'open',ownerMemberId:member(sales).id,dueDate:'',customerEvidence:'',executionNote:'',returnedQuantity:0,completedQuantity:0,resentQuantity:0,trackingNo:'',customerAccepted:false};
  const caseRecord=(await ok('project-after-sale-save',caseBody,sales)).record;

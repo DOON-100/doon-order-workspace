@@ -106,8 +106,10 @@ const {testCustomerQuoteArchive}=await import('./customer-quote-archive-cases.mj
 const {testDrawingCorrection}=await import('./drawing-correction-cases.mjs');await testDrawingCorrection({ok,call,state,original,preview,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawPut:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(record.id,record.kind,JSON.stringify(record))});
 const projectHarness={ok,call,state,pass,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))};
 const {testCustomerProjects}=await import('./customer-project-cases.mjs');await testCustomerProjects(projectHarness);
+const {testCustomerProjectEntries}=await import('./customer-project-entry-cases.mjs');await testCustomerProjectEntries(projectHarness);
 const {testCustomerProjectTaskReview}=await import('./customer-project-task-review-cases.mjs');await testCustomerProjectTaskReview(projectHarness);
 const {testCustomerProjectFinance}=await import('./customer-project-finance-cases.mjs');await testCustomerProjectFinance(projectHarness);
+const {testCustomerProjectFinanceEntries}=await import('./customer-project-finance-entry-cases.mjs');await testCustomerProjectFinanceEntries(projectHarness);
 const {testEngineeringDrawings}=await import('./engineering-drawing-cases.mjs');await testEngineeringDrawings(projectHarness);
 const {testEngineeringSop}=await import('./engineering-sop-cases.mjs');await testEngineeringSop(projectHarness);
 const {testCustomerProjectAssignmentRoster}=await import('./customer-project-assignment-roster-cases.mjs');await testCustomerProjectAssignmentRoster(projectHarness);

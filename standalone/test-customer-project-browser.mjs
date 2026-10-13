@@ -166,8 +166,8 @@ try{
  await dialog.getByLabel('当前前期阶段',{exact:false}).selectOption('payment');
  await dialog.locator('input[type="number"]').fill('2');
  await dialog.getByRole('checkbox',{name:'2D 工程图',exact:true}).uncheck();
- await dialog.getByRole('checkbox',{name:/必须关联已接受报价/}).uncheck();
- await dialog.getByLabel('样办确认门槛',{exact:false}).selectOption('not_required');
+ await dialog.getByRole('checkbox',{name:'正式交接时核对报价'}).uncheck();
+ await dialog.getByLabel('正式交接的样办确认节点',{exact:false}).selectOption('not_required');
  await dialog.getByLabel('本轮目标日',{exact:false}).fill(day);
  await dialog.getByLabel('开发 / 修改原因',{exact:false}).fill('Synthetic fixture');
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
@@ -207,11 +207,15 @@ try{
  await dialog.getByLabel('下一步行动',{exact:false}).fill('浏览器待办核对运单');
  await dialog.getByLabel('下一跟进日',{exact:false}).fill(day);
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
- const communicated=await workspace('customer-project-data');assert(communicated.communications.some(c=>c.content==='浏览器登记客户确认寄样地址'));assert(communicated.tasks.some(t=>t.title==='浏览器待办核对运单'));
- pass('浏览器沟通表单成功生成对应行动项');
- await page.getByRole('row').filter({hasText:'浏览器待办核对运单'}).getByRole('button',{name:'取消行动',exact:true}).click();
- await dialog.getByLabel('取消原因',{exact:false}).fill('合成取消测试：缺审核配置也可正常取消');
- await dialog.getByRole('button',{name:'确认取消行动',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ const communicated=await workspace('customer-project-data');assert(communicated.communications.some(c=>c.content==='浏览器登记客户确认寄样地址'));assert(!communicated.tasks.some(t=>t.title==='浏览器待办核对运单'));
+ pass('浏览器沟通独立保存，不自动重复创建行动项');
+ await page.getByRole('button',{name:'新增行动',exact:true}).click();
+ await dialog.getByLabel('行动标题',{exact:false}).fill('浏览器待办核对运单');
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ await page.getByRole('row').filter({hasText:'浏览器待办核对运单'}).getByRole('button',{name:'修改',exact:true}).click();
+ await dialog.getByLabel('行动状态',{exact:false}).selectOption('cancelled');
+ await dialog.getByLabel('修改说明',{exact:false}).fill('合成取消测试：缺审核配置也可正常取消');
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
  assert.equal((await workspace('customer-project-data')).tasks.find(t=>t.title==='浏览器待办核对运单').status,'cancelled');
  const taskContexts=[];
  async function taskPage(session){
@@ -254,7 +258,7 @@ try{
  await reviewResult(page,'sales','approve','合成业务意见：同意完成');
  const doneRow=await openQueue(page,'已完成');await doneRow.waitFor();await doneRow.locator('summary').click();
  for(const opinion of ['合成客服意见：请补充图纸版本','合成客服复核意见：已补充且通过','合成业务意见：同意完成'])assert((await doneRow.innerText()).includes(opinion));
- const reviewed=(await workspace('customer-project-data')).tasks.find(t=>t.title===taskTitle);assert.equal(reviewed.status,'done');assert.equal(reviewed.reviewCycle,2);assert.equal(reviewed.reviewHistory.length,5);
+ const reviewed=(await workspace('customer-project-data')).tasks.find(t=>t.title===taskTitle);assert.equal(reviewed.status,'done');assert.equal(reviewed.reviewCycle,2);assert.equal(reviewed.reviewHistory.filter(event=>event.action!=='reconfigure').length,5);assert.equal(reviewed.reviewHistory[0].action,'reconfigure');
  await page.screenshot({path:path.join(dir,'task-completed-history.png'),fullPage:true});
  for(const ctx of taskContexts)await ctx.close();
  pass('业务审核人独立队列通过后最终完成；完整保留跟进结果、退回与两级审核意见');

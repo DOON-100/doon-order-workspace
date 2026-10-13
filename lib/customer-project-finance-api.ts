@@ -1,37 +1,49 @@
 import {z} from 'zod';
-import {all,clean,newId,now,type Entity,type Member,type State} from './domain';
+import {all,canRead,clean,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,commit,json} from './store';
 import {sha} from './workbooks';
-import {assignedServiceCustomer} from './service-workspace';
-import {projectAccess} from './customer-projects';
+import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-workspace';
+import {projectAccess,projectKey} from './customer-projects';
 import {canVerifyProjectFinance,paymentGate,pfDay,pfId,pfMoney,pfPositive,pfText,pfToken,projectAllocationNet,projectChargeAmounts,projectChargePaid,projectCreditSourceAvailable,projectCurrencies,projectFinanceTotals,projectReceiptAvailable,projectReceiptRefunded,projectReceiptReversed,type ProjectCharge,type ProjectReceipt} from './customer-project-finance';
 
 const edit={id:pfId.optional(),version:z.number().int().positive().optional()},token={token:pfToken};
-const category=z.enum(['sample','tooling','freight','sales_sample','preproduction','bulk','development','revision','repair','replacement','other']);
+const defaulted=<T extends z.ZodTypeAny>(schema:T,value:z.input<T>)=>z.preprocess(v=>v===''||v===undefined?value:v,schema);
+const category=defaulted(z.enum(['sample','tooling','freight','sales_sample','preproduction','bulk','development','revision','repair','replacement','other']),'sample');
+const optionalLink=pfText(160),entryMoney=defaulted(pfMoney,'0'),entryCurrency=defaulted(z.enum(projectCurrencies),'USD');
+const entryQuantity=defaulted(z.number().int().min(0),0);
+const entrySchemas={
+ receipts:z.object({amount:entryMoney,currency:entryCurrency,date:pfDay,reference:pfText(240),payer:pfText(240),account:pfText(240),note:pfText()}),
+ allocations:z.object({receiptId:optionalLink,chargeId:optionalLink,amount:entryMoney,currency:entryCurrency,reason:pfText()}),
+ adjustments:z.object({chargeId:optionalLink,caseId:optionalLink,type:defaulted(z.enum(['discount','credit','waiver','debit']),'discount'),amount:entryMoney,currency:entryCurrency,prepay:z.boolean().default(false),reason:pfText(),evidence:pfText()}),
+ creditApplications:z.object({sourceChargeId:optionalLink,targetChargeId:optionalLink,amount:entryMoney,currency:entryCurrency,reason:pfText(),evidence:pfText()}),
+ refunds:z.object({receiptId:optionalLink,caseId:optionalLink,amount:entryMoney,currency:entryCurrency,reason:pfText(),date:pfDay,reference:pfText(240),account:pfText(240)}),
+};
+const entryKinds={receipts:'project_receipt',allocations:'project_allocation',adjustments:'project_adjustment',creditApplications:'project_credit_application',refunds:'project_refund'} as const;
 export const projectFinanceSchemas={
- 'project-charge-save':z.object({...edit,...token,projectId:pfId,roundId:pfId,title:z.string().trim().min(1).max(240),category,currency:z.enum(projectCurrencies),amount:pfPositive,prepayAmount:pfMoney,dueDate:pfDay,note:pfText(),plan:z.array(z.object({title:z.string().trim().min(1).max(160),amount:pfPositive,dueDate:pfDay,beforeOrder:z.boolean()}).strict()).max(50).optional()}).strict(),
+ 'project-finance-entry-save':z.object({...edit,...token,projectId:pfId,roundId:optionalLink,entryType:z.enum(['receipts','allocations','adjustments','creditApplications','refunds']),data:z.record(z.unknown())}).strict(),
+ 'project-charge-save':z.object({...edit,...token,projectId:pfId,roundId:optionalLink,title:pfText(240),category,currency:entryCurrency,amount:entryMoney,prepayAmount:entryMoney,dueDate:pfDay,note:pfText(),plan:z.array(z.object({title:pfText(160),amount:entryMoney,dueDate:pfDay,beforeOrder:z.boolean().default(false)}).strict()).optional()}).strict(),
  'project-charge-confirm':z.object({...token,id:pfId,version:z.number().int().positive()}).strict(),
  'project-payment-requirement':z.object({...token,projectId:pfId,roundId:pfId,mode:z.enum(['charges','free']),reason:z.string().trim().min(2).max(3000),version:z.number().int().min(0)}).strict(),
- 'project-payment-notice':z.object({...token,projectId:pfId,roundId:pfId,amount:pfPositive,currency:z.enum(projectCurrencies),reference:z.string().trim().min(1).max(240),note:pfText()}).strict(),
- 'project-receipt-verify':z.object({...token,customerId:pfId,amount:pfPositive,currency:z.enum(projectCurrencies),date:pfDay.refine(Boolean,'请填写实际到账日期'),reference:z.string().trim().min(1).max(240),payer:pfText(240),account:z.string().trim().min(1).max(240),note:pfText(),noticeIds:z.array(pfId).max(100).default([])}).strict(),
+ 'project-payment-notice':z.object({...edit,...token,projectId:pfId,roundId:optionalLink,amount:entryMoney,currency:entryCurrency,reference:pfText(240),note:pfText()}).strict(),
+ 'project-receipt-verify':z.object({...token,customerId:pfId,amount:pfPositive,currency:z.enum(projectCurrencies),date:pfDay.refine(Boolean,'请填写实际到账日期'),reference:z.string().trim().min(1).max(240),payer:pfText(240),account:z.string().trim().min(1).max(240),note:pfText(),noticeIds:z.array(pfId).default([])}).strict(),
  'project-receipt-reverse':z.object({...token,receiptId:pfId,reason:z.string().trim().min(2).max(3000)}).strict(),
  'project-allocation':z.object({...token,receiptId:pfId,chargeId:pfId,amount:pfPositive}).strict(),
  'project-allocation-release':z.object({...token,allocationId:pfId,amount:pfPositive,reason:z.string().trim().min(2).max(3000)}).strict(),
  'project-adjustment':z.object({...token,chargeId:pfId,caseId:pfId.optional(),type:z.enum(['discount','credit','waiver','debit']),amount:pfPositive,prepay:z.boolean().default(false),reason:z.string().trim().min(2).max(3000),evidence:z.string().trim().min(1).max(3000)}).strict(),
  'project-credit-apply':z.object({...token,sourceChargeId:pfId,targetChargeId:pfId,amount:pfPositive,reason:z.string().trim().min(2).max(3000),evidence:z.string().trim().min(1).max(3000)}).strict(),
- 'project-document-save':z.object({...edit,...token,customerId:pfId,documentType:z.enum(['PI','CI','CHARGE','STATEMENT','CREDIT']),documentNo:z.string().trim().min(1).max(120),chargeIds:z.array(pfId).min(1).max(200),currency:z.enum(projectCurrencies),date:pfDay.refine(Boolean),customerAddress:pfText(),company:pfText(500),terms:pfText(6000),adjustmentIds:z.array(pfId).max(200).default([])}).strict(),
+ 'project-document-save':z.object({...edit,...token,customerId:pfId,projectId:optionalLink,roundId:optionalLink,manualTitle:pfText(3000),manualAmount:entryMoney,documentType:defaulted(z.enum(['PI','CI','CHARGE','STATEMENT','CREDIT']),'PI'),documentNo:pfText(120),chargeIds:z.array(pfId).default([]),currency:entryCurrency,date:pfDay,customerAddress:pfText(),company:pfText(500),terms:pfText(6000),adjustmentIds:z.array(pfId).default([])}).strict(),
  'project-document-confirm':z.object({...token,id:pfId,version:z.number().int().positive()}).strict(),
  'project-document-revise':z.object({...token,id:pfId,version:z.number().int().positive(),reason:z.string().trim().min(2).max(3000)}).strict(),
- 'project-document-sent':z.object({...token,id:pfId,version:z.number().int().positive(),date:pfDay.refine(Boolean),recipient:z.string().trim().min(1).max(240),reference:z.string().trim().min(1).max(1000)}).strict(),
- 'project-after-sale-save':z.object({...edit,...token,projectId:pfId,roundId:pfId,orderId:pfText(160),shipmentReference:pfText(240),title:z.string().trim().min(1).max(240),description:z.string().trim().min(1).max(10000),quantity:z.number().int().min(0).max(10000000),resolution:z.enum(['pending','repair','replacement','discount','return_refund','chargeable']),status:z.enum(['open','investigating','approved','executing','awaiting_customer','closed']),ownerMemberId:pfId,dueDate:pfDay,customerEvidence:pfText(),executionNote:pfText(),returnedQuantity:z.number().int().min(0).max(10000000).default(0),completedQuantity:z.number().int().min(0).max(10000000).default(0),resentQuantity:z.number().int().min(0).max(10000000).default(0),trackingNo:pfText(240),customerAccepted:z.boolean().default(false)}).strict(),
- 'project-after-sale-cost':z.object({...token,caseId:pfId,category:pfText(120),description:z.string().trim().min(1).max(3000),currency:z.enum(projectCurrencies),budget:pfMoney,actual:pfMoney,bearer:z.enum(['company','customer','supplier','shared']),supplierReference:pfText(500)}).strict(),
- 'project-refund-request':z.object({...token,projectId:pfId,roundId:pfId,receiptId:pfId,caseId:pfId.optional(),amount:pfPositive,reason:z.string().trim().min(2).max(3000)}).strict(),
+ 'project-document-sent':z.object({...token,id:pfId.optional(),sendId:pfId.optional(),version:z.number().int().positive().optional(),projectId:optionalLink,roundId:optionalLink,documentId:optionalLink,date:pfDay,recipient:pfText(240),reference:pfText(1000)}).strict(),
+ 'project-after-sale-save':z.object({...edit,...token,projectId:pfId,roundId:optionalLink,orderId:pfText(160),shipmentReference:pfText(240),title:pfText(240),description:pfText(10000),quantity:entryQuantity,resolution:defaulted(z.enum(['pending','repair','replacement','discount','return_refund','chargeable']),'pending'),status:defaulted(z.enum(['open','investigating','approved','executing','awaiting_customer','closed']),'open'),ownerMemberId:optionalLink,dueDate:pfDay,customerEvidence:pfText(),executionNote:pfText(),returnedQuantity:entryQuantity,completedQuantity:entryQuantity,resentQuantity:entryQuantity,trackingNo:pfText(240),customerAccepted:z.boolean().default(false)}).strict(),
+ 'project-after-sale-cost':z.object({...edit,...token,projectId:optionalLink,roundId:optionalLink,caseId:optionalLink,category:pfText(120),description:pfText(3000),currency:entryCurrency,budget:entryMoney,actual:entryMoney,bearer:defaulted(z.enum(['company','customer','supplier','shared']),'company'),supplierReference:pfText(500)}).strict(),
+ 'project-refund-request':z.object({...token,projectId:pfId,roundId:optionalLink,receiptId:pfId,caseId:pfId.optional(),amount:pfPositive,reason:z.string().trim().min(2).max(3000)}).strict(),
  'project-refund-execute':z.object({...token,id:pfId,version:z.number().int().positive(),date:pfDay.refine(Boolean),reference:z.string().trim().min(1).max(240),account:z.string().trim().min(1).max(240)}).strict(),
  'project-refund-cancel':z.object({...token,id:pfId,version:z.number().int().positive(),reason:z.string().trim().min(2).max(3000)}).strict(),
- 'project-finance-grant-save':z.object({...token,...edit,memberId:pfId,customerIds:z.array(pfId).max(1000),active:z.boolean()}).strict(),
+ 'project-finance-grant-save':z.object({...token,...edit,memberId:pfId,customerIds:z.array(pfId),active:z.boolean()}).strict(),
 };
 type FinanceAction=keyof typeof projectFinanceSchemas;
-const financialKinds=new Set(['project_charge','project_payment_requirement','project_payment_notice','project_receipt','project_receipt_reversal','project_allocation','project_adjustment','project_credit_application','project_billing_document','project_document_send','project_after_sale','project_after_sale_cost','project_refund']);
+const financialKinds=new Set(['project_charge','project_payment_requirement','project_payment_notice','project_receipt','project_receipt_reversal','project_allocation','project_adjustment','project_credit_application','project_billing_document','project_document_send','project_after_sale','project_after_sale_cost','project_refund','project_finance_entry']);
 function accountAccess(s:State,m:Member,customerId:string){
  const c=all(s,'customer_account').find(r=>r.id===customerId),verify=canVerifyProjectFinance(s,m,customerId);
  const commercial=!!c&&m.active&&['sales','clerk','pmc'].includes(m.role)&&assignedServiceCustomer(s,m,c as any)&&projectAccess(s,m,customerId).read;
@@ -43,13 +55,18 @@ function access(s:State,m:Member,customerId:string,mode:'read'|'write'|'verify'=
 function project(s:State,m:Member,projectId:string,roundId?:string,mode:'read'|'write'|'verify'='read'){
  const p=all(s,'customer_project').find(r=>r.id===projectId);if(!p)throw new AppError('项目不存在或不可访问。',403);access(s,m,p.customerId,mode);
  const r=roundId?all(s,'customer_project_round').find(r=>r.id===roundId&&r.projectId===p.id&&r.customerId===p.customerId):null;
- if(roundId&&!r)throw new AppError('开发轮次与项目不一致。');if(mode!=='read'&&(p.status==='archived'||p.status==='cancelled'))throw new AppError('归档或取消项目不能新增财务业务，请先按项目流程重新开启。',409);
+ if(roundId&&!r)throw new AppError('开发轮次与项目不一致。');
  return {p,r,customerId:p.customerId as string};
 }
 function row(s:State,m:Member,kind:string,id:string,mode:'read'|'write'|'verify'='read'){
  const r=all(s,kind).find(r=>r.id===id);if(!r)throw new AppError('记录不存在或不可访问。',403);access(s,m,r.customerId,mode);return r;
 }
-function current(row:Entity,version:number|undefined){if(row.version!==version)throw new AppError('记录已更新，请刷新后重试。',409);}
+function current(row:Entity,version:number|undefined){if((row.version||1)!==version)throw new AppError('记录已更新，请刷新后重试。',409);}
+function verifyChargePlan(record:Entity){
+ const plan=record.plan||[];
+ if(!record.title||record.amountCents<=0||record.prepayCents>record.amountCents)throw new AppError('核实收费须有费用名称及有效总额，预收要求不能超过收费总额。');
+ if(plan.some((p:any)=>!p.title||p.amountCents<=0)||plan.reduce((n:number,p:any)=>n+p.amountCents,0)!==record.amountCents||plan.filter((p:any)=>p.beforeOrder).reduce((n:number,p:any)=>n+p.amountCents,0)!==record.prepayCents)throw new AppError('核实前请补齐分期名称与金额；付款计划合计须等于总额，下单前分期合计须等于预收要求。');
+}
 function withoutRequest(record:Entity){const {requestFingerprint,...publicRecord}=record;return publicRecord;}
 function financialDto(s:State,m:Member,record:Entity){if(accountAccess(s,m,record.customerId).verify)return withoutRequest(record);const {account,payer,...safe}=withoutRequest(record);return safe;}
 function today(){return new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});}
@@ -83,10 +100,12 @@ export async function customerProjectFinanceGet(action:string,req:Request,s:Stat
  const ids=new Set(customers.map(c=>c.id));
  const visible=(kind:string)=>all(s,kind).filter(r=>ids.has(r.customerId));
  const charges=visible('project_charge') as ProjectCharge[],receipts=visible('project_receipt') as ProjectReceipt[];
+ const entries=visible('project_finance_entry').filter(r=>!projectId||r.projectId===projectId);
+ const withEntries=(type:keyof typeof entryKinds,records:Entity[])=>[...records,...entries.filter(r=>r.entryType===type).map(r=>({...financialDto(s,m,r),independent:true,status:'draft',availableCents:0,refundedCents:0,remainingCents:0,reversed:false,entryType:type==='allocations'?'allocate':r.entryType}))];
  const publicReceipt=(r:ProjectReceipt)=>{const verified=accountAccess(s,m,r.customerId).verify,{account,payer,...safe}=r;return {...safe,...(verified?{account,payer}:{}),availableCents:projectReceiptAvailable(s,r),refundedCents:projectReceiptRefunded(s,r.id),reversed:projectReceiptReversed(s,r.id)};};
  return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,canWrite:accountAccess(s,m,c.id).write,canVerify:accountAccess(s,m,c.id).verify})),
   projects:all(s,'customer_project').filter(p=>ids.has(p.customerId)).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code,status:p.status})),rounds:all(s,'customer_project_round').filter(r=>ids.has(r.customerId)).map(r=>({id:r.id,projectId:r.projectId,title:r.title,type:r.type,status:r.status})),
-  charges:charges.map(c=>({...c,net:projectChargeAmounts(s,c),creditSourceAvailableCents:projectCreditSourceAvailable(s,c)})),receipts:receipts.map(publicReceipt),allocations:visible('project_allocation').map(a=>({...a,remainingCents:projectAllocationNet(s,a)})),adjustments:visible('project_adjustment'),creditApplications:visible('project_credit_application'),documents:visible('project_billing_document'),notices:visible('project_payment_notice'),cases:visible('project_after_sale'),costs:visible('project_after_sale_cost'),refunds:visible('project_refund').map(r=>financialDto(s,m,r)),requirements:visible('project_payment_requirement'),sends:visible('project_document_send'),reversals:visible('project_receipt_reversal'),
+  charges:charges.map(c=>({...c,net:projectChargeAmounts(s,c),creditSourceAvailableCents:projectCreditSourceAvailable(s,c)})),receipts:withEntries('receipts',receipts.map(publicReceipt)),allocations:withEntries('allocations',visible('project_allocation').map(a=>({...a,currency:a.currency||charges.find(c=>c.id===a.chargeId)?.currency||'USD',remainingCents:projectAllocationNet(s,a)}))),adjustments:withEntries('adjustments',visible('project_adjustment')),creditApplications:withEntries('creditApplications',visible('project_credit_application')),documents:visible('project_billing_document'),notices:visible('project_payment_notice'),cases:visible('project_after_sale'),costs:visible('project_after_sale_cost'),refunds:withEntries('refunds',visible('project_refund').map(r=>financialDto(s,m,r))),requirements:visible('project_payment_requirement'),sends:visible('project_document_send'),reversals:visible('project_receipt_reversal'),
   grants:m.role==='admin'?all(s,'project_finance_grant'):[],canVerify:!!customerId&&accountAccess(s,m,customerId).verify,canWrite:!!customerId&&accountAccess(s,m,customerId).write,totalsByCurrency:projectFinanceTotals(s,charges,receipts),totalsScope:'customer',
   projectTotalsByCurrency:projectId?projectFinanceTotals(s,charges.filter(c=>c.projectId===projectId),[]):null,gates:projectId?all(s,'customer_project_round').filter(r=>r.projectId===projectId).map(r=>({roundId:r.id,...paymentGate(s,projectId,r.id)})):[]});
 }
@@ -98,10 +117,10 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
  if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(x=>`${x.path.join('.')}：${x.message}`).join('；'));
  const input=parsed.data as any,fingerprint=await sha(JSON.stringify({action,input})),requestId='project_finance_request_'+input.token;
  const repeated=all(s,'project_finance_request').find(r=>r.id===requestId);
- if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);if(repeated.customerId){const verifyActions=['project-charge-confirm','project-payment-requirement','project-receipt-verify','project-receipt-reverse','project-allocation','project-allocation-release','project-adjustment','project-credit-apply','project-refund-execute','project-refund-cancel'];access(s,m,repeated.customerId,verifyActions.includes(action)?'verify':'write');}else if(m.role!=='admin')throw new AppError('需要管理员权限。',403);return json({...repeated.result,idempotent:true});}
+ if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);if(repeated.customerId){const verifyActions=['project-charge-confirm','project-payment-requirement','project-receipt-verify','project-receipt-reverse','project-allocation','project-allocation-release','project-adjustment','project-credit-apply','project-refund-execute','project-refund-cancel'];access(s,m,repeated.customerId,(verifyActions.includes(action)||(action==='project-finance-entry-save'&&repeated.result?.record?.kind!=='project_finance_entry')||(action==='project-charge-save'&&repeated.result?.record?.status==='confirmed'))?'verify':'write');}else if(m.role!=='admin')throw new AppError('需要管理员权限。',403);return json({...repeated.result,...(repeated.result?.record?.customerId?{record:financialDto(s,m,repeated.result.record)}:{}),idempotent:true});}
  const meta=()=>({createdAt:now(),createdBy:m.name,createdById:m.id});
  async function save(customerId:string,updates:Entity[],result:Record<string,unknown>,before:Entity|null=null){
-  const at=now(),history:Entity[]=updates.filter(r=>financialKinds.has(r.kind)).map(target=>({id:newId('project_finance_history'),kind:'project_finance_history',customerId,targetId:target.id,projectId:target.projectId||'',action,actorId:m.id,actor:m.name,createdAt:at,before:before?.id===target.id?before:null,after:structuredClone(target)}));
+  const at=now(),history:Entity[]=updates.filter(r=>financialKinds.has(r.kind)).map(target=>({id:newId('project_finance_history'),kind:'project_finance_history',customerId,targetId:target.id,projectId:target.projectId||'',action,actorId:m.id,actor:m.name,createdAt:at,before:before?.id===target.id?before:s.records.find(r=>r.id===target.id&&r.kind===target.kind)||null,after:structuredClone(target)}));
   const resultBody={ok:true,...result};await commit(s.revision,[...updates,...history,{id:requestId,kind:'project_finance_request',customerId,actorId:m.id,fingerprint,result:resultBody,createdAt:at}]);return json(resultBody);
  }
  if(action==='project-finance-grant-save'){
@@ -113,18 +132,85 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   const record={id:before?.id||newId('project_finance_grant'),kind:'project_finance_grant',memberId:input.memberId,customerIds:input.customerIds,active:input.active,version:(before?.version||0)+1,...meta()};
   return save('',[record,{id:newId('project_finance_grant_history'),kind:'project_finance_grant_history',before,after:record,...meta()}],{record},before||null);
  }
+ if(action==='project-finance-entry-save'){
+  const {customerId}=project(s,m,input.projectId,input.roundId,'write'),entryType=input.entryType as keyof typeof entrySchemas;
+  const parsedEntry=entrySchemas[entryType].strict().safeParse(input.data);
+  if(!parsedEntry.success)throw new AppError(parsedEntry.error.issues.slice(0,4).map(x=>`${x.path.join('.')}：${x.message}`).join('；'));
+  const fields=parsedEntry.data as any,{amount,...details}=fields;
+  const before=input.id?s.records.find(r=>r.id===input.id&&(r.kind==='project_finance_entry'||r.kind===entryKinds[entryType])):null;
+  if(input.id&&!before)throw new AppError('记录不存在或不可访问。',403);
+  if(before){access(s,m,before.customerId,'write');current(before,input.version);if(before.customerId!==customerId||before.projectId&&before.projectId!==input.projectId)throw new AppError('记录归属不能改换。');if(before.kind==='project_finance_entry'&&before.entryType!==entryType)throw new AppError('记录类型不能改换。');}
+  for(const [key,kind] of Object.entries({receiptId:'project_receipt',chargeId:'project_charge',sourceChargeId:'project_charge',targetChargeId:'project_charge',caseId:'project_after_sale'})){
+   if(details[key]){const linked=row(s,m,kind,details[key],'read');if(linked.customerId!==customerId)throw new AppError('关联记录须属于同一客户。');if(key==='caseId'&&linked.projectId!==input.projectId)throw new AppError('关联售后须属于当前项目。');}
+  }
+  if(!before||before.kind==='project_finance_entry'){
+   if(before&&!accountAccess(s,m,customerId).verify){for(const key of ['account','payer'])if(!Object.hasOwn(input.data,key)&&Object.hasOwn(before,key))details[key]=before[key];}
+   const record={...details,id:before?.id||newId('project_finance_entry'),kind:'project_finance_entry',entryType,customerId,projectId:input.projectId,roundId:input.roundId,amountCents:amount,status:'draft',independent:true,version:(before?.version||0)+1,...(before?{createdAt:before.createdAt,createdBy:before.createdBy,createdById:before.createdById}:meta()),updatedAt:now(),updatedBy:m.name};
+   return save(customerId,[record],{record:financialDto(s,m,record)},before||null);
+  }
+  // Existing verified records are edited in place only after their accounting
+  // invariants are rechecked. No allocation, release or reversal is manufactured.
+  access(s,m,customerId,'verify');
+  if(amount<=0)throw new AppError('已核实账务金额须大于零；尚待核实的内容可新增为独立记录。');
+  if(details.currency!==before.currency&&before.currency)throw new AppError('已核实账务币种不能改换，请登记对应币种的新记录。');
+  for(const key of ['receiptId','chargeId','sourceChargeId','targetChargeId'])if(key in details&&details[key]!==before[key])throw new AppError('已核实账务的关联来源不能改换；请先按原记录释放或冲销，再核实新的关联。');
+  const record:Entity={...before,...details,amountCents:amount,version:(before.version||1)+1,updatedAt:now(),updatedBy:m.name,updatedById:m.id};
+  const updates=[record],delta=amount-before.amountCents;
+  if(entryType==='receipts'){
+   if(!details.date||!details.reference||!details.account)throw new AppError('已核实到账须保留实际日期、银行流水和收款账户；待补资料请另存独立记录。');
+   if(projectReceiptReversed(s,before.id)&&delta)throw new AppError('已冲销到账的原金额须保留，请新增待核实记录。');
+   if(amount<before.amountCents-projectReceiptAvailable(s,before as ProjectReceipt))throw new AppError('到账金额不能少于现有分配和实退金额；请先核实已有用途。');
+   checkActualDate(details.date);
+   if(all(s,'project_receipt').some(r=>r.id!==before.id&&r.currency===record.currency&&clean(r.reference).toLowerCase()===clean(record.reference).toLowerCase()&&clean(r.account).toLowerCase()===clean(record.account).toLowerCase()&&!projectReceiptReversed(s,r.id)))throw new AppError('该账户银行流水已登记。',409);
+  }
+  if(entryType==='allocations'){
+   if(before.entryType==='release'){if(delta)throw new AppError('释放金额须保留原凭据，可修改说明；金额更正请核实对应分配。');return save(customerId,[record],{record},before);}
+   const receipt=row(s,m,'project_receipt',before.receiptId,'verify') as ProjectReceipt,charge=row(s,m,'project_charge',before.chargeId,'verify') as ProjectCharge;
+   if(details.currency!==receipt.currency)throw new AppError('分配币种须与原到账一致。');
+   if(amount<before.amountCents-projectAllocationNet(s,before)||delta>projectReceiptAvailable(s,receipt)||delta>projectChargeAmounts(s,charge).balanceCents)throw new AppError('修改金额与已有释放、可用到账或未收余额不一致。');
+   const used=all(s,'project_credit_application').filter(r=>r.sourceChargeId===charge.id).reduce((n,r)=>n+r.amountCents,0);if(projectChargePaid(s,charge.id)+delta<used)throw new AppError('该收款已有抵扣用途，不能减少到已用抵扣以下。');
+  }
+  if(entryType==='adjustments'){
+   if(before.sourceChargeId)throw new AppError('该调整来自抵扣记录，请在样办费抵大货记录中修改。');
+   const charge=row(s,m,'project_charge',before.chargeId,'verify') as ProjectCharge;
+   const candidate={...s,records:s.records.map(r=>r.id===before.id?record:r)} as State,t=projectChargeAmounts(candidate,charge);
+   const used=all(s,'project_credit_application').filter(r=>r.sourceChargeId===charge.id).reduce((n,r)=>n+r.amountCents,0);
+   if(t.amountCents<0||t.amountCents<t.receivedCents||t.amountCents<used)throw new AppError('修改后的应收少于现有核销或已用抵扣；请先核实并释放相关分配。');
+  }
+  if(entryType==='creditApplications'){
+   const source=row(s,m,'project_charge',before.sourceChargeId,'verify') as ProjectCharge,target=row(s,m,'project_charge',before.targetChargeId,'verify') as ProjectCharge;
+   if(delta>projectCreditSourceAvailable(s,source)||delta>projectChargeAmounts(s,target).balanceCents)throw new AppError('修改抵扣超过来源可用额度或目标未收余额。');
+   const adjustment=row(s,m,'project_adjustment',before.adjustmentId,'verify');updates.push({...adjustment,amountCents:amount,reason:details.reason,evidence:details.evidence,version:(adjustment.version||1)+1,updatedAt:now(),updatedBy:m.name});
+  }
+  if(entryType==='refunds'){
+   const receipt=row(s,m,'project_receipt',before.receiptId,'verify') as ProjectReceipt;
+   if(before.status==='executed'&&delta>projectReceiptAvailable(s,receipt))throw new AppError('修改实退金额超过原到账未分配余额。');
+   if(before.status==='executed'){
+    if(!details.date||!details.reference||!details.account)throw new AppError('已执行退款须保留实际日期、银行流水和退款账户；待补资料请另存独立记录。');
+    checkActualDate(details.date);
+    if(all(s,'project_refund').some(r=>r.id!==before.id&&r.status==='executed'&&r.currency===record.currency&&clean(r.account).toLowerCase()===clean(record.account).toLowerCase()&&clean(r.reference).toLowerCase()===clean(record.reference).toLowerCase()))throw new AppError('该退款银行流水已登记。',409);
+   }
+  }
+  return save(customerId,updates,{record},before);
+ }
  if(action==='project-charge-save'){
   const {customerId}=project(s,m,input.projectId,input.roundId,'write');
-  if(input.prepayAmount>input.amount)throw new AppError('预收要求不能超过收费总额。');
   const before=input.id?row(s,m,'project_charge',input.id,'write'):null;
-  if(before){current(before,input.version);if(before.status!=='draft')throw new AppError('已确认收费不可覆盖，请用财务调整保留原收费。',409);if(before.projectId!==input.projectId||before.roundId!==input.roundId||before.customerId!==customerId)throw new AppError('收费归属不能改换。');}
+  if(before){current(before,input.version);if(before.projectId!==input.projectId||before.roundId!==input.roundId||before.customerId!==customerId)throw new AppError('收费归属不能改换。');}
   const plan=input.plan?input.plan.map((p:any)=>({title:p.title,amountCents:p.amount,dueDate:p.dueDate,beforeOrder:p.beforeOrder})):[...(input.prepayAmount?[{title:'Prepayment before order',amountCents:input.prepayAmount,dueDate:input.dueDate,beforeOrder:true}]:[]),...(input.amount>input.prepayAmount?[{title:'Balance payment',amountCents:input.amount-input.prepayAmount,dueDate:input.dueDate,beforeOrder:false}]:[])];
-  if(plan.reduce((n:number,p:any)=>n+p.amountCents,0)!==input.amount||plan.filter((p:any)=>p.beforeOrder).reduce((n:number,p:any)=>n+p.amountCents,0)!==input.prepayAmount)throw new AppError('付款计划合计须等于总额，下单前分期合计须等于预收要求。');
-  const record:ProjectCharge={id:before?.id||newId('project_charge'),kind:'project_charge',customerId,projectId:input.projectId,roundId:input.roundId,title:input.title,category:input.category,currency:input.currency,amountCents:input.amount,prepayCents:input.prepayAmount,dueDate:input.dueDate,note:input.note,status:'draft',version:(before?.version||0)+1,plan,...meta()};
+  const record:ProjectCharge={id:before?.id||newId('project_charge'),kind:'project_charge',customerId,projectId:input.projectId,roundId:input.roundId,title:input.title,category:input.category,currency:input.currency,amountCents:input.amount,prepayCents:input.prepayAmount,dueDate:input.dueDate,note:input.note,status:before?.status||'draft',version:(before?.version||0)+1,plan,...(before?{createdAt:before.createdAt,createdBy:before.createdBy,createdById:before.createdById}:meta()),updatedAt:now(),updatedBy:m.name};
+  if(before?.status==='confirmed'){
+   verifyChargePlan(record);
+   const financialChange=before.amountCents!==record.amountCents||before.prepayCents!==record.prepayCents||before.currency!==record.currency||JSON.stringify(before.plan)!==JSON.stringify(record.plan);
+   if(financialChange)access(s,m,customerId,'verify');
+   if(before.currency!==record.currency&&(projectChargePaid(s,before.id)||all(s,'project_adjustment').some(r=>r.chargeId===before.id)||all(s,'project_credit_application').some(r=>r.sourceChargeId===before.id||r.targetChargeId===before.id)))throw new AppError('已有核销或调整的收费币种不能直接改换。');
+   const amounts=projectChargeAmounts(s,record),used=all(s,'project_credit_application').filter(r=>r.sourceChargeId===record.id).reduce((n,r)=>n+r.amountCents,0);
+   if(amounts.amountCents<amounts.receivedCents||amounts.amountCents<used)throw new AppError('修改后的应收不能少于现有核销或已用抵扣。');
+  }
   return save(customerId,[record],{record},before);
  }
  if(action==='project-charge-confirm'){
-  const before=row(s,m,'project_charge',input.id,'verify');current(before,input.version);if(before.status!=='draft')throw new AppError('收费已确认。',409);
+  const before=row(s,m,'project_charge',input.id,'verify');current(before,input.version);if(before.status!=='draft')throw new AppError('收费已确认。',409);verifyChargePlan(before);
   const record:Entity={...before,status:'confirmed',version:before.version+1,confirmedAt:now(),confirmedBy:m.name,confirmedById:m.id};return save(before.customerId,[record],{record},before);
  }
  if(action==='project-payment-requirement'){
@@ -136,7 +222,9 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   const record={id:before?.id||newId('project_payment_requirement'),kind:'project_payment_requirement',customerId,projectId:input.projectId,roundId:input.roundId,mode:input.mode,reason:input.reason,chargeIds:charges.map(c=>c.id),version:(before?.version||0)+1,...meta()};return save(customerId,[record],{record},before);
  }
  if(action==='project-payment-notice'){
-  const {customerId}=project(s,m,input.projectId,input.roundId,'write'),record={id:newId('project_payment_notice'),kind:'project_payment_notice',customerId,projectId:input.projectId,roundId:input.roundId,amountCents:input.amount,currency:input.currency,reference:input.reference,note:input.note,status:'pending',...meta()};return save(customerId,[record],{record});
+  const {customerId}=project(s,m,input.projectId,input.roundId,'write'),before=input.id?row(s,m,'project_payment_notice',input.id,'write'):null;
+  if(before){current(before,input.version);if(before.projectId!==input.projectId)throw new AppError('付款通知归属不能改换。');}
+  const record={...before,id:before?.id||newId('project_payment_notice'),kind:'project_payment_notice',customerId,projectId:input.projectId,roundId:input.roundId,amountCents:input.amount,currency:input.currency,reference:input.reference,note:input.note,status:before?.status||'pending',version:(before?.version||0)+1,...(before?{}:meta()),updatedAt:now(),updatedBy:m.name};return save(customerId,[record],{record},before);
  }
  if(action==='project-receipt-verify'){
   access(s,m,input.customerId,'verify');checkActualDate(input.date);
@@ -183,51 +271,57 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
  }
  if(action==='project-document-save'){
   const {customer}=access(s,m,input.customerId,'write'),before=input.id?row(s,m,'project_billing_document',input.id,'write'):null;
-  if(before){current(before,input.version);if(before.status!=='draft')throw new AppError('已核对单据须先创建修订草稿。',409);if(before.customerId!==input.customerId)throw new AppError('单据客户不能改换。');}
+  if(before){current(before,input.version);if(before.customerId!==input.customerId)throw new AppError('单据客户不能改换。');}
   if(new Set(input.chargeIds).size!==input.chargeIds.length||new Set(input.adjustmentIds).size!==input.adjustmentIds.length)throw new AppError('单据不能重复引用同一收费或调整。');
   const charges=input.chargeIds.map((id:string)=>row(s,m,'project_charge',id,'write') as ProjectCharge);
-  if(charges.some((c:ProjectCharge)=>c.customerId!==input.customerId||c.currency!==input.currency||c.status!=='confirmed'))throw new AppError('单据只能引用同客户同币种已确认收费。');
-  if(all(s,'project_billing_document').some(d=>d.id!==before?.id&&d.customerId===input.customerId&&d.documentType===input.documentType&&d.documentNo.toLowerCase()===input.documentNo.toLowerCase()))throw new AppError('同客户同类单据号已存在。',409);
+  if(charges.some((c:ProjectCharge)=>c.customerId!==input.customerId||c.currency!==input.currency))throw new AppError('单据引用收费须属于同客户同币种。');
   const adjustments=input.adjustmentIds.map((id:string)=>row(s,m,'project_adjustment',id,'write'));
   if(adjustments.some((a:Entity)=>!input.chargeIds.includes(a.chargeId)||a.type==='debit'))throw new AppError('贷项单只能引用选中收费的减免调整。');
-  if(input.documentType==='CREDIT'&&!adjustments.length)throw new AppError('贷项单须明确引用已有调整；生成单据不会重复减少应收。');
   const lines=charges.map((c:ProjectCharge)=>({chargeId:c.id,projectId:c.projectId,roundId:c.roundId,title:c.title,currency:c.currency,...projectChargeAmounts(s,c),plan:c.plan,creditCents:adjustments.filter((a:Entity)=>a.chargeId===c.id).reduce((n:number,a:Entity)=>n+a.amountCents,0)}));
-  const record={id:before?.id||newId('project_billing_document'),kind:'project_billing_document',customerId:input.customerId,customerName:customer!.customer,customerCode:customer!.customerCode,documentType:input.documentType,documentNo:input.documentNo,currency:input.currency,date:input.date,chargeIds:input.chargeIds,adjustmentIds:input.adjustmentIds,lines,customerAddress:input.customerAddress,company:input.company,terms:input.terms,status:'draft',version:(before?.version||0)+1,...meta()};return save(input.customerId,[record],{record},before);
+  if(input.projectId){const parent=project(s,m,input.projectId,input.roundId,'write');if(parent.customerId!==input.customerId)throw new AppError('单据项目与客户不一致。');}
+  if(before?.projectId&&input.projectId!==before.projectId)throw new AppError('单据项目归属不能改换。');
+  if(input.manualTitle||input.manualAmount||!lines.length)lines.push({chargeId:'',projectId:input.projectId,roundId:input.roundId,title:input.manualTitle,currency:input.currency,amountCents:input.manualAmount,prepayCents:0,receivedCents:0,balanceCents:input.manualAmount,plan:[],creditCents:input.documentType==='CREDIT'?input.manualAmount:0});
+  const record={id:before?.id||newId('project_billing_document'),kind:'project_billing_document',projectId:input.projectId||before?.projectId||'',roundId:input.roundId,manualTitle:input.manualTitle,manualAmountCents:input.manualAmount,customerId:input.customerId,customerName:customer!.customer,customerCode:customer!.customerCode,documentType:input.documentType,documentNo:input.documentNo,currency:input.currency,date:input.date,chargeIds:input.chargeIds,adjustmentIds:input.adjustmentIds,lines,customerAddress:input.customerAddress,company:input.company,terms:input.terms,status:'draft',version:(before?.version||0)+1,...meta()};return save(input.customerId,[record],{record},before);
  }
- if(['project-document-confirm','project-document-revise','project-document-sent'].includes(action)){
+ if(['project-document-confirm','project-document-revise'].includes(action)){
   const before=row(s,m,'project_billing_document',input.id,'write');current(before,input.version);
   if(action==='project-document-confirm'){
+   if(before.documentNo&&all(s,'project_billing_document').some(d=>d.id!==before.id&&d.status==='confirmed'&&d.customerId===before.customerId&&d.documentType===before.documentType&&clean(d.documentNo).toLowerCase()===clean(before.documentNo).toLowerCase()))throw new AppError('同客户同类单据号已有已确认版本，请核对编号。',409);
    if(before.status!=='draft')throw new AppError('单据已核对。',409);
-   for(const line of before.lines){const c=row(s,m,'project_charge',line.chargeId) as ProjectCharge,t=projectChargeAmounts(s,c);if(c.status!=='confirmed'||t.amountCents!==line.amountCents||(before.documentType==='STATEMENT'&&(t.receivedCents!==line.receivedCents||t.balanceCents!==line.balanceCents)))throw new AppError('收费或收款发生变化，请先重新保存单据快照。',409);}
+   for(const line of before.lines){if(!line.chargeId)continue;const c=row(s,m,'project_charge',line.chargeId) as ProjectCharge,t=projectChargeAmounts(s,c);if(c.status!=='confirmed'||t.amountCents!==line.amountCents||(before.documentType==='STATEMENT'&&(t.receivedCents!==line.receivedCents||t.balanceCents!==line.balanceCents)))throw new AppError('收费或收款发生变化，请先重新保存单据快照。',409);}
    const record={...before,status:'confirmed',version:before.version+1,confirmedAt:now(),confirmedBy:m.name,confirmedById:m.id};return save(before.customerId,[record],{record},before);
   }
   if(before.status!=='confirmed')throw new AppError('只有核对后的单据可修订或登记发送。',409);
   if(action==='project-document-revise'){const record={...before,status:'draft',version:before.version+1,revisionReason:input.reason,confirmedAt:'',confirmedBy:'',confirmedById:''};return save(before.customerId,[record],{record},before);}
-  checkActualDate(input.date);const record={id:newId('project_document_send'),kind:'project_document_send',customerId:before.customerId,documentId:before.id,documentVersion:before.version,date:input.date,recipient:input.recipient,reference:input.reference,...meta()};return save(before.customerId,[record],{record});
+ }
+ if(action==='project-document-sent'){
+  const documentId=input.documentId||input.id||'',document=documentId?row(s,m,'project_billing_document',documentId,'write'):null;
+  const before=input.sendId?row(s,m,'project_document_send',input.sendId,'write'):null;
+  if(before)current(before,input.version);
+  const projectId=input.projectId||before?.projectId||document?.projectId||document?.lines?.find((l:any)=>l.projectId)?.projectId||'';
+  const customerId=projectId?project(s,m,projectId,input.roundId,'write').customerId:document?.customerId;
+  if(!customerId)throw new AppError('请指定发送记录所属项目。');
+  if(document&&document.customerId!==customerId||before&&before.customerId!==customerId)throw new AppError('发送记录客户不一致。');
+  // The document snapshot is frozen when the send is registered. Editing delivery
+  // details never rewrites the version that was actually sent.
+  const record={...before,id:before?.id||newId('project_document_send'),kind:'project_document_send',customerId,projectId,roundId:input.roundId,documentId,documentVersion:before&&before.documentId===documentId?before.documentVersion:document?.version||0,documentSnapshot:before&&before.documentId===documentId?before.documentSnapshot||null:document?structuredClone(document):null,date:input.date,recipient:input.recipient,reference:input.reference,version:(before?.version||0)+1,...(before?{}:meta()),updatedAt:now(),updatedBy:m.name};
+  return save(customerId,[record],{record},before);
  }
  if(action==='project-after-sale-save'){
   const {p,customerId}=project(s,m,input.projectId,input.roundId,'write'),before=input.id?row(s,m,'project_after_sale',input.id,'write'):null;
-  if(before){current(before,input.version);if(before.projectId!==p.id||before.roundId!==input.roundId)throw new AppError('售后归属不能改换。');if(before.status==='closed'&&input.status!=='open')throw new AppError('已关闭售后须先重新开启，不能改写结案内容。',409);}
-  if(input.orderId){const order=all(s,'order').find(o=>o.id===input.orderId),link=all(s,'customer_project_handover').find(l=>l.projectId===p.id&&(l.orderLinks||[]).some((line:any)=>line.orderId===input.orderId));if(!order||!link)throw new AppError('售后订单须来自本项目已关联订单。');}
-  const owner=all(s,'member').find(r=>r.id===input.ownerMemberId&&r.active&&r.role!=='supplier') as Member|undefined;if(!owner||!(projectAccess(s,owner,customerId).read||projectAccess(s,owner,customerId).internal||canVerifyProjectFinance(s,owner,customerId)))throw new AppError('请选择有本客户权限或内部执行职责的有效责任人。');
-  if(input.returnedQuantity>input.quantity||input.completedQuantity>input.quantity||input.resentQuantity>input.completedQuantity)throw new AppError('退回、处理和重寄数量不一致。');
-  if(!before&&!['open','investigating'].includes(input.status))throw new AppError('新售后请先登记调查，再核对处理方案。');
-  if(['approved','executing','awaiting_customer','closed'].includes(input.status)&&(input.resolution==='pending'||!input.customerEvidence))throw new AppError('执行或关闭前须明确处理方案及客户确认依据。');
-  if(['executing','awaiting_customer','closed'].includes(input.status)&&!['approved','executing','awaiting_customer'].includes(before?.status))throw new AppError('请先确认售后处理方案。');
-  if(input.status==='closed'){
-   if(!input.customerAccepted||!input.customerEvidence||!input.executionNote)throw new AppError('结案须有执行说明和客户确认依据。');
-   if(['repair','replacement'].includes(input.resolution)&&(input.completedQuantity!==input.quantity||input.resentQuantity!==input.quantity))throw new AppError('返修或补货数量尚未完成。');
-   if(all(s,'project_refund').some(r=>r.caseId===before?.id&&r.status==='requested'))throw new AppError('售后仍有待执行退款。');
-   if(['discount','return_refund'].includes(input.resolution)&&!all(s,'project_adjustment').some(a=>a.caseId===before?.id&&['discount','credit'].includes(a.type)))throw new AppError('折让或退货退款须有对应有效贷项调整。');
-   if(input.resolution==='return_refund'&&input.returnedQuantity!==input.quantity)throw new AppError('退货数量尚未核对完成。');
-   if(input.resolution==='return_refund'){const released=all(s,'project_adjustment').filter(a=>a.caseId===before?.id).reduce((n,a)=>n+(a.releasedCents||0),0),refunded=all(s,'project_refund').filter(r=>r.caseId===before?.id&&r.status==='executed').reduce((n,r)=>n+r.amountCents,0);if(refunded<released)throw new AppError('退货退款方案仍有已收款应退金额未实际退款。');}
-   if(input.resolution==='chargeable'&&!all(s,'project_adjustment').some(a=>a.caseId===before?.id&&a.type==='debit'))throw new AppError('对客收费售后须有对应已确认补收费。');
-  }
+  if(before){current(before,input.version);if(before.projectId!==p.id||before.roundId!==input.roundId)throw new AppError('售后归属不能改换。');}
+  if(input.orderId){const order=all(s,'order').find(o=>o.id===input.orderId),customer=projectAccess(s,m,customerId).customer!,keys=serviceOrderCustomerKeys(s,customer).map(projectKey);if(!order||!canRead(m,order as any)||!keys.includes(projectKey(order.customer)))throw new AppError('售后订单不属于当前客户或没有读取权限。',403);}
+  const owner=all(s,'member').find(r=>r.id===input.ownerMemberId&&r.active&&r.role!=='supplier') as Member|undefined;if(input.ownerMemberId&&(!owner||!(projectAccess(s,owner,customerId).read||projectAccess(s,owner,customerId).internal||canVerifyProjectFinance(s,owner,customerId))))throw new AppError('请选择有本客户权限或内部执行职责的有效责任人。');
   const {token,id,version,...fields}=input,record={...fields,id:before?.id||newId('project_after_sale'),kind:'project_after_sale',customerId,version:(before?.version||0)+1,...meta()};return save(customerId,[record],{record},before);
  }
  if(action==='project-after-sale-cost'){
-  const c=row(s,m,'project_after_sale',input.caseId,'write');if(c.status==='closed')throw new AppError('已关闭售后不能追加成本。');
-  const record={id:newId('project_after_sale_cost'),kind:'project_after_sale_cost',customerId:c.customerId,projectId:c.projectId,roundId:c.roundId,caseId:c.id,category:input.category,description:input.description,currency:input.currency,budgetCents:input.budget,actualCents:input.actual,bearer:input.bearer,supplierReference:input.supplierReference,...meta()};return save(c.customerId,[record],{record});
+  const linked=input.caseId?row(s,m,'project_after_sale',input.caseId,'write'):null;
+  const projectId=input.projectId||linked?.projectId,roundId=input.roundId||linked?.roundId||'';
+  const {customerId}=project(s,m,projectId,roundId,'write');
+  if(linked&&linked.projectId!==projectId)throw new AppError('售后费用须关联本项目事项。');
+  const before=input.id?row(s,m,'project_after_sale_cost',input.id,'write'):null;
+  if(before){current(before,input.version);if(before.projectId!==projectId)throw new AppError('售后费用归属不能改换。');}
+  const record={...before,id:before?.id||newId('project_after_sale_cost'),kind:'project_after_sale_cost',customerId,projectId,roundId,caseId:input.caseId,category:input.category,description:input.description,currency:input.currency,budgetCents:input.budget,actualCents:input.actual,bearer:input.bearer,supplierReference:input.supplierReference,version:(before?.version||0)+1,...(before?{}:meta()),updatedAt:now(),updatedBy:m.name};return save(customerId,[record],{record},before);
  }
  if(action==='project-refund-request'){
   const {customerId}=project(s,m,input.projectId,input.roundId,'write'),receipt=row(s,m,'project_receipt',input.receiptId);

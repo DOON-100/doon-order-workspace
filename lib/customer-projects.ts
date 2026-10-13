@@ -65,7 +65,9 @@ export function projectRound(s:State,project:CustomerProject,id:string):Customer
 }
 export function internalSampleAccess(s:State,m:Member,sample:Entity){return !!m.active&&['admin','pmc','production'].includes(m.role)&&(m.role==='admin'||sample.ownerId===m.id);}
 export function projectKey(value:unknown){return clean(value).toLocaleLowerCase();}
-export function transferredScope(s:State,roundId:string){const quantities=new Map<string,number>();for(const h of all(s,'customer_project_handover').filter(h=>h.roundId===roundId))for(const line of h.scope||[])quantities.set(line.itemId,(quantities.get(line.itemId)||0)+line.quantity);return quantities;}
+/** Independent registration does not consume an order or change a released snapshot. */
+export function officialProjectHandovers(s:State){return all(s,'customer_project_handover').filter(h=>!h.independentEntry).map(h=>h.executionSnapshot?{...h.executionSnapshot,id:h.id,projectId:h.projectId,customerId:h.customerId}:h);}
+export function transferredScope(s:State,roundId:string){const quantities=new Map<string,number>();for(const h of officialProjectHandovers(s).filter(h=>h.roundId===roundId))for(const line of h.scope||[])quantities.set(line.itemId,(quantities.get(line.itemId)||0)+line.quantity);return quantities;}
 export function remainingRoundScope(s:State,round:CustomerProjectRound){const transferred=transferredScope(s,round.id);return round.scope.map(line=>({...line,quantity:line.quantity-(transferred.get(line.itemId)||0)})).filter(line=>line.quantity>0);}
 export const projectRecordKinds=['customer_project','customer_project_item','customer_project_round','customer_project_team','customer_project_communication','customer_project_task','customer_project_drawing','customer_project_confirmation','customer_project_quote_link','customer_project_sample','customer_project_dispatch','customer_project_feedback','customer_project_handover','customer_project_attachment'] as const;
 /** New project history is served by the dedicated scoped API, never broad order audit feeds. */
