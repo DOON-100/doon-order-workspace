@@ -6,6 +6,7 @@ import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,customerQuoteVersion,type CustomerQuote} from './customer-quotes';
 import {currentStage,warehouse} from './ledger';
 import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,canManageProjectAssignments,canManageProjectTasks,projectTaskPermissions,projectKey,type CustomerProject,type CustomerProjectTask,type CustomerProjectTaskReviewEvent,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
+import {customerProjectAssignmentRosterId,customerProjectAssignmentRoster,projectTaskAssignmentCandidates} from './customer-project-assignment';
 
 const id=z.string().trim().min(1).max(160),text=(n=2000)=>z.string().trim().max(n).default(''),ids=z.array(id).max(300).refine(v=>new Set(v).size===v.length,'编号不能重复').default([]),token=z.string().uuid();
 const day=text(10).refine(v=>{try{return !v||/^\d{4}-\d{2}-\d{2}$/.test(v)&&strictDate(v)===v;}catch{return false;}},'日期须为有效YYYY-MM-DD');
@@ -13,6 +14,7 @@ const qty=z.number().int().positive().max(10_000_000),scope=z.array(z.object({it
 const mutation={id:id.optional(),version:z.number().int().positive().optional(),token:token.optional()};
 const append={token,projectId:id,roundId:text(160)};
 export const customerProjectSchemas={
+ 'assignment-roster-save':z.object({...mutation,token,serviceFollowerIds:ids.removeDefault(),salesReviewerIds:ids.removeDefault()}).strict(),
  'team-save':z.object({...mutation,name:id,leaderIds:ids,salesMemberIds:ids,serviceMemberIds:ids,customerIds:ids,active:z.boolean().default(true)}).strict(),
  save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active')}).strict(),
  'item-save':z.object({...mutation,projectId:id,model:id,customerModel:text(160),drawing:text(160),color:text(160),lens:text(160),material:text(160),requirements:text(6000),quantity:qty}).strict(),
@@ -73,8 +75,10 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
  // history and subsequent requests perform their own current permission checks.
  const members=all(s,'member') as Member[],accessByMember=new Map<string,Map<string,ReturnType<typeof projectAccess>>>();
  const access=(assigned:Member,customerId:string)=>{let byCustomer=accessByMember.get(assigned.id);if(!byCustomer){byCustomer=new Map();accessByMember.set(assigned.id,byCustomer);}let result=byCustomer.get(customerId);if(!result){result=projectAccess(s,assigned,customerId);byCustomer.set(customerId,result);}return result;};
+ const assignmentRoster=customerProjectAssignmentRoster(s),assignableByCustomer=new Map<string,string[]>();
+ const assignableMembers=(customerId:string)=>{let ids=assignableByCustomer.get(customerId);if(!ids){ids=members.filter(assigned=>access(assigned,customerId).write).map(assigned=>assigned.id);assignableByCustomer.set(customerId,ids);}return ids;};
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(c=>access(m,c.id).read),customerIds=new Set(customers.map(c=>c.id));
- const projects=all(s,'customer_project').filter(p=>customerIds.has(p.customerId)),projectIds=new Set(projects.map(p=>p.id));
+ const projects=(all(s,'customer_project') as CustomerProject[]).filter(p=>customerIds.has(p.customerId)).map(p=>({...p,...projectTaskAssignmentCandidates(assignmentRoster,assignableMembers(p.customerId))})),projectIds=new Set(projects.map(p=>p.id));
  const projectById=new Map(projects.map(p=>[p.id,p as CustomerProject]));
  const rows=(kind:string)=>all(s,kind).filter(r=>projectIds.has(r.projectId)&&customerIds.has(r.customerId));
  const ownedSamples=all(s,'customer_project_sample').filter(r=>internalSampleAccess(s,m,r)),samples=all(s,'customer_project_sample').filter(r=>projectIds.has(r.projectId)||ownedSamples.some(x=>x.id===r.id));
@@ -82,8 +86,6 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
  const technicalFiles=new Set(drawings.filter(d=>technicalIds.has(d.id)).flatMap(d=>d.attachmentIds));
  const teams=all(s,'customer_project_team').filter(t=>m.role==='admin'||t.customerIds.some((c:string)=>customerIds.has(c))).map(t=>({...t,customerIds:t.customerIds.filter((c:string)=>m.role==='admin'||customerIds.has(c))}));
  const quotes=(all(s,'customer_quote') as CustomerQuote[]).filter(q=>customerIds.has(q.customerAccountId||'')&&canReadCustomerQuote(s,m,q)).flatMap(q=>{const versions=all(s,'customer_quote_revision').filter(r=>r.quoteId===q.id&&r.snapshot?.status==='confirmed').map(r=>r.snapshot);return versions.filter(v=>v.customerAccountId===q.customerAccountId).map(v=>({id:v.id,version:v.version,quoteNo:v.quoteNo,customerId:v.customerAccountId,status:v.status,lines:v.lines.map((l:any)=>({id:l.id,model:l.model}))}));});
- const assignableByCustomer=new Map<string,string[]>();
- const assignableMembers=(customerId:string)=>{let ids=assignableByCustomer.get(customerId);if(!ids){ids=members.filter(assigned=>access(assigned,customerId).write).map(assigned=>assigned.id);assignableByCustomer.set(customerId,ids);}return ids;};
  return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,salesName:c.salesName,serviceName:c.serviceName,active:c.active,assignableMemberIds:assignableMembers(c.id)})),teams,projects:projects.map(p=>({...p,serviceMemberIds:projectServiceMemberIds(p as CustomerProject),canWrite:access(m,p.customerId).write,canManageTasks:canManageProjectTasks(s,m,p as CustomerProject),canManageAssignments:canManageProjectAssignments(s,m,p as CustomerProject),assignableMemberIds:assignableMembers(p.customerId)})),items:rows('customer_project_item'),rounds:rows('customer_project_round').map(r=>({...r,remainingScope:remainingRoundScope(s,r as CustomerProjectRound)})),communications:rows('customer_project_communication'),tasks:rows('customer_project_task').map(task=>({...task,reviewHistory:Array.isArray(task.reviewHistory)?task.reviewHistory:[],reviewCycle:task.reviewCycle||0,...projectTaskPermissions(s,m,projectById.get(task.projectId)!,task as CustomerProjectTask)})),drawings,confirmations:rows('customer_project_confirmation'),quoteLinks:rows('customer_project_quote_link').map(q=>publicLink(s,m,q)),samples:samples.map(sample=>({...safeSample(sample),canExecute:internalSampleAccess(s,m,sample),canCommunicate:projectIds.has(sample.projectId)&&access(m,sample.customerId).write})),dispatches:rows('customer_project_dispatch'),feedback:rows('customer_project_feedback'),handovers:rows('customer_project_handover').map(h=>{const {paymentSnapshot,...safe}=h;return safe;}),attachments:all(s,'customer_project_attachment').filter(a=>projectIds.has(a.projectId)||technicalFiles.has(a.id)).map(safeRecord),orders:safeOrders(s,m,customers),quotes,members:members.filter(x=>x.active&&x.role!=='supplier').map(x=>({id:x.id,name:x.name,role:x.role})),canManageTeams:m.role==='admin',canWrite:customers.some(c=>access(m,c.id).write),canExecute:ownedSamples.length>0});
 }
 
@@ -93,6 +95,17 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  if(!(name in customerProjectSchemas))return null;
  if(!m.active)throw new AppError('账号已停用。',403);
  const input:any=parse(customerProjectSchemas[name as keyof typeof customerProjectSchemas],await req.json());
+ if(name==='assignment-roster-save'){
+  if(m.role!=='admin')throw new AppError('仅管理员可维护项目跟进与审核人员名单。',403);
+  if(input.id&&input.id!==customerProjectAssignmentRosterId)throw new AppError('项目人员名单使用固定记录编号。');
+  for(const assignedId of [...input.serviceFollowerIds,...input.salesReviewerIds])member(s,assignedId);
+  const rows=all(s,'customer_project_assignment_roster');
+  if(rows.length>1||rows.some(row=>row.id!==customerProjectAssignmentRosterId)||s.records.some(row=>row.id===customerProjectAssignmentRosterId&&row.kind!=='customer_project_assignment_roster'))throw new AppError('项目人员名单存在重复或异常记录，请先核对配置。',409);
+  const repeated=await replay(s,m,action,input);if(repeated)return repeated;
+  const before=rows[0]||null;if(before)fresh(before,input.version);else if(input.version!==undefined)throw new AppError('项目人员名单尚未建立，请刷新后重试。',409);
+  const item={id:customerProjectAssignmentRosterId,kind:'customer_project_assignment_roster',serviceFollowerIds:input.serviceFollowerIds,salesReviewerIds:input.salesReviewerIds,...meta(m,before||undefined)};
+  return persist(s,m,action,input,item,before);
+ }
  if(name==='team-save'){
   if(m.role!=='admin')throw new AppError('仅管理员可维护客户业务小组。',403);const repeated=await replay(s,m,action,input);if(repeated)return repeated;const before=existingOrNew(s,m,'customer_project_team',input);
   for(const x of [...input.leaderIds,...input.salesMemberIds,...input.serviceMemberIds])member(s,x);
@@ -185,12 +198,25 @@ function validateTaskAssignments(s:State,p:CustomerProject,task:CustomerProjectT
  for(const assignedId of [task.ownerId,task.serviceReviewerId,task.salesReviewerId])writerOwner(s,p,assignedId,true);
  if([task.serviceReviewerId,task.salesReviewerId].includes(task.ownerId))throw new AppError('跟进人不能审核自己提交的事项，请另选审核人。');
 }
+function validateTaskRosterAssignments(s:State,p:CustomerProject,task:Pick<CustomerProjectTask,'ownerId'|'serviceReviewerId'|'salesReviewerId'>,before?:CustomerProjectTask){
+ const changed={owner:!before||task.ownerId!==before.ownerId,service:!before||(task.serviceReviewerId||'')!==(before.serviceReviewerId||''),sales:!before||(task.salesReviewerId||'')!==(before.salesReviewerId||'')};
+ if(!changed.owner&&!changed.service&&!changed.sales)return;
+ const roster=customerProjectAssignmentRoster(s);if(!roster.configured)return;
+ if(!roster.valid)throw new AppError('项目跟进与审核人员名单配置无效，请由管理员核对。',409);
+ const writable=(all(s,'member') as Member[]).filter(assigned=>projectAccess(s,assigned,p.customerId).write).map(assigned=>assigned.id);
+ const candidates=projectTaskAssignmentCandidates(roster,writable);
+ if(changed.owner&&!candidates.taskOwnerMemberIds.includes(task.ownerId))throw new AppError('客服跟进人须在已配置的客服名单内，并具有当前客户项目权限。',403);
+ if(changed.service&&!candidates.taskServiceReviewerMemberIds.includes(task.serviceReviewerId||''))throw new AppError('客服审核人须在已配置的客服名单内，并具有当前客户项目权限。',403);
+ if(changed.sales&&!candidates.taskSalesReviewerMemberIds.includes(task.salesReviewerId||''))throw new AppError('业务审核人须在已配置的业务审核名单内，并具有当前客户项目权限。',403);
+}
 async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:string,input:any){
  const before=input.id?all(s,'customer_project_task').find(task=>task.id===input.id) as CustomerProjectTask|undefined:undefined;
  if(input.id&&(!before||before.projectId!==p.id||before.customerId!==p.customerId))throw new AppError('待办不存在或不属于当前项目。',403);
  // Current actor and customer authorization always precede idempotent replay; admins do not substitute for a reviewer.
  if(name==='task-save'){
   if(!canManageProjectTasks(s,m,p))throw new AppError('仅项目业务负责人、所属小组组长或管理员可指派或调整待办。',403);
+  // Cancellation and unchanged historical assignees preserve their original configuration.
+  if(!(before&&input.status==='cancelled'))validateTaskRosterAssignments(s,p,{ownerId:input.ownerId,serviceReviewerId:input.serviceReviewerId??before?.serviceReviewerId??p.serviceReviewerId??'',salesReviewerId:input.salesReviewerId??before?.salesReviewerId??p.salesReviewerId??''},before);
  }else if(name==='task-submit'){
   if(!before||before.ownerId!==m.id)throw new AppError('仅本事项指定跟进人可提交完成结果。',403);
  }else{

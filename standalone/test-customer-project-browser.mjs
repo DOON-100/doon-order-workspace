@@ -139,9 +139,15 @@ try{
  await loadedRow.getByRole('button',{name:'打开项目'}).click();
  await page.getByRole('button',{name:'维护项目',exact:true}).waitFor();
  pass('项目请求超时明确提示且不显示虚假零记录，刷新后恢复查看和修改');
+ await workspace('customer-project-assignment-roster-save',{token:token(),serviceFollowerIds:[serviceMembers[0].id,serviceMembers[1].id,serviceSessions[2].member.id],salesReviewerIds:[admin.id]});
+ await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await page.getByRole('button',{name:'维护项目',exact:true}).waitFor();
  const taskTitle='合成两级审核跟进事项';
  await page.getByRole('button',{name:'沟通与待办',exact:true}).click();
  await page.getByRole('button',{name:'新增行动',exact:true}).click();
+ assert.deepEqual(await dialog.getByLabel('客服跟进人',{exact:false}).locator('option').evaluateAll(rows=>rows.filter(row=>row.value).map(row=>row.value)),serviceMembers.map(member=>member.id));
+ assert.deepEqual(await dialog.getByLabel('业务审核人',{exact:false}).locator('option').evaluateAll(rows=>rows.filter(row=>row.value).map(row=>row.value)),[admin.id]);
+ pass('跟进表单按客服及业务职责分别显示候选，业务管理员和未授权客服不会混入跟进名单');
  await dialog.getByLabel('行动标题',{exact:false}).fill(taskTitle);
  await dialog.getByLabel('客服跟进人',{exact:false}).selectOption(serviceMembers[0].id);
  await dialog.getByLabel('客服审核人',{exact:false}).selectOption(serviceMembers[1].id);
