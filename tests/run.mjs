@@ -108,5 +108,6 @@ const projectHarness={ok,call,state,pass,admin,rawRecords:()=>db.prepare('SELECT
 const {testCustomerProjects}=await import('./customer-project-cases.mjs');await testCustomerProjects(projectHarness);
 const {testCustomerProjectTaskReview}=await import('./customer-project-task-review-cases.mjs');await testCustomerProjectTaskReview(projectHarness);
 const {testCustomerProjectFinance}=await import('./customer-project-finance-cases.mjs');await testCustomerProjectFinance(projectHarness);
+const {testEngineeringDrawings}=await import('./engineering-drawing-cases.mjs');await testEngineeringDrawings(projectHarness);
 console.log('Total business checks:',checks.length);
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

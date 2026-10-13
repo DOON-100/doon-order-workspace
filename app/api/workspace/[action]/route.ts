@@ -1,5 +1,6 @@
 import {commitImport} from '@/lib/import-commit';
 import {drawingCorrectionPost} from '@/lib/drawing-correction-api';
+import {engineeringDrawingGet,engineeringDrawingPost} from '@/lib/engineering-drawing-api';
 import {finishedSupplierGet,finishedSupplierPost,assertLegacyFinishedMutation} from '@/lib/finished-supplier-api';
 import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
 import {departmentColumns} from '@/lib/departments';
@@ -30,6 +31,9 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ // Engineering has an independent, scoped history endpoint. Never expose its
+ // source emails or snapshots through the broad production audit feed.
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('engineering_drawing')))return false;
  // Project histories have their own customer/finance authorization. Broad PMC
  // order access must never expose project commercial or receipt snapshots.
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('customer_project')||v.kind.startsWith('project_'))))return false;
@@ -54,6 +58,7 @@ export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const engineering=await engineeringDrawingGet(action,req,s,m);if(engineering)return engineering;
  const projectFinance=await customerProjectFinanceGet(action,req,s,m);if(projectFinance)return projectFinance;
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
@@ -81,6 +86,7 @@ export async function POST(req:Request,ctx:Context){try{
  const m=await actor(s);
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ const engineering=await engineeringDrawingPost(action,req,s,m);if(engineering)return engineering;
  const projectFinance=await customerProjectFinancePost(action,req,s,m);if(projectFinance)return projectFinance;
  const projects=await customerProjectPost(action,req,s,m);if(projects)return projects;
  const drawingCorrection=await drawingCorrectionPost(action,req,s,m);if(drawingCorrection)return drawingCorrection;
@@ -126,7 +132,7 @@ export async function POST(req:Request,ctx:Context){try{
   const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
  }
  if(action==='member'){
-  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),supplierId:z.string().optional(),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'])).default([]),active:z.boolean()}).parse(body);
+  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),supplierId:z.string().optional(),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished','engineering','engineering_review'])).default([]),active:z.boolean()}).parse(body);
   const existing=input.id?s.records.find(r=>r.id===input.id&&r.kind==='member'):undefined;if(input.id&&!existing)throw new AppError('成员不存在。');
   if((existing?.role==='supplier')!==(input.role==='supplier')&&existing)throw new AppError('供应商账号与员工账号不能互换角色，请分别建立账号。',403);
   if(input.role==='supplier'){

@@ -5,7 +5,7 @@ const scrypt=promisify(scryptCallback);
 const hashToken=token=>createHash('sha256').update(token).digest('hex');
 export const sessionName='doon_session';
 export const supplierSessionName='doon_supplier_session';
-const departments=new Set(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished']);
+const departments=new Set(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished','engineering','engineering_review']);
 let hashing=0;
 function fail(message,status=400){throw Object.assign(new Error(message),{status});}
 export function validatePassword(value){if(typeof value!=='string'||value.length<12||value.length>128)fail('密码请使用 12 至 128 个字符。');return value;}

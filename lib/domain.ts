@@ -28,7 +28,7 @@ export const readsAllOrders=(m:Member)=>m.role!=='supplier'&&(managesProduction(
 // New and standard orders use productType; historical ledger orders retain the source value in column W.
 export const productTypeOf=(o:Order)=>clean(o.productType||o.ledger?.columns?.W||o.extra?.['W · 产品类型']||o.extra?.['产品类型']);
 export const assignedOrder=(m:Member,o:Order)=>o.ownerEmail===m.email||m.customers.includes(o.customer);
-export function canRead(m:Member,o:Order){return m.role!=='supplier'&&(readsAllOrders(m)||assignedOrder(m,o)||(m.orderScope===undefined&&m.role==='clerk'&&!!o.ledger&&!!m.departments?.length));}
+export function canRead(m:Member,o:Order){return m.role!=='supplier'&&(readsAllOrders(m)||assignedOrder(m,o)||(m.orderScope===undefined&&m.role==='clerk'&&!!o.ledger&&!!m.departments?.some(d=>['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'].includes(d))));}
 export const canCorrectDrawing=(m:Member,o:Order)=>broad(m)&&canRead(m,o)&&!!o.ledger&&o.lifecycle!=='archived'&&o.sourceStatus!=='已取消';
 export function allowedFields(m:Member,o:Order):string[]{
  if(o.lifecycle==='archived')return [];
