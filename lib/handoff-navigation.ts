@@ -16,6 +16,38 @@ export const handoffNavigation = [
  {id:'business-rules',label:'知识与规则',group:'规则与管理',icon:'book'},
  {id:'settings',label:'系统设置',group:'规则与管理',icon:'settings'},
 ] as const;
+/** Original workspace names stay one click away alongside the new department pages. */
+export const directWorkspaceNavigation = [
+ {id:'customer-projects',label:'客户项目开发',icon:'business'},
+ {id:'sales',label:'业务工作台',icon:'business'},
+ {id:'customer-quotes',label:'客户报价',icon:'chart'},
+ {id:'customer-price-archive',label:'历史报价档案',icon:'text'},
+ {id:'service-workspace',label:'客服工作台',icon:'support'},
+ {id:'engineering-drawings',label:'工程画图部门',icon:'production'},
+ {id:'factory-orders',label:'中英内部订单',icon:'languages'},
+ {id:'customers',label:'客户责任清单',icon:'customer'},
+ {id:'pmc-handoff',label:'PMC 交接工作台',icon:'people'},
+ {id:'pmc',label:'PMC 排期总表',icon:'production'},
+ {id:'finished-outsourcing',label:'成品外发跟进总表',icon:'factory'},
+ {id:'orders',label:'动态订单总表',icon:'home'},
+ {id:'dashboard',label:'欠数与异常看板',icon:'chart'},
+ {id:'department',label:'部门录入工作台',icon:'factory'},
+ {id:'losses',label:'部门损耗月报',icon:'chart'},
+ {id:'receiving',label:'供应商收货',icon:'upload'},
+ {id:'completed',label:'已完成订单档案',icon:'production'},
+ {id:'mine',label:'我的订单',icon:'production'},
+ {id:'imports',label:'上传与更新',icon:'upload'},
+ {id:'mes',label:'MES 核对',icon:'factory'},
+ {id:'reports',label:'报表中心',icon:'chart'},
+ {id:'members',label:'成员与权限',icon:'people'},
+ {id:'maintenance',label:'系统维护',icon:'sliders'},
+] as const;
+const directWorkspaceIds=new Set<string>(directWorkspaceNavigation.map(item=>item.id));
+export const workspaceNavigation=[
+ handoffNavigation[0],
+ ...directWorkspaceNavigation.map(item=>({...item,group:'工作空间'})),
+ ...handoffNavigation.filter(item=>item.id!=='workbench'&&!directWorkspaceIds.has(item.id)),
+];
 export const handoffDocumentViews = ['order-confirmations','engineering-materials','production-orders','production-shipments','logistics-waybills','finance-documents'] as const;
 export type HandoffDocumentView = typeof handoffDocumentViews[number];
 export function isHandoffDocumentView(view:string):view is HandoffDocumentView{return (handoffDocumentViews as readonly string[]).includes(view);}
@@ -24,7 +56,7 @@ export type WorkspaceNavigate=(view:string,context?:WorkspaceNavigationContext)=
 /** A new department stage keeps business scope, never another form's record/tab. */
 export function departmentNavigationContext(context:WorkspaceNavigationContext):WorkspaceNavigationContext{const {recordId:_recordId,tab:_tab,...scope}=context;return scope;}
 export const departmentTabs:Record<string,{view:string;label:string;phase:string}[]>={
- service:[{view:'service',label:'客服订单',phase:'订单总览'},{view:'sales',label:'业务移交',phase:'业务 → 客服'},{view:'service-followups',label:'订单事项',phase:'客服跟进'}],
+ service:[{view:'service',label:'客服订单',phase:'订单总览'},{view:'service-workspace',label:'客服工作台',phase:'全部客服事项'},{view:'sales',label:'业务移交',phase:'业务 → 客服'},{view:'service-followups',label:'订单事项',phase:'客服跟进'}],
  'order-confirmations':[{view:'order-confirmations',label:'订单与 PI',phase:'客户下单'},{view:'imports',label:'订单表核对',phase:'资料录入'}],
  'engineering-materials':[{view:'engineering-materials',label:'工程资料',phase:'资料与采用版本'},{view:'engineering-drawings',label:'工程协作',phase:'接收 → 画图 → 审核 → SOP'}],
  'production-orders':[{view:'production-orders',label:'生产单',phase:'资料核对'},{view:'factory-orders',label:'中英生产单',phase:'客服制单'},{view:'pmc-handoff',label:'PMC 接收',phase:'移交与接收'},{view:'receiving',label:'采购与收货',phase:'备料'},{view:'pmc',label:'排期与进度',phase:'排产'},{view:'department',label:'部门工序',phase:'生产执行'},{view:'finished-outsourcing',label:'成品外发',phase:'外发执行'},{view:'losses',label:'损耗记录',phase:'工序核对'},{view:'dashboard',label:'欠数与异常',phase:'异常跟进'},{view:'orders',label:'生产总表',phase:'全部明细'},{view:'mine',label:'我的生产事项',phase:'负责明细'},{view:'mes',label:'MES 核对',phase:'工序核对'},{view:'completed',label:'完工档案',phase:'完成归档'}],
