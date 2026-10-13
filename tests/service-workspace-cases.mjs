@@ -3,7 +3,7 @@ import {build} from 'esbuild';
 
 // This suite is appended after the existing business suites. Every new identity,
 // customer, order and document here is synthetic; no production files are read.
-export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,rawInsert}){
+export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,rawInsert,rawUpdate}){
  const identity=(id,name)=>({userId:id,email:id+'@test.invalid',displayName:name,fullName:name});
  const assigned=identity('service_case_assigned','CRM合成负责员');
  const other=identity('service_case_other','CRM合成另一负责员');
@@ -254,7 +254,7 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  // Removing a responsibility immediately revokes record, receipt, file and
  // history access; only this suite's synthetic customer is intentionally edited.
  const protectedService=clone(rawRecords().filter(row=>row.kind.startsWith('service_')));
- await ok('customer-save',{...account,serviceName:other.displayName});
+ await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,serviceName:other.displayName});
  const revoked=await list(assigned);
  assert(!revoked.records.some(row=>row.customerId===account.id));assert(!revoked.receipts.some(row=>row.customerId===account.id));assert(!revoked.attachments.some(row=>row.customerId===account.id));
  await deny('service-history?id='+encodeURIComponent(project.id),undefined,403);
@@ -263,18 +263,21 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  assert((await list(other)).records.some(row=>row.id===project.id));
  assert(!(await ok('data',undefined,assigned)).audits.some(audit=>serviceTargets.has(audit.targetId)));
  for(const row of protectedService)assert.deepEqual(rawRecords().find(record=>record.id===row.id),row);
- await ok('customer-save',{...(await state()).customerAccounts.find(row=>row.id===account.id),serviceName:assigned.displayName});
+ await ok('customer-save',{...(await state()).customerAccounts.find(row=>row.id===account.id),expectedVersion:(await state()).customerAccounts.find(row=>row.id===account.id).version,serviceName:assigned.displayName});
  pass('客户责任转移立即收回原客服的业务、到账、附件和历史权限，业务历史本身不改写');
 
  const activeAccount=(await state()).customerAccounts.find(row=>row.id===account.id);
- await ok('customer-save',{...activeAccount,active:false});
+ await ok('customer-save',{...activeAccount,expectedVersion:(await state()).customerAccounts.find(r=>r.id===activeAccount.id).version,active:false});
  assert(!(await list(assigned)).records.some(row=>row.customerId===account.id));
  await deny('service-file?id='+encodeURIComponent(firstUpload.attachment.id),undefined,403);
  await deny('service-save',fields(project),403);
  assert((await list()).records.some(row=>row.id===project.id),'Administrators retain read-only access to a disabled customer history.');
- await ok('customer-save',{...(await state()).customerAccounts.find(row=>row.id===account.id),active:true});
+ await ok('customer-save',{...(await state()).customerAccounts.find(row=>row.id===account.id),expectedVersion:(await state()).customerAccounts.find(row=>row.id===account.id).version,active:true});
  const activeMember=(await state()).members.find(row=>row.id===memberFor(assigned).id);
- await ok('member',{...activeMember,active:false});
+ const beforeDisable=clone(rawRecords()),disableResult=await call('member',{...activeMember,active:false});
+ assert.equal(disableResult.status,409,await disableResult.text());assert.deepEqual(rawRecords(),beforeDisable);
+ // Synthetic historical state: ordinary account writes must respect confirmed handover policy.
+ rawUpdate({...activeMember,active:false});
  await deny('service-data',undefined,403);
  await deny('service-file?id='+encodeURIComponent(firstUpload.attachment.id),undefined,403);
  await ok('member',{...activeMember,active:true});

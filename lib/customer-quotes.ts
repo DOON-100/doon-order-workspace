@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {assignedCustomerQuoteAccount,canUseCustomerQuotes,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {assignedCustomerQuoteAccount,canUseCustomerQuotes,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,customerServiceQuoteReader,customerQuoteServiceReadOnly,canMaintainCustomerQuoteAccount} from './customer-quote-access';
 import type {CustomerQuoteTemplate} from './customer-quote-template';
 import type {QuoteTemplateBinding} from './customer-quote-template-api';
 export {canCreateCustomerQuote,canUseCustomerQuotes,eligibleCustomerQuoteAccounts} from './customer-quote-access';
@@ -100,13 +100,14 @@ export function assignedCustomerQuote(s:State,m:Member,q:Pick<CustomerQuoteField
  return !!a&&assignedCustomerQuoteAccount(s,m,a);
 }
 export function canEditCustomerQuote(s:State,m:Member,q:CustomerQuote){
- return q.status==='draft'&&canReadCustomerQuote(s,m,q);
+ return q.status==='draft'&&mayChangeQuoteCustomer(s,m,q);
 }
 export function canReadCustomerQuote(s:State,m:Member,q:CustomerQuote){
- return canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,q));
+ const account=quoteAccount(s,q.customerAccountId);
+ return canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,q))||!!account&&customerServiceQuoteReader(s,m,account);
 }
 export function changedQuoteCustomer(before:CustomerQuote,after:CustomerQuoteFields){return ['customerAccountId','customerName','customerCode'].some(field=>key(before[field])!==key(after[field as keyof CustomerQuoteFields]));}
-export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){return isCustomerQuoteAdministrator(m,s)||assignedCustomerQuote(s,m,next);}
+export function mayChangeQuoteCustomer(s:State,m:Member,next:CustomerQuoteFields){const account=quoteAccount(s,next.customerAccountId);return isCustomerQuoteAdministrator(m,s)||!!account&&canMaintainCustomerQuoteAccount(s,m,account);}
 
 export function customerQuoteVersion(s:State,m:Member,quoteId:string,version:number):CustomerQuote|null{
  const current=all(s,'customer_quote').find(q=>q.id===quoteId) as CustomerQuote|undefined;
@@ -140,8 +141,9 @@ export function customerQuoteSentHistory(s:State,m:Member,q:CustomerQuote){
 
 // Explicit response allowlist. Bucket keys and full historical snapshots remain server-side.
 export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
- const internal=canSeeCustomerQuoteInternal(s,m),administrator=isCustomerQuoteAdministrator(m,s);
- const archiveWritable=q.status==='confirmed'&&!!customerQuoteVersion(s,m,q.id,q.version);
+ const account=quoteAccount(s,q.customerAccountId),serviceOnly=!!account&&customerQuoteServiceReadOnly(s,m,account);
+ const internal=canSeeCustomerQuoteInternal(s,m,account),administrator=isCustomerQuoteAdministrator(m,s);
+ const archiveWritable=q.status==='confirmed'&&mayChangeQuoteCustomer(s,m,q)&&!!customerQuoteVersion(s,m,q.id,q.version);
  const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&canReadCustomerQuote(s,m,v.snapshot)&&(administrator||v.snapshot.customerAccountId===q.customerAccountId)&&!!customerQuoteVersion(s,m,q.id,v.version)).sort((a,b)=>b.version-a.version).map(v=>({
   id:v.id,version:v.version,status:v.snapshot.status,action:v.action,updatedAt:v.updatedAt,updatedBy:v.updatedBy,sourceFilename:v.snapshot.sourceFilename||'',sourceHash:v.snapshot.sourceHash||'',
  }));
@@ -152,8 +154,8 @@ export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
   ...(q.templateBinding?{templateBinding:q.templateBinding}:{}),
   templateOutputs:all(s,'customer_quote_template_output').filter(output=>output.quoteId===q.id&&output.quoteVersion===q.version&&output.customerAccountId===q.customerAccountId&&output.templateId===q.templateBinding?.id).map(output=>({id:output.id,filename:output.filename,sourceHash:output.sourceHash,uploaded:output.uploaded,createdAt:output.createdAt})),
   ...(internal?{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[]}:{}),canSeeInternal:internal,customerCharges:q.customerCharges||[],
-  lines:q.lines.map(line=>publicCustomerQuoteLine(line,q)),terms:q.terms,reviewNotes:q.reviewNotes,createdAt:q.createdAt,createdBy:q.createdBy,updatedAt:q.updatedAt,updatedBy:q.updatedBy,
-  confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:administrator&&!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&administrator,canRevise:q.status==='confirmed'&&canReadCustomerQuote(s,m,q),history,
+  lines:q.lines.map(line=>{const item=publicCustomerQuoteLine(line,q);if(serviceOnly)delete item.sourceFormula;return item;}),terms:serviceOnly?q.terms.map(({reviewNote,...term})=>term):q.terms,reviewNotes:serviceOnly?[]:q.reviewNotes,createdAt:q.createdAt,createdBy:q.createdBy,updatedAt:q.updatedAt,updatedBy:q.updatedBy,
+  confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:administrator&&!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&administrator,canRevise:q.status==='confirmed'&&mayChangeQuoteCustomer(s,m,q),history,
   media:customerQuoteMedia(s,m,q).map(publicCustomerQuoteMedia),sentHistory:customerQuoteSentHistory(s,m,q),canRegisterSent:archiveWritable,canSupplementArchive:archiveWritable,
  };
 }

@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
-import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,canReadCustomerQuoteHistory,readableCustomerQuoteAccounts} from './customer-quote-access';
 import {assertCustomerQuoteConfirmable,completedCustomerQuoteRows,visibleCompletedCustomerQuotes} from './customer-quote-review';
 import {customerQuoteTemplateGet,customerQuoteTemplatePost,detachChangedQuoteTemplate,assertQuoteTemplateMapping,validateTemplateQuoteArchive} from './customer-quote-template-api';
 import {
@@ -13,7 +13,7 @@ import {
 
 function allowed(s:State,m:Member){if(!canUseCustomerQuotes(s,m))throw new AppError('没有客户报价权限，请联系管理员核对报价授权。',403);}
 function quoteFor(s:State,id:string){const q=all(s,'customer_quote').find(v=>v.id===id) as CustomerQuote|undefined;if(!q)throw new AppError('客户报价不存在。',404);return q;}
-function editable(s:State,m:Member,q:CustomerQuote){if(!canReadCustomerQuote(s,m,q))throw new AppError('只能修改客户责任清单中自己跟进客户的报价；未关联客户的报价须由管理员核对。',403);if(q.status!=='draft')throw new AppError('已确认报价不可覆盖，请先创建修订草稿。',409);}
+function editable(s:State,m:Member,q:CustomerQuote){if(!mayChangeQuoteCustomer(s,m,q))throw new AppError('只能修改客户责任清单中自己跟进客户的报价；未关联客户的报价须由管理员核对。',403);if(q.status!=='draft')throw new AppError('已确认报价不可覆盖，请先创建修订草稿。',409);}
 function current(q:CustomerQuote,version:number){if(q.version!==version)throw new AppError('报价已由其他同事更新，你的输入未覆盖新版本；请刷新核对后再保存。',409);}
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const result=schema.safeParse(value);if(!result.success)throw new AppError(result.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).slice(0,4).join('；'));return result.data;}
 async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]){
@@ -31,7 +31,7 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('仅管理员可查看客户报价授权配置。',403);
   return json({policy:customerQuoteAccessPolicy(s)});
  }
- allowed(s,m);
+ if(!canReadCustomerQuoteHistory(s,m))throw new AppError('没有客户对客报价历史查看权限。',403);
  const templateResponse=await customerQuoteTemplateGet(action,req,s,m);if(templateResponse)return templateResponse;
  if(action==='customer-quote-version'){
   const url=new URL(req.url),q=archiveVersion(s,m,url.searchParams.get('quoteId'),url.searchParams.get('quoteVersion'));
@@ -48,7 +48,7 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
   return new Response(object.body,{headers:{'Content-Type':media.contentType,'Content-Disposition':`${url.searchParams.get('download')==='1'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(media.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'; frame-ancestors 'self'",'Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer'}});
  }
  if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
- if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:eligibleCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canUseCustomerQuotes(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
+ if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:readableCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canReadCustomerQuoteHistory(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
  if(!canReadCustomerQuote(s,m,q))throw new AppError('无权读取该客户报价的原附件。',403);
  if(!isCustomerQuoteAdministrator(m,s))throw new AppError('原附件可能含内部核价或多客户资料，仅报价管理员可读取。',403);
@@ -75,7 +75,7 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
  }
  if(action==='customer-quote-revise'){
   const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive()}).strict(),await req.json()),before=quoteFor(s,input.id);
-  if(!canReadCustomerQuote(s,m,before))throw new AppError('无权修订该客户报价。',403);
+  if(!mayChangeQuoteCustomer(s,m,before))throw new AppError('客服可查看对客报价历史，不可改价或修订报价。',403);
   current(before,input.version);if(before.status!=='confirmed')throw new AppError('仅已确认的报价可以创建修订草稿。',409);
   const at=now(),quote:CustomerQuote={...before,status:'draft',version:before.version+1,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   delete quote.confirmedAt;delete quote.confirmedBy;delete quote.confirmedById;
@@ -132,6 +132,7 @@ async function uploadQuoteMedia(req:Request,s:State,m:Member){
  const form=await req.formData(),input=parse(z.object({quoteId:archiveId,quoteVersion:archiveVersionInput,lineId:z.string().trim().max(100),category:z.enum(['image','drawing','sent_quote','evidence']),title:z.string().trim().max(200),drawingNo:z.string().trim().max(200)}).strict(),{
   quoteId:form.get('quoteId'),quoteVersion:form.get('quoteVersion'),lineId:form.get('lineId')||'',category:form.get('category'),title:form.get('title')||'',drawingNo:form.get('drawingNo')||'',
  }),before=archiveVersion(s,m,input.quoteId,input.quoteVersion),currentQuote=quoteFor(s,input.quoteId);
+ if(!mayChangeQuoteCustomer(s,m,before))throw new AppError('客服报价历史为只读，不能修改报价附件。',403);
  const lineMedia=input.category==='image'||input.category==='drawing';
  if(lineMedia&&!before.lines.some(line=>line.id===input.lineId))throw new AppError('款式图片和图纸须关联本报价版本中的有效产品行。');
  if(!lineMedia&&input.lineId)throw new AppError('已发报价和发送凭证属于整份报价版本，请勿关联产品行。');
@@ -165,6 +166,7 @@ async function recordQuoteSent(req:Request,s:State,m:Member){
  if(input.sentDate>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'}))throw new AppError('发送日期不能晚于今天。');
  if(new Set(input.mediaIds).size!==input.mediaIds.length)throw new AppError('发送凭证编号不能重复。');
  const q=archiveVersion(s,m,input.quoteId,input.quoteVersion);
+ if(!mayChangeQuoteCustomer(s,m,q))throw new AppError('客服报价历史为只读，不能变更报价或发送记录。',403);
  if(q.status!=='confirmed')throw new AppError('只有已最终确认的英文报价版本才能登记已发送。',409);
  const media=customerQuoteMedia(s,m,q);
  if(input.mediaIds.some(id=>!media.some(item=>item.id===id&&item.quoteVersion===q.version&&['sent_quote','evidence'].includes(item.category))))throw new AppError('只能关联本报价确认版本的已发报价文件或发送凭证。',403);

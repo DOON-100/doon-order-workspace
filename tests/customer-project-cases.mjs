@@ -1,14 +1,17 @@
 import assert from 'node:assert/strict';
 
 // Synthetic API integration suite. No production files, accounts or workbooks.
-export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawInsert,admin}){
+export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawInsert,rawUpdate,admin}){
  const original=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),current=id=>rawRecords().find(r=>r.id===id);
  const users={};for(const [key,role] of [['sales','sales'],['service','clerk'],['service2','sales'],['inactive','clerk'],['other','sales'],['pmc','pmc']]){
   const user={userId:'synthetic_project_'+key,email:'synthetic-project-'+key+'@test.invalid',displayName:'合成项目-'+key,fullName:'合成项目-'+key};await ok('member',{name:user.displayName,email:user.email,role,orderScope:'all',customers:[],active:true});await ok('enroll',{},user);users[key]=user;
  }
  const members=(await state()).members,mid=key=>members.find(m=>m.email===users[key].email).id;
  const customer=(await ok('customer-save',{customer:'合成项目客户甲',customerCode:'TEST-PROJECT-A',salesName:users.sales.displayName,serviceName:users.service.displayName,pmcName:users.pmc.displayName,salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service'),mid('service2'),mid('inactive')],active:true})).item;
- await ok('member',{...members.find(m=>m.id===mid('inactive')),active:false});
+ const inactiveMember=members.find(m=>m.id===mid('inactive')),beforeDisable=structuredClone(rawRecords());
+ const deniedDisable=await call('member',{...inactiveMember,active:false});assert.equal(deniedDisable.status,409);assert.deepEqual(rawRecords(),beforeDisable);
+ // Establish a pre-existing disabled history fixture without weakening the handover guard.
+ rawUpdate({...inactiveMember,active:false});
  const otherCustomer=(await ok('customer-save',{customer:'合成项目客户乙',customerCode:'TEST-PROJECT-B',salesName:users.other.displayName,serviceName:'',pmcName:'',salesMemberIds:[mid('other')],serviceMemberIds:[],active:true})).item;
  const customerBefore=structuredClone(current(customer.id));
  const team=(await ok('customer-project-team-save',{token:token(),name:'合成项目小组',leaderIds:[mid('sales')],salesMemberIds:[mid('sales'),mid('other')],serviceMemberIds:[mid('service'),mid('service2')],customerIds:[customer.id],active:true})).item;
@@ -63,7 +66,7 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  assert.deepEqual(current(customer.id),customerBefore);
  pass('两名客服以各自账号追加沟通和上传资料，双方均能读取项目、对方沟通、附件及历史，客户主档保持原样');
  const drawing=(await ok('customer-project-drawing',{token:token(),projectId:project.id,roundId:round.id,itemIds:[itemA.id,itemB.id],type:'2d',drawingNo:'SYN-2D',revision:'V1',attachmentIds:[attachment.id]},users.service)).item;
- const quote={id:'synthetic_project_quote',kind:'customer_quote',customerAccountId:customer.id,customerName:customer.customer,customerCode:customer.customerCode,status:'confirmed',version:2,quoteNo:'SYN-PROJECT-Q',lines:[{id:'syn-line-a',model:itemA.model},{id:'syn-line-b',model:itemB.model}]};rawInsert(quote);rawInsert({id:'synthetic_project_quote_revision',kind:'customer_quote_revision',quoteId:quote.id,version:2,snapshot:quote});
+ const quote={id:'synthetic_project_quote',kind:'customer_quote',customerAccountId:customer.id,customerName:customer.customer,customerCode:customer.customerCode,status:'confirmed',version:2,quoteNo:'SYN-PROJECT-Q',internalNotesZh:'SYNTHETIC-PROJECT-COST-SECRET',lines:[{id:'syn-line-a',model:itemA.model},{id:'syn-line-b',model:itemB.model}]};rawInsert(quote);rawInsert({id:'synthetic_project_quote_revision',kind:'customer_quote_revision',quoteId:quote.id,version:2,snapshot:quote});
  const linkPayload={token:token(),projectId:project.id,roundId:round.id,itemIds:[itemA.id,itemB.id],quoteId:quote.id,quoteVersion:2,lineIds:['syn-line-a','syn-line-b'],acceptedBy:'合成客户',acceptedDate:'2026-10-12',evidence:'合成客户邮件已接受报价V2'};
  await denied('customer-project-quote-link',linkPayload,users.sales);const quoteLink=(await ok('customer-project-quote-link',linkPayload)).item;
  const salesMember=(await state()).members.find(member=>member.id===mid('sales'));
@@ -79,8 +82,8 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  const sample=(await ok('customer-project-sample-release',releasePayload,users.service)).item;assert.equal((await ok('customer-project-sample-release',releasePayload,users.service)).item.id,sample.id);
  assert.equal(current(round.id).status,'partial');assert.equal(current(project.id).status,'active');assert(!rawRecords().some(r=>r.kind==='order'&&r.id===sample.id));
  const pmcData=await ok('customer-project-data',undefined,users.pmc);assert(pmcData.samples.some(x=>x.id===sample.id));assert.equal(pmcData.projects.length,0);assert.equal(pmcData.quoteLinks.length,0);assert.equal(pmcData.communications.length,0);assert(!('paymentSnapshot' in pmcData.samples[0]));assert.equal((await call('customer-project-file?id='+attachment.id,undefined,users.pmc)).status,200);
- const serviceData=await ok('customer-project-data',undefined,users.service);assert.equal(serviceData.quoteLinks[0].restricted,true);assert(!('quoteNo' in serviceData.quoteLinks[0]));
- const service2Data=await ok('customer-project-data',undefined,users.service2);assert(service2Data.drawings.some(d=>d.id===drawing.id));assert.equal(service2Data.quoteLinks[0].restricted,true);assert(!('quoteNo' in service2Data.quoteLinks[0]));
+ const serviceData=await ok('customer-project-data',undefined,users.service);assert.equal(serviceData.quoteLinks[0].quoteNo,quote.quoteNo);assert(!JSON.stringify(serviceData).includes('SYNTHETIC-PROJECT-COST-SECRET'));await denied('customer-quote-save',{id:quote.id,version:quote.version},users.service);
+ const service2Data=await ok('customer-project-data',undefined,users.service2);assert(service2Data.drawings.some(d=>d.id===drawing.id));assert.equal(service2Data.quoteLinks[0].quoteNo,quote.quoteNo);assert(!JSON.stringify(service2Data).includes('SYNTHETIC-PROJECT-COST-SECRET'));await denied('customer-quote-save',{id:quote.id,version:quote.version},users.service2);
  pass('准确图纸版本、客户报价接受与财务核实同时满足才放样办；部分款色只完成已转范围，独立样办不污染PMC大货统计');
  await denied('customer-project-sample-update',{id:sample.id,version:1,status:'accepted',note:'越权制作'},users.service);
  let internal=(await ok('customer-project-sample-update',{id:sample.id,version:1,status:'accepted',plannedDate:'2026-10-22',note:'内部已核对排期'},users.pmc)).item;

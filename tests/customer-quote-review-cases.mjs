@@ -141,7 +141,7 @@ export async function testCustomerQuoteReview({ok,call,state,pass,rawRecords,raw
  pass('已确认报价禁止保存或换附件；修订另建草稿版本，新确认追加总表，旧报价及旧总表金额保持不变');
 
  const authorizedSnapshots=rawRecords().filter(item=>['customer_quote_revision','customer_quote_completed'].includes(item.kind)&&item.quoteId===q.id).map(item=>structuredClone(item));
- await ok('customer-save',{...account,salesName:other.displayName});
+ await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,salesName:other.displayName});
  assert(!(await ok('customer-quotes',undefined,assigned)).quotes.some(item=>item.id===q.id));
  assert(!(await ok('customer-quote-completed',undefined,assigned)).rows.some(item=>item.quoteId===q.id));
  assert.equal((await ok('customer-quote-completed',undefined,other)).rows.filter(item=>item.quoteId===q.id).length,4);
@@ -152,7 +152,7 @@ export async function testCustomerQuoteReview({ok,call,state,pass,rawRecords,raw
 
  q=(await ok('customer-quote-revise',{id:q.id,version:q.version},other)).quote;
  q=(await ok('customer-quote-save',{...fields(q),customerAccountId:accountB.id,customerName:accountB.customer,customerCode:accountB.customerCode})).quote;
- await ok('customer-save',{...account,salesName:assigned.displayName});
+ await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,salesName:assigned.displayName});
  assert((await ok('customer-quotes',undefined,other)).quotes.some(item=>item.id===q.id));
  assert(!(await ok('customer-quote-completed',undefined,other)).rows.some(item=>item.quoteId===q.id));
  assert(!(await ok('customer-quote-completed',undefined,assigned)).rows.some(item=>item.quoteId===q.id));

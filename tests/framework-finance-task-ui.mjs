@@ -1,0 +1,27 @@
+import {build} from 'esbuild';
+import {renderToStaticMarkup} from 'react-dom/server';
+import React from 'react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import assert from 'node:assert/strict';
+const output=path.resolve('test-output','framework-finance-ui-'+process.pid);await fs.mkdir(output,{recursive:true});
+const outfile=path.join(output,'ui.mjs');
+await build({entryPoints:['app/framework-finance-task-panel.tsx'],outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},loader:{'.css':'empty'},jsx:'automatic'});
+const {FrameworkFinanceTaskPanel,writeFrameworkFinanceTask}=await import(pathToFileURL(outfile).href);
+const me={id:'synthetic_finance',name:'合成财务',role:'finance',active:true},data={me,revision:7};
+const task={id:'framework_finance_task_synthetic',kind:'framework_finance_task',customerId:'synthetic_customer',orderId:'synthetic_order',customerLabel:'Synthetic Customer',orderLabel:'SYN-ORDER',type:'收款核对',body:'PRIVATE_ASSIGNED_TASK',evidence:'PRIVATE_EVIDENCE',due:'2026-10-20',status:'待财务接收',version:2,updatedAt:'2026-10-13T00:00:00Z',canAccept:true,canEdit:false,canOpenOrder:false};
+const feed={orders:[],sourceRequests:[],financeMembers:[],tasks:[task],canCreate:false};
+const key=['framework-finance-tasks',[me.id,me.role,me.active].join(':'),data.revision],client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});client.setQueryData(key,feed);
+const render=value=>renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(FrameworkFinanceTaskPanel,{data:value,initialContext:{recordId:task.id}})));
+let html=render(data);assert(html.includes(task.body));assert(html.includes(task.evidence));assert(html.includes(task.due));assert(html.includes('财务接收'));assert(!html.includes('准备财务协作'));assert(!html.includes('修改草稿'));
+for(const value of [{...data,revision:8},{...data,me:{...me,id:'other_actor'}},{...data,me:{...me,active:false}}]){html=render(value);assert(!html.includes(task.body));assert(!html.includes(task.evidence));}
+const query=client.getQueryCache().find({queryKey:key});query.setState({status:'error',error:new Error('任务权限已撤销')});html=render(data);assert(html.includes('任务权限已撤销'));assert(!html.includes(task.body));assert(!html.includes(task.evidence));
+const realFetch=globalThis.fetch,calls=[],attempt={scope:'synthetic-scope',action:'save',body:{token:crypto.randomUUID(),body:'synthetic pending text'}};
+globalThis.fetch=async(url,options)=>{calls.push({url,body:options.body});throw Error('synthetic lost response after server commit');};await assert.rejects(()=>writeFrameworkFinanceTask(attempt),e=>e.definite===false);
+globalThis.fetch=async(url,options)=>{calls.push({url,body:options.body});return Response.json({ok:true,idempotent:true,item:{id:'already-created'}});};assert.equal((await writeFrameworkFinanceTask(attempt)).idempotent,true);assert.deepEqual(calls[0],calls[1]);
+globalThis.fetch=async()=>new Response('incomplete',{status:200});await assert.rejects(()=>writeFrameworkFinanceTask(attempt),e=>e.definite===false);
+globalThis.fetch=async()=>Response.json({error:'stale current version'},{status:409});await assert.rejects(()=>writeFrameworkFinanceTask(attempt),e=>e.definite===true);
+globalThis.fetch=realFetch;client.clear();
+await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:4,checks:['指定财务只见任务正文、期望日期和当前可执行动作','账号/版本变化、停用及读取失败立即隐藏缓存私密任务','不确定网络/不完整成功响应须原请求核实，重试使用相同token和完整正文','明确版本冲突可回到保留输入；API错误与不确定结果分离'],limitation:'SSR缓存隔离及HTTP分类检查；输入、页面切换和beforeunload由最终浏览器验收覆盖'},null,2));console.log(JSON.stringify({passed:4,report:path.join(output,'result.json')}));

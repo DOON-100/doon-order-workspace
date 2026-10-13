@@ -72,7 +72,8 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
   assert.equal(duplicateUpload.alreadyPresent,true);assert.equal(duplicateUpload.quote.version,q.version);assert.deepEqual(rawRecords(),beforeDuplicateUpload);
   q=(await ok('customer-quote-save',{...fields(q),quoteNo:'SYNTH-ARCHIVE-TEST-EDIT'},assigned)).quote;
   assert((await version(q)).media.some(item=>item.id===first.id),'Ordinary draft save must preserve attached style media.');
-  q=(await ok('customer-quote-media-upload',upload(q,{lineId:q.lines[1].id,filename:'second-style.png'}),service)).quote;
+  await deny('customer-quote-media-upload',upload(q,{lineId:q.lines[1].id,filename:'second-style.png'}),403,service);
+  q=(await ok('customer-quote-media-upload',upload(q,{lineId:q.lines[1].id,filename:'second-style.png'}),assigned)).quote;
   const second=(await version(q)).media.find(item=>item.filename==='second-style.png');assert(second);
   assert.deepEqual(rawRecords().find(item=>item.id===firstSnapshot.id),firstSnapshot);
   assert.deepEqual((await version(q,firstMediaVersion)).media.map(item=>item.id),[first.id]);
@@ -100,7 +101,9 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
   assert(completed.find(item=>item.lineId===q.lines[0].id).media.some(item=>item.id===first.id));
   assert(!completed.find(item=>item.lineId===q.lines[1].id).media.some(item=>item.id===first.id),'A style row must not show another style image.');
   await deny('customer-quote-save',{...fields(q),lines:q.lines.map(line=>({...line,unitPrice:999}))},409);
-  await ok('customer-quote-media-upload',upload(q,{category:'drawing',bytes:pdf,filename:'reviewed-drawing.pdf',title:'Synthetic reviewed drawing',drawingNo:'SYNTH-PDF-001'}),service);
+  assert(completed.every(item=>!item.canRegisterSent&&!item.canSupplementArchive));
+  await deny('customer-quote-media-upload',upload(q,{category:'drawing',bytes:pdf,filename:'reviewed-drawing.pdf'}),403,service);
+  await ok('customer-quote-media-upload',upload(q,{category:'drawing',bytes:pdf,filename:'reviewed-drawing.pdf',title:'Synthetic reviewed drawing',drawingNo:'SYNTH-PDF-001'}),assigned);
   const drawing=(await version(q)).media.find(item=>item.filename==='reviewed-drawing.pdf');assert(drawing);assert.equal(drawing.supplement,true);
   assert.equal(drawing.title,'Synthetic reviewed drawing');assert.equal(drawing.drawingNo,'SYNTH-PDF-001');
   assert.deepEqual(rawRecords().find(item=>item.id===q.id),confirmedQuote);assert.deepEqual(rawRecords().find(item=>item.id===confirmedSnapshot.id),confirmedSnapshot);
@@ -160,7 +163,7 @@ export async function testCustomerQuoteArchive({ok,call,state,pass,admin,rawReco
    if(user===other)assert(!data.audits.some(item=>relevantIds.has(item.targetId)));
   }
   const quoteRecords=structuredClone(rawRecords().filter(item=>item.id===q.id||item.quoteId===q.id));
-  account=(await ok('customer-save',{...account,salesName:other.displayName,serviceName:'',salesMemberIds:[member(other).id],serviceMemberIds:[],quoteMemberIds:[member(other).id]})).item;
+  account=(await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,salesName:other.displayName,serviceName:'',salesMemberIds:[member(other).id],serviceMemberIds:[],quoteMemberIds:[member(other).id]})).item;
   for(const user of [assigned,service]){
    assert.equal((await call(`customer-quote-version?quoteId=${q.id}&quoteVersion=${confirmedVersion}`,undefined,user)).status,403);
    assert.equal((await call('customer-quote-media-file?id='+first.id,undefined,user)).status,403);

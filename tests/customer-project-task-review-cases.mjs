@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // All identities and workflow records belong to the isolated synthetic API database.
-export async function testCustomerProjectTaskReview({ok,call,state,pass,rawRecords,rawInsert,admin}){
+export async function testCustomerProjectTaskReview({ok,call,state,pass,rawRecords,rawInsert,rawUpdate,admin}){
  const original=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),current=id=>rawRecords().find(r=>r.id===id),users={};
  for(const key of ['follow','reviewer','sales','leader','outsider']){
   const user={userId:'synthetic_task_review_'+key,email:'task-review-'+key+'@test.invalid',displayName:'合成审核-'+key,fullName:'合成审核-'+key};
@@ -67,14 +67,16 @@ export async function testCustomerProjectTaskReview({ok,call,state,pass,rawRecor
  assert.equal(edited.status,'open');assert.equal(edited.result,'待复核的原始结果');assert.deepEqual(edited.reviewHistory.slice(0,oldHistory.length),oldHistory);
  assert(edited.reviewHistory.some(e=>e.comment.includes('调整交期')));
  await ok('customer-project-task-submit',submitBody(editable.id,'调整后的完成结果'),users.follow);
- const reviewerRecord=current(mid('reviewer'));await ok('member',{...reviewerRecord,active:false});
+ const reviewerRecord=current(mid('reviewer'));await denied('member',{...reviewerRecord,active:false},admin,409);
+ // Only the isolated fixture establishes a pre-existing disabled account for withdrawal checks.
+ rawUpdate({...reviewerRecord,active:false});
  assert.equal((await taskFor(editable.id,users.sales)).canReviewService,false);
  await denied('customer-project-task-review',reviewBody(editable.id,'service'),users.reviewer);
  await ok('member',{...reviewerRecord,active:true});
- await ok('customer-save',{...customerBody,id:customer.id,serviceMemberIds:[mid('follow'),mid('leader')]});
+ await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:rawRecords().find(r=>r.id===customer.id).version,serviceMemberIds:[mid('follow'),mid('leader')]});
  await denied('customer-project-task-review',reviewBody(editable.id,'service'),users.reviewer);
  assert.equal((await dataFor(users.reviewer)).tasks.some(t=>t.id===editable.id),false);
- await ok('customer-save',{...customerBody,id:customer.id});
+ await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:rawRecords().find(r=>r.id===customer.id).version});
  const cancel=(await ok('customer-project-task-save',{...createBody(),id:editable.id,version:current(editable.id).version,status:'cancelled',changeReason:'合成事项取消留痕'},users.sales)).item;
  assert.equal(cancel.status,'cancelled');assert(cancel.reviewHistory.length>oldHistory.length);
  pass('审批中改派或改配置须理由并重新跟进，已提交结果与意见保留；成员停用及客户撤权即时阻止审核，取消保留记录');
@@ -92,7 +94,8 @@ export async function testCustomerProjectTaskReview({ok,call,state,pass,rawRecor
  assert.equal((await taskFor(configured.id,users.follow)).canSubmit,true);
  const recoveryBody={...projectBody,code:'SYN-TASK-RECOVERY',title:'合成暂停项目配置恢复',serviceMemberIds:[mid('follow')]};
  let recoverable=(await ok('customer-project-save',{...recoveryBody,token:token(),status:'paused'})).item;
- await ok('member',{...reviewerRecord,active:false});
+ await denied('member',{...reviewerRecord,active:false},admin,409);
+ rawUpdate({...reviewerRecord,active:false});
  const pausedDto=(await dataFor(users.sales)).projects.find(p=>p.id===recoverable.id);
  assert.equal(pausedDto.canManageTasks,false);assert.equal(pausedDto.canManageAssignments,true);
  await denied('customer-project-save',{...recoveryBody,token:token(),id:recoverable.id,version:recoverable.version,serviceReviewerId:mid('leader'),status:'active'});

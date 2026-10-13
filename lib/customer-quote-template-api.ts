@@ -3,8 +3,8 @@ import * as XLSX from 'xlsx';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
-import {assignedCustomerQuoteAccount,isCustomerQuoteAdministrator} from './customer-quote-access';
-import {canReadCustomerQuote,customerQuoteInput,quoteAccount,type CustomerQuote,type CustomerQuoteRevision} from './customer-quotes';
+import {assignedCustomerQuoteAccount,isCustomerQuoteAdministrator,customerServiceQuoteReader} from './customer-quote-access';
+import {canReadCustomerQuote,customerQuoteInput,quoteAccount,mayChangeQuoteCustomer,type CustomerQuote,type CustomerQuoteRevision} from './customer-quotes';
 import {visibleCompletedCustomerQuotes,assertCustomerQuoteConfirmable} from './customer-quote-review';
 import {parseCustomerQuoteTemplate,exportCustomerQuoteTemplate,validateCustomerQuoteTemplateOutput,assertCustomerQuoteTemplateExportable,type CustomerQuoteTemplate} from './customer-quote-template';
 
@@ -19,7 +19,7 @@ function parse<T extends z.ZodTypeAny>(schema:T,input:unknown):z.output<T>{const
 const scopeKey=(value:unknown)=>String(value||'').trim().toLowerCase();
 async function engine<T>(action:()=>Promise<T>):Promise<T>{try{return await action();}catch(error){if(error instanceof AppError)throw error;throw new AppError(error instanceof Error?error.message:'客户工作簿内容无效，请核对模板。');}}
 function compatibleTemplate(template:CustomerQuoteTemplate){if(template.items.length>200||template.items.some(item=>item.id.length>100||(item.modelNames[0]||item.materialNumber).length>200||item.modelNames.join(' / ').length>200))throw new AppError('模板超出本期报价限制：最多 200 个物料，行编号不超过 100 字符、父款名称不超过 200 字符。请先核对客户模板。');}
-function accountFor(s:State,m:Member,accountId:string){const account=quoteAccount(s,accountId);if(!account||!assignedCustomerQuoteAccount(s,m,account))throw new AppError('没有此客户模板的权限或客户已停用。',403);return account;}
+function accountFor(s:State,m:Member,accountId:string){const account=quoteAccount(s,accountId);if(!account||!assignedCustomerQuoteAccount(s,m,account)&&!customerServiceQuoteReader(s,m,account))throw new AppError('没有此客户模板的权限或客户已停用。',403);return account;}
 function quoteFor(s:State,m:Member,quoteId:string){const quote=all(s,'customer_quote').find(item=>item.id===quoteId) as TemplateQuote|undefined;if(!quote||!canReadCustomerQuote(s,m,quote))throw new AppError('报价不存在或没有此客户权限。',403);return quote;}
 function confirmedVersion(s:State,m:Member,quoteId:string,v:number){
  const current=quoteFor(s,m,quoteId),revisions=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(item=>item.quoteId===quoteId&&item.version===v),snapshot=revisions.length===1?revisions[0].snapshot as TemplateQuote:undefined;
@@ -81,6 +81,7 @@ export async function customerQuoteTemplateGet(action:string,req:Request,s:State
  const cached=(all(s,'customer_quote_template_output') as OutputRecord[]).find(output=>output.quoteId===q.id&&output.quoteVersion===q.version&&output.customerAccountId===q.customerAccountId&&output.templateId===q.templateBinding!.id&&!output.uploaded);
  if(cached){const bytes=await readObject(cached.fileKey);if(await sha(bytes)!==cached.sourceHash)throw new AppError('客户成品归档摘要不一致，请联系管理员核对。',409);return download(bytes,cached.filename);}
  const original=await readObject(q.templateFileKey!),bytes=await engine(()=>exportCustomerQuoteTemplate(original,params)),buffer=bytes.slice().buffer as ArrayBuffer;
+ if(!mayChangeQuoteCustomer(s,m,q))return download(buffer,filename(q.quoteNo+'_R'+q.version+'.xlsx'));
  const output=await outputRecord(s,m,q,buffer,false);
  return download(buffer,output.filename);
 }
@@ -102,12 +103,14 @@ export async function customerQuoteTemplatePost(action:string,req:Request,s:Stat
  }
  if(action==='customer-quote-template-archive'){
   const form=await req.formData(),input=parse(z.object({quoteId:id,quoteVersion:version}),{quoteId:form.get('quoteId'),quoteVersion:Number(form.get('quoteVersion'))}),q=confirmedVersion(s,m,input.quoteId,input.quoteVersion);
+  if(!mayChangeQuoteCustomer(s,m,q))throw new AppError('客服报价历史为只读，不能修改报价附件。',403);
   const file=form.get('file');if(!(file instanceof File)||!file.name.toLowerCase().endsWith('.xlsx')||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的实际对客 XLSX。');
   const bytes=await file.arrayBuffer();await engine(()=>validateCustomerQuoteTemplateOutput(bytes,exportInput(q)));
   const record=await outputRecord(s,m,q,bytes,true,file.name),{fileKey,...safe}=record;
   return json({ok:true,output:safe});
  }
  const input=parse(z.object({quoteId:id,version,templateId:id}).strict(),await req.json()),before=quoteFor(s,m,input.quoteId);
+ if(!mayChangeQuoteCustomer(s,m,before))throw new AppError('客服报价历史为只读，不能应用模板改价。',403);
  if(before.status!=='draft')throw new AppError('已确认报价不可覆盖，请先创建修订草稿。',409);
  if(before.version!==input.version)throw new AppError('报价版本已更新，请读取服务器版本后再应用模板。',409);
  const template=all(s,'customer_quote_template').find(item=>item.id===input.templateId) as TemplateRecord|undefined;

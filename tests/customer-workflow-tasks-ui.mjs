@@ -1,0 +1,21 @@
+import {build} from 'esbuild';
+import {renderToStaticMarkup} from 'react-dom/server';
+import React from 'react';
+import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import assert from 'node:assert/strict';
+const output=path.resolve('test-output','customer-workflow-tasks-ui-'+process.pid);await fs.mkdir(output,{recursive:true});
+const outfile=path.join(output,'ui.mjs');
+await build({entryPoints:['app/customer-workflow-tasks.tsx'],outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},loader:{'.css':'empty'},jsx:'automatic'});
+const {CustomerWorkflowTasks}=await import(pathToFileURL(outfile).href);
+const me={id:'synthetic_actor',name:'合成负责人',role:'sales',active:true},data={me,revision:7};
+const task={id:'synthetic_task',kind:'customer_workflow_task',customerId:'synthetic_customer',title:'TASK_VISIBLE_TITLE',ownerId:me.id,owner:me.name,due:'2026-10-20',status:'进行中',result:'TASK_PRIVATE_RESULT',notes:'TASK_PRIVATE_NOTES',version:2,updatedAt:'2026-10-13T00:00:00Z',canEdit:true};
+const feed={customers:[{id:task.customerId,customer:'合成客户',customerCode:'TEST'}],ownerCandidates:[{id:me.id,name:me.name,customerIds:[task.customerId]}],tasks:[task],canCreate:true};
+const key=['customer-workflow-tasks',me.id,task.customerId,data.revision],client=new QueryClient({defaultOptions:{queries:{retry:false,staleTime:Infinity}}});client.setQueryData(key,feed);
+const render=value=>renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(CustomerWorkflowTasks,{data:value,customerId:task.customerId})));
+let html=render(data);assert(html.includes('TASK_VISIBLE_TITLE'));assert(html.includes('TASK_PRIVATE_RESULT'));assert(html.includes('2026-10-20'));assert(html.includes('版本历史'));assert(html.includes('新建客户任务'));
+for(const value of [{...data,revision:8},{...data,me:{...me,id:'other_actor'}},{...data,me:{...me,active:false}}]){html=render(value);assert(!html.includes('TASK_VISIBLE_TITLE'));assert(!html.includes('TASK_PRIVATE_RESULT'));}
+const query=client.getQueryCache().find({queryKey:key});query.setState({status:'error',error:new Error('客户权限已撤销')});html=render(data);assert(html.includes('客户权限已撤销'));assert(!html.includes('TASK_VISIBLE_TITLE'));assert(!html.includes('TASK_PRIVATE_RESULT'));
+await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:3,checks:['授权任务真实渲染状态/期限/结果/历史入口','actor或revision变更及停用时不复用已缓存私密任务','最新来源读取失败立即隐藏旧任务，显示错误而非空任务数'],limitation:'SSR与缓存隔离检查；交互点击由最终浏览器验收覆盖'},null,2));console.log(JSON.stringify({passed:3,report:path.join(output,'result.json')}));client.clear();

@@ -3,6 +3,7 @@ import {all,broad,canRead,clean,newId,now,strictDate,type Entity,type Member,typ
 import {AppError,audit,bucket,commit,json} from './store';
 import {countValue,colLabels,today} from './ledger';
 import {factoryName,isFinishedOutsource} from './manufacturing';
+import {assertHandoffProductionGate,hasRecordedProduction} from './handoff-production-gate';
 import {canOperateFinished,canReadFinished,finishedBalance,finishedData,finishedReworks,finishedShipments,finishedTasks,isSupplierMember,pendingFinishedBaseline,publicFinishedAttachment,publicFinishedRework,publicFinishedShipment,publicFinishedTask,reworkComplete,supplierMemberId,type FinishedAttachment,type FinishedEvent,type FinishedRework,type FinishedShipment,type FinishedTask} from './finished-supplier';
 
 const qty=z.number().int().min(0).max(10000000),positive=qty.refine(n=>n>0,'数量必须大于零');
@@ -85,6 +86,7 @@ export async function finishedSupplierPost(action:string,req:Request,s:State,m:M
   if(o.lifecycle==='archived'||o.sourceStatus==='已取消'||o.version!==p.orderVersion)throw new AppError('订单已关闭或版本已变化，请刷新核对。',409);
   if(!o.ledger||!Number.isSafeInteger(o.quantity)||o.quantity<=0)throw new AppError('请先核定原表订单数量和工序结构。');const stock=p.baseline.confirmed?countValue(o.ledger.columns.BF):null;if(p.baseline.confirmed&&(stock===null||stock>o.quantity))throw new AppError('期初入仓必须为已核实的有效数量，空白不能当作零。');
   if(finishedTasks(s).some(t=>t.lineId===o.id&&!t.closedAt))throw new AppError('该明细已有活跃协作任务，不能重复建账。',409);
+  if(!hasRecordedProduction(o))assertHandoffProductionGate(s,m,o);
   const cutoff=actualDate(p.baseline.cutoffDate),due=date(p.dueDate,'要求交期',p.baseline.confirmed),ids=p.steps.map(x=>x.id);if(p.baseline.confirmed&&due<cutoff)throw new AppError('要求交期不能早于期初截止日。');
   if(new Set(ids).size!==ids.length||!ids.includes('packing'))throw new AppError('工序不得重复，且必须包含 packing 包装工序。');
   const opening=p.baseline.confirmed&&stock!==null?validateBaseline(o.quantity,p.steps,stock,p.baseline,cutoff):{stages:p.steps.map(x=>({...x,baseline:null,completed:null})),baselineRework:0};

@@ -18,7 +18,7 @@ const append={token,projectId:id,roundId:text(160)};
 export const customerProjectSchemas={
  'assignment-roster-save':z.object({...mutation,token,serviceFollowerIds:ids.removeDefault(),salesReviewerIds:ids.removeDefault()}).strict(),
  'team-save':z.object({...mutation,name:id,leaderIds:ids,salesMemberIds:ids,serviceMemberIds:ids,customerIds:ids,active:z.boolean().default(true)}).strict(),
- save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active')}).strict(),
+ save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active'),development:z.object({stage:z.enum(['待核实','需求了解','可行性','报价','打样','样品反馈','商务确认','暂缓','关闭']),next:z.string().trim().max(300),notes:z.string().max(12000)}).strict().optional()}).strict(),
  'item-save':z.object({...mutation,projectId:id,model:id,customerModel:text(160),drawing:text(160),color:text(160),lens:text(160),material:text(160),requirements:text(6000),quantity:qty}).strict(),
  'round-save':z.object({...mutation,projectId:id,title:id,type:z.enum(['development','revision','sales_sample','preproduction','bulk']),parentRoundId:text(160),scope,stage:text(160),requiredDrawingTypes:z.array(z.enum(['2d','3d'])).max(2).default(['2d']),requireQuote:z.boolean().default(true),requiredSampleIds:ids,sampleGateStage:z.enum(['order','before_production','not_required']).default('order'),sampleGateNote:text(2000),dueDate:day,reason:text(3000),status:z.enum(['open','cancelled']).optional()}).strict(),
  communication:z.object({...append,channel:text(120),contact:text(240),occurredAt:day,content:z.string().trim().min(1).max(10000),nextAction:text(2000),ownerId:text(160),dueDate:day,visibility:z.enum(['internal','customer']).default('internal'),attachmentIds:ids}).strict(),
@@ -119,6 +119,7 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  if(name==='save'){
   if(!projectAccess(s,m,input.customerId).write)throw new AppError('只能建立或维护原客户责任清单中负责的客户项目。',403);
   const repeated=await replay(s,m,action,input);if(repeated)return repeated;const before=existingOrNew(s,m,'customer_project',input) as CustomerProject|null;
+  if(before&&input.development!==undefined)throw new AppError('已有项目的开发资料须在项目资料页按独立版本维护，不能由旧主档表单覆盖。',409);
   if(before&&before.customerId!==input.customerId)throw new AppError('项目不能换到另一个客户。');
   if(before?.status==='archived'&&m.role!=='admin')throw new AppError('归档项目仅管理员可重新开启。',403);
   const p=(before||{id:'',customerId:input.customerId}) as CustomerProject;writerOwner(s,p,input.salesMemberId);
@@ -138,7 +139,10 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
    const {projectFinanceOpenReasons}=await import('./customer-project-finance');const reasons=projectFinanceOpenReasons(s,before.id);if(reasons.length)throw new AppError(reasons.join('；'));
    const orders=officialProjectHandovers(s).filter(h=>h.projectId===before.id).flatMap(h=>h.orderLinks||[]).map(l=>all(s,'order').find(o=>o.id===l.orderId));if(orders.some(o=>!o||o.lifecycle!=='archived'&&o.workflowStatus!=='已完成'))throw new AppError('仍有关联大货订单未交付关闭，不能归档。');
   }
-  const {id:_,version:__,token:___,...fields}=input,item={...fields,serviceMemberIds:services,serviceMemberId:services[0]||'',serviceReviewerId,salesReviewerId,id:before?.id||newId('customer_project'),kind:'customer_project',...meta(m,before||undefined)};return persist(s,m,action,input,item,before);
+  const {id:_,version:__,token:___,development,...fields}=input,item={...fields,serviceMemberIds:services,serviceMemberId:services[0]||'',serviceReviewerId,salesReviewerId,id:before?.id||newId('customer_project'),kind:'customer_project',...meta(m,before||undefined)};
+  const extra:Entity[]=[];
+  if(development){const record={id:newId('customer_workflow_project'),kind:'customer_workflow_project',customerId:input.customerId,projectId:item.id,version:1,...development,updatedBy:m.name,updatedAt:now()};extra.push(record,audit(m,record,null,'新建前期开发资料','前期开发'));}
+  return persist(s,m,action,input,item,before,extra);
  }
  if(['sample-update','sample-promise'].includes(name))return updateSample(s,m,action,input,name);
  if(name==='drawing-withdraw'){

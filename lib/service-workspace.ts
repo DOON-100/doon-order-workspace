@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {matchesCustomerResponsibility} from './customer-responsibility';
+import {historicalCustomerIdentities} from './customer-identities';
 
 export const serviceTypes=['customer_profile','followup','project','sample','shipment','receivable'] as const;
 export const serviceCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
@@ -54,9 +55,9 @@ export function serviceOrderCustomerKeys(s:State,account:CustomerAccount):string
   const value=matches[0].source?.confirmedCustomerCode;
   return typeof value==='string'&&clean(value).length<=160?clean(value):'';
  };
- const candidates=[account.customer,account.customerCode,confirmed(account.id)].map(clean).filter(Boolean);
+ const candidates=[account.customer,account.customerCode,confirmed(account.id),...historicalCustomerIdentities(s,account.id)].map(clean).filter(Boolean);
  return [...new Set(candidates)].filter(candidate=>!accounts.some(other=>other.id!==account.id&&
-  [other.customer,other.customerCode,...claims(other.id)].some(value=>!!nameKey(value)&&nameKey(value)===nameKey(candidate))));
+  [other.customer,other.customerCode,...claims(other.id),...historicalCustomerIdentities(s,other.id)].some(value=>!!nameKey(value)&&nameKey(value)===nameKey(candidate))));
 }
 export function canWriteServiceWorkspace(s:State,m:Member){
  if(!m.active)return false;

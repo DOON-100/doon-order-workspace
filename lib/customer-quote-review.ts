@@ -1,6 +1,6 @@
 import {all,newId,type Member,type State} from './domain';
 import {isCustomerQuoteAdministrator} from './customer-quote-access';
-import {canReadCustomerQuote,customerQuoteInput,customerQuoteLineDetails,customerQuoteVersion,customerQuoteMedia,publicCustomerQuoteMedia,customerQuoteSentHistory,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
+import {canReadCustomerQuote,mayChangeQuoteCustomer,customerQuoteInput,customerQuoteLineDetails,customerQuoteVersion,customerQuoteMedia,publicCustomerQuoteMedia,customerQuoteSentHistory,type CustomerQuote,type CustomerQuoteCompleted,type CustomerQuoteRevision} from './customer-quotes';
 import {AppError} from './store';
 
 // Confirm the stored draft, never a second payload which has not been saved and
@@ -78,6 +78,6 @@ export function visibleCompletedCustomerQuotes(s:State,m:Member){
   ...(row.templateBinding?{templateBinding:row.templateBinding}:{}),
   ...(row.quantityBasisZh!==undefined?{quantityBasisZh:row.quantityBasisZh}:{}),...(row.quantityBasisEn!==undefined?{quantityBasisEn:row.quantityBasisEn}:{}),
   currency:row.currency,quoteDate:row.quoteDate,validUntil:row.validUntil,customerCharges:row.customerCharges,confirmedAt:row.confirmedAt,confirmedBy:row.confirmedBy,quotedCustomer:sentHistory.length?'Y' as const:'' as const,
-  media,sentHistory,canRegisterSent:true,canSupplementArchive:true,
+  media,sentHistory,canRegisterSent:mayChangeQuoteCustomer(s,m,snapshot),canSupplementArchive:mayChangeQuoteCustomer(s,m,snapshot),
  }];});
 }

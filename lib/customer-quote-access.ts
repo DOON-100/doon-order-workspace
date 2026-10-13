@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,clean,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {explicitCustomerResponsibility} from './customer-responsibility';
+import {explicitCustomerResponsibility,matchesCustomerResponsibility} from './customer-responsibility';
 
 // A separate grant prevents broad order/PMC roles from also exposing customer prices.
 // Names and account IDs are configuration data, never a source-code allowlist.
@@ -29,7 +29,7 @@ export function customerQuoteAccessPolicy(s:State):CustomerQuoteAccessPolicy|nul
  return policy;
 }
 export const isCustomerQuoteAdministrator=(m:Member,s?:State)=>!!m.active&&(m.role==='admin'||!!(s&&customerQuoteAccessPolicy(s)?.administratorMemberIds?.includes(m.id)));
-export const canSeeCustomerQuoteInternal=(s:State,m:Member)=>canUseCustomerQuotes(s,m)&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.internalMemberIds?.includes(m.id));
+export const canSeeCustomerQuoteInternal=(s:State,m:Member,account?:CustomerAccount)=>canUseCustomerQuotes(s,m)&&(!account||!customerQuoteServiceReadOnly(s,m,account))&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.internalMemberIds?.includes(m.id));
 export function canUseCustomerQuotes(s:State,m:Member){
  return !!m.active&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.memberIds.includes(m.id));
 }
@@ -52,5 +52,25 @@ export function eligibleCustomerQuoteAccounts(s:State,m:Member){
  return (all(s,'customer_account') as CustomerAccount[]).filter(account=>assignedCustomerQuoteAccount(s,m,account));
 }
 export function canCreateCustomerQuote(s:State,m:Member){
- return isCustomerQuoteAdministrator(m,s)||eligibleCustomerQuoteAccounts(s,m).length>0;
+ return isCustomerQuoteAdministrator(m,s)||eligibleCustomerQuoteAccounts(s,m).some(a=>!customerQuoteServiceReadOnly(s,m,a));
 }
+
+// Confirmed 2026-10-13: customer-service staff may read the customer-facing
+// history of their assigned accounts, without price editing or internal costs.
+// This read grant is deliberately separate from the existing quotation grant:
+// it must not unlock engineering cost sources, methods, or quote administration.
+export function customerServiceQuoteReader(s:State,m:Member,account:CustomerAccount){
+ if(!m.active||!account.active||!['sales','clerk','pmc'].includes(m.role))return false;
+ const aliases=customerQuoteAccessPolicy(s)?.aliasesByMember?.[m.id]||[];
+ return matchesCustomerResponsibility(account,m,'service',aliases);
+}
+export function customerQuoteServiceReadOnly(s:State,m:Member,account:CustomerAccount){
+ if(isCustomerQuoteAdministrator(m,s)||!customerServiceQuoteReader(s,m,account))return false;
+ const aliases=customerQuoteAccessPolicy(s)?.aliasesByMember?.[m.id]||[];
+ return !matchesCustomerResponsibility(account,m,'sales',aliases);
+}
+export function readableCustomerQuoteAccounts(s:State,m:Member){
+ return (all(s,'customer_account') as CustomerAccount[]).filter(a=>assignedCustomerQuoteAccount(s,m,a)||customerServiceQuoteReader(s,m,a));
+}
+export function canReadCustomerQuoteHistory(s:State,m:Member){return canUseCustomerQuotes(s,m)||readableCustomerQuoteAccounts(s,m).length>0;}
+export function canMaintainCustomerQuoteAccount(s:State,m:Member,account:CustomerAccount){return assignedCustomerQuoteAccount(s,m,account)&&!customerQuoteServiceReadOnly(s,m,account);}

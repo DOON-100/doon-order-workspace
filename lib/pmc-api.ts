@@ -1,3 +1,4 @@
+import {assertHandoffProductionGate,requiresProductionGate} from './handoff-production-gate';
 import {processDate} from './process-date';
 import {z} from 'zod';
 import {all,broad,canRead,now,strictDate,type Entity,type Member,type Order,type State} from './domain';
@@ -36,7 +37,7 @@ export async function pmcPost(action:string,req:Request,s:State,m:Member){
    if(next.ledger){next.extra['U · '+colLabels.U]=pmcValue(next,'U');next.extra['AB · '+colLabels.AB]=next.notes;}
    updates.set(o.id,next);
   }
-  const rows=[...updates.values()];if(rows.length)await commit(s.revision,rows.flatMap(o=>[o,audit(m,o,originals.get(o.id),'PMC总表单元格修改',isFinishedOutsource(o)?'成品外发跟进总表':'PMC排期总表')]));
+  const rows=[...updates.values()];for(const next of rows){const before=originals.get(next.id)!;if(requiresProductionGate(before,next))assertHandoffProductionGate(s,m,before);}if(rows.length)await commit(s.revision,rows.flatMap(o=>[o,audit(m,o,originals.get(o.id),'PMC总表单元格修改',isFinishedOutsource(o)?'成品外发跟进总表':'PMC排期总表')]));
   return json({ok:true,count:rows.length,orders:rows,unchanged:!rows.length});
  }
  if(action==='pmc-round'){

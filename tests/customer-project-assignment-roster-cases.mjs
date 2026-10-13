@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Synthetic identities only. A workflow roster narrows candidates without granting customer access.
-export async function testCustomerProjectAssignmentRoster({ok,call,state,pass,rawRecords,rawInsert,admin}){
+export async function testCustomerProjectAssignmentRoster({ok,call,state,pass,rawRecords,rawInsert,rawUpdate,admin}){
  const originals=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),users={};
  for(const key of ['service_a','service_b','service_c','sales_a','sales_b','marketing']){
   const user={userId:'synthetic_roster_'+key,email:'roster-'+key+'@test.invalid',displayName:'合成名单-'+key,fullName:'合成名单-'+key};
@@ -58,12 +58,14 @@ export async function testCustomerProjectAssignmentRoster({ok,call,state,pass,ra
  roster=(await ok('customer-project-assignment-roster-save',{...rosterBody,token:token(),id:roster.id,version:roster.version})).item;
  pass('后台按职责名单校验跟进和两级审核，隐藏选项无法经直接请求越过，仍拒绝同人自审');
 
- await ok('customer-save',{...customerBody,id:customer.id,serviceMemberIds:serviceIds.slice(0,2)});
+ await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:rawRecords().find(r=>r.id===customer.id).version,serviceMemberIds:serviceIds.slice(0,2)});
  dto=await candidates();assert.deepEqual(dto.taskOwnerMemberIds,serviceIds.slice(0,2));
  await denied('customer-project-task-save',{...taskBody(),ownerId:serviceIds[2]},users.sales_a,403);
  assert.equal((await ok('customer-project-data',undefined,users.service_b)).projects.some(p=>p.id===project.id),false);
- await ok('customer-save',{...customerBody,id:customer.id});
- const serviceRecord=rawRecords().find(r=>r.id===serviceIds[2]);await ok('member',{...serviceRecord,active:false});
+ await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:rawRecords().find(r=>r.id===customer.id).version});
+ const serviceRecord=rawRecords().find(r=>r.id===serviceIds[2]);await denied('member',{...serviceRecord,active:false},admin,409);
+ // Preserve revoked historical-member coverage without bypassing handover in the application API.
+ rawUpdate({...serviceRecord,active:false});
  assert.deepEqual((await candidates()).taskOwnerMemberIds,serviceIds.slice(0,2));
  await denied('customer-project-task-save',{...taskBody(),ownerId:serviceIds[2]},users.sales_a,403);
  await ok('member',{...serviceRecord,active:true});

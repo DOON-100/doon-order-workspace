@@ -1,0 +1,21 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const module=await build({entryPoints:['lib/handoff-navigation.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const nav=await import('data:text/javascript;base64,'+Buffer.from(module.outputFiles[0].text).toString('base64'));
+// A workbench link may address a legacy stage inside the new department.
+const incoming={customerId:'synthetic-customer',projectId:'synthetic-project',orderId:'synthetic-order',recordId:'synthetic-pmc-record',tab:'pmc'};
+assert.equal(nav.resolveWorkspaceView('production-orders',incoming),'pmc');
+const next=nav.departmentNavigationContext(incoming);
+assert.deepEqual(next,{customerId:incoming.customerId,projectId:incoming.projectId,orderId:incoming.orderId});
+assert.equal(nav.resolveWorkspaceView('factory-orders',next),'factory-orders');
+assert.equal(nav.resolveWorkspaceView('production-orders',next),'production-orders');
+assert.equal(nav.resolveWorkspaceView('factory-orders',incoming),'factory-orders');
+assert.equal(nav.workspacePrimaryView('factory-orders'),'production-orders');
+assert.equal(nav.resolveWorkspaceView('documents',{tab:'customer-quotes'}),'customer-quotes');
+assert.equal(nav.resolveWorkspaceView('documents',nav.departmentNavigationContext({recordId:'synthetic-message',tab:'customer-quotes'})),'documents');
+assert.equal(nav.resolveWorkspaceView('customers',{recordId:'synthetic-task',tab:'tasks'}),'customers');
+assert.equal(nav.resolveWorkspaceView('engineering-drawings',{recordId:'synthetic-drawing',tab:'drawings'}),'engineering-drawings');
+assert.equal(nav.resolveWorkspaceView('settings',{tab:'approvals'}),'settings');
+assert.deepEqual(nav.readWorkspaceContext('?customerId=c&recordId=r&tab=tasks&unexpected=ignored'),{customerId:'c',recordId:'r',tab:'tasks'});
+assert.deepEqual(incoming,{customerId:'synthetic-customer',projectId:'synthetic-project',orderId:'synthetic-order',recordId:'synthetic-pmc-record',tab:'pmc'});
+console.log('PASS parent deep links resolve their stage; explicit department changes preserve business scope and clear stale record/tab; child tabs remain local');

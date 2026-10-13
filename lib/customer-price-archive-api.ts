@@ -3,15 +3,15 @@ import * as XLSX from 'xlsx';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha,makeWorkbook} from './workbooks';
-import {canUseCustomerQuotes,canSeeCustomerQuoteInternal,eligibleCustomerQuoteAccounts,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {canUseCustomerQuotes,canSeeCustomerQuoteInternal,eligibleCustomerQuoteAccounts,isCustomerQuoteAdministrator,canReadCustomerQuoteHistory,readableCustomerQuoteAccounts} from './customer-quote-access';
 import {canonicalPriceJson,canReadPriceArchive,customerInvoiceSkuRows,customerPriceArchiveRows,customerPriceDatasetSchema,customerPriceSelection,type CustomerPriceSelection,type PriceArchive} from './customer-price-archive';
 
 const hashText=(value:string)=>sha(new TextEncoder().encode(value).buffer);
-function allowed(s:State,m:Member){if(!canUseCustomerQuotes(s,m))throw new AppError('当前账号没有客户报价档案权限。',403);}
+function allowed(s:State,m:Member){if(!canReadCustomerQuoteHistory(s,m))throw new AppError('当前账号没有客户报价档案权限。',403);}
 function admin(s:State,m:Member){if(!isCustomerQuoteAdministrator(m,s))throw new AppError('仅报价管理员可导入历史档案和归档原件。',403);}
 function archiveFor(s:State,id:string){const value=all(s,'customer_price_archive').find(v=>v.id===id) as PriceArchive|undefined;if(!value)throw new AppError('报价档案不存在。',404);return value;}
 async function filtered(s:State,m:Member,url:URL){
- const customerId=url.searchParams.get('customerId')||'',customers=eligibleCustomerQuoteAccounts(s,m);
+ const customerId=url.searchParams.get('customerId')||'',customers=readableCustomerQuoteAccounts(s,m);
  if(customerId&&!customers.some(a=>a.id===customerId))throw new AppError('无权查询该客户报价档案。',403);
  const q=(url.searchParams.get('q')||'').trim().toLowerCase(),state=url.searchParams.get('state')||'all',currency=url.searchParams.get('currency')||'';
  const view=url.searchParams.get('view')==='history'?'history':'sku',rows=(view==='history'?customerPriceArchiveRows(s,m):customerInvoiceSkuRows(s,m)).filter(row=>(!customerId||row.customerAccountId===customerId)&&(!q||[row.customer,row.customerCode,...Object.values(row.product).filter(v=>typeof v==='string')].join(' ').toLowerCase().includes(q))&&(state==='all'||row.status===state)&&(!currency||(view==='history'?row.history.some(p=>p.currency===currency):'dualMode' in row&&row.dualMode?row.bases.some(p=>p.currency===currency)||'variantInvoiceCurrencies' in row&&!!row.variantInvoiceCurrencies&&Object.values(row.variantInvoiceCurrencies).some(list=>Array.isArray(list)&&list.length===1&&list[0]===currency):row.basis?row.basis.currency===currency:'latestInvoiceCurrencies' in row&&Array.isArray(row.latestInvoiceCurrencies)&&row.latestInvoiceCurrencies.length===1&&row.latestInvoiceCurrencies[0]===currency)));

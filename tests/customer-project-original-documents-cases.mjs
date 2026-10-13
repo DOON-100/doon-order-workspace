@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 
 // Synthetic projects, identities and file bytes only. No production documents or accounts.
-export async function testCustomerProjectOriginalDocuments({ok,call,state,pass,rawRecords,rawInsert}){
+export async function testCustomerProjectOriginalDocuments({ok,call,state,pass,rawRecords,rawInsert,rawUpdate}){
  const original=structuredClone(rawRecords()),users={},token=()=>crypto.randomUUID(),hash=bytes=>createHash('sha256').update(bytes).digest('hex');
  for(const [key,role] of [['writer','sales'],['reader','finance'],['other','sales'],['internal','production'],['unassigned','production']]){
   const user={userId:'synthetic_original_document_'+key,email:'original-document-'+key+'@test.invalid',displayName:'合成原文-'+key,fullName:'合成原文-'+key};
@@ -62,8 +62,12 @@ export async function testCustomerProjectOriginalDocuments({ok,call,state,pass,r
  const handedOff=await call('customer-project-file?id='+doc.id,undefined,users.internal);assert.equal(handedOff.status,200);assert.equal(handedOff.headers.get('content-type'),'application/octet-stream');assert.deepEqual(new Uint8Array(await handedOff.arrayBuffer()),bytes);
  await denied('customer-project-file?id='+documents[1].id,undefined,users.internal,403);assert.equal((await call('customer-project-file?id='+general.id,undefined,users.internal)).status,200);
  const unassignedData=await ok('customer-project-data',undefined,users.unassigned);assert(!unassignedData.attachments.some(row=>row.projectId===project.id));await denied('customer-project-file?id='+doc.id,undefined,users.unassigned,403);
- await ok('customer-save',{...customerBody,id:customer.id,active:false});await denied('customer-project-attachment',form(),users.writer,403);await denied('customer-project-file?id='+doc.id,undefined,users.writer,403);await ok('customer-save',{...customerBody,id:customer.id});
- const writer=members.find(member=>member.id===mid('writer'));await ok('member',{...writer,active:false});await denied('customer-project-attachment',form(),users.writer,403);await denied('customer-project-file?id='+doc.id,undefined,users.writer,403);await ok('member',{...writer,active:true});
+ const customerVersion=()=>rawRecords().find(row=>row.id===customer.id).version;
+ await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:customerVersion(),active:false});await denied('customer-project-attachment',form(),users.writer,403);await denied('customer-project-file?id='+doc.id,undefined,users.writer,403);await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:customerVersion()});
+ const writer=members.find(member=>member.id===mid('writer'));
+ const beforeDeactivate=structuredClone(rawRecords()),deactivate=await call('member',{...writer,active:false});assert.equal(deactivate.status,409,await deactivate.text());assert.deepEqual(rawRecords(),beforeDeactivate,'Pending responsibility must block deactivation without writes');
+ const currentWriter=rawRecords().find(row=>row.id===writer.id);rawUpdate({...currentWriter,active:false});
+ await denied('customer-project-attachment',form(),users.writer,403);await denied('customer-project-file?id='+doc.id,undefined,users.writer,403);rawUpdate(currentWriter);
  pass('跨客户、只读人员和停用身份不能上传；内部制作只读取其样办指定图纸明确选定的附件，其余原始文档和未指定人员仍隔离');
 
  const emojiName='a'.repeat(239)+'😀.html',emoji=(await ok('customer-project-attachment',form(emojiName),users.writer)).item;

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,clean,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {assignedCustomerQuoteAccount,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator} from './customer-quote-access';
+import {assignedCustomerQuoteAccount,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,customerServiceQuoteReader} from './customer-quote-access';
 
 const nullableText=z.string().max(8000).nullable().optional().default(null);
 const amount=z.number().finite().min(0).max(1e12).nullable().optional().default(null);
@@ -26,7 +26,7 @@ export type CustomerPriceSelection=Entity&{kind:'customer_price_selection';custo
 export function customerPriceSelection(s:State,customerId:string){const records=all(s,'customer_price_selection').filter(r=>r.customerAccountId===customerId);return records.length===1?records[0] as CustomerPriceSelection:null;}
 export const canReadPriceArchive=(s:State,m:Member,archive:PriceArchive)=>{
  const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId) as CustomerAccount|undefined;
- return !!account&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuoteAccount(s,m,account));
+ return !!account&&(isCustomerQuoteAdministrator(m,s)||assignedCustomerQuoteAccount(s,m,account)||customerServiceQuoteReader(s,m,account));
 };
 export function canonicalPriceJson(value:unknown):string{return JSON.stringify(canonical(value));}
 function canonical(value:unknown):unknown{return Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,canonical(v)])):value;}
@@ -38,9 +38,9 @@ export const verifiedArchivePrice=(p:ArchivePrice)=>p.reviewStatus==='verified'&
 const salesType=(type:string)=>['invoice','quote','order'].includes(type);
 const docRank=(type:string)=>type==='invoice'?0:type==='quote'?1:type==='order'?2:3;
 export function customerPriceArchiveRows(s:State,m:Member){
- const internal=canSeeCustomerQuoteInternal(s,m),archives=(all(s,'customer_price_archive') as PriceArchive[]).filter(a=>canReadPriceArchive(s,m,a));
+ const archives=(all(s,'customer_price_archive') as PriceArchive[]).filter(a=>canReadPriceArchive(s,m,a));
  const grouped=new Map<string,{id:string;customerAccountId:string;customer:string;customerCode:string;product:Record<string,unknown>;history:Record<string,any>[];issues:string[]}>();
- for(const archive of archives){const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId)!;const pricesByProduct=new Map<string,ArchivePrice[]>();for(const price of archive.dataset.prices){const list=pricesByProduct.get(price.productId)||[];list.push(price);pricesByProduct.set(price.productId,list);}
+ for(const archive of archives){const account=all(s,'customer_account').find(a=>a.id===archive.customerAccountId)! as CustomerAccount;const internal=canSeeCustomerQuoteInternal(s,m,account);const pricesByProduct=new Map<string,ArchivePrice[]>();for(const price of archive.dataset.prices){const list=pricesByProduct.get(price.productId)||[];list.push(price);pricesByProduct.set(price.productId,list);}
   const source=(refs:ArchiveProduct['sourceRefs'])=>refs.map(ref=>{const file=archive.dataset.files.find(f=>f.id===ref.fileId);return {fileId:ref.fileId,archiveId:archive.id,filename:clean(file?.relativePath).split(/[\\/]/).pop()||ref.fileId,sheet:ref.sheet,cell:ref.cell,page:ref.page,sha256:file?.sha256||null,hasFile:!!archive.files?.[ref.fileId],canDownload:isCustomerQuoteAdministrator(m,s)&&!!archive.files?.[ref.fileId]};});
   for(const p of archive.dataset.products){const groupKey=archive.customerAccountId+'|'+archiveProductKey(p);let row=grouped.get(groupKey);if(!row){const {id,factoryModel,customerModel,productName,productType,sku,frameColor,lens,material,size,specVersion,activity}=p;row={id:groupKey,customerAccountId:archive.customerAccountId,customer:account.customer,customerCode:account.customerCode||archive.dataset.customer.code,product:{id,factoryModel,customerModel,productName,productType,sku,frameColor,lens,material,size,specVersion,activity,sourceRefs:source(p.sourceRefs)},history:[],issues:[]};grouped.set(groupKey,row);}
    for(const p0 of (pricesByProduct.get(p.id)||[]).filter(price=>internal||salesType(price.documentType))){const verified=verifiedArchivePrice(p0),{id,scope,documentType,documentNo,version,documentDate,currency,unit,configuration,lensVariant,invoiceKind,quantity,quantityMin,quantityMax,quantityBasis,terms,sentStatus}=p0;

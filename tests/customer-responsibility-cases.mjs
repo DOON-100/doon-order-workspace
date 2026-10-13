@@ -49,13 +49,23 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
 
  for(const [key,value] of [['salesMemberIds',[id('pmc')]],['serviceMemberIds',[]],['quoteMemberIds',[id('pmc')]]])await deny('customer-save',{...team,[key]:value},users.pmc);
  await deny('customer-save',{...team,serviceMemberIds:null},users.pmc);
- await deny('customer-save',{...team,serviceMemberIds:[id('other')]},users.teamA);
+ await deny('customer-save',{...team,serviceMemberIds:[id('other')]},users.teamA,409);
+ await deny('customer-save',{...independent,expectedVersion:independent.version,customer:'跨客户不得改名'},users.teamA);
+ await deny('customer-save',{...team,expectedVersion:team.version,quoteMemberIds:[id('other')]},users.teamA);
+ const beforeOwn=clone(rawRecords()),oldOwn=clone(team);
+ team=(await ok('customer-save',{...team,expectedVersion:team.version,customer:team.customer+'已核对',customerCode:team.customerCode+'-R1',serviceMemberIds:[id('teamA')],notes:'本人负责客户核对名称编码'},users.teamA)).item;
+ assert.equal(team.customer,oldOwn.customer+'已核对');assert.equal(team.customerCode,oldOwn.customerCode+'-R1');
+ assert.deepEqual(team.serviceMemberIds,oldOwn.serviceMemberIds);assert.deepEqual(team.quoteMemberIds,oldOwn.quoteMemberIds);
+ for(const row of beforeOwn)if(row.id!==team.id)assert.deepEqual(current(row.id),row);
+ await deny('customer-save',{...oldOwn,expectedVersion:oldOwn.version,notes:'旧版本覆盖'},users.teamA,409);
+ await deny('customer-save',{...team,expectedVersion:team.version,customer:'别人客户不能维护'},users.other);
+ pass('本人负责客服可按当前版本维护客户名称编码，历史身份保留；原协作与报价成员不丢，跨客户/报价增权/过期写入零变更');
  const unchanged=(await ok('customer-save',{...team,expectedVersion:team.version,notes:'PMC仅维护普通资料'},users.pmc)).item;
  assert(!Object.hasOwn(unchanged,'expectedVersion'));
  await deny('customer-save',{...team,expectedVersion:team.version,notes:'旧版不得覆盖责任或备注'},admin,409);
  assert.deepEqual(unchanged.serviceMemberIds,team.serviceMemberIds);team=unchanged;
  for(const value of [[id('teamA'),id('teamA')],['not-a-member'],[id('disabled')],['']])await deny('customer-save',{...team,serviceMemberIds:value},admin,400);
- pass('责任数组仅管理员可更改；不存在、停用、空ID及重复成员拒绝，PMC只能回传不变名单维护普通资料');
+ pass('管理员可调整责任数组；不存在、停用、空ID及重复成员拒绝，PMC只能回传不变名单维护普通资料');
 
  // Compile pure permission helpers separately so malformed historical records
  // and aliases can be checked without mutating even the synthetic database.
@@ -77,14 +87,14 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
  const quotePermissions=await import('../test-output/customer-responsibility-quotes-unit.mjs');
  const quotePolicy={id:'synthetic_customer_binding_quote_policy',kind:'customer_quote_access',memberIds:[id('teamA'),id('teamB'),id('other')],aliasesByMember:{},customerMemberIds:{[team.id]:[id('other')]}};
  const quoteState={revision:1,records:[...rawRecords().filter(row=>row.kind!=='customer_quote_access'),quotePolicy]};
- for(const key of ['teamA','teamB'])assert.equal(quotePermissions.assignedCustomerQuoteAccount(quoteState,member(key),team),true);
+ for(const key of ['teamA','teamB']){assert.equal(quotePermissions.assignedCustomerQuoteAccount(quoteState,member(key),team),true);assert.equal(quotePermissions.customerServiceQuoteReader(quoteState,member(key),team),true);assert.equal(quotePermissions.canMaintainCustomerQuoteAccount(quoteState,member(key),team),false);}
  assert.equal(quotePermissions.assignedCustomerQuoteAccount(quoteState,member('other'),team),false);
  assert.equal(quotePermissions.assignedCustomerQuoteAccount(quoteState,member('teamA'),{...team,quoteMemberIds:[]}),false);
  assert.equal(quotePermissions.assignedCustomerQuoteAccount(quoteState,member('teamA'),{...team,quoteMemberIds:null}),false);
  const noGrant={...quoteState,records:quoteState.records.map(row=>row.id===quotePolicy.id?{...row,memberIds:[id('other')]}:row)};
  assert.equal(quotePermissions.assignedCustomerQuoteAccount(noGrant,member('teamA'),team),false);
- await deny('customer-quotes',undefined,users.teamA);
- pass('报价名单与客户绑定双重校验：同组显式授权可共享、空名单拒绝、旧报价映射不越权，未获全局报价资格仍禁止访问');
+ const serviceQuotes=await ok('customer-quotes',undefined,users.teamA);assert.equal(serviceQuotes.canCreate,false);assert(serviceQuotes.quotes.every(q=>!q.canEdit&&!q.canSeeInternal));
+ pass('旧报价名单不推翻客服只读；负责客服历史只读且无内部成本，跨客户及空报价维护绑定仍拒绝');
 
  const attachmentBytes=Buffer.from('%PDF-1.7\nSynthetic shared-service attachment');
  const attachmentForm=new FormData();attachmentForm.set('recordId',followup.id);attachmentForm.set('version',String(followup.version));attachmentForm.set('file',new File([attachmentBytes],'synthetic-team.pdf',{type:'application/pdf'}));
@@ -98,7 +108,7 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
  const submitted=(await ok('workflow',{id:order.id,version:1,action:'submit-pmc'},users.teamB)).item;
  for(const action of ['accept-pmc','save-pmc'])await deny('workflow',{id:order.id,version:submitted.version,action},users.teamB);
  await deny('workflow',{id:order.id,version:submitted.version,action:'return-business',note:'跨组不得审核'},users.other);
- team=(await ok('customer-save',{...team,serviceMemberIds:[id('teamB')],quoteMemberIds:[id('teamB')]})).item;
+ team=(await ok('customer-save',{...team,expectedVersion:team.version,serviceMemberIds:[id('teamB')],quoteMemberIds:[id('teamB')]})).item;
  await deny(attachmentUrl,undefined,users.teamA);await deny('service-history?id='+encodeURIComponent(followup.id),undefined,users.teamA);
  assert((await ok('service-data',undefined,users.teamB)).records.some(row=>row.id===followup.id));
  assert.deepEqual(Buffer.from(await (await call(attachmentUrl,undefined,users.teamB)).arrayBuffer()),attachmentBytes);
@@ -106,16 +116,16 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
 
  // Omitted fields mean preserve unless the corresponding human responsibility
  // changes; null is the administrator's explicit reset to legacy name mapping.
- const saveWithoutLists={...team,serviceName:users.other.displayName};
+ const saveWithoutLists={...team,expectedVersion:team.version,serviceName:users.other.displayName};
  for(const key of permissions.customerResponsibilityListKeys)delete saveWithoutLists[key];
  team=(await ok('customer-save',saveWithoutLists)).item;
  assert.deepEqual(team.salesMemberIds,[]);assert(!Object.hasOwn(team,'serviceMemberIds'));assert(!Object.hasOwn(team,'quoteMemberIds'));
  assert(!(await ok('service-data',undefined,users.teamA)).records.some(row=>row.customerId===team.id));
  assert((await ok('service-data',undefined,users.other)).records.some(row=>row.id===followup.id));
- team=(await ok('customer-save',{...team,serviceMemberIds:[id('teamB')],quoteMemberIds:[id('teamB')]})).item;
- team=(await ok('customer-save',{...team,serviceMemberIds:null,quoteMemberIds:null})).item;
+ team=(await ok('customer-save',{...team,expectedVersion:team.version,serviceMemberIds:[id('teamB')],quoteMemberIds:[id('teamB')]})).item;
+ team=(await ok('customer-save',{...team,expectedVersion:team.version,serviceMemberIds:null,quoteMemberIds:null})).item;
  assert(!Object.hasOwn(team,'serviceMemberIds'));assert(!Object.hasOwn(team,'quoteMemberIds'));assert.deepEqual(team.salesMemberIds,[]);
- team=(await ok('customer-save',{...team,serviceMemberIds:[],quoteMemberIds:[]})).item;
+ team=(await ok('customer-save',{...team,expectedVersion:team.version,serviceMemberIds:[],quoteMemberIds:[]})).item;
  assert(!(await ok('service-data',undefined,users.other)).records.some(row=>row.customerId===team.id));
  pass('责任姓名变化立即清除陈旧该侧及报价绑定；管理员可明确回退名称规则或置空撤权，历史业务不改变');
 

@@ -1,0 +1,4 @@
+export const businessSourceTypes=['po','engineering_drawing','engineering_quote','production_order','production_shipment','finance_file','finance_request'] as const;
+export const businessDocumentTypes=['pi','invoice','packing','paymentrequest','waybill'] as const;
+export const businessNames:Record<string,string>={po:'客户 PO',engineering_drawing:'工程图纸版本',engineering_quote:'工程报价资料',production_order:'生产交接资料',production_shipment:'生产出货批次',finance_file:'财务资料',finance_request:'内部财务核对资料',pi:'PI',invoice:'Commercial Invoice',packing:'Packing List',paymentrequest:'尾款请款草稿',waybill:'运单资料草稿'};
+export const businessSections=[['documents','文本与单据'],['order-pi','01 订单与 PI'],['engineering','02 工程资料'],['production','03 生产单'],['shipments','04 生产出货单'],['logistics','05 物流与出货'],['finance','06 财务资料'],['queues','部门协作']] as const;

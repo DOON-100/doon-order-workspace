@@ -101,16 +101,23 @@ export async function runServiceReadonlyPmcCases({ok,call,state,pass,rawRecords,
  pass('客服仍可维护责任 CRM，并按管理员完整别名及已确认客户代号退回/提交 PMC；部分姓名与其他客户不可交接，内部订单客服审核保留');
 
  const quote={companyEn:'Synthetic Eyewear Ltd',companyZh:'合成测试公司',collectionEn:'Synthetic collection',collectionZh:'合成系列',customerCode:'',customerName:aliasAccount.customer,customerAccountId:aliasAccount.id,quoteNo:'SYNTHETIC-READONLY-QUOTE',quoteDate:'2026-10-08',validUntil:'2026-11-08',currency:'USD',lines:[{id:'synthetic-line',model:'SYNTHETIC-MODEL',descriptionZh:'合成材质',descriptionEn:'Synthetic material',quantity:300,unitPrice:10,toolingFee:0}],terms:[],reviewNotes:['仅合成测试']};
- let saved=(await ok('customer-quote-save',quote,aliasUser)).quote;
- saved=(await ok('customer-quote-save',{...quote,id:saved.id,version:saved.version,lines:[{...quote.lines[0],unitPrice:11}]},aliasUser)).quote;
- assert.equal(saved.lines[0].unitPrice,11);
+ const saved=(await ok('customer-quote-save',quote)).quote;
+ const serviceQuote=(await ok('customer-quotes',undefined,aliasUser)).quotes.find(q=>q.id===saved.id);
+ assert.equal(serviceQuote.lines[0].unitPrice,10);assert.equal(serviceQuote.canEdit,false);
+ await denied('customer-quote-save',{...quote,id:saved.id,version:saved.version,lines:[{...quote.lines[0],unitPrice:11}]},403,aliasUser);
  await denied('customer-quote-save',{...quote,quoteNo:'SYNTHETIC-CROSS-QUOTE',customerAccountId:other.id,customerCode:other.customerCode,customerName:other.customer},403,aliasUser);
  await denied('service-save',{...servicePayload,customerId:partial.id,orderId:partialOrder.id},403,aliasUser);
- const collision=await customer('合成已确认代号冲突客户','TEST-REVIEWED-SERVICE-CODE','合成其他客服');assert(collision.id);
+ const collisionInput={customer:'合成已确认代号冲突客户',customerCode:'TEST-REVIEWED-SERVICE-CODE',salesName:'',serviceName:'合成其他客服',pmcName:'',active:true};
+ const beforeCollision=clone(rawRecords()),collisionResponse=await call('customer-save',collisionInput);
+ assert.equal(collisionResponse.status,409,await collisionResponse.text());
+ assert.deepEqual(rawRecords(),beforeCollision,'A conflicting customer identity must reject without any partial write.');
+ // Preserve coverage of historical corrupt data without using the guarded API
+ // to introduce a new conflict. This fixture contains only synthetic records.
+ rawInsert({...clone(other),...collisionInput,id:'synthetic_readonly_historical_customer_collision',version:1});
  assert(!(await ok('data',undefined,aliasUser)).collaborationAssignments.some(a=>a.orderKeys.includes('TEST-REVIEWED-SERVICE-CODE')));
  await denied('workflow',{id:aliasOrder.id,version:current(aliasOrder.id).version,action:'submit-pmc'},403,aliasUser);
  await denied('service-save',{...servicePayload,customerId:aliasAccount.id,orderId:aliasOrder.id},400,aliasUser);
- pass('报价授权及责任别名继续生效且只维护本人客户；客户代号出现冲突时关闭订单关联与交接，不猜测匹配');
+ pass('客服责任别名可读本人客户报价且不可改价；客户代号出现冲突时关闭订单关联与交接，不猜测匹配');
 
  const after=new Map(rawRecords().map(r=>[r.id,r]));
  for(const original of before)assert.deepEqual(after.get(original.id),original);

@@ -45,7 +45,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  pass('报价配置缺失、重复或格式损坏均封闭；别名只完整匹配，停用成员与仅PMC字段不授予客户报价权');
 
  // Only administrators can confirm responsibility changes; normal descriptive edits remain available.
- const allowedCustomerEdit=(await ok('customer-save',{...account,notes:'非责任资料的合成测试更新'},assigned)).item;
+ const allowedCustomerEdit=(await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,notes:'非责任资料的合成测试更新'},assigned)).item;
  assert.equal(allowedCustomerEdit.notes,'非责任资料的合成测试更新');
  for(const field of ['salesName','serviceName','pmcName'])assert.equal((await call('customer-save',{...allowedCustomerEdit,[field]:'未经管理员确认的责任人'},assigned)).status,403);
  assert.equal((await call('customer-save',{customer:'新建责任绕过测试',customerCode:'TEST-RESP-ESCAPE',salesName:assigned.displayName,active:true},assigned)).status,403);
@@ -59,7 +59,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  pass('客户责任变更和新建责任仅管理员确认，非责任备注可编辑，混合导入越权时整批拒绝且不部分覆盖');
 
  const inactiveQuote=(await ok('customer-quote-save',forAccount(inactive,'TEST-QUOTE-INACTIVE'))).quote;
- inactive=(await ok('customer-save',{...inactive,active:false})).item;
+ inactive=(await ok('customer-save',{...inactive,expectedVersion:(await state()).customerAccounts.find(r=>r.id===inactive.id).version,active:false})).item;
  const unbound=(await ok('customer-quote-save',{...draft,customerAccountId:null,quoteNo:'TEST-QUOTE-UNBOUND'})).quote;
  const pmcOnlyQuote=(await ok('customer-quote-save',forAccount(pmcOnly,'TEST-QUOTE-PMC-ONLY'))).quote;
  const untouched=rawRecords().map(r=>structuredClone(r));
@@ -67,7 +67,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  const qB=(await ok('customer-quote-save',forAccount(accountB,'TEST-QUOTE-B'),other)).quote;
  assert.equal(q.status,'draft');assert.equal(q.version,1);assert.equal(q.history.length,1);assert.equal(q.lines[0].toolingFee,0);assert.equal(q.hasSource,false);
  for(const user of [assigned,service]){
-  const list=await ok('customer-quotes',undefined,user);assert.equal(list.quotes.find(v=>v.id===q.id).canEdit,true);
+  const list=await ok('customer-quotes',undefined,user);assert.equal(list.quotes.find(v=>v.id===q.id).canEdit,user===assigned);
   assert.equal(list.quotes.some(v=>[qB.id,unbound.id,inactiveQuote.id,pmcOnlyQuote.id].includes(v.id)),false);assert.deepEqual(list.customers.map(v=>v.id),[account.id]);
  }
  const otherList=await ok('customer-quotes',undefined,other);assert.deepEqual(otherList.quotes.map(v=>v.id),[qB.id]);assert.deepEqual(otherList.customers.map(v=>v.id),[accountB.id]);
@@ -85,13 +85,14 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  pass('指定成员只读写已绑定且启用的业务/客服责任客户，PMC角色和请求字段不能越权，通用审计同步隔离');
 
  const oldVersion=q.version,originalRevision=structuredClone(rawRecords().find(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id));
- q=(await ok('customer-quote-save',{...fields(q),lines:[{...q.lines[0],unitPrice:14,descriptionZh:'改后的合成材质'}]},service)).quote;
+ const serviceBefore=structuredClone(rawRecords());assert.equal((await call('customer-quote-save',{...fields(q),lines:[{...q.lines[0],unitPrice:14}]},service)).status,403);assert.deepEqual(rawRecords(),serviceBefore);
+ q=(await ok('customer-quote-save',{...fields(q),lines:[{...q.lines[0],unitPrice:14,descriptionZh:'改后的合成材质'}]},assigned)).quote;
  assert.equal(q.version,oldVersion+1);assert.equal(q.history.length,2);assert.deepEqual(rawRecords().find(v=>v.id===originalRevision.id),originalRevision);
  assert.equal((await call('customer-quote-save',{...fields(q),version:oldVersion},assigned)).status,409);
  const race=await Promise.all([call('customer-quote-save',{...fields(q),reviewNotes:['并发测试甲']},assigned),call('customer-quote-save',{...fields(q),reviewNotes:['并发测试乙']},assigned)]);
  assert.deepEqual(race.map(r=>r.status).sort(),[200,409]);q=(await ok('customer-quotes')).quotes.find(v=>v.id===q.id);
  assert.equal(q.version,3);assert.equal(rawRecords().filter(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id).length,3);
- pass('同客户业务与客服可协作，历史版本不可变，旧版本和并发提交返回409，不覆盖他人保存');
+ pass('负责业务可修订，客服报价历史只读且拒绝改价；历史版本不可变，旧版本和并发提交返回409');
 
  for(const bad of [{...fields(q),quoteDate:'2026-02-30'},{...fields(q),validUntil:'2026-09-01'},{...fields(q),status:'approved'},{...fields(q),lines:[{...q.lines[0],quantity:1.5}]},{...fields(q),lines:[{...q.lines[0],quantity:0}]},{...fields(q),lines:[{...q.lines[0],unitPrice:''}]},{...fields(q),lines:[{...q.lines[0],quantity:''}]},{...fields(q),lines:[{...q.lines[0],toolingFee:''}]},{...fields(q),lines:[{...q.lines[0],toolingFee:-1}]},{...fields(q),lines:[q.lines[0],q.lines[0]]}])assert.equal((await call('customer-quote-save',bad)).status,400);
  assert.equal((await ok('customer-quotes')).quotes.find(v=>v.id===q.id).version,q.version);
@@ -113,7 +114,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
 
  // Transfer responsibility, not quotation data. The old creator must lose access immediately.
  const revisionsBeforeTransfer=rawRecords().filter(v=>v.kind==='customer_quote_revision'&&v.quoteId===q.id).map(v=>structuredClone(v));
- await ok('customer-save',{...account,salesName:other.displayName,serviceName:''});
+ await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,salesName:other.displayName,serviceName:''});
  for(const user of [assigned,service]){
   assert.equal((await ok('customer-quotes',undefined,user)).quotes.some(v=>v.id===q.id),false);
   assert.equal((await call('customer-quote-save',fields(q),user)).status,403);assert.equal((await call('customer-quote-file?id='+q.id,undefined,user)).status,403);
@@ -130,7 +131,7 @@ export async function testCustomerQuotes({ok,call,state,clerk,pass,rawRecords,ra
  moved=(await ok('customer-quote-save',{...fields(moved),customerCode:accountB.customerCode,customerName:accountB.customer,customerAccountId:accountB.id})).quote;
  assert.equal(moved.hasSource,false);assert.equal((await call('customer-quote-file?id='+moved.id,undefined,other)).status,403);assert.deepEqual(rawRecords().find(v=>v.id===movedOld.id),movedOld);assert.equal(moved.history.length,3);
  // Removing responsibility for A must also hide its old revisions and audit snapshots on a quote now at B.
- await ok('customer-save',{...account,salesName:'无关合成人员',serviceName:''});
+ await ok('customer-save',{...account,expectedVersion:(await state()).customerAccounts.find(r=>r.id===account.id).version,salesName:'无关合成人员',serviceName:''});
  const movedPublic=(await ok('customer-quotes',undefined,other)).quotes.find(v=>v.id===moved.id);
  assert.deepEqual(movedPublic.history.map(v=>v.version),[3]);assert(!JSON.stringify(movedPublic).includes('old-account-only.xlsx'));
  assert(!(await ok('data',undefined,other)).audits.filter(v=>v.targetId===moved.id).some(v=>JSON.stringify(v).includes('old-account-only.xlsx')));

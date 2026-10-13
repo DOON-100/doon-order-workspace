@@ -3,6 +3,7 @@ import {all,allowedFields,broad,businessKey,canRead,now,type Entity,type Member,
 import {AppError,audit,commit,json} from './store';
 import {syncFollowColumns} from './ledger-edit';
 import {isLedgerDrawingExtra,matchesOrderIdentity} from './order-identity';
+import {assertHandoffProductionGate,requiresProductionGate} from './handoff-production-gate';
 
 export async function commitImport(body:unknown,s:State,m:Member){
  const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional()}).parse(body);
@@ -28,7 +29,7 @@ export async function commitImport(body:unknown,s:State,m:Member){
    if(current&&(current.ledger||current.identityHistory?.length)&&r.after.drawing!==current.drawing)throw new AppError(`第 ${r.index} 行图纸编号不能通过工作表覆盖，请使用订单详情的“修改图纸编号”入口。`,409);
    if(current?.ledger&&(r.after.ledger?.columns?.J!==current.ledger.columns.J||[...new Set([...Object.keys(current.extra||{}),...Object.keys(r.after.extra||{})])].some(key=>isLedgerDrawingExtra(key)&&r.after.extra?.[key]!==current.extra?.[key])))throw new AppError(`第 ${r.index} 行原表 J 列已变化，请重新导出；工作表不能覆盖图纸编号。`,409);
    if((!current||businessKey(current as Order)!==businessKey(r.after))&&all(s,'order').some(o=>o.id!==r.after.id&&matchesOrderIdentity(o as Order,r.after)))throw new AppError(`第 ${r.index} 行的订单明细或历史图号已存在，请重新预览，避免重复建单。`,409);
-   if(current){if(!canRead(m,current as Order)||(!broad(m)&&r.changes?.some(k=>!allowedFields(m,current as Order).includes(k))))throw new AppError('你的字段权限已改变，请重新预览。',403);}
+   if(current){if(!canRead(m,current as Order)||(!broad(m)&&r.changes?.some(k=>!allowedFields(m,current as Order).includes(k))))throw new AppError('你的字段权限已改变，请重新预览。',403);if(requiresProductionGate(current as Order,r.after))assertHandoffProductionGate(s,m,current as Order);}
    else if(!broad(m)&&!(m.role==='sales'&&m.customers.includes(r.after.customer)))throw new AppError('仅该客户的业务/客服、PMC 或管理员可新建订单。',403);
   }
   return current;

@@ -1,0 +1,15 @@
+import {build} from 'esbuild';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+import assert from 'node:assert/strict';
+const output=path.resolve('test-output','workspace-record-context-'+process.pid);await fs.mkdir(output,{recursive:true});
+const outfile=path.join(output,'context.mjs');await build({entryPoints:['lib/workspace-record-context.ts'],outfile,bundle:true,format:'esm',platform:'node'});
+const {resolveWorkspaceRecordContext:resolve}=await import(pathToFileURL(outfile).href);
+const customers=[{id:'allowed-customer'}],records=[{id:'allowed-record',customerId:'allowed-customer',customerCode:'CODE001'},{id:'another-record',customerId:'another-customer'}],checks=[];
+assert.equal(resolve(undefined,customers,records).status,'none');checks.push('无上下文不改变默认列表');
+assert.equal(resolve({customerId:'allowed-customer'},customers,records).status,'customer');assert.equal(resolve({recordId:'allowed-record'},customers,records).record.id,'allowed-record');checks.push('明确客户ID筛选、明确记录ID选择授权记录');
+for(const context of [{recordId:'CODE001'},{recordId:'missing'},{customerId:'unauthorized'},{recordId:'another-record'},{recordId:'allowed-record',customerId:'another-customer'}])assert.equal(resolve(context,customers,records).status,'unavailable');checks.push('代码不能当记录ID，未知客户、悬空关系、客户记录不一致不回退首条');
+assert.equal(resolve({recordId:'allowed-record'},customers,[]).status,'unavailable');assert.equal(resolve({recordId:'allowed-record'},[],records).status,'unavailable');checks.push('最新feed撤销记录/客户授权后深链拒绝');
+const quotes=[{id:'quote-id',customerAccountId:'allowed-customer'},{id:'unbound-admin',customerAccountId:null}];assert.equal(resolve({recordId:'quote-id'},customers,quotes).record.id,'quote-id');assert.equal(resolve({recordId:'unbound-admin'},customers,quotes).status,'record');assert.equal(resolve({recordId:'unbound-admin',customerId:'allowed-customer'},customers,quotes).status,'unavailable');checks.push('报价使用实际id与customerAccountId，不猜关联；已授权未绑定管理员报价仅按自身ID打开');
+await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:checks.length,checks,scope:'synthetic authorization feeds; no production access'},null,2));console.log(JSON.stringify({passed:checks.length,report:path.join(output,'result.json')}));

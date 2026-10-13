@@ -1,3 +1,4 @@
+import {assertHandoffProductionGate,requiresProductionGate,hasRecordedProduction} from './handoff-production-gate';
 import {departmentColumns,mayReceive} from './departments';
 import {metricExport} from './metric-export';
 import {z} from 'zod';
@@ -70,7 +71,7 @@ export async function operationPost(action:string,req:Request,s:State,m:Member):
  }
  if(action==='ledger-edit'){
   const input=z.object({id:z.string(),version:z.number().int(),patch:z.record(z.string().max(3000)),reason:z.string().trim().min(2).max(1000)}).parse(await req.json()),o=getOrder(s,m,input.id);if(!departmentColumns(m,o).length)throw new AppError('未分配该部门录入权限。',403);if(!o.ledger)throw new AppError('此订单未采用原表工序结构。');if(o.version!==input.version)throw new AppError('该明细已由其他同事更新，请刷新后核对。',409);
-  const next=applyLedgerPatch(o,m,input.patch);await commit(s.revision,[next,audit(m,next,o,'更新原表工序',input.reason)]);return json({ok:true});
+  const next=applyLedgerPatch(o,m,input.patch);if(requiresProductionGate(o,next))assertHandoffProductionGate(s,m,o);await commit(s.revision,[next,audit(m,next,o,'更新原表工序',input.reason)]);return json({ok:true});
  }
  if(action==='ledger-lifecycle'){
   pmc(m);const input=z.object({id:z.string(),version:z.number().int(),mode:z.enum(['active','archived']),reason:z.string().trim().min(3).max(1000),closedDate:z.string().default('')}).parse(await req.json()),o=getOrder(s,m,input.id);if(o.version!==input.version)throw new AppError('明细版本已改变，请刷新。',409);if((o.lifecycle||'active')===input.mode)return json({ok:true});
@@ -88,6 +89,7 @@ export async function operationPost(action:string,req:Request,s:State,m:Member):
   const p=z.object({lineId:z.string(),supplier:z.string().trim().min(1).max(100),process:z.string(),quantity:z.number().int().positive().max(10000000),sentDate:z.string(),dueDate:z.string(),reference:z.string().trim().min(1).max(100),buyerEmail:z.string().email().optional(),note:z.string().max(2000).default(''),token:z.string().uuid()}).parse(await req.json());
   const o=getOrder(s,m,p.lineId);if(!mayReceive(m,o,p.process))throw new AppError('没有此工序外发权限。',403);if(!stageDefs.some(d=>d.id===p.process&&d.id!=='procurement'&&d.id!=='packing'))throw new AppError('请选择有效外发工序。');try{strictDate(p.sentDate);strictDate(p.dueDate);}catch(e){throw new AppError((e as Error).message);}if(!p.sentDate||!p.dueDate||p.dueDate<p.sentDate)throw new AppError('回货日期不能早于外发日期。');
   if(all(s,'outsource').some(r=>r.token===p.token))return json({ok:true,reused:true});if(all(s,'outsource').some(r=>r.status!=='已取消'&&clean(r.supplier).toUpperCase()===clean(p.supplier).toUpperCase()&&clean(r.reference).toUpperCase()===clean(p.reference).toUpperCase()&&r.lineId===p.lineId&&r.process===p.process))throw new AppError('相同供应商外发单 / 订单 / 工序已登记。');
+  if(!hasRecordedProduction(o))assertHandoffProductionGate(s,m,o);
   const buyer=all(s,'member').find(u=>u.email===(p.buyerEmail||m.email)&&u.active&&['admin','pmc'].includes(u.role));if(!buyer)throw new AppError('请选择有效的 PMC / 采购跟进人。');
   const master=all(s,'supplier').find(v=>clean(v.name).toUpperCase()===clean(p.supplier).toUpperCase());if(master?.active===false)throw new AppError('此供应商已停用，请由采购核对后启用。');
   const approverName=outsourceApprover(p.process,o.productType||o.ledger?.columns?.W||''),autoApproved=broad(m),item={...p,supplier:master?.name||p.supplier,id:newId('outsource'),kind:'outsource',originalDueDate:p.dueDate,buyerEmail:buyer.email,buyerName:buyer.name,latestNote:p.note,received:0,approvalStatus:autoApproved?'已审批':'待主管审批',approverName,approvedBy:autoApproved?m.name:'',approvedAt:autoApproved?now():'',actorId:m.id,actor:m.name,createdAt:now(),version:1};
