@@ -41,6 +41,46 @@ export async function testCustomerProjectOriginalDocuments({ok,call,state,pass,r
  for(const category of ['other','','Original-Communication'])await denied('customer-project-attachment',form('分类.txt',{category}));
  pass('重复上传不改写记录，分类参与幂等且旧附件仍视为general，普通工程格式白名单和非法分类拒绝保持有效');
 
+ const previewFiles=[],previewBytes=[
+  ['synthetic.png','image/png',Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=','base64')],
+  ['synthetic.jpg','image/jpeg',Buffer.from([255,216,255,224,0,16,74,70,73,70,0,1,255,217])],
+  ['synthetic.gif','image/gif',Buffer.from('GIF89a\x01\0\x01\0\0\0\0;','binary')],
+  ['synthetic.webp','image/webp',Buffer.from('RIFF\x10\0\0\0WEBPVP8 synthetic','binary')],
+  ['synthetic.pdf','application/pdf',Buffer.from('%PDF-1.7\n% Synthetic preview fixture\n%%EOF\n')]
+ ];
+ for(const [filename,type,source] of previewBytes){
+  const item=(await ok('customer-project-attachment',form(filename,{category:'general',bytes:source}),users.writer)).item;previewFiles.push(item);
+  const before=structuredClone(rawRecords()),response=await call('customer-project-file?id='+item.id+'&preview=1',undefined,users.reader);
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),type);assert.match(response.headers.get('content-disposition'),/^inline;/);
+  assert.equal(response.headers.get('cache-control'),'no-store');assert.equal(response.headers.get('x-content-type-options'),'nosniff');assert.equal(response.headers.get('x-frame-options'),'SAMEORIGIN');assert.equal(response.headers.get('cross-origin-resource-policy'),'same-origin');assert.equal(response.headers.get('referrer-policy'),'no-referrer');
+  assert.match(response.headers.get('content-security-policy'),/frame-ancestors 'self'/);assert.equal(response.headers.get('content-security-policy').includes('sandbox'),type!=='application/pdf');assert.equal(response.headers.get('content-range'),null);assert.equal(response.headers.get('accept-ranges'),null);
+  assert.deepEqual(Buffer.from(await response.arrayBuffer()),source);assert.deepEqual(rawRecords(),before,'Preview must not migrate originals or write records');
+  for(const suffix of ['', '&preview=0', '&preview=true']){const download=await call('customer-project-file?id='+item.id+suffix,undefined,users.reader);assert.match(download.headers.get('content-disposition'),/^attachment;/);assert.deepEqual(Buffer.from(await download.arrayBuffer()),source);}
+ }
+ const validPdf=previewFiles.at(-1),validPng=previewFiles[0],storedPdf=rawRecords().find(row=>row.id===validPdf.id),legacyPreview={...storedPdf,id:'synthetic-original-preview-legacy'};delete legacyPreview.category;rawInsert(legacyPreview);
+ const beforeLegacyPreview=structuredClone(rawRecords()),legacyPreviewResponse=await call('customer-project-file?id='+legacyPreview.id+'&preview=1',undefined,users.reader);assert.match(legacyPreviewResponse.headers.get('content-disposition'),/^inline;/);assert.deepEqual(Buffer.from(await legacyPreviewResponse.arrayBuffer()),previewBytes.at(-1)[2]);assert.deepEqual(rawRecords(),beforeLegacyPreview);
+ const unavailablePreview=async(item,user=users.reader,status=415)=>{const before=structuredClone(rawRecords()),response=await call('customer-project-file?id='+encodeURIComponent(item.id)+'&preview=1',undefined,user);assert.equal(response.status,status);assert.equal(response.headers.get('content-disposition'),null,'An unsupported preview must never trigger a download');assert.deepEqual(rawRecords(),before);};
+ for(const item of [...documents,distinct,general])await unavailablePreview(item);
+ for(const type of ['image/svg+xml','text/html','application/octet-stream']){const record={...storedPdf,id:'synthetic-original-preview-unsupported-'+type.split('/').at(-1),contentType:type};rawInsert(record);await unavailablePreview(record);}
+ const fakePng=(await ok('customer-project-attachment',form('fake.png',{category:'general',bytes:Buffer.from('<html>not an image</html>')}),users.writer)).item;await unavailablePreview(fakePng);
+ const mismatched=(await ok('customer-project-attachment',form('mismatch.jpg',{category:'general',bytes:previewBytes[0][2]}),users.writer)).item;await unavailablePreview(mismatched);
+ const shortHeader=(await ok('customer-project-attachment',form('short.pdf',{category:'general',bytes:Buffer.from('%PD')}),users.writer)).item;await unavailablePreview(shortHeader);
+ await unavailablePreview(validPdf,users.other,403);await unavailablePreview(fakePng,users.other,403);
+ pass('显式预览仅放行签名与保存MIME一致的图片及PDF；未知、伪格式和原始沟通拒绝且不触发下载，旧附件兼容与普通下载原字节不变');
+
+ // The preview must inspect a split header then stream the remaining bytes, without eagerly reading the file.
+ const streamSource=Buffer.concat([Buffer.from('%PDF-1.7\nabc'),Buffer.alloc(131072,127)]),streamItem=(await ok('customer-project-attachment',form('stream.pdf',{category:'general',bytes:streamSource}),users.writer)).item;
+ const streamKey=rawRecords().find(row=>row.id===streamItem.id).fileKey,originalGet=globalThis.__testEnv.BUCKET.get;let pulled=0,cancelled=0;
+ const chunks=[streamSource.subarray(0,2),streamSource.subarray(2,5),streamSource.subarray(5,12),streamSource.subarray(12,28),streamSource.subarray(28)];
+ globalThis.__testEnv.BUCKET.get=async key=>key===streamKey?{body:new ReadableStream({pull(controller){if(pulled<chunks.length)controller.enqueue(chunks[pulled++]);else controller.close();},cancel(){cancelled++;}})}:originalGet(key);
+ try{
+  const before=structuredClone(rawRecords()),response=await call('customer-project-file?id='+streamItem.id+'&preview=1',undefined,users.reader);assert.equal(response.status,200);assert(pulled<chunks.length,'Preview header inspection must not eagerly consume the entire file');assert.equal(hash(Buffer.from(await response.arrayBuffer())),hash(streamSource));assert.equal(cancelled,0);
+  pulled=0;const head=await call('customer-project-file?id='+streamItem.id+'&preview=1',undefined,users.reader,'HEAD');assert.equal(head.status,200);assert.deepEqual([...head.headers],[...response.headers]);assert.equal((await head.arrayBuffer()).byteLength,0);assert.equal(cancelled,1,'HEAD must cancel the original stream after inspecting its header');assert(pulled<chunks.length,'HEAD must not consume the whole attachment');assert.deepEqual(rawRecords(),before);
+ }finally{globalThis.__testEnv.BUCKET.get=originalGet;}
+ const readerBefore=rawRecords().find(row=>row.id===mid('reader'));rawUpdate({...readerBefore,active:false});await unavailablePreview(validPng,users.reader,403);rawUpdate(readerBefore);
+ const accountBefore=rawRecords().find(row=>row.id===customer.id);rawUpdate({...accountBefore,serviceMemberIds:[],serviceOwnerId:'',serviceName:''});await unavailablePreview(validPdf,users.reader,403);rawUpdate(accountBefore);
+ pass('预览只窥视分块文件头并原样回填完整字节，每次重新鉴权，停用或收回客户责任立即拒绝且零写入');
+
  const doc=documents[0],current=()=>rawRecords().find(row=>row.id===doc.id),stored=structuredClone(current());
  const round=(await ok('customer-project-entry-save',{token:token(),entryType:'round',projectId:project.id,title:'合成独立轮次'},users.writer)).item;
  await denied('customer-project-attachment',form('错误关联.txt',{roundId:round.id}));
@@ -56,11 +96,12 @@ export async function testCustomerProjectOriginalDocuments({ok,call,state,pass,r
  await denied('customer-project-attachment',form('跨客户.txt',{projectId:otherProject.id}),users.writer,403);
  await denied('customer-project-attachment',form(),users.reader,403);
  await denied('customer-project-file?id='+doc.id,undefined,users.other,403);
- const drawing={id:'synthetic-original-document-drawing',kind:'customer_project_drawing',projectId:project.id,customerId:customer.id,roundId:'',attachmentIds:[doc.id,general.id],status:'submitted'};rawInsert(drawing);
+ const drawing={id:'synthetic-original-document-drawing',kind:'customer_project_drawing',projectId:project.id,customerId:customer.id,roundId:'',attachmentIds:[doc.id,general.id,validPdf.id],status:'submitted'};rawInsert(drawing);
  rawInsert({id:'synthetic-original-document-sample',kind:'customer_project_sample',projectId:project.id,customerId:customer.id,roundId:'',ownerId:mid('internal'),drawingIds:[drawing.id],scope:[],itemSnapshot:[],status:'pending'});
  const internalData=await ok('customer-project-data',undefined,users.internal);assert(!internalData.projects.some(row=>row.id===project.id));assert.deepEqual(internalData.attachments.filter(row=>row.category==='original-communication').map(row=>row.id),[doc.id]);assert(internalData.attachments.some(row=>row.id===general.id));
  const handedOff=await call('customer-project-file?id='+doc.id,undefined,users.internal);assert.equal(handedOff.status,200);assert.equal(handedOff.headers.get('content-type'),'application/octet-stream');assert.deepEqual(new Uint8Array(await handedOff.arrayBuffer()),bytes);
  await denied('customer-project-file?id='+documents[1].id,undefined,users.internal,403);assert.equal((await call('customer-project-file?id='+general.id,undefined,users.internal)).status,200);
+ const technicalPreview=await call('customer-project-file?id='+validPdf.id+'&preview=1',undefined,users.internal);assert.equal(technicalPreview.status,200);assert.match(technicalPreview.headers.get('content-disposition'),/^inline;/);assert.deepEqual(Buffer.from(await technicalPreview.arrayBuffer()),previewBytes.at(-1)[2]);await unavailablePreview(validPng,users.internal,403);await unavailablePreview(validPdf,users.unassigned,403);
  const unassignedData=await ok('customer-project-data',undefined,users.unassigned);assert(!unassignedData.attachments.some(row=>row.projectId===project.id));await denied('customer-project-file?id='+doc.id,undefined,users.unassigned,403);
  const customerVersion=()=>rawRecords().find(row=>row.id===customer.id).version;
  await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:customerVersion(),active:false});await denied('customer-project-attachment',form(),users.writer,403);await denied('customer-project-file?id='+doc.id,undefined,users.writer,403);await ok('customer-save',{...customerBody,id:customer.id,expectedVersion:customerVersion()});

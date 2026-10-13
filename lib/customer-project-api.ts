@@ -58,15 +58,49 @@ function newRecord(kind:string,p:CustomerProject,m:Member,input:any){const {toke
 function existingOrNew(s:State,m:Member,kind:string,input:any){if(input.id){const found=all(s,kind).find(i=>i.id===input.id);if(!found)throw new AppError('记录不存在。',404);fresh(found,input.version);return found;}if(!input.token)throw new AppError('新记录需要唯一请求编号。');return null;}
 function safeOrders(s:State,m:Member,customers:CustomerAccount[]){const keys=new Set(customers.flatMap(c=>serviceOrderCustomerKeys(s,c).map(projectKey)));return (all(s,'order') as Order[]).filter(o=>keys.has(projectKey(o.customer))&&canRead(m,o)).map(o=>({id:o.id,version:o.version,customer:o.customer,orderNo:o.orderNo,customerPO:o.customerPO,drawing:o.drawing,color:o.color,lens:o.lens,quantity:o.quantity,sourceStatus:o.sourceStatus,workflowStatus:o.workflowStatus,lifecycle:o.lifecycle,stage:currentStage(o),plannedDate:o.plannedDate,promisedDate:o.promiseConfirmed?o.promisedDate:'',requestedDate:o.requestedDate,warehouse:warehouse(o),updatedAt:o.updatedAt}));}
 
+function previewSignatureMatches(contentType:string,header:Uint8Array){
+ const matches=(offset:number,bytes:number[])=>bytes.every((value,index)=>header[offset+index]===value);
+ if(contentType==='image/png')return matches(0,[137,80,78,71,13,10,26,10]);
+ if(contentType==='image/jpeg')return matches(0,[255,216,255]);
+ if(contentType==='image/gif')return matches(0,[71,73,70,56,55,97])||matches(0,[71,73,70,56,57,97]);
+ if(contentType==='image/webp')return matches(0,[82,73,70,70])&&matches(8,[87,69,66,80]);
+ if(contentType==='application/pdf')return matches(0,[37,80,68,70,45])&&[49,50].includes(header[5])&&header[6]===46&&header[7]>=48&&header[7]<=57;
+ return false;
+}
+async function previewStream(body:BodyInit){
+ // Inspect only a short header. Return every original chunk, without copying the whole attachment.
+ const reader=new Response(body).body!.getReader(),chunks:Uint8Array[]=[],header=new Uint8Array(12);let length=0,ended=false;
+ try{while(length<header.length){const next=await reader.read();if(next.done){ended=true;break;}chunks.push(next.value);const count=Math.min(next.value.length,header.length-length);header.set(next.value.subarray(0,count),length);length+=count;}}
+ catch(error){try{await reader.cancel(error);}finally{reader.releaseLock();}throw error;}
+ let index=0;
+ const stream=new ReadableStream<Uint8Array>({async pull(controller){
+  if(index<chunks.length){controller.enqueue(chunks[index++]);return;}
+  if(ended){reader.releaseLock();controller.close();return;}
+  try{const next=await reader.read();if(next.done){ended=true;reader.releaseLock();controller.close();}else controller.enqueue(next.value);}catch(error){reader.releaseLock();controller.error(error);}
+ },async cancel(reason){try{await reader.cancel(reason);}finally{reader.releaseLock();}}});
+ return {header:header.subarray(0,length),stream};
+}
+
 export async function customerProjectGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['customer-project-data','customer-project-file','customer-project-history'].includes(action))return null;
  if(!m.active)throw new AppError('账号已停用。',403);
  if(action==='customer-project-file'){
-  const attachment=all(s,'customer_project_attachment').find(r=>r.id===new URL(req.url).searchParams.get('id'));if(!attachment)throw new AppError('附件不存在。',404);
+  const params=new URL(req.url).searchParams,attachment=all(s,'customer_project_attachment').find(r=>r.id===params.get('id'));if(!attachment)throw new AppError('附件不存在。',404);
   const samples=all(s,'customer_project_sample').filter(sample=>internalSampleAccess(s,m,sample));
   const technical=samples.some(sample=>all(s,'customer_project_drawing').some(d=>sample.drawingIds.includes(d.id)&&d.attachmentIds.includes(attachment.id)));
   if(!canReadProject(s,m,attachment)&&!technical)throw new AppError('无权读取当前项目附件。',403);
+  const preview=params.get('preview')==='1',previewType=attachment.contentType;
+  if(preview&&(!['general',undefined].includes(attachment.category)||!['image/png','image/jpeg','image/gif','image/webp','application/pdf'].includes(previewType)))throw new AppError('此文件不支持在线预览，请使用下载按钮查看原件。',415);
   const object=await bucket().get(attachment.fileKey);if(!object)throw new AppError('原附件暂不可用，请核对存储。',404);
+  if(preview){
+   const {header,stream}=await previewStream(object.body);
+   if(!previewSignatureMatches(previewType,header)){await stream.cancel();throw new AppError('文件内容与预览格式不符，请使用下载按钮查看原件。',415);}
+   // The native PDF viewer cannot run in a CSP sandbox. Restrict it to same-origin frames instead.
+   const policy="default-src 'none'; script-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'";
+   const headers={'Content-Type':previewType,'Content-Disposition':`inline; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-Frame-Options':'SAMEORIGIN','Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer','Content-Security-Policy':previewType==='application/pdf'?policy:policy+'; sandbox'};
+   if(req.method==='HEAD'){await stream.cancel();return new Response(null,{headers});}
+   return new Response(stream,{headers});
+  }
   return new Response(object.body,{headers:{'Content-Type':attachment.category==='original-communication'?'application/octet-stream':attachment.contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
  }
  if(action==='customer-project-history'){
@@ -131,7 +165,14 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
   if(input.serviceMemberIds===undefined&&priorServices.length>1&&input.serviceMemberId!==undefined&&input.serviceMemberId!==before?.serviceMemberId)throw new AppError('本项目已有多名客服，请刷新页面后在客服多选框中修改。',409);
   const services:string[]=input.serviceMemberIds??(input.serviceMemberId===undefined||before&&input.serviceMemberId===before.serviceMemberId?priorServices:input.serviceMemberId?[input.serviceMemberId]:[]);
   for(const serviceId of services)writerOwner(s,p,serviceId,true);
-  if(input.teamId&&!all(s,'customer_project_team').some(t=>t.id===input.teamId&&t.active&&t.customerIds.includes(input.customerId)))throw new AppError('小组不包含当前客户，请先由管理员配置组织归属。');
+  const selectedTeam=input.teamId?all(s,'customer_project_team').find(t=>t.id===input.teamId&&t.active&&t.customerIds.includes(input.customerId)):undefined;
+  if(input.teamId&&!selectedTeam)throw new AppError('小组不包含当前客户，请先由管理员配置组织归属。');
+  if(selectedTeam){
+   // Keep historical assignments on an unchanged team; additions and team changes use its current service roster.
+   const retainedServices=new Set(before&&before.teamId===input.teamId?priorServices:[]);
+   const teamServices=new Set(Array.isArray(selectedTeam.serviceMemberIds)?selectedTeam.serviceMemberIds:[]);
+   if(services.some(serviceId=>!retainedServices.has(serviceId)&&!teamServices.has(serviceId)))throw new AppError('客服负责人须为所选业务客服组的客服成员；切换小组时请重新选择客服。');
+  }
   if(input.status==='archived'){
    if(!before)throw new AppError('新项目不能直接归档。');
    const open=s.records.some(r=>r.projectId===before.id&&((r.kind==='customer_project_round'&&['open','partial'].includes(r.status))||(r.kind==='customer_project_task'&&!['done','cancelled'].includes(r.status))||(r.kind==='customer_project_sample'&&!['closed','cancelled'].includes(r.status))));if(open)throw new AppError('尚有开发轮次、样办或待办未完成，不能归档。');

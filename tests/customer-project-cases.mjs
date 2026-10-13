@@ -39,6 +39,40 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  assert.deepEqual((await ok('customer-project-data',undefined,users.service2)).projects.find(p=>p.id===legacyProject.id).serviceMemberIds,[mid('service2')]);
  assert.equal(Object.hasOwn(current(legacyProject.id),'serviceMemberIds'),false,'读取旧单客服记录不能触发数据迁移');
  pass('多客服逐人校验既有客户权限，拒绝未授权、停用及重复成员；旧单人兼容且清空与旧客户端保存不会误改多客服');
+ const narrowTeam=(await ok('customer-project-team-save',{token:token(),name:'合成项目客服单组',leaderIds:[mid('sales')],salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service'),mid('other')],customerIds:[customer.id],active:true})).item;
+ const groupedPayload={...projectPayload,token:token(),teamId:narrowTeam.id,code:'TEST-PROJECT-GROUP',title:'合成组内客服校验',serviceMemberIds:[mid('service')]};
+ // Customer write access alone is insufficient, and sales/leader membership is not service membership.
+ for(const outsider of ['service2','sales'])await denied('customer-project-save',{...groupedPayload,token:token(),serviceMemberIds:[mid(outsider)]},users.sales,400);
+ // Being configured as team service staff must not grant access to an unrelated customer.
+ await denied('customer-project-save',{...groupedPayload,token:token(),serviceMemberIds:[mid('other')]},users.sales,400);
+ let groupedProject=(await ok('customer-project-save',groupedPayload,users.sales)).item;
+ const editGrouped=patch=>({...groupedPayload,token:token(),id:groupedProject.id,version:current(groupedProject.id).version,...patch});
+ groupedProject=(await ok('customer-project-save',editGrouped({description:'合成同组合法更新'}),users.service)).item;
+ assert.deepEqual(groupedProject.serviceMemberIds,[mid('service')]);
+ await denied('customer-project-save',editGrouped({serviceMemberIds:serviceIds}),users.sales,400);
+ groupedProject=(await ok('customer-project-save',editGrouped({teamId:team.id,serviceMemberIds:serviceIds}),users.sales)).item;
+ assert.deepEqual(groupedProject.serviceMemberIds,serviceIds);
+ await denied('customer-project-save',editGrouped({teamId:narrowTeam.id,serviceMemberIds:serviceIds}),users.sales,400);
+ groupedProject=(await ok('customer-project-save',editGrouped({teamId:narrowTeam.id,serviceMemberIds:[mid('service')]}),users.sales)).item;
+ assert.deepEqual(groupedProject.serviceMemberIds,[mid('service')]);
+ // Historical out-of-team staff remain intact on read and same-team edits, including old single-owner forms.
+ const historical={...groupedProject,id:'synthetic_project_historical_team_service',code:'TEST-PROJECT-HISTORICAL-GROUP',serviceMemberIds:serviceIds,serviceMemberId:mid('service')};rawInsert(historical);
+ const beforeHistoricalRead=structuredClone(rawRecords());
+ assert.deepEqual((await ok('customer-project-data',undefined,users.service2)).projects.find(p=>p.id===historical.id).serviceMemberIds,serviceIds);
+ assert.deepEqual(rawRecords(),beforeHistoricalRead);
+ const editHistorical=patch=>({...groupedPayload,token:token(),id:historical.id,version:current(historical.id).version,serviceMemberIds:serviceIds,...patch});
+ let historicalSaved=(await ok('customer-project-save',editHistorical({description:'合成历史分派保留'}),users.service2)).item;
+ assert.deepEqual(historicalSaved.serviceMemberIds,serviceIds);assert.equal(historicalSaved.version,historical.version+1);
+ const historicalLegacy=editHistorical({description:'合成旧表单仍保留历史分派'});delete historicalLegacy.serviceMemberIds;
+ historicalSaved=(await ok('customer-project-save',historicalLegacy,users.service)).item;assert.deepEqual(historicalSaved.serviceMemberIds,serviceIds);
+ await denied('customer-project-save',editHistorical({serviceMemberIds:[...serviceIds,mid('sales')]}),users.sales,400);
+ const thirdTeam=(await ok('customer-project-team-save',{token:token(),name:'合成项目另一客服组',leaderIds:[mid('sales')],salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service2')],customerIds:[customer.id],active:true})).item;
+ await denied('customer-project-save',editHistorical({teamId:thirdTeam.id}),users.sales,400);
+ historicalSaved=(await ok('customer-project-save',editHistorical({teamId:thirdTeam.id,serviceMemberIds:[mid('service2')]}),users.sales)).item;
+ assert.deepEqual(historicalSaved.serviceMemberIds,[mid('service2')]);assert.equal(historicalSaved.serviceMemberId,mid('service2'));
+ const ungrouped=(await ok('customer-project-save',{...groupedPayload,token:token(),teamId:'',serviceMemberIds:[mid('service2')]},users.sales)).item;
+ assert.deepEqual(ungrouped.serviceMemberIds,[mid('service2')]);assert.deepEqual(current(customer.id),customerBefore);
+ pass('项目客服须同时属于所选组客服名单和客户责任；跨组新增、组长冒充客服及带旧客服切组均零写拒绝，同组历史分派保留且无组规则不变');
  const makeItem=async(model,color)=> (await ok('customer-project-item-save',{token:token(),projectId:project.id,model,drawing:model,color,lens:'白片',quantity:10},users.sales)).item;
  const itemA=await makeItem('SYN-PROJ-A','C1'),itemB=await makeItem('SYN-PROJ-B','C2');
  const roundPayload={token:token(),projectId:project.id,title:'R1首次开发',type:'development',scope:[{itemId:itemA.id,quantity:2},{itemId:itemB.id,quantity:2}],stage:'图纸确认',requiredDrawingTypes:['2d'],requireQuote:true,requiredSampleIds:[],sampleGateStage:'order'};
