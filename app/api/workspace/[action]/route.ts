@@ -1,6 +1,7 @@
 import {commitImport} from '@/lib/import-commit';
 import {drawingCorrectionPost} from '@/lib/drawing-correction-api';
 import {engineeringDrawingGet,engineeringDrawingPost} from '@/lib/engineering-drawing-api';
+import {engineeringSopGet,engineeringSopPost} from '@/lib/engineering-sop-api';
 import {finishedSupplierGet,finishedSupplierPost,assertLegacyFinishedMutation} from '@/lib/finished-supplier-api';
 import {warehouse,balance,currentStage,ownerLabel} from '@/lib/ledger';
 import {departmentColumns} from '@/lib/departments';
@@ -34,7 +35,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
  // Engineering has an independent, scoped history endpoint. Never expose its
  // source emails or snapshots through the broad production audit feed.
- if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('engineering_drawing')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('engineering_')))return false;
  // Project histories have their own customer/finance authorization. Broad PMC
  // order access must never expose project commercial or receipt snapshots.
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('customer_project')||v.kind.startsWith('project_'))))return false;
@@ -60,6 +61,7 @@ export async function GET(req:Request,ctx:Context){try{
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
  const engineering=await engineeringDrawingGet(action,req,s,m);if(engineering)return engineering;
+ const engineeringSop=await engineeringSopGet(action,req,s,m);if(engineeringSop)return engineeringSop;
  const projectFinance=await customerProjectFinanceGet(action,req,s,m);if(projectFinance)return projectFinance;
  const followup=await customerProjectFollowupGet(action,req,s,m);if(followup)return followup;
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
@@ -89,6 +91,7 @@ export async function POST(req:Request,ctx:Context){try{
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
  const engineering=await engineeringDrawingPost(action,req,s,m);if(engineering)return engineering;
+ const engineeringSop=await engineeringSopPost(action,req,s,m);if(engineeringSop)return engineeringSop;
  const projectFinance=await customerProjectFinancePost(action,req,s,m);if(projectFinance)return projectFinance;
  const followup=await customerProjectFollowupPost(action,req,s,m);if(followup)return followup;
  const projects=await customerProjectPost(action,req,s,m);if(projects)return projects;

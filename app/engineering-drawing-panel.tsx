@@ -22,24 +22,26 @@ const asDraft=(r:Drawing):Draft=>{const value=blank('');delete value.token;for(c
 function Field({label,children,wide=false}:{label:string;children:ReactNode;wide?:boolean}){return <label className={'ed-field'+(wide?' ed-wide':'')}><span>{label}</span>{isValidElement(children)?cloneElement(children as ReactElement<{'aria-label'?:string}>,{'aria-label':label}):children}</label>;}
 const initial:DrawingData={records:[],customers:[],members:[],events:[],canCreate:false,canManage:false,canApprove:false};
 
-export function EngineeringDrawingPanel({data,onDirtyChange}:{data:Data;onDirtyChange?:(dirty:boolean)=>void}){
+export function EngineeringDrawingPanel({data,initialRecordId='',onDirtyChange}:{data:Data;initialRecordId?:string;onDirtyChange?:(dirty:boolean)=>void}){
  const [work,setWork]=useState<DrawingData>(initial),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
  const [search,setSearch]=useState(''),[queue,setQueue]=useState('全部'),[type,setType]=useState(''),[owner,setOwner]=useState(''),[page,setPage]=useState(0);
  const [draft,setDraft]=useState<Draft|null>(null),[baseline,setBaseline]=useState(''),[history,setHistory]=useState<any[]>([]),[reviewNote,setReviewNote]=useState('');
  const [eventNote,setEventNote]=useState(''),[eventId,setEventId]=useState('');
  const editor=useRef<HTMLElement>(null),loadSeq=useRef(0),historySeq=useRef(0),draftRef=useRef<Draft|null>(null);draftRef.current=draft;
- const dirty=!!draft&&JSON.stringify(draft)!==baseline;
+ const dirty=!!draft&&JSON.stringify(draft)!==baseline,hasUnsavedInput=dirty||!!reviewNote||!!eventNote;
  const selected=work.records.find(r=>r.id===draft?.id),manage=selected?.canManage??work.canManage,approve=selected?.canApprove??work.canApprove,editable=draft?.id?(selected?.canEdit||manage):work.canCreate;
  const reload=useCallback(async()=>{const seq=++loadSeq.current;setLoading(true);try{const result=await request('drawing-data');if(seq!==loadSeq.current)return;const next={...initial,...result};setWork(next);if(draftRef.current?.id&&!next.records.some((r:Drawing)=>r.id===draftRef.current?.id)){setDraft(null);setBaseline('');setHistory([]);setError('该记录当前不可访问，请核对账号权限。');}}finally{if(seq===loadSeq.current)setLoading(false);}},[]);
  useEffect(()=>{reload().catch(e=>setError(e.message));return()=>{loadSeq.current++;historySeq.current++;};},[reload]);
  useEffect(()=>{const timer=setInterval(()=>reload().catch(e=>setError(e.message)),30000);return()=>clearInterval(timer);},[reload]);
- useEffect(()=>{onDirtyChange?.(dirty);return()=>onDirtyChange?.(false);},[dirty,onDirtyChange]);
- useEffect(()=>{if(!dirty)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};addEventListener('beforeunload',leave);return()=>removeEventListener('beforeunload',leave);},[dirty]);
+ useEffect(()=>{onDirtyChange?.(hasUnsavedInput);return()=>onDirtyChange?.(false);},[hasUnsavedInput,onDirtyChange]);
+ useEffect(()=>{if(!hasUnsavedInput)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};addEventListener('beforeunload',leave);return()=>removeEventListener('beforeunload',leave);},[hasUnsavedInput]);
  useEffect(()=>setPage(0),[search,queue,type,owner]);
  const install=(value:Draft)=>{setDraft(value);setBaseline(JSON.stringify(value));setHistory([]);historySeq.current++;setReviewNote('');setError('');};
- const leave=()=>!dirty||confirm('有尚未保存的修改，是否放弃？');
- const choose=(r:Drawing)=>{if(busy||!leave())return;install(asDraft(r));setTimeout(()=>editor.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
- const add=()=>{if(busy||!leave())return;setDraft(blank(data.me.name));setBaseline('');setHistory([]);setReviewNote('');setError('');setTimeout(()=>editor.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
+ const openedInitial=useRef(false);
+ useEffect(()=>{if(openedInitial.current||!initialRecordId)return;const r=work.records.find(r=>r.id===initialRecordId);if(r){openedInitial.current=true;setEventNote('');setEventId('');install(asDraft(r));setTimeout(()=>editor.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);}},[initialRecordId,work.records]);
+ const leave=()=>!hasUnsavedInput||confirm('有尚未保存的修改，是否放弃？');
+ const choose=(r:Drawing)=>{if(busy||!leave())return;setEventNote('');setEventId('');install(asDraft(r));setTimeout(()=>editor.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
+ const add=()=>{if(busy||!leave())return;setEventNote('');setEventId('');setDraft(blank(data.me.name));setBaseline('');setHistory([]);setReviewNote('');setError('');setTimeout(()=>editor.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
  const change=(patch:Partial<Draft>)=>setDraft(d=>d?{...d,...patch}:d);
  const mutate=async(action:string,body:unknown,message:string)=>{setBusy(true);setError('');setNotice('');try{const result=await request(action,body);if(result.record||result.item)install(asDraft(result.record||result.item));setNotice(message);try{await reload();}catch(e){setError('操作已保存，但刷新失败：'+(e as Error).message);}return true;}catch(e){setError((e as Error).message+'；当前输入已保留。');return false;}finally{setBusy(false);}};
  const save=async()=>{if(!draft)return;await mutate('drawing-save',draft,'跟进已保存。');};
@@ -57,7 +59,7 @@ export function EngineeringDrawingPanel({data,onDirtyChange}:{data:Data;onDirtyC
    <div className="ed-table-wrap"><table className="ed-table"><thead><tr>{['状态','客户 / 需求编号','画图类型','需求发出','新款','改图','需求者','款号','画图备注','画图人员','截止日期','完成日期','审批确认'].map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{visible.map(r=><tr key={r.id} className={overdue(r)?'ed-overdue':''}><td><span className={'ed-status '+(closed(r)?'done':'')}>{r.status}</span>{overdue(r)&&<small>已逾期</small>}</td><td><button className="text-link" onClick={()=>choose(r)}>{r.customerCode||'客户待核对'}</button><small>{r.id}</small></td><td>{r.drawingType}</td><td>{r.requestedDate||'—'}</td><td>{r.newCount??'—'}</td><td>{r.revisionCount??'—'}</td><td>{r.requester||'—'}</td><td className="ed-wrap">{r.modelNo||'待填写'}</td><td className="ed-wrap">{r.drawingNotes||'—'}</td><td>{r.assignee||'待分配'}</td><td>{r.deadline||'待排期'}</td><td>{r.completedDate||'—'}</td><td>{r.approval}</td></tr>)}</tbody></table>{!visible.length&&<div className="ed-empty">{loading?'正在读取跟进表…':work.records.length?'没有符合筛选条件的需求。':'暂无画图需求。可新增需求，或由管理员导入历史清单。'}</div>}</div>
    <div className="ed-pagination"><span>共 {rows.length} 条 · 第 {Math.min(page,pages-1)+1} / {pages} 页</span><div><Button variant="outline" size="sm" disabled={page===0} onClick={()=>setPage(p=>p-1)}>上一页</Button><Button variant="outline" size="sm" disabled={page>=pages-1} onClick={()=>setPage(p=>p+1)}>下一页</Button></div></div>
   </section>
-  {draft&&<section ref={editor} className="panel ed-editor"><div className="ed-editor-heading"><div><h3>{draft.id?'画图需求详情':'新增画图需求'}</h3><p>{draft.id?`${draft.id} · 第 ${draft.version} 版`:'填写客户需求，保存后由画图组安排。'}</p></div><Button aria-label="关闭画图详情" variant="ghost" onClick={()=>{if(leave()){setDraft(null);setHistory([]);}}}><X/></Button></div>
+  {draft&&<section ref={editor} className="panel ed-editor"><div className="ed-editor-heading"><div><h3>{draft.id?'画图需求详情':'新增画图需求'}</h3><p>{draft.id?`${draft.id} · 第 ${draft.version} 版`:'填写客户需求，保存后由画图组安排。'}</p></div><Button aria-label="关闭画图详情" variant="ghost" onClick={()=>{if(leave()){setDraft(null);setHistory([]);setReviewNote('');setEventNote('');setEventId('');}}}><X/></Button></div>
    <form onSubmit={e=>{e.preventDefault();void save();}}><fieldset disabled={busy||!editable}><legend>需求资料</legend><div className="ed-form-grid">
     <Field label="关联客户档案"><select value={draft.customerId} onChange={e=>{const c=work.customers.find(c=>c.id===e.target.value);change({customerId:e.target.value,customerCode:c?.customerCode||c?.customer||draft.customerCode});}}><option value="">待关联 / 历史客户</option>{work.customers.map(c=><option value={c.id} key={c.id}>{c.customerCode} {c.customer}</option>)}</select></Field>
     <Field label="客户编号"><input value={draft.customerCode} required onChange={e=>change({customerCode:e.target.value})}/></Field>

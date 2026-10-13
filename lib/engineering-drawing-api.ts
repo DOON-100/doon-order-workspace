@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
+import {isDrawingChangeType,planSopObligation} from './engineering-sop';
 import {assignedDrawingCustomer,assertDrawingLifecycle,buildImportedDrawings,canApproveDrawings,canCreateDrawings,canEditDrawingRequest,canManageDrawings,canReadDrawing,createDrawing,drawingCustomers,drawingDefaultFields,drawingExecutionFields,drawingFieldsSchema,drawingRequestFields,drawingRevision,drawingSaveSchema,publicDrawing,type DrawingEvent,type EngineeringDrawing} from './engineering-drawings';
 
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const r=schema.safeParse(value);if(!r.success)throw new AppError(r.error.issues.slice(0,4).map(i=>`${i.path.join('.')||'内容'}：${i.message}`).join('；'));return r.data;}
@@ -17,6 +18,18 @@ function assignee(s:State,r:EngineeringDrawing){if(!r.assigneeId)return;const a=
 function pending(s:State,r:EngineeringDrawing){return all(s,'engineering_drawing_event').some(e=>e.recordId===r.id&&e.status==='pending');}
 function advance(r:EngineeringDrawing,m:Member){return {...r,version:r.version+1,updatedAt:now(),updatedBy:m.name};}
 function changed(a:unknown,b:unknown){return JSON.stringify(a)!==JSON.stringify(b);}
+/** Applying one accepted proposal to the editable fields consumes that event once
+ * per field; it is not another instruction. A later genuine change still is. */
+function adoptedSopApplication(s:State,m:Member,before:EngineeringDrawing,r:EngineeringDrawing):Entity[]|null{
+ const fields=['drawingType','requirement'].filter(k=>changed(r[k],before[k]));if(!fields.length)return null;
+ const obligations=all(s,'engineering_sop').filter(o=>o.drawingRecordId===r.id&&o.customerId===r.customerId&&o.isCurrent&&o.sourceEventId);
+ const candidates=all(s,'engineering_drawing_event').filter(e=>e.recordId===r.id&&e.customerId===r.customerId&&e.status==='accepted'&&obligations.some(o=>o.sourceEventId===e.id)).sort((a,b)=>String(b.reviewedAt||b.createdAt).localeCompare(String(a.reviewedAt||a.createdAt)));
+ for(const event of candidates){
+  const applied=all(s,'engineering_sop_application').filter(a=>a.eventId===event.id).flatMap(a=>a.fields||[]);
+  if(fields.every(k=>!applied.includes(k)&&!changed(r[k],event.request?.[k]))){const obligation=obligations.find(o=>o.sourceEventId===event.id)!;return [{id:newId('sop_application'),kind:'engineering_sop_application',sopId:obligation.id,drawingRecordId:r.id,customerId:r.customerId,eventId:event.id,fields,actorId:m.id,createdAt:now()}];}
+ }
+ return null;
+}
 async function persist(s:State,m:Member,r:EngineeringDrawing,before:EngineeringDrawing|null,action:string,extra:Entity[]=[]){await commit(s.revision,[r,drawingRevision(r,m,action),audit(m,r,before,action,'工程画图工作台'),...extra]);return json({ok:true,record:publicDrawing(s,m,r),item:publicDrawing(s,m,r)});}
 
 export async function engineeringDrawingGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
@@ -66,7 +79,9 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
   }
   // Acceptance is a recorded decision. Any business-field changes are explicit, separate human edits.
   const decision={id:newId('drawing_event_decision'),kind:'engineering_drawing_event_decision',recordId:r.id,customerId:r.customerId,eventId:event.id,decision:input.decision,note:input.note,actorId:m.id,createdAt:now()};
-  return persist(s,m,r,before,'核对邮件变更（'+(input.decision==='accepted'?'已采纳':'未采纳')+'）',[updated,decision]);
+  const createsSop=input.decision==='accepted'&&isDrawingChangeType(event.request?.drawingType);if(createsSop&&!r.customerId)throw new AppError('请先明确绑定客户，再采纳改图并建立SOP义务。');
+  const sopChanges=createsSop?planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:String(event.request?.requirement||input.note)},'change_instruction',event.id).updates:[];
+  return persist(s,m,r,before,'核对邮件变更（'+(input.decision==='accepted'?'已采纳':'未采纳')+'）',[updated,decision,...sopChanges]);
  }
  const input=parse(z.object({recordId:id,version,modelNo:text(3000),requirement:z.string().trim().min(1).max(12000),note:text(6000)}).strict(),await req.json()),before=readable(s,m,input.recordId);current(before,input.version);
  if(!canEditDrawingRequest(s,m,before))throw new AppError('没有追加画图明细权限。',403);
@@ -111,6 +126,7 @@ async function save(s:State,m:Member,body:unknown){
   if(executionChanged)r.legacyNeedsReview=false;
  }
  const extra:Entity[]=mutationKey?[{id:mutationKey,kind:'engineering_drawing_mutation',recordId:r.id,actorId:m.id,fingerprint:digest,createdAt:now()}]:[];
+ if(isDrawingChangeType(r.drawingType)&&(!before||['drawingType','requirement'].some(k=>changed(r[k],before[k])))){if(!r.customerId)throw new AppError('请先明确绑定客户，再发出改图并建立SOP义务。');const applied=before?adoptedSopApplication(s,m,before,r):null;extra.push(...(applied||planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'改图需求待明确SOP版本'},'change_instruction').updates));}
  return persist(s,m,r,before,before?'更新工程画图跟进':'新建画图需求',extra);
 }
 
@@ -126,6 +142,7 @@ async function emailIntake(s:State,m:Member,body:unknown){
   r=createDrawing(drawingFieldsSchema.parse({...input.request,customerCode:input.request.customerCode||c.customerCode||c.customer}),m,{type:'email',messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId});
  }
  const event:DrawingEvent={id:eventId,kind:'engineering_drawing_event',recordId:r.id,customerId:r.customerId,messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId,sender:input.sender,subject:input.subject,receivedAt:input.receivedAt,request:input.request,fingerprint:digest,status:before?'pending':'created',reviewNote:'',actorId:m.id,createdAt:now()};
- await commit(s.revision,[r,drawingRevision(r,m,before?'收取邮件变更（待核对）':'邮件新画图需求'),event,audit(m,r,before,before?'收取邮件变更（待核对）':'邮件新画图需求','授权邮箱接入')]);
+ const sopChanges=!before&&isDrawingChangeType(r.drawingType)?planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'邮件改图需求待明确SOP版本'},'change_instruction',event.id).updates:[];
+ await commit(s.revision,[r,drawingRevision(r,m,before?'收取邮件变更（待核对）':'邮件新画图需求'),event,audit(m,r,before,before?'收取邮件变更（待核对）':'邮件新画图需求','授权邮箱接入'),...sopChanges]);
  return json({ok:true,record:publicDrawing(s,m,r),event});
 }

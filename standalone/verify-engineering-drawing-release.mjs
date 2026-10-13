@@ -29,13 +29,13 @@ async function sources(){
 }
 for(const name of ['workspace-api.mjs','runtime.mjs','auth.mjs','server.mjs','manage.mjs','client/index.html'])await fs.access(path.join(buildDir,name));
 const beforeSource=await sources(),beforeBuild=await filesHash(buildDir);
-const required=['business','types','standalone','drawing-import'];
+const required=['business','types','standalone','drawing-import','drawing-browser','sop-browser'];
 if(checkOnly){
  const saved=JSON.parse(await fs.readFile(evidence,'utf8'));
  if(saved.format!=='doon-engineering-release-v1'||saved.buildDir!==buildDir||JSON.stringify(saved.sourceHashes)!==JSON.stringify(beforeSource)||JSON.stringify(saved.buildHashes)!==JSON.stringify(beforeBuild)||!required.every(name=>saved.checks?.some(item=>item.name===name&&item.passed===true)))throw new Error('Release evidence is missing, failed, or stale; build and validate the exact sources again.');
  console.log(JSON.stringify({verified:true,buildDir,evidence,verifiedAt:saved.verifiedAt}));
 }else{
- const commands=[['business',['tests/run.mjs']],['types',['node_modules/typescript/bin/tsc','--noEmit']],['standalone',['standalone/test.mjs']],['drawing-import',['standalone/test-engineering-drawing-import.mjs']]],checks=[];
+ const commands=[['business',['tests/run.mjs']],['types',['node_modules/typescript/bin/tsc','--noEmit']],['standalone',['standalone/test.mjs']],['drawing-import',['standalone/test-engineering-drawing-import.mjs']],['drawing-browser',['standalone/test-engineering-drawing-browser.mjs']],['sop-browser',['standalone/test-engineering-sop-browser.mjs']]],checks=[];
  const env={...process.env,DOON_BUILD_DIR:buildDir};delete env.DOON_DATA_DIR;delete env.DOON_TEST_ORIGINALS;delete env.DOON_TEST_ORIGINALS_MANIFEST;
  for(const [name,command] of commands){
   console.log(`Verifying ${name}…`);execFileSync(process.execPath,command,{cwd:root,env,stdio:'inherit'});checks.push({name,passed:true});

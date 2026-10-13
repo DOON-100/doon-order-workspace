@@ -28,7 +28,7 @@ try{
  await context.addInitScript(()=>Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true}));
  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  const page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
- await page.goto(origin+'/engineering-drawings');await page.getByRole('heading',{name:'工程画图跟进表',exact:true}).waitFor();
+ await page.goto(origin+'/engineering-drawings');await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('heading',{name:'工程画图跟进表',exact:true}).waitFor();
  await page.getByRole('button',{name:'新增画图需求',exact:true}).click();
  await page.getByLabel('关联客户档案',{exact:true}).selectOption(customer.id);
  await page.getByLabel('新款数量',{exact:true}).fill('2');

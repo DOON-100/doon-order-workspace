@@ -23,7 +23,7 @@ import {PmcPanel} from './pmc-panel';
 import {FinishedSupplierPanel} from './finished-supplier-panel';
 import {CollaborationPanel,CustomerMasterPanel} from './collaboration-panel';
 import {ServiceWorkspacePanel} from './service-workspace-panel';
-import {EngineeringDrawingPanel} from './engineering-drawing-panel';
+import {EngineeringDepartmentPanel} from './engineering-department-panel';
 import {CustomerProjectPanel} from './customer-project-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
 import {CustomerQuotePanel} from './customer-quote-panel';
@@ -87,7 +87,7 @@ function Surface({identity,signInUrl,initialView='orders',accountControls,Accoun
  {view==='customer-quotes'&&<CustomerQuotePanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data}/>}
  {view==='service'&&<ServiceWorkspacePanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}><CollaborationPanel side="service" data={data} act={action} busy={busy} openOrder={setSelected}/></ServiceWorkspacePanel>}
- {view==='engineering-drawings'&&<EngineeringDrawingPanel data={data} onDirtyChange={setPmcDirty}/>}
+ {view==='engineering-drawings'&&<EngineeringDepartmentPanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='customer-projects'&&<CustomerProjectPanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/>}
  {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy}/>}
