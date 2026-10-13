@@ -111,6 +111,18 @@ try{
  }
  pass('两位客服分别登录均能看到和跟进同一项目，无关账号看不到项目');
  await page.screenshot({path:path.join(dir,'project-created.png'),fullPage:true});pass('浏览器新建客户项目成功，真实保存到隔离数据库');
+ const taskTitle='合成两级审核跟进事项';
+ await page.getByRole('button',{name:'沟通与待办',exact:true}).click();
+ await page.getByRole('button',{name:'新增行动',exact:true}).click();
+ await dialog.getByLabel('行动标题',{exact:false}).fill(taskTitle);
+ await dialog.getByLabel('客服跟进人',{exact:false}).selectOption(serviceMembers[0].id);
+ await dialog.getByLabel('客服审核人',{exact:false}).selectOption(serviceMembers[1].id);
+ await dialog.getByLabel('业务审核人',{exact:false}).selectOption(admin.id);
+ await dialog.getByLabel('下次跟进 / 完成日',{exact:false}).fill(day);
+ await dialog.getByLabel('行动内容',{exact:false}).fill('合成跟进及两级意见验证');
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert.equal((await workspace('customer-project-data')).tasks.find(t=>t.title===taskTitle).roundId,'');
+ await page.getByRole('button',{name:'需求与款色',exact:true}).click();
  await page.getByRole('button',{name:'增加款色',exact:true}).click();
  for(const [label,value] of [['内部款号','MODEL-X'],['客户款号','CLIENT-X'],['图纸编号','DRAW-X'],['色号','C1'],['镜片','RX'],['材质','Synthetic'],['开发目标数量（副）','10'],['该款色要求','Fixture only']])await dialog.getByLabel(label,{exact:false}).fill(value);
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
@@ -163,6 +175,55 @@ try{
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
  const communicated=await workspace('customer-project-data');assert(communicated.communications.some(c=>c.content==='浏览器登记客户确认寄样地址'));assert(communicated.tasks.some(t=>t.title==='浏览器待办核对运单'));
  pass('浏览器沟通表单成功生成对应行动项');
+ await page.getByRole('row').filter({hasText:'浏览器待办核对运单'}).getByRole('button',{name:'取消行动',exact:true}).click();
+ await dialog.getByLabel('取消原因',{exact:false}).fill('合成取消测试：缺审核配置也可正常取消');
+ await dialog.getByRole('button',{name:'确认取消行动',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ assert.equal((await workspace('customer-project-data')).tasks.find(t=>t.title==='浏览器待办核对运单').status,'cancelled');
+ const taskContexts=[];
+ async function taskPage(session){
+  const ctx=await browser.newContext({viewport:{width:1536,height:1050}}),at=session.cookie.indexOf('=');taskContexts.push(ctx);
+  await ctx.addCookies([{name:session.cookie.slice(0,at),value:session.cookie.slice(at+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
+  const p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.accept());await p.goto(origin+'/customer-projects');return p;
+ }
+ async function openQueue(p,label){
+  await p.reload();await p.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+  await p.getByRole('button',{name:'跟进与审核',exact:true}).click();
+  await p.locator('.cp-task-queues').getByRole('button',{name:new RegExp('^'+label)}).click();
+  await p.getByRole('textbox',{name:'搜索跟进与审核事项',exact:true}).fill(taskTitle);
+  return p.getByRole('row').filter({hasText:taskTitle});
+ }
+ async function submitResult(p,result){
+  const row=await openQueue(p,'本人待跟进事项');await row.getByRole('button',{name:'已完成，提交审核',exact:true}).click();
+  const modal=p.getByRole('dialog');await modal.getByLabel('完成结果 / 处理说明',{exact:false}).fill(result);
+  await modal.getByRole('button',{name:'已完成，提交审核',exact:true}).click();await modal.waitFor({state:'hidden'});
+  await row.waitFor({state:'hidden'});
+ }
+ async function reviewResult(p,stage,decision,comment){
+  const row=await openQueue(p,stage==='service'?'待我客服审核':'待我业务审核');
+  await row.getByRole('button',{name:stage==='service'?'客服审核':'业务审核',exact:true}).click();
+  const modal=p.getByRole('dialog');assert.match(await modal.getByLabel('提交的完成结果',{exact:false}).inputValue(),/合成完成结果/);
+  await modal.getByLabel('审核结论',{exact:false}).selectOption(decision);
+  await modal.getByLabel('审核意见',{exact:true}).fill(comment);
+  await modal.getByRole('button',{name:'提交审核意见',exact:true}).click();await modal.waitFor({state:'hidden'});
+  await row.waitFor({state:'hidden'});
+ }
+ const followPage=await taskPage(serviceSessions[0]),reviewPage=await taskPage(serviceSessions[1]);
+ await submitResult(followPage,'合成完成结果V1：核对客户要求');
+ await reviewResult(reviewPage,'service','return','合成客服意见：请补充图纸版本');
+ const returnedRow=await openQueue(followPage,'本人待跟进事项');await returnedRow.waitFor();assert.match(await returnedRow.innerText(),/请补充图纸版本/);
+ await followPage.screenshot({path:path.join(dir,'task-returned-followup.png'),fullPage:true});
+ await submitResult(followPage,'合成完成结果V2：已补图纸版本');
+ await reviewResult(reviewPage,'service','approve','合成客服复核意见：已补充且通过');
+ pass('指定跟进人登录可筛选本人事项并提交，指定客服可退回写意见，补充后再次通过进入业务审核');
+ const salesRow=await openQueue(page,'待我业务审核');await salesRow.waitFor();assert.match(await salesRow.innerText(),/待业务审核/);
+ await page.screenshot({path:path.join(dir,'task-sales-review.png'),fullPage:true});
+ await reviewResult(page,'sales','approve','合成业务意见：同意完成');
+ const doneRow=await openQueue(page,'已完成');await doneRow.waitFor();await doneRow.locator('summary').click();
+ for(const opinion of ['合成客服意见：请补充图纸版本','合成客服复核意见：已补充且通过','合成业务意见：同意完成'])assert((await doneRow.innerText()).includes(opinion));
+ const reviewed=(await workspace('customer-project-data')).tasks.find(t=>t.title===taskTitle);assert.equal(reviewed.status,'done');assert.equal(reviewed.reviewCycle,2);assert.equal(reviewed.reviewHistory.length,5);
+ await page.screenshot({path:path.join(dir,'task-completed-history.png'),fullPage:true});
+ for(const ctx of taskContexts)await ctx.close();
+ pass('业务审核人独立队列通过后最终完成；完整保留跟进结果、退回与两级审核意见');
  assert.equal(errors.length,0,errors.join('\n'));pass('已转内部项目、沟通、费用与售后页面加载无脚本错误');
  await page.setViewportSize({width:1280,height:900});await page.screenshot({path:path.join(dir,'project-desktop.png'),fullPage:true});
  const current=new Map(originalRows().map(r=>[r.id,r.data]));for(const row of originals)assert.equal(current.get(row.id),row.data,'Existing record changed: '+row.id);

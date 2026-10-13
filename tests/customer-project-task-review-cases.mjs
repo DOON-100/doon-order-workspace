@@ -1,0 +1,105 @@
+import assert from 'node:assert/strict';
+
+// All identities and workflow records belong to the isolated synthetic API database.
+export async function testCustomerProjectTaskReview({ok,call,state,pass,rawRecords,rawInsert,admin}){
+ const original=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),current=id=>rawRecords().find(r=>r.id===id),users={};
+ for(const key of ['follow','reviewer','sales','leader','outsider']){
+  const user={userId:'synthetic_task_review_'+key,email:'task-review-'+key+'@test.invalid',displayName:'合成审核-'+key,fullName:'合成审核-'+key};
+  await ok('member',{name:user.displayName,email:user.email,role:key==='follow'||key==='reviewer'?'clerk':'sales',customers:[],active:true});await ok('enroll',{},user);users[key]=user;
+ }
+ const members=(await state()).members,mid=key=>members.find(m=>m.email===users[key].email).id;
+ const customerBody={customer:'合成两级审核客户',customerCode:'SYN-REVIEW-C',salesName:users.sales.displayName,serviceName:users.follow.displayName,salesMemberIds:[mid('sales')],serviceMemberIds:[mid('follow'),mid('reviewer'),mid('leader')],active:true};
+ const customer=(await ok('customer-save',customerBody)).item;
+ const team=(await ok('customer-project-team-save',{token:token(),name:'合成跟进审核组',leaderIds:[mid('leader')],salesMemberIds:[mid('sales')],serviceMemberIds:[mid('follow'),mid('reviewer')],customerIds:[customer.id],active:true})).item;
+ const projectBody={customerId:customer.id,code:'SYN-TASK-P',title:'合成两级审核项目',description:'Synthetic only',teamId:team.id,salesMemberId:mid('sales'),serviceMemberIds:[mid('follow'),mid('reviewer')],serviceReviewerId:mid('reviewer'),salesReviewerId:mid('sales'),status:'active'};
+ const project=(await ok('customer-project-save',{...projectBody,token:token()})).item;
+ const denied=async(action,body,user=users.follow,status=403)=>{const before=structuredClone(rawRecords()),response=await call(action,body,user);assert.equal(response.status,status,await response.text());assert.deepEqual(rawRecords(),before,'Rejected workflow call must not write');};
+ const createBody=()=>({token:token(),projectId:project.id,roundId:'',title:'合成待跟进事项',description:'核对图纸参数',ownerId:mid('follow'),serviceReviewerId:mid('reviewer'),salesReviewerId:mid('sales'),waitingFor:'self',dueDate:'2026-11-30',status:'open'});
+ const dataFor=user=>ok('customer-project-data',undefined,user),taskFor=async(id,user)=>(await dataFor(user)).tasks.find(t=>t.id===id);
+ const body=createBody();let task=(await ok('customer-project-task-save',body,users.sales)).item;
+ assert.equal((await ok('customer-project-task-save',body,users.sales)).item.id,task.id);
+ assert.equal((await taskFor(task.id,users.follow)).canSubmit,true);assert.equal((await taskFor(task.id,users.follow)).canManage,false);
+ assert.equal((await taskFor(task.id,users.sales)).canManage,true);assert.equal((await taskFor(task.id,users.leader)).canManage,true);
+ assert.equal((await dataFor(users.outsider)).tasks.some(t=>t.id===task.id),false);
+ await denied('customer-project-task-save',createBody());
+ await denied('customer-project-task-save',{...createBody(),ownerId:mid('outsider')},users.sales,400);
+ for(const field of ['serviceReviewerId','salesReviewerId'])await denied('customer-project-task-save',{...createBody(),[field]:mid('follow')},users.sales,400);
+ await denied('customer-project-task-save',{...createBody(),status:'done'},users.sales,400);
+ await denied('customer-project-save',{...projectBody,token:token(),id:project.id,version:current(project.id).version,salesMemberId:mid('follow')});
+ await denied('customer-project-save',{...projectBody,token:token(),id:project.id,version:current(project.id).version,serviceReviewerId:mid('leader')});
+ pass('跟进审核名单仅业务、组负责人或管理员可管理；跟进人不能自封业务、改审核人或直接标完成，同人自审和跨客户指派被拒绝');
+
+ const submitBody=(id,result)=>({token:token(),projectId:project.id,id,version:current(id).version,result});
+ const reviewBody=(id,stage,decision='approve',comment='合成审核意见')=>({token:token(),projectId:project.id,id,version:current(id).version,stage,decision,comment});
+ const firstSubmit=submitBody(task.id,'已核对V1图纸及客户要求');
+ await denied('customer-project-task-submit',firstSubmit,users.sales);await denied('customer-project-task-submit',firstSubmit,admin);
+ task=(await ok('customer-project-task-submit',firstSubmit,users.follow)).item;
+ assert.equal(task.status,'service_review');assert.equal(task.reviewCycle,1);assert.equal(task.reviewHistory.length,1);
+ const afterSubmit=structuredClone(rawRecords());await ok('customer-project-task-submit',firstSubmit,users.follow);assert.deepEqual(rawRecords(),afterSubmit);
+ assert.equal((await taskFor(task.id,users.reviewer)).canReviewService,true);
+ await denied('customer-project-task-review',reviewBody(task.id,'sales'),users.sales,409);
+ await denied('customer-project-task-review',reviewBody(task.id,'service'),users.follow);
+ await denied('customer-project-task-review',reviewBody(task.id,'service'),admin);
+ await denied('customer-project-task-review',{...reviewBody(task.id,'service'),version:1},users.reviewer,409);
+ const serviceApprove=reviewBody(task.id,'service','approve','客服核对尺寸无误');
+ task=(await ok('customer-project-task-review',serviceApprove,users.reviewer)).item;assert.equal(task.status,'sales_review');
+ const afterApprove=structuredClone(rawRecords());await ok('customer-project-task-review',serviceApprove,users.reviewer);assert.deepEqual(rawRecords(),afterApprove);
+ await denied('customer-project-task-review',reviewBody(task.id,'sales','return',''),users.sales,400);
+ task=(await ok('customer-project-task-review',reviewBody(task.id,'sales','return','请补齐客户书面确认'),users.sales)).item;assert.equal(task.status,'returned');
+ task=(await ok('customer-project-task-submit',submitBody(task.id,'补齐客户确认V2'),users.follow)).item;assert.equal(task.status,'service_review');assert.equal(task.reviewCycle,2);
+ await denied('customer-project-task-review',reviewBody(task.id,'sales'),users.sales,409);
+ task=(await ok('customer-project-task-review',reviewBody(task.id,'service','return','请补充色号'),users.reviewer)).item;assert.equal(task.status,'returned');
+ task=(await ok('customer-project-task-submit',submitBody(task.id,'客户确认V3且已补色号'),users.follow)).item;
+ task=(await ok('customer-project-task-review',reviewBody(task.id,'service','approve','客服复核通过'),users.reviewer)).item;
+ task=(await ok('customer-project-task-review',reviewBody(task.id,'sales','approve','业务最终确认通过'),users.sales)).item;
+ assert.equal(task.status,'done');assert.equal(task.reviewCycle,3);assert.equal(task.reviewHistory.length,8);
+ for(const opinion of ['客服核对尺寸无误','请补齐客户书面确认','请补充色号','业务最终确认通过'])assert(task.reviewHistory.some(e=>e.comment===opinion));
+ assert.deepEqual(task.reviewHistory.filter(e=>e.action==='approve').map(e=>e.actorId),[mid('reviewer'),mid('reviewer'),mid('sales')]);
+ await denied('customer-project-task-save',{...createBody(),id:task.id,version:task.version},users.sales,409);
+ pass('跟进人提交后依次由指定客服和业务审核，任一级退回重走两级；意见和三轮结果留痕，跳级、代审、过期与重复提交不能绕过');
+
+ const editable=(await ok('customer-project-task-save',createBody(),users.leader)).item;
+ await ok('customer-project-task-submit',submitBody(editable.id,'待复核的原始结果'),users.follow);
+ const oldHistory=structuredClone(current(editable.id).reviewHistory);
+ const edit={...createBody(),id:editable.id,version:current(editable.id).version,dueDate:'2026-12-01'};
+ await denied('customer-project-task-save',edit,users.sales,400);
+ const edited=(await ok('customer-project-task-save',{...edit,changeReason:'调整交期后重新核对',result:'不能由派单人覆盖处理结果'},users.sales)).item;
+ assert.equal(edited.status,'open');assert.equal(edited.result,'待复核的原始结果');assert.deepEqual(edited.reviewHistory.slice(0,oldHistory.length),oldHistory);
+ assert(edited.reviewHistory.some(e=>e.comment.includes('调整交期')));
+ await ok('customer-project-task-submit',submitBody(editable.id,'调整后的完成结果'),users.follow);
+ const reviewerRecord=current(mid('reviewer'));await ok('member',{...reviewerRecord,active:false});
+ assert.equal((await taskFor(editable.id,users.sales)).canReviewService,false);
+ await denied('customer-project-task-review',reviewBody(editable.id,'service'),users.reviewer);
+ await ok('member',{...reviewerRecord,active:true});
+ await ok('customer-save',{...customerBody,id:customer.id,serviceMemberIds:[mid('follow'),mid('leader')]});
+ await denied('customer-project-task-review',reviewBody(editable.id,'service'),users.reviewer);
+ assert.equal((await dataFor(users.reviewer)).tasks.some(t=>t.id===editable.id),false);
+ await ok('customer-save',{...customerBody,id:customer.id});
+ const cancel=(await ok('customer-project-task-save',{...createBody(),id:editable.id,version:current(editable.id).version,status:'cancelled',changeReason:'合成事项取消留痕'},users.sales)).item;
+ assert.equal(cancel.status,'cancelled');assert(cancel.reviewHistory.length>oldHistory.length);
+ pass('审批中改派或改配置须理由并重新跟进，已提交结果与意见保留；成员停用及客户撤权即时阻止审核，取消保留记录');
+
+ const archiveProject=(await ok('customer-project-save',{...projectBody,token:token(),code:'SYN-TASK-ARCHIVE',title:'合成未完审核归档检查'})).item;
+ const pending=(await ok('customer-project-task-save',{...createBody(),projectId:archiveProject.id},users.sales)).item;
+ await ok('customer-project-task-submit',{...submitBody(pending.id,'待审结果'),projectId:archiveProject.id},users.follow);
+ await denied('customer-project-save',{...projectBody,token:token(),id:archiveProject.id,version:archiveProject.version,status:'archived'},admin,400);
+ const legacy={...task,id:'synthetic_task_review_legacy_done',reviewCycle:undefined,reviewHistory:undefined,serviceReviewerId:undefined,salesReviewerId:undefined};rawInsert(legacy);
+ const oldOpen={...legacy,id:'synthetic_task_review_legacy_open',status:'open',result:''};rawInsert(oldOpen);
+ const beforeRead=structuredClone(rawRecords());const legacyDto=await taskFor(legacy.id,users.follow);assert.deepEqual(legacyDto.reviewHistory,[]);assert.deepEqual(rawRecords(),beforeRead);
+ assert.equal((await taskFor(oldOpen.id,users.follow)).canSubmit,false);
+ await denied('customer-project-task-submit',submitBody(oldOpen.id,'未设审核人不能提交'),users.follow,400);
+ const configured=(await ok('customer-project-task-save',{...createBody(),id:oldOpen.id,version:oldOpen.version},users.sales)).item;
+ assert.equal((await taskFor(configured.id,users.follow)).canSubmit,true);
+ const recoveryBody={...projectBody,code:'SYN-TASK-RECOVERY',title:'合成暂停项目配置恢复',serviceMemberIds:[mid('follow')]};
+ let recoverable=(await ok('customer-project-save',{...recoveryBody,token:token(),status:'paused'})).item;
+ await ok('member',{...reviewerRecord,active:false});
+ const pausedDto=(await dataFor(users.sales)).projects.find(p=>p.id===recoverable.id);
+ assert.equal(pausedDto.canManageTasks,false);assert.equal(pausedDto.canManageAssignments,true);
+ await denied('customer-project-save',{...recoveryBody,token:token(),id:recoverable.id,version:recoverable.version,serviceReviewerId:mid('leader'),status:'active'});
+ recoverable=(await ok('customer-project-save',{...recoveryBody,token:token(),id:recoverable.id,version:recoverable.version,serviceReviewerId:mid('leader'),status:'active'},users.sales)).item;
+ assert.equal(recoverable.status,'active');assert.equal(recoverable.serviceReviewerId,mid('leader'));
+ await ok('member',{...reviewerRecord,active:true});
+ const afterAll=new Map(rawRecords().map(record=>[record.id,record]));
+ for(const record of original)assert.deepEqual(afterAll.get(record.id),record,'Previous business data must remain unchanged: '+record.id);
+ pass('待审核任务阻止项目提前归档，旧已完成记录不迁移，旧待办设置审核人后可继续；前序业务记录全部保持原样');
+}

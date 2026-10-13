@@ -106,6 +106,7 @@ const {testCustomerQuoteArchive}=await import('./customer-quote-archive-cases.mj
 const {testDrawingCorrection}=await import('./drawing-correction-cases.mjs');await testDrawingCorrection({ok,call,state,original,preview,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawPut:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(record.id,record.kind,JSON.stringify(record))});
 const projectHarness={ok,call,state,pass,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))};
 const {testCustomerProjects}=await import('./customer-project-cases.mjs');await testCustomerProjects(projectHarness);
+const {testCustomerProjectTaskReview}=await import('./customer-project-task-review-cases.mjs');await testCustomerProjectTaskReview(projectHarness);
 const {testCustomerProjectFinance}=await import('./customer-project-finance-cases.mjs');await testCustomerProjectFinance(projectHarness);
 console.log('Total business checks:',checks.length);
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

@@ -5,7 +5,7 @@ import {sha} from './workbooks';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,customerQuoteVersion,type CustomerQuote} from './customer-quotes';
 import {currentStage,warehouse} from './ledger';
-import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,projectKey,type CustomerProject,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
+import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,canManageProjectAssignments,canManageProjectTasks,projectTaskPermissions,projectKey,type CustomerProject,type CustomerProjectTask,type CustomerProjectTaskReviewEvent,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
 
 const id=z.string().trim().min(1).max(160),text=(n=2000)=>z.string().trim().max(n).default(''),ids=z.array(id).max(300).refine(v=>new Set(v).size===v.length,'编号不能重复').default([]),token=z.string().uuid();
 const day=text(10).refine(v=>{try{return !v||/^\d{4}-\d{2}-\d{2}$/.test(v)&&strictDate(v)===v;}catch{return false;}},'日期须为有效YYYY-MM-DD');
@@ -14,11 +14,13 @@ const mutation={id:id.optional(),version:z.number().int().positive().optional(),
 const append={token,projectId:id,roundId:text(160)};
 export const customerProjectSchemas={
  'team-save':z.object({...mutation,name:id,leaderIds:ids,salesMemberIds:ids,serviceMemberIds:ids,customerIds:ids,active:z.boolean().default(true)}).strict(),
- save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active')}).strict(),
+ save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active')}).strict(),
  'item-save':z.object({...mutation,projectId:id,model:id,customerModel:text(160),drawing:text(160),color:text(160),lens:text(160),material:text(160),requirements:text(6000),quantity:qty}).strict(),
  'round-save':z.object({...mutation,projectId:id,title:id,type:z.enum(['development','revision','sales_sample','preproduction','bulk']),parentRoundId:text(160),scope,stage:text(160),requiredDrawingTypes:z.array(z.enum(['2d','3d'])).max(2).default(['2d']),requireQuote:z.boolean().default(true),requiredSampleIds:ids,sampleGateStage:z.enum(['order','before_production','not_required']).default('order'),sampleGateNote:text(2000),dueDate:day,reason:text(3000),status:z.enum(['open','cancelled']).optional()}).strict(),
  communication:z.object({...append,channel:text(120),contact:text(240),occurredAt:day,content:z.string().trim().min(1).max(10000),nextAction:text(2000),ownerId:text(160),dueDate:day,visibility:z.enum(['internal','customer']).default('internal'),attachmentIds:ids}).strict(),
- 'task-save':z.object({...mutation,projectId:id,roundId:text(160),title:id,description:text(6000),ownerId:id,waitingFor:text(240),dueDate:day,status:z.enum(['open','done','cancelled']).default('open'),result:text(3000)}).strict(),
+ 'task-save':z.object({...mutation,projectId:id,roundId:text(160),title:id,description:text(6000),ownerId:id,serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),waitingFor:text(240),dueDate:day,status:z.enum(['open','cancelled']).default('open'),result:text(3000),changeReason:text(3000)}).strict(),
+ 'task-submit':z.object({token,projectId:id,id,version:z.number().int().positive(),result:z.string().trim().min(1).max(3000)}).strict(),
+ 'task-review':z.object({token,projectId:id,id,version:z.number().int().positive(),stage:z.enum(['service','sales']),decision:z.enum(['approve','return']),comment:text(3000)}).strict(),
  drawing:z.object({...append,roundId:id,itemIds:ids,type:z.enum(['customer','2d','3d','artwork','packing']),drawingNo:id,revision:id,previousId:text(160),pairedDrawingId:text(160),attachmentIds:ids,changeNote:text(3000)}).strict(),
  'drawing-withdraw':z.object({id,version:z.number().int().positive(),reason:z.string().trim().min(3).max(2000)}).strict(),
  confirmation:z.object({...append,roundId:id,drawingId:id,itemIds:ids,decision:z.enum(['approved','conditional','rejected']),contact:id,date:day,evidence:z.string().trim().min(3).max(3000),conditions:text(3000),attachmentIds:ids}).strict(),
@@ -48,7 +50,7 @@ function quoteVisible(s:State,m:Member,link:Entity){const quote=all(s,'customer_
 function publicLink(s:State,m:Member,link:Entity){return quoteVisible(s,m,link)?safeRecord(link):{id:link.id,kind:link.kind,projectId:link.projectId,roundId:link.roundId,itemIds:link.itemIds,accepted:true,restricted:true};}
 async function replay(s:State,m:Member,action:string,input:any){if(!input.token)return null;const found=all(s,'customer_project_request').find(r=>r.id==='customer_project_request_'+input.token);if(!found)return null;const hash=await sha(JSON.stringify({action,input}));if(found.actorId!==m.id||found.action!==action||found.hash!==hash)throw new AppError('请求编号已用于其他内容，请刷新核对。',409);const result=s.records.find(r=>r.id===found.resultId);if(!result)throw new AppError('原操作结果待核对。',409);if(result.kind==='customer_project_quote_link'&&!quoteVisible(s,m,result))throw new AppError('当前报价授权已变更，不能通过重放历史请求读取。',403);return json({ok:true,item:result.kind==='customer_project_sample'?safeSample(result):safeRecord(result),idempotent:true});}
 async function persist(s:State,m:Member,action:string,input:any,item:Entity,before:Entity|null=null,extra:Entity[]=[]){const updates=[item,...extra,audit(m,item,before,'客户项目 · '+action,'客户项目',safeRecord(item))];if(input.token)updates.push({id:'customer_project_request_'+input.token,kind:'customer_project_request',projectId:item.projectId||item.id,customerId:item.customerId||'',action,actorId:m.id,hash:await sha(JSON.stringify({action,input})),resultId:item.id,createdAt:now()});await commit(s.revision,updates);return json({ok:true,item:item.kind==='customer_project_sample'?safeSample(item):safeRecord(item)});}
-function newRecord(kind:string,p:CustomerProject,m:Member,input:any){const {token:_,id:__,version:___,...fields}=input;return {...fields,id:newId(kind),kind,customerId:p.customerId,projectId:p.id,...meta(m)} as Entity;}
+function newRecord(kind:string,p:CustomerProject,m:Member,input:any){const {token:_,id:__,version:___,...fields}=input;const taskDefaults=kind==='customer_project_task'?{serviceReviewerId:p.serviceReviewerId||'',salesReviewerId:p.salesReviewerId||'',reviewHistory:[],reviewCycle:0}:{};return {...taskDefaults,...fields,id:newId(kind),kind,customerId:p.customerId,projectId:p.id,...meta(m)} as Entity;}
 function existingOrNew(s:State,m:Member,kind:string,input:any){if(input.id){const found=all(s,kind).find(i=>i.id===input.id);if(!found)throw new AppError('记录不存在。',404);fresh(found,input.version);return found;}if(!input.token)throw new AppError('新记录需要唯一请求编号。');return null;}
 function safeOrders(s:State,m:Member,customers:CustomerAccount[]){const keys=new Set(customers.flatMap(c=>serviceOrderCustomerKeys(s,c).map(projectKey)));return (all(s,'order') as Order[]).filter(o=>keys.has(projectKey(o.customer))&&canRead(m,o)).map(o=>({id:o.id,version:o.version,customer:o.customer,orderNo:o.orderNo,customerPO:o.customerPO,drawing:o.drawing,color:o.color,lens:o.lens,quantity:o.quantity,sourceStatus:o.sourceStatus,workflowStatus:o.workflowStatus,lifecycle:o.lifecycle,stage:currentStage(o),plannedDate:o.plannedDate,promisedDate:o.promiseConfirmed?o.promisedDate:'',requestedDate:o.requestedDate,warehouse:warehouse(o),updatedAt:o.updatedAt}));}
 
@@ -69,13 +71,15 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
  }
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(c=>projectAccess(s,m,c.id).read),customerIds=new Set(customers.map(c=>c.id));
  const projects=all(s,'customer_project').filter(p=>customerIds.has(p.customerId)),projectIds=new Set(projects.map(p=>p.id));
+ const projectById=new Map(projects.map(p=>[p.id,p as CustomerProject]));
  const rows=(kind:string)=>all(s,kind).filter(r=>projectIds.has(r.projectId)&&customerIds.has(r.customerId));
  const ownedSamples=all(s,'customer_project_sample').filter(r=>internalSampleAccess(s,m,r)),samples=all(s,'customer_project_sample').filter(r=>projectIds.has(r.projectId)||ownedSamples.some(x=>x.id===r.id));
  const technicalIds=new Set(ownedSamples.flatMap(x=>x.drawingIds)),drawings=all(s,'customer_project_drawing').filter(r=>projectIds.has(r.projectId)||technicalIds.has(r.id));
  const technicalFiles=new Set(drawings.filter(d=>technicalIds.has(d.id)).flatMap(d=>d.attachmentIds));
  const teams=all(s,'customer_project_team').filter(t=>m.role==='admin'||t.customerIds.some((c:string)=>customerIds.has(c))).map(t=>({...t,customerIds:t.customerIds.filter((c:string)=>m.role==='admin'||customerIds.has(c))}));
  const quotes=(all(s,'customer_quote') as CustomerQuote[]).filter(q=>customerIds.has(q.customerAccountId||'')&&canReadCustomerQuote(s,m,q)).flatMap(q=>{const versions=all(s,'customer_quote_revision').filter(r=>r.quoteId===q.id&&r.snapshot?.status==='confirmed').map(r=>r.snapshot);return versions.filter(v=>v.customerAccountId===q.customerAccountId).map(v=>({id:v.id,version:v.version,quoteNo:v.quoteNo,customerId:v.customerAccountId,status:v.status,lines:v.lines.map((l:any)=>({id:l.id,model:l.model}))}));});
- return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,salesName:c.salesName,serviceName:c.serviceName,active:c.active})),teams,projects:projects.map(p=>({...p,serviceMemberIds:projectServiceMemberIds(p as CustomerProject),canWrite:projectAccess(s,m,p.customerId).write})),items:rows('customer_project_item'),rounds:rows('customer_project_round').map(r=>({...r,remainingScope:remainingRoundScope(s,r as CustomerProjectRound)})),communications:rows('customer_project_communication'),tasks:rows('customer_project_task'),drawings,confirmations:rows('customer_project_confirmation'),quoteLinks:rows('customer_project_quote_link').map(q=>publicLink(s,m,q)),samples:samples.map(sample=>({...safeSample(sample),canExecute:internalSampleAccess(s,m,sample),canCommunicate:projectIds.has(sample.projectId)&&projectAccess(s,m,sample.customerId).write})),dispatches:rows('customer_project_dispatch'),feedback:rows('customer_project_feedback'),handovers:rows('customer_project_handover').map(h=>{const {paymentSnapshot,...safe}=h;return safe;}),attachments:all(s,'customer_project_attachment').filter(a=>projectIds.has(a.projectId)||technicalFiles.has(a.id)).map(safeRecord),orders:safeOrders(s,m,customers),quotes,members:all(s,'member').filter(x=>x.active&&x.role!=='supplier').map(x=>({id:x.id,name:x.name,role:x.role})),canManageTeams:m.role==='admin',canWrite:customers.some(c=>projectAccess(s,m,c.id).write),canExecute:ownedSamples.length>0});
+ const assignableMembers=(customerId:string)=>all(s,'member').filter(assigned=>projectAccess(s,assigned as Member,customerId).write).map(assigned=>assigned.id);
+ return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,salesName:c.salesName,serviceName:c.serviceName,active:c.active,assignableMemberIds:assignableMembers(c.id)})),teams,projects:projects.map(p=>({...p,serviceMemberIds:projectServiceMemberIds(p as CustomerProject),canWrite:projectAccess(s,m,p.customerId).write,canManageTasks:canManageProjectTasks(s,m,p as CustomerProject),canManageAssignments:canManageProjectAssignments(s,m,p as CustomerProject),assignableMemberIds:assignableMembers(p.customerId)})),items:rows('customer_project_item'),rounds:rows('customer_project_round').map(r=>({...r,remainingScope:remainingRoundScope(s,r as CustomerProjectRound)})),communications:rows('customer_project_communication'),tasks:rows('customer_project_task').map(task=>({...task,reviewHistory:Array.isArray(task.reviewHistory)?task.reviewHistory:[],reviewCycle:task.reviewCycle||0,...projectTaskPermissions(s,m,projectById.get(task.projectId)!,task as CustomerProjectTask)})),drawings,confirmations:rows('customer_project_confirmation'),quoteLinks:rows('customer_project_quote_link').map(q=>publicLink(s,m,q)),samples:samples.map(sample=>({...safeSample(sample),canExecute:internalSampleAccess(s,m,sample),canCommunicate:projectIds.has(sample.projectId)&&projectAccess(s,m,sample.customerId).write})),dispatches:rows('customer_project_dispatch'),feedback:rows('customer_project_feedback'),handovers:rows('customer_project_handover').map(h=>{const {paymentSnapshot,...safe}=h;return safe;}),attachments:all(s,'customer_project_attachment').filter(a=>projectIds.has(a.projectId)||technicalFiles.has(a.id)).map(safeRecord),orders:safeOrders(s,m,customers),quotes,members:all(s,'member').filter(x=>x.active&&x.role!=='supplier').map(x=>({id:x.id,name:x.name,role:x.role})),canManageTeams:m.role==='admin',canWrite:customers.some(c=>projectAccess(s,m,c.id).write),canExecute:ownedSamples.length>0});
 }
 
 export async function customerProjectPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
@@ -97,6 +101,9 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
   if(before&&before.customerId!==input.customerId)throw new AppError('项目不能换到另一个客户。');
   if(before?.status==='archived'&&m.role!=='admin')throw new AppError('归档项目仅管理员可重新开启。',403);
   const p=(before||{id:'',customerId:input.customerId}) as CustomerProject;writerOwner(s,p,input.salesMemberId);
+  const serviceReviewerId=input.serviceReviewerId??before?.serviceReviewerId??'',salesReviewerId=input.salesReviewerId??before?.salesReviewerId??'';
+  if(before&&!canManageProjectAssignments(s,m,before)&&(input.teamId!==before.teamId||input.salesMemberId!==before.salesMemberId||serviceReviewerId!==(before.serviceReviewerId||'')||salesReviewerId!==(before.salesReviewerId||'')))throw new AppError('仅项目业务负责人、所属小组组长或管理员可调整业务主责、小组及默认审核人。',403);
+  writerOwner(s,p,serviceReviewerId);writerOwner(s,p,salesReviewerId);
   // Stale single-owner forms may update other fields, but must not silently drop additional staff.
   const priorServices=before?projectServiceMemberIds(before):[];
   if(input.serviceMemberIds===undefined&&priorServices.length>1&&input.serviceMemberId!==undefined&&input.serviceMemberId!==before?.serviceMemberId)throw new AppError('本项目已有多名客服，请刷新页面后在客服多选框中修改。',409);
@@ -105,12 +112,12 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
   if(input.teamId&&!all(s,'customer_project_team').some(t=>t.id===input.teamId&&t.active&&t.customerIds.includes(input.customerId)))throw new AppError('小组不包含当前客户，请先由管理员配置组织归属。');
   if(input.status==='archived'){
    if(!before)throw new AppError('新项目不能直接归档。');
-   const open=s.records.some(r=>r.projectId===before.id&&((r.kind==='customer_project_round'&&['open','partial'].includes(r.status))||(r.kind==='customer_project_task'&&r.status==='open')||(r.kind==='customer_project_sample'&&!['closed','cancelled'].includes(r.status))));if(open)throw new AppError('尚有开发轮次、样办或待办未完成，不能归档。');
+   const open=s.records.some(r=>r.projectId===before.id&&((r.kind==='customer_project_round'&&['open','partial'].includes(r.status))||(r.kind==='customer_project_task'&&!['done','cancelled'].includes(r.status))||(r.kind==='customer_project_sample'&&!['closed','cancelled'].includes(r.status))));if(open)throw new AppError('尚有开发轮次、样办或待办未完成，不能归档。');
    // Finance explicitly validates its own customer balances; core must not infer settlement.
    const {projectFinanceOpenReasons}=await import('./customer-project-finance');const reasons=projectFinanceOpenReasons(s,before.id);if(reasons.length)throw new AppError(reasons.join('；'));
    const orders=all(s,'customer_project_handover').filter(h=>h.projectId===before.id).flatMap(h=>h.orderLinks||[]).map(l=>all(s,'order').find(o=>o.id===l.orderId));if(orders.some(o=>!o||o.lifecycle!=='archived'&&o.workflowStatus!=='已完成'))throw new AppError('仍有关联大货订单未交付关闭，不能归档。');
   }
-  const {id:_,version:__,token:___,...fields}=input,item={...fields,serviceMemberIds:services,serviceMemberId:services[0]||'',id:before?.id||newId('customer_project'),kind:'customer_project',...meta(m,before||undefined)};return persist(s,m,action,input,item,before);
+  const {id:_,version:__,token:___,...fields}=input,item={...fields,serviceMemberIds:services,serviceMemberId:services[0]||'',serviceReviewerId,salesReviewerId,id:before?.id||newId('customer_project'),kind:'customer_project',...meta(m,before||undefined)};return persist(s,m,action,input,item,before);
  }
  if(['sample-update','sample-promise'].includes(name))return updateSample(s,m,action,input,name);
  if(name==='drawing-withdraw'){
@@ -121,7 +128,9 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  if(name==='dispatch-receive'){
   const {item:before}=scopedRecord(s,m,'customer_project_dispatch',input.id);fresh(before,input.version);if(!input.receivedDate||input.receivedDate<before.shipDate)throw new AppError('签收日期不得早于寄出日期。');return persist(s,m,action,input,{...before,receivedDate:input.receivedDate,...meta(m,before)},before);
  }
- const project=requireProject(s,m,input.projectId,{write:true});ensureOpen(project);const repeated=await replay(s,m,action,input);if(repeated)return repeated;
+ const project=requireProject(s,m,input.projectId,{write:true});ensureOpen(project);
+ if(['task-save','task-submit','task-review'].includes(name))return taskAction(s,m,project,action,name,input);
+ const repeated=await replay(s,m,action,input);if(repeated)return repeated;
  if(name==='item-save'){
   const before=existingOrNew(s,m,'customer_project_item',input);if(before&&before.projectId!==project.id)throw new AppError('款色不属于当前项目。');
   if(before&&all(s,'customer_project_handover').some(h=>h.projectId===project.id&&h.scope.some((l:ProjectScope)=>l.itemId===before.id)))throw new AppError('款色已用于下单，请保留原资料并新增款色或改版轮次。',409);
@@ -139,11 +148,8 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  }
  if(name==='communication'){
   if(input.roundId)requireRound(s,project,input.roundId);member(s,input.ownerId,false);attachments(s,project,input.attachmentIds);if(!input.occurredAt)throw new AppError('请填写沟通发生日期。');
+  if(input.nextAction)writerOwner(s,project,input.ownerId||m.id,true);
   const item=newRecord('customer_project_communication',project,m,input),extra=input.nextAction?[newRecord('customer_project_task',project,m,{roundId:input.roundId,title:input.nextAction,description:'由沟通记录生成',ownerId:input.ownerId||m.id,waitingFor:'',dueDate:input.dueDate,status:'open',result:'',communicationId:item.id})]:[];return persist(s,m,action,input,item,null,extra);
- }
- if(name==='task-save'){
-  const before=existingOrNew(s,m,'customer_project_task',input);if(before&&before.projectId!==project.id)throw new AppError('待办不属于当前项目。');if(input.roundId)requireRound(s,project,input.roundId);member(s,input.ownerId);if(input.status==='done'&&!input.result)throw new AppError('完成待办须记录处理结果。');
-  const item={...newRecord('customer_project_task',project,m,input),id:before?.id||newId('customer_project_task'),...meta(m,before||undefined)};return persist(s,m,action,input,item,before);
  }
  if(['sample-dispatch','sample-feedback'].includes(name))return sampleCustomerEvent(s,m,project,action,name,input);
  const round=requireRound(s,project,input.roundId,['drawing','quote-link','sample-release','bulk-link'].includes(name));
@@ -163,6 +169,55 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  }
  if(name==='sample-release'||name==='bulk-link')return release(s,m,project,round,action,name,input);
  throw new AppError('不支持的客户项目操作。');
+}
+
+function taskEvent(m:Member,task:CustomerProjectTask,action:CustomerProjectTaskReviewEvent['action'],stage:CustomerProjectTaskReviewEvent['stage'],comment:string,cycle=task.reviewCycle||0):CustomerProjectTaskReviewEvent{
+ return {id:newId('customer_project_task_event'),action,stage,actorId:m.id,actorName:m.name,at:now(),comment,cycle};
+}
+function taskHistory(task:CustomerProjectTask){return Array.isArray(task.reviewHistory)?task.reviewHistory:[];}
+function validateTaskAssignments(s:State,p:CustomerProject,task:CustomerProjectTask){
+ if(!task.serviceReviewerId||!task.salesReviewerId)throw new AppError('请先由项目业务负责人、小组组长或管理员配置客服审核人与业务审核人。');
+ for(const assignedId of [task.ownerId,task.serviceReviewerId,task.salesReviewerId])writerOwner(s,p,assignedId,true);
+ if([task.serviceReviewerId,task.salesReviewerId].includes(task.ownerId))throw new AppError('跟进人不能审核自己提交的事项，请另选审核人。');
+}
+async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:string,input:any){
+ const before=input.id?all(s,'customer_project_task').find(task=>task.id===input.id) as CustomerProjectTask|undefined:undefined;
+ if(input.id&&(!before||before.projectId!==p.id||before.customerId!==p.customerId))throw new AppError('待办不存在或不属于当前项目。',403);
+ // Current actor and customer authorization always precede idempotent replay; admins do not substitute for a reviewer.
+ if(name==='task-save'){
+  if(!canManageProjectTasks(s,m,p))throw new AppError('仅项目业务负责人、所属小组组长或管理员可指派或调整待办。',403);
+ }else if(name==='task-submit'){
+  if(!before||before.ownerId!==m.id)throw new AppError('仅本事项指定跟进人可提交完成结果。',403);
+ }else{
+  const reviewerId=input.stage==='service'?before?.serviceReviewerId:before?.salesReviewerId;
+  if(!before||reviewerId!==m.id||before.ownerId===m.id)throw new AppError('仅本阶段指定审核人可审核，跟进人不能审核自己的事项。',403);
+ }
+ const repeated=await replay(s,m,action,input);if(repeated)return repeated;
+ if(before)fresh(before,input.version);else if(!input.token)throw new AppError('新记录需要唯一请求编号。');
+ if(name==='task-save'){
+  if(before&&['done','cancelled'].includes(before.status))throw new AppError('已完成或已取消事项保留原始记录，请另建跟进事项。',409);
+  if(!before&&input.status!=='open')throw new AppError('新跟进事项须从待跟进开始。');
+  if(input.roundId)requireRound(s,p,input.roundId);
+  if(before&&['service_review','sales_review'].includes(before.status)&&!input.changeReason)throw new AppError('审核中的事项如需调整或取消，请填写变更原因；调整后须重新提交审核。');
+  if(before&&input.status==='cancelled')return persist(s,m,action,input,{...before,status:'cancelled',reviewHistory:[...taskHistory(before),taskEvent(m,before,'cancel','configuration',input.changeReason||'管理人员取消事项。')],...meta(m,before)},before);
+  const {result:_,changeReason:__,...configuration}=input;
+  const item={...before,...newRecord('customer_project_task',p,m,configuration),id:before?.id||newId('customer_project_task'),serviceReviewerId:input.serviceReviewerId??before?.serviceReviewerId??p.serviceReviewerId??'',salesReviewerId:input.salesReviewerId??before?.salesReviewerId??p.salesReviewerId??'',result:before?.result||'',reviewCycle:before?.reviewCycle||0,reviewHistory:before?taskHistory(before):[],...meta(m,before)} as CustomerProjectTask;
+  validateTaskAssignments(s,p,item);
+  if(before)item.reviewHistory=[...taskHistory(before),taskEvent(m,before,'reconfigure','configuration',input.changeReason||'管理人员调整事项，重新等待跟进提交。')];
+  return persist(s,m,action,input,item,before||null);
+ }
+ if(name==='task-submit'){
+  if(!before||!['open','returned'].includes(before.status))throw new AppError('仅待跟进或退回修改事项可提交，请刷新当前状态。',409);
+  validateTaskAssignments(s,p,before);
+  const cycle=(before.reviewCycle||0)+1,item={...before,status:'service_review',result:input.result,reviewCycle:cycle,reviewHistory:[...taskHistory(before),taskEvent(m,before,'submit','followup',input.result,cycle)],...meta(m,before)};
+  return persist(s,m,action,input,item,before);
+ }
+ const expected=input.stage==='service'?'service_review':'sales_review';
+ if(!before||before.status!==expected)throw new AppError('事项尚未到本审核阶段或已被处理，请刷新当前状态。',409);
+ validateTaskAssignments(s,p,before);
+ if(input.decision==='return'&&!input.comment)throw new AppError('退回修改须填写具体审核意见。');
+ const item={...before,status:input.decision==='return'?'returned':input.stage==='service'?'sales_review':'done',reviewHistory:[...taskHistory(before),taskEvent(m,before,input.decision,input.stage,input.comment)],...meta(m,before)};
+ return persist(s,m,action,input,item,before);
 }
 
 async function upload(req:Request,s:State,m:Member){

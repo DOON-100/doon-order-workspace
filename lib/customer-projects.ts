@@ -4,12 +4,13 @@ import {AppError} from './store';
 
 export type ProjectMeta={version:number;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string};
 export type ProjectScope={itemId:string;quantity:number};
-export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;serviceMemberIds?:string[];dueDate:string;status:'active'|'paused'|'cancelled'|'archived'};
+export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;serviceMemberIds?:string[];serviceReviewerId?:string;salesReviewerId?:string;dueDate:string;status:'active'|'paused'|'cancelled'|'archived'};
 export type CustomerProjectItem=Entity&ProjectMeta&{kind:'customer_project_item';projectId:string;customerId:string;model:string;customerModel:string;drawing:string;color:string;lens:string;material:string;requirements:string;quantity:number};
 export type CustomerProjectRound=Entity&ProjectMeta&{kind:'customer_project_round';projectId:string;customerId:string;title:string;type:'development'|'revision'|'sales_sample'|'preproduction'|'bulk';parentRoundId:string;scope:ProjectScope[];stage:string;requiredDrawingTypes:('2d'|'3d')[];requireQuote:boolean;requiredSampleIds?:string[];sampleGateStage?:'order'|'before_production'|'not_required';sampleGateNote?:string;dueDate:string;status:'open'|'partial'|'transferred'|'cancelled';reason:string};
 export type CustomerProjectTeam=Entity&ProjectMeta&{kind:'customer_project_team';name:string;leaderIds:string[];salesMemberIds:string[];serviceMemberIds:string[];customerIds:string[];active:boolean};
 export type CustomerProjectCommunication=Entity&ProjectMeta&{kind:'customer_project_communication';projectId:string;customerId:string;roundId:string;channel:string;contact:string;occurredAt:string;content:string;nextAction:string;ownerId:string;dueDate:string;visibility:'internal'|'customer';attachmentIds:string[]};
-export type CustomerProjectTask=Entity&ProjectMeta&{kind:'customer_project_task';projectId:string;customerId:string;roundId:string;title:string;description:string;ownerId:string;waitingFor:string;dueDate:string;status:'open'|'done'|'cancelled';result:string};
+export type CustomerProjectTaskReviewEvent={id:string;action:'submit'|'approve'|'return'|'reconfigure'|'cancel';stage:'followup'|'service'|'sales'|'configuration';actorId:string;actorName:string;at:string;comment:string;cycle:number};
+export type CustomerProjectTask=Entity&ProjectMeta&{kind:'customer_project_task';projectId:string;customerId:string;roundId:string;title:string;description:string;ownerId:string;serviceReviewerId?:string;salesReviewerId?:string;waitingFor:string;dueDate:string;status:'open'|'service_review'|'sales_review'|'returned'|'done'|'cancelled';result:string;reviewHistory?:CustomerProjectTaskReviewEvent[];reviewCycle?:number};
 export type CustomerProjectDrawing=Entity&ProjectMeta&{kind:'customer_project_drawing';projectId:string;customerId:string;roundId:string;itemIds:string[];type:'customer'|'2d'|'3d'|'artwork'|'packing';drawingNo:string;revision:string;previousId:string;pairedDrawingId:string;attachmentIds:string[];changeNote:string;status:'submitted'|'withdrawn'};
 export type CustomerProjectConfirmation=Entity&ProjectMeta&{kind:'customer_project_confirmation';projectId:string;customerId:string;roundId:string;drawingId:string;itemIds:string[];decision:'approved'|'conditional'|'rejected';contact:string;date:string;evidence:string;conditions:string;attachmentIds:string[]};
 export type CustomerProjectQuoteLink=Entity&ProjectMeta&{kind:'customer_project_quote_link';projectId:string;customerId:string;roundId:string;itemIds:string[];quoteId:string;quoteVersion:number;lineIds:string[];quoteNo:string;acceptedBy:string;acceptedDate:string;evidence:string};
@@ -27,6 +28,26 @@ export function projectAccess(s:State,m:Member,customerId:string){
 /** Old projects retain their single service owner until explicitly edited. An empty array clears it. */
 export function projectServiceMemberIds(project:Pick<CustomerProject,'serviceMemberId'|'serviceMemberIds'>):string[]{
  return Array.isArray(project.serviceMemberIds)?project.serviceMemberIds:project.serviceMemberId?[project.serviceMemberId]:[];
+}
+/** Task assignment adds no customer authorization and never bypasses the existing responsibility scope. */
+export function canManageProjectAssignments(s:State,m:Member,project:CustomerProject):boolean{
+ if(!projectAccess(s,m,project.customerId).write)return false;
+ return m.role==='admin'||project.salesMemberId===m.id||all(s,'customer_project_team').some(t=>t.id===project.teamId&&t.active&&t.customerIds.includes(project.customerId)&&t.leaderIds.includes(m.id));
+}
+export function canManageProjectTasks(s:State,m:Member,project:CustomerProject):boolean{
+ return project.status==='active'&&canManageProjectAssignments(s,m,project);
+}
+export function taskReviewConfigurationValid(s:State,project:CustomerProject,task:CustomerProjectTask):boolean{
+ if(!task.ownerId||!task.serviceReviewerId||!task.salesReviewerId||[task.serviceReviewerId,task.salesReviewerId].includes(task.ownerId))return false;
+ return [task.ownerId,task.serviceReviewerId,task.salesReviewerId].every(memberId=>{
+  const assigned=all(s,'member').find(row=>row.id===memberId) as Member|undefined;
+  return !!assigned&&projectAccess(s,assigned,project.customerId).write;
+ });
+}
+export function projectTaskPermissions(s:State,m:Member,project:CustomerProject,task:CustomerProjectTask){
+ const writable=project.status==='active'&&task.projectId===project.id&&task.customerId===project.customerId&&projectAccess(s,m,project.customerId).write;
+ const reviewConfigurationValid=taskReviewConfigurationValid(s,project,task);
+ return {reviewConfigurationValid,canManage:writable&&!['done','cancelled'].includes(task.status)&&canManageProjectTasks(s,m,project),canSubmit:writable&&reviewConfigurationValid&&task.ownerId===m.id&&['open','returned'].includes(task.status),canReviewService:writable&&reviewConfigurationValid&&task.serviceReviewerId===m.id&&task.status==='service_review',canReviewSales:writable&&reviewConfigurationValid&&task.salesReviewerId===m.id&&task.status==='sales_review'};
 }
 export function canReadProject(s:State,m:Member,record:Entity){
  const project=record.kind==='customer_project'?record:all(s,'customer_project').find(p=>p.id===record.projectId);
