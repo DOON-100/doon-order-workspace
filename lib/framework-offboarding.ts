@@ -7,6 +7,8 @@ import {isProjectTrashed,projectAccess,taskReviewConfigurationValid,type Custome
 import {communicationAccess} from './unified-communication';
 import {customerTaskOpenStatuses,customerTaskOwnerEligible,customerTaskRevisionChanges,type CustomerWorkflowTask} from './customer-workflow-tasks';
 import {frameworkFinanceOpenStatuses,frameworkFinanceBusinessAccess,frameworkFinanceTaskRevision,type FrameworkFinanceTask} from './framework-finance-task';
+import {eligibleCollaborationOwner,collaborationTaskKind} from './project-collaboration';
+import {roles} from './domain';
 
 /** A plan is an inventory, not authorization to rewrite any original business record. */
 export type OffboardingItem={key:string;recordId:string;kind:string;field:string;label:string;category:string;customerId:string;projectId:string;orderId:string;version:number;sourceHash:string;mode:'id'|'ids'|'name'|'email'|'delegate'|'manual';roles:string[];requiresQuote:boolean;blocker:string;recipientId:string;acceptedBy:string;acceptedAt:string;acceptanceNote:string};
@@ -60,6 +62,8 @@ export async function frameworkOffboardingInventory(s:State,member:Member):Promi
    await add(r,'salesMemberId','项目销售','前期开发',sales);await add(r,'serviceMemberId','项目客服','前期开发',service);await add(r,'serviceMemberIds','项目客服名单','前期开发',service,'ids');await add(r,'serviceReviewerId','客服核对责任','前期开发',service);await add(r,'salesReviewerId','销售核对责任','前期开发',sales);
   }else if(r.kind==='customer_project_team'){
    await add(r,'leaderIds','团队负责人','前期开发',business,'ids');await add(r,'salesMemberIds','团队销售','前期开发',sales,'ids');await add(r,'serviceMemberIds','团队客服','前期开发',service,'ids');
+  }else if(r.kind===collaborationTaskKind){
+   await add(r,'ownerId','跨部门待办责任人','项目协作',roles.filter(role=>role!=='supplier'));
   }else if(r.kind==='customer_project_task'){
    await add(r,'ownerId','跟进执行人','前期开发',business);await add(r,'serviceReviewerId','客服核对责任','前期开发',service);await add(r,'salesReviewerId','销售核对责任','前期开发',sales);
   }else if(['customer_project_followup','customer_project_communication','customer_project_followup_mail'].includes(r.kind)){if(r.kind!=='customer_project_communication'||r.nextAction||r.dueDate)await add(r,'ownerId','当前跟进责任','前期开发',business);}
@@ -84,6 +88,7 @@ export function frameworkOffboardingCandidate(s:State,source:Member,item:Offboar
  if(!internal(target)||target.id===source.id||item.blocker||item.mode==='manual'||!item.roles.includes(target.role))return false;
  if(item.requiresQuote&&!canUseCustomerQuotes(s,target))return false;
  if(item.kind==='engineering_drawing'&&!canManageDrawings(target))return false;
+ if(item.kind===collaborationTaskKind&&!eligibleCollaborationOwner(target))return false;
  if(item.kind==='customer_workflow_task'&&!customerTaskOwnerEligible(s,target,item.customerId)){
   // Preview only: a new recipient may receive the customer's explicit responsibility
   // in this same plan. finalTransfers rechecks the real projected assignments below.
@@ -138,7 +143,8 @@ function finalTransfers(s:State,m:Member,p:OffboardingPlan,source:Member):Entity
  }
  const projected:State={revision:s.revision,records:s.records.map(r=>changed.get(r.id)||r).concat([...changed.values()].filter(r=>!s.records.some(x=>x.id===r.id)))};
  for(const i of p.items){const target=all(s,'member').find(x=>x.id===i.recipientId) as Member,r=changed.get(i.recordId)!;
-  if(r.kind.startsWith('customer_project')&&r.customerId&&!['customer_project_sample'].includes(r.kind)&&!projectAccess(projected,target,r.customerId).write)throw new AppError('接收人尚不具备该项目客户范围，请先在同一交接中明确客户责任或核实原权限。',403);
+  if(r.kind.startsWith('customer_project')&&r.customerId&&!['customer_project_sample',collaborationTaskKind].includes(r.kind)&&!projectAccess(projected,target,r.customerId).write)throw new AppError('接收人尚不具备该项目客户范围，请先在同一交接中明确客户责任或核实原权限。',403);
+  if(r.kind===collaborationTaskKind&&!eligibleCollaborationOwner(target))throw new AppError('跨部门待办接收人须为在职内部成员。',403);
   if(r.kind==='customer_project_task'){const project=projected.records.find(x=>x.id===r.projectId&&x.kind==='customer_project') as CustomerProject|undefined;if(!project||!taskReviewConfigurationValid(projected,project,r as CustomerProjectTask))throw new AppError('交接后的任务执行人和核对人须保持独立，并全部具备现有客户范围。',403);}
   if(r.kind==='handoff_business_source'&&!communicationAccess(projected,target,{customerId:r.customerId,projectId:r.projectId||'',orderId:r.orderId||''},r.type!=='finance_request'))throw new AppError('接收人没有该生产或财务资料的现有客户及订单权限。',403);
   if(r.kind==='customer_workflow_state'){const c=projected.records.find(x=>x.id===r.customerId&&x.kind==='customer_account');if(!c?.salesMemberIds?.includes(r.primarySalesMemberId))throw new AppError('客户主负责人须在明确销售责任名单中。',403);}
@@ -148,6 +154,7 @@ function finalTransfers(s:State,m:Member,p:OffboardingPlan,source:Member):Entity
  const updates:Entity[]=[];
  for(const row of changed.values()){
   const before=beforeById.get(row.id);row.version=(Number(before?.version)||0)+1;row.updatedAt=at;row.updatedBy=m.name;
+  if(row.kind===collaborationTaskKind){row.status='open';row.history=[...(row.history||[]),{id:newId('project_collaboration_event'),action:'transfer',actorId:m.id,actorName:m.name,at,comment:'离岗交接：指定接收人本人确认后接续待办。',changes:[{field:'ownerId',before:String(before?.ownerId||''),after:row.ownerId},{field:'status',before:String(before?.status||''),after:'open'}]}];}
   if(row.kind==='customer_project_task'){row.reviewCycle=(row.reviewCycle||0)+1;row.reviewHistory=[...(row.reviewHistory||[]),{id:newId('task_review'),action:'reconfigure',stage:'configuration',actorId:m.id,actorName:m.name,at,comment:'离岗交接：接收人本人确认后重新安排执行与核对',cycle:row.reviewCycle}];row.status='open';}
   updates.push(row,{id:newId('framework_offboarding_record_history'),kind:'framework_offboarding_record_history',planId:p.id,targetId:row.id,targetKind:row.kind,before:before?structuredClone(before):null,after:structuredClone(row),createdAt:at,actorId:m.id});
   if(row.kind==='customer_workflow_task')updates.push(...customerTaskRevisionChanges(s,m,before as CustomerWorkflowTask|undefined,row as CustomerWorkflowTask,'离岗交接：指定接收人本人确认责任').filter(change=>change.item.id!==row.id).map(change=>change.item));

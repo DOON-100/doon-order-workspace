@@ -24,6 +24,7 @@ const stubs={
  'customer-project-task-board':`export function CustomerProjectTaskBoard(){}export function CustomerProjectTaskTable(){}`,
  'customer-project-attachment-upload':`export function CustomerProjectAttachmentUpload(){}`,
  'customer-project-attachment-preview':`export function CustomerProjectAttachmentPreviewGallery(){}`,
+ 'project-collaboration-panel':`export function ProjectStepCollaboration(){}`,
  css:''
 };
 const bundled=await build({entryPoints:['app/customer-project-panel.tsx'],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'synthetic-project-panel',setup(b){b.onResolve({filter:/.*/},a=>{const key=a.path.endsWith('.css')?'css':a.path.endsWith('/button')?'button':Object.hasOwn(stubs,a.path)?a.path:a.path.split('/').at(-1);return Object.hasOwn(stubs,key)?{path:key,namespace:'synthetic'}:undefined;});b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:stubs[a.path]}));}}]});

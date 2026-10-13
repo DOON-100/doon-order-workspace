@@ -1,0 +1,82 @@
+// Exercise the actual new components with synthetic hooks and a memory-only API.
+// No running server, database, production files or credentials are used.
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+const H={slots:[],effects:[],index:0,changed:false};globalThis.__pctHooks=H;
+const react=`const H=globalThis.__pctHooks;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,value=>{const next=typeof value==='function'?value(H.slots[i].value):value;if(!Object.is(next,H.slots[i].value)){H.slots[i].value=next;H.changed=true;}}];}export function useRef(value){const i=H.index++;return H.slots[i]||(H.slots[i]={current:value});}export function useEffect(fn,deps){const i=H.index++,old=H.slots[i];if(!old||deps.some((value,j)=>value!==old.deps[j])){H.slots[i]={deps,cleanup:old?.cleanup};H.effects.push(()=>{old?.cleanup?.();H.slots[i].cleanup=fn();});}}`;
+const bundled=await build({entryPoints:['app/project-collaboration-panel.tsx'],bundle:true,platform:'node',format:'esm',write:false,alias:{'@':process.cwd()},plugins:[{name:'synthetic-task-events',setup(b){
+ b.onResolve({filter:/^(react|react\/jsx-runtime|@tanstack\/react-query)$/},a=>({path:a.path,namespace:'synthetic'}));
+ b.onResolve({filter:/components\/ui\/button$/},()=>({path:'button',namespace:'synthetic'}));b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'synthetic'}));
+ b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export const jsx=(type,props)=>({type,props:props||{}});export const jsxs=jsx;`:a.path==='button'?`export const Button='button';`:a.path==='@tanstack/react-query'?`export const useQuery=options=>globalThis.__pctQuery(options);export const useQueryClient=()=>({invalidateQueries:async()=>{}});`:''}));
+ }}]});
+const {PersonalTasksPanel,ProjectStepCollaboration}=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
+const originalFetch=globalThis.fetch,originalWindow=globalThis.window,listeners=new Map(),queries=new Map();
+let tree,Component,props,dirty=false,requests=[],failGet=false,post=async()=>Response.json({ok:true}),sourceTasks=[],canAssign=true,changedCalls=0,changedFails=false,opened=[];
+const me={id:'synthetic-owner',name:'Synthetic owner',role:'engineering',active:true};
+const baseTask={id:'synthetic-task',version:1,projectId:'synthetic-project',customerId:'synthetic-customer',roundId:'synthetic-round',stepKey:'drawings',department:'engineering',ownerId:me.id,ownerName:me.name,title:'Synthetic next drawing',description:'TASK_PRIVATE_DESCRIPTION',dueDate:'2026-10-25',status:'open',result:'',history:[{id:'synthetic-event',actorId:'synthetic-manager',actorName:'Synthetic manager',at:'2026-10-13T08:00:00Z',action:'create',comment:'TASK_PRIVATE_HISTORY'}],projectTitle:'Synthetic project',projectCode:'TEST-P',customerLabel:'Synthetic customer',canAssign:false,canReply:true,canComplete:true,canAcknowledge:false,canOpenProject:false};
+const dirtyChange=value=>{dirty=value;};
+globalThis.window={addEventListener:(name,fn)=>{if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener:(name,fn)=>listeners.get(name)?.delete(fn)};
+globalThis.fetch=async(url,init={})=>{
+ const body=init.body?JSON.parse(init.body):undefined;requests.push({url,init,body});
+ if(init.method==='POST')return post(url,body,init);
+ if(failGet)return Response.json({error:'Synthetic scope revoked'},{status:403});
+ const params=new URL(url,'http://synthetic.invalid').searchParams,projectId=params.get('projectId'),taskId=params.get('taskId');
+ const tasks=sourceTasks.filter(t=>(!projectId||t.projectId===projectId)&&(!taskId||t.id===taskId));
+ if(taskId&&!tasks.length)return Response.json({error:'Synthetic task not visible'},{status:403});
+ return Response.json({tasks,members:projectId&&canAssign?[{id:me.id,name:me.name,role:'engineering'},{id:'synthetic-finance',name:'Synthetic finance',role:'finance'}]:[],canAssign:!!projectId&&canAssign});
+};
+globalThis.__pctQuery=options=>{
+ const key=JSON.stringify(options.queryKey);let entry=queries.get(key);
+ if(!entry){entry={data:undefined,error:null,isError:false,isPending:true,isFetching:false};queries.set(key,entry);}
+ entry.options=options;
+ entry.refetch=async()=>{entry.isFetching=true;try{entry.data=await entry.options.queryFn({signal:new AbortController().signal});entry.isError=false;entry.error=null;}catch(e){entry.isError=true;entry.error=e;}entry.isPending=false;entry.isFetching=false;return {data:entry.data,isError:entry.isError};};
+ const reenabled=entry.enabled===false&&options.enabled!==false;entry.enabled=options.enabled;
+ if(options.enabled!==false&&(!entry.started||reenabled)){entry.started=true;void entry.refetch();}
+ return {...entry};
+};
+function cleanup(){for(const slot of H.slots)slot?.cleanup?.();H.slots=[];H.effects=[];queries.clear();}
+function render(){for(let i=0;i<15;i++){H.index=0;H.changed=false;const wrapper=Component(props);tree=wrapper.type(wrapper.props);for(const effect of H.effects.splice(0))effect();if(!H.changed)return;}throw Error('Render did not settle');}
+async function flush(){for(let i=0;i<30;i++){await Promise.resolve();render();}}
+async function reread(){for(const entry of [...queries.values()])if(entry.options.enabled!==false)await entry.refetch();await flush();}
+async function mount(personal=true,extra={}){cleanup();dirty=false;requests=[];failGet=false;changedFails=false;changedCalls=0;opened=[];canAssign=true;post=async()=>Response.json({ok:true});sourceTasks=[structuredClone(baseTask)];Component=personal?PersonalTasksPanel:ProjectStepCollaboration;props=personal?{data:{me,revision:1},onNavigate:(...args)=>opened.push(args),onDirtyChange:dirtyChange,...extra}:{projectId:baseTask.projectId,roundId:baseTask.roundId,stepKey:'drawings',onDirtyChange:dirtyChange,onChanged:async()=>{changedCalls++;if(changedFails)throw Error('Synthetic project refresh failed');},...extra};render();await flush();}
+function nodes(node=tree,out=[]){if(Array.isArray(node))node.forEach(child=>nodes(child??null,out));else if(node&&typeof node==='object'){out.push(node);nodes(node.props?.children??null,out);}return out;}
+function text(node=tree){return node==null||typeof node==='boolean'?'':Array.isArray(node)?node.map(child=>text(child??null)).join(''):typeof node==='object'?text(node.props?.children??null):String(node);}
+const named=label=>nodes().find(node=>node.props?.['aria-label']===label),button=label=>nodes().find(node=>node.type==='button'&&text(node)===label);
+function change(label,value){const field=named(label);assert(field,`Missing field ${label}`);field.props.onChange({target:{value}});render();}
+async function click(label){const b=button(label);assert(b,`Missing button ${label}`);const result=b.props.onClick?.({currentTarget:{focus(){}}});render();await result;await flush();}
+const writes=()=>requests.filter(r=>r.init.method==='POST');
+function unloadBlocked(){let prevented=false;for(const fn of listeners.get('beforeunload')||[])fn({preventDefault(){prevented=true;},returnValue:null});return prevented;}
+async function open(){await click('查看任务 · '+baseTask.title);}
+try{
+ await mount();assert(text().includes(baseTask.title));assert(text().includes('工程'));assert(!text().includes('TASK_PRIVATE_HISTORY'));assert.equal(button('新增待办'),undefined);assert.equal(requests.some(r=>r.init.headers?.['X-Workspace-Team']),false);
+ await open();assert(text().includes('TASK_PRIVATE_HISTORY'));assert.equal(button('打开项目原环节'),undefined);assert.equal(dirty,false);await click('确认完成');assert.equal(writes().length,0);assert(text().includes('必须填写完成备注'));
+ change('本次回复 / 完成备注','Synthetic completion evidence');assert.equal(dirty,true);assert.equal(unloadBlocked(),true);await click('关闭详情');assert(text().includes('是否放弃'));assert(text().includes('TASK_PRIVATE_HISTORY'));await click('继续编辑');assert.equal(named('本次回复 / 完成备注').props.value,'Synthetic completion evidence');
+ post=async(_url,body)=>{sourceTasks=[{...sourceTasks[0],version:2,status:'done',result:body.comment,canReply:false,canComplete:false}];return Response.json({ok:true});};await click('确认完成');assert.equal(writes()[0].body.comment,'Synthetic completion evidence');assert.equal(writes()[0].body.version,1);assert.equal(dirty,false);assert.equal(unloadBlocked(),false);assert.equal(button('确认完成'),undefined);
+ console.log('PASS personal cross-group feed, exact authorized detail, mandatory completion evidence and dirty close/unload protection');
+
+ await mount();await open();change('本次回复 / 完成备注','Preserved original reply');post=async(_url,body)=>{sourceTasks=[{...sourceTasks[0],version:2,status:'done',result:body.comment,canReply:false,canComplete:false}];throw Error('Synthetic lost response');};await click('确认完成');const original=structuredClone(writes()[0].body);assert.equal(dirty,true);await reread();assert.equal(button('确认完成'),undefined);post=async()=>Response.json({ok:true,idempotent:true});await click('核实并重试同一请求');assert.equal(writes().length,2);assert.deepEqual(writes()[1].body,original);assert.equal(dirty,false);
+ console.log('PASS successful completion with lost response replays frozen token, content and expected version after status changes');
+
+ await mount();await open();change('本次回复 / 完成备注','Local input survives conflict');sourceTasks[0]={...sourceTasks[0],version:2,description:'Current server description'};await reread();assert.equal(named('本次回复 / 完成备注').props.value,'Local input survives conflict');assert.equal(button('保存跟进').props.disabled,true);assert(text().includes('当前不能覆盖保存'));await click('已核对，保留输入并采用最新版本');post=async()=>Response.json({error:'Synthetic version conflict'},{status:409});await click('保存跟进');assert.equal(writes()[0].body.version,2);assert.equal(named('本次回复 / 完成备注').props.value,'Local input survives conflict');assert.equal(dirty,true);assert.equal(button('核实并重试同一请求'),undefined);
+ failGet=true;await reread();assert(!text().includes('TASK_PRIVATE_HISTORY'));assert(!text().includes('Current server description'));assert.equal(named('本次回复 / 完成备注'),undefined);assert.equal(dirty,true);failGet=false;await reread();assert.equal(named('本次回复 / 完成备注').props.value,'Local input survives conflict');
+ console.log('PASS polling preserves drafts, current version requires explicit reconciliation, conflict keeps input, and failed reads hide private data');
+
+ await mount(false);await click('新增待办');change('任务名称','Synthetic finance check');change('负责部门','finance');change('负责人','synthetic-finance');named('截止日期').props.onInput({currentTarget:{value:'2026-11-02'}});render();change('任务说明','Check only this task');assert.equal(named('截止日期').props.value,'2026-11-02');assert.equal(dirty,true);changedFails=true;post=async()=>Response.json({ok:true});const form=nodes().find(n=>n.type==='form');form.props.onSubmit({preventDefault(){}});await flush();assert.equal(writes()[0].body.projectId,baseTask.projectId);assert.equal(writes()[0].body.roundId,baseTask.roundId);assert.equal(writes()[0].body.stepKey,'drawings');assert.equal(writes()[0].body.department,'finance');assert.equal(writes()[0].body.ownerId,'synthetic-finance');assert.equal(writes()[0].body.dueDate,'2026-11-02');assert.equal(writes()[0].body.version,0);assert.equal('scope' in writes()[0].body,false);assert.equal(dirty,false);assert(text().includes('操作已保存，但最新清单刷新失败'));assert.equal(button('核实并重试同一请求'),undefined);assert.equal(changedCalls,1);
+ console.log('PASS project creation freezes exact project/round/step, department is explicit, dates survive rerender, and confirmed writes stay final when refresh fails');
+
+ await mount(false);sourceTasks[0]={...sourceTasks[0],canAssign:true,canComplete:false,canReply:true,ownerId:'synthetic-finance',ownerName:'Synthetic finance'};await reread();await open();assert.equal(named('跟进进度'),undefined);assert.equal(button('确认完成'),undefined);change('本次回复 / 完成备注','Manager reply only');post=async()=>Response.json({ok:true});await click('经理回复');assert.equal('status' in writes()[0].body,false);await click('修改任务');change('任务名称','Edited title');const editForm=nodes().find(n=>n.type==='form');editForm.props.onSubmit({preventDefault(){}});await flush();assert.equal(writes().length,1);assert(text().includes('修改任务还需填写原因'));change('修改原因','Synthetic correction');nodes().find(n=>n.type==='form').props.onSubmit({preventDefault(){}});await flush();assert.equal(writes().length,2);assert.equal(writes()[1].body.reason,'Synthetic correction');assert.equal(writes()[1].body.ownerId,'synthetic-finance');
+ console.log('PASS managers reply without executor progress/complete controls, and assignment edits require a reason');
+
+ await mount(false);canAssign=false;sourceTasks[0]={...sourceTasks[0],canAssign:false,canReply:false,canComplete:false,canAcknowledge:false};await reread();assert.equal(button('新增待办').props.disabled,true);await open();assert(text().includes('TASK_PRIVATE_HISTORY'));assert.equal(named('本次回复 / 完成备注'),undefined);assert.equal(button('修改任务'),undefined);
+ await mount(true,{initialContext:{recordId:'synthetic-missing'}});assert(text().includes('指定任务不存在或当前无权读取'));assert(!text().includes('TASK_PRIVATE_HISTORY'));assert.equal(named('本次回复 / 完成备注'),undefined);
+ console.log('PASS project readers can view history without assignment/reply controls; unauthorized deep links never open another task');
+
+ await mount();await open();change('本次回复 / 完成备注','Synthetic pending note');let release;post=()=>new Promise(resolve=>{release=resolve;});button('保存跟进').props.onClick();render();assert.equal(dirty,true);assert.equal(button('关闭详情').props.disabled,true);assert.equal(named('本次回复 / 完成备注').props.disabled,true);button('保存跟进').props.onClick();assert.equal(writes().length,1);release(Response.json({ok:true}));await flush();assert.equal(dirty,false);
+ change('本次回复 / 完成备注','Actor A private draft');props={...props,data:{...props.data,me:{...me,id:'synthetic-other'}}};failGet=true;render();await flush();assert(!text().includes('TASK_PRIVATE_HISTORY'));assert.equal(named('本次回复 / 完成备注'),undefined);cleanup();assert.equal(dirty,false);assert.equal(unloadBlocked(),false);
+ console.log('PASS pending writes freeze inputs and navigation, duplicate clicks do not resubmit, actor changes conceal old data, and unmount cleans guards');
+ await mount();sourceTasks[0]={...sourceTasks[0],canOpenProject:true};await reread();await open();change('本次回复 / 完成备注','Unsaved before project navigation');props={...props,onNavigate:(...args)=>{assert.equal(dirty,false,'Parent must receive cleared dirty before navigation');opened.push(args);}};render();await click('打开项目原环节');assert.equal(opened.length,0);await click('继续编辑');assert.equal(dirty,true);await click('打开项目原环节');await click('放弃未保存输入并继续');assert.equal(opened.length,1);assert.equal(opened[0][0],'customer-projects');assert.deepEqual(opened[0][1],{projectId:baseTask.projectId,customerId:baseTask.customerId,recordId:baseTask.id,tab:'drawings'});assert.equal(dirty,false);
+ console.log('PASS confirmed discard commits clean state before exact authorized project-step navigation');
+ await mount();sourceTasks[0]={...sourceTasks[0],status:'done',result:'Synthetic finished work',ownerId:'synthetic-finance',canReply:false,canComplete:false,canAcknowledge:true};await reread();assert(button('待处理 · 0'));assert(button('待我推进反馈 · 1'));await click('待我推进反馈 · 1');await open();assert.equal(button('确认完成'),undefined);post=async()=>{sourceTasks=[];return Response.json({ok:true});};await click('已阅反馈');assert.equal(writes()[0].body.comment,'');assert(writes()[0].url.endsWith('project-collaboration-acknowledge'));assert.equal(dirty,false);assert(button('待我推进反馈 · 0'));
+ console.log('PASS completed feedback count is visible from the first screen and explicit acknowledgement needs no fabricated completion comment');
+ console.log('PASS project-collaboration UI: 9 synthetic interaction groups');
+}finally{cleanup();globalThis.fetch=originalFetch;if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;delete globalThis.__pctHooks;delete globalThis.__pctQuery;}

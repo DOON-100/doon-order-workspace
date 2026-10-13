@@ -22,6 +22,7 @@ import {eligibleCustomerQuoteAccounts,canReadCustomerQuoteHistory,readableCustom
 import {assertFrameworkMemberDisableAllowed} from '@/lib/framework-offboarding';
 import {serviceWorkspaceGet,serviceWorkspacePost} from '@/lib/service-workspace-api';
 import {customerProjectGet,customerProjectPost} from '@/lib/customer-project-api';
+import {projectCollaborationGet,projectCollaborationPost} from '@/lib/project-collaboration-api';
 import {customerProjectFollowupGet,customerProjectFollowupPost} from '@/lib/customer-project-followup-api';
 import {unifiedCommunicationGet,unifiedCommunicationPost} from '@/lib/unified-communication-api';
 import {handoffBusinessGet,handoffBusinessPost} from '@/lib/handoff-business-api';
@@ -82,6 +83,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const engineeringSop=await engineeringSopGet(action,req,s,m);if(engineeringSop)return engineeringSop;
  const projectFinance=await customerProjectFinanceGet(action,req,s,m);if(projectFinance)return projectFinance;
  const followup=await customerProjectFollowupGet(action,req,s,m);if(followup)return followup;
+ const collaboration=projectCollaborationGet(action,req,s,m);if(collaboration)return collaboration;
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
@@ -122,6 +124,7 @@ export async function POST(req:Request,ctx:Context){try{
  const engineeringSop=await engineeringSopPost(action,req,s,m);if(engineeringSop)return engineeringSop;
  const projectFinance=await customerProjectFinancePost(action,req,s,m);if(projectFinance)return projectFinance;
  const followup=await customerProjectFollowupPost(action,req,s,m);if(followup)return followup;
+ const collaboration=await projectCollaborationPost(action,req,s,m);if(collaboration)return collaboration;
  const projects=await customerProjectPost(action,req,s,m);if(projects)return projects;
  const drawingCorrection=await drawingCorrectionPost(action,req,s,m);if(drawingCorrection)return drawingCorrection;
  if(['ledger-edit','ledger-lifecycle','pack'].includes(action))assertLegacyFinishedMutation(s,action,await req.clone().json());

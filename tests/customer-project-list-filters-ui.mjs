@@ -25,6 +25,7 @@ const stubs={
  'customer-project-task-board':`export function CustomerProjectTaskBoard(){}export function CustomerProjectTaskTable(){}`,
  'customer-project-attachment-upload':`export function CustomerProjectAttachmentUpload(){}`,
  'customer-project-attachment-preview':`export function CustomerProjectAttachmentPreviewGallery(){}`,
+ 'project-collaboration-panel':`export function ProjectStepCollaboration(){}`,
  css:''
 };
 const labels=['筛选项目客户','筛选项目名称或编号','创建开始日期','创建结束日期','筛选项目业务','筛选项目客服','筛选项目状态','筛选开发轮次数','筛选款色数量','筛选下一行动','筛选行动负责人','筛选行动期限','搜索下一行动'];
@@ -105,9 +106,9 @@ export async function runCustomerProjectListFiltersUiTests(){
  const originals=new Map(globalKeys.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
  const NativeDate=globalThis.Date;
  globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-13T04:00:00Z']));}static now(){return new NativeDate('2026-10-13T04:00:00Z').getTime();}};
- globalThis.window={addEventListener(){},removeEventListener(){},confirm(){return true;}};
+ globalThis.window={addEventListener(){},removeEventListener(){},confirm(){confirmCalls++;return true;}};
  globalThis.requestAnimationFrame=fn=>{fn();return 0;};
- let source,model,requests=[],checks=[];
+ let source,model,requests=[],checks=[],dirtyReports=[],confirmCalls=0;
  const pass=description=>{checks.push(description);console.log('PASS '+description);};
  const render=model=>{for(let i=0;i<20;i++){globalThis.__projectFilterFrame=model;model.index=0;model.changed=false;model.tree=CustomerProjectPanel(model.props);for(const effect of model.effects.splice(0))effect();if(!model.changed)return model;}throw Error('Synthetic filter render did not settle');};
  const settle=async model=>{for(let i=0;i<12;i++){await Promise.resolve();render(model);}return model;};
@@ -120,10 +121,10 @@ export async function runCustomerProjectListFiltersUiTests(){
   if(action==='project-finance-data')return {projects:[makeProject('FINANCE',{customerId:'finance-only'})],customers:[{id:'finance-only',customer:'Synthetic finance-only customer'}],rounds:[]};
   throw Error('Filters must not send a mutation: '+action);
  };
- const mount=async(data=fixture,scope=null)=>{
+ const mount=async(data=fixture,scope=null,extraProps={})=>{
   if(model)unmount(model);
-  source=structuredClone(data);requests=[];globalThis.__projectFilterBusinessTeam=scope;
-  model=render({props:{data:{members,me:{id:'admin-filter',role:'admin'},orders:[]},openOrder(){}},slots:[],effects:[],index:0,tree:null});
+  source=structuredClone(data);requests=[];dirtyReports=[];confirmCalls=0;globalThis.__projectFilterBusinessTeam=scope;
+  model=render({props:{data:{members,me:{id:'admin-filter',role:'admin'},orders:[]},openOrder(){},onDirtyChange:value=>dirtyReports.push(value),...extraProps},slots:[],effects:[],index:0,tree:null});
   await settle(model);
  };
  try{
@@ -210,6 +211,89 @@ export async function runCustomerProjectListFiltersUiTests(){
   for(const label of labels)assert.equal(control(model,label).props.value,'');
   assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data']);
   pass('clearing within a unified team preserves its scope and never pulls recycle-bin or finance-only records into the project list');
+
+  const collaborationFixture=structuredClone(fixture);
+  collaborationFixture.collaborationTasks=[
+   {id:'collaboration-earliest',projectId:'project-A',title:'Synthetic engineering collaboration next',ownerId:'owner-b',status:'blocked',dueDate:'2026-10-09'},
+   {id:'collaboration-done',projectId:'project-A',title:'Synthetic completed collaboration hidden',ownerId:'owner-b',status:'done',dueDate:'2026-10-07'},
+   {id:'collaboration-cancelled',projectId:'project-A',title:'Synthetic cancelled collaboration hidden',ownerId:'owner-b',status:'cancelled',dueDate:'2026-10-06'}
+  ];
+  const nextAction=()=>text(tableFor(model).props.rows.find(row=>text(row[0]).includes('FLT-A'))[5]);
+  await mount(collaborationFixture);
+  assert.match(nextAction(),/Synthetic engineering collaboration next/);assert.match(nextAction(),/2026-10-09/);assert.match(nextAction(),/Synthetic action owner B/);
+  assert(!/Review amber drawing|completed collaboration hidden|cancelled collaboration hidden/.test(nextAction()));
+  change('搜索下一行动','engineering collaboration');expectCodes(model,['A']);clear();
+  const completedCollaboration=structuredClone(collaborationFixture);completedCollaboration.collaborationTasks[0].status='done';
+  await mount(completedCollaboration);
+  assert.match(nextAction(),/Review amber drawing/);assert.match(nextAction(),/2026-10-12/);assert(!nextAction().includes('collaboration'));
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Completion is represented only by the next scoped fixture; no task mutation is invoked');
+  pass('project-list next action includes the earliest unfinished cross-department task and falls back to the legacy task once collaboration is complete');
+
+  const integration=structuredClone(collaborationFixture);
+  integration.rounds.find(row=>row.id==='round-a').title='Synthetic first round';
+  integration.rounds.push({id:'round-a2',projectId:'project-A',status:'open',title:'Synthetic second round',type:'revision',scope:[]});
+  await mount(integration);
+  const projectRow=tableFor(model).props.rows.find(row=>text(row[0]).includes('FLT-A'));
+  nodes(projectRow).find(node=>node.type==='button'&&text(node)==='打开项目').props.onClick();render(model);
+  const component=name=>{const found=nodes(model.tree).filter(node=>node.type?.name===name);assert.equal(found.length,1,'Exactly one mounted component: '+name);return found[0];};
+  const collaboration=()=>component('ProjectStepCollaboration');
+  const projectTab=label=>{const nav=nodes(model.tree).find(node=>node.props?.['aria-label']==='项目功能'),found=nodes(nav).find(node=>node.type==='button'&&text(node)===label);assert(found,'Project tab: '+label);return found;};
+  const switchTab=label=>{projectTab(label).props.onClick();render(model);};
+  const roundSelect=()=>{const bar=nodes(model.tree).find(node=>node.props?.className==='cp-round-bar'),select=nodes(bar).find(node=>node.type==='select');assert(select,'Project round selector');return select;};
+  const assertContext=(stepKey,roundId='round-a2')=>{const {props}=collaboration();assert.equal(props.projectId,'project-A');assert.equal(props.stepKey,stepKey);assert.equal(props.roundId,roundId);assert.equal(roundSelect().props.value,roundId);};
+  const tabs=[['directory','项目资料目录'],['overview','需求与款色'],['communication','沟通与待办'],['drawings','图纸与客批'],['quotes','报价版本'],['samples','样办与寄样'],['finance','费用与收款'],['documents','PI / CI 单据'],['orders','大货交接'],['after-sales','售后与额外费用']];
+  for(const [stepKey,label] of tabs){switchTab(label);assertContext(stepKey);}
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Changing project tabs passes context without issuing a mutation');
+  pass('all ten real project tabs mount collaboration with the exact project, active round and step key');
+
+  switchTab('项目资料目录');button(model,'维护项目').props.onClick();render(model);
+  component('CPFormDialog').props.onDirtyChange(true);render(model);
+  collaboration().props.onDirtyChange(true);render(model);assert.equal(dirtyReports.at(-1),true);
+  component('CPFormDialog').props.onDirtyChange(false);render(model);
+  component('CustomerEarlyDevelopment').props.onDirtyChange(false);render(model);
+  assert.equal(dirtyReports.at(-1),true,'Unrelated pristine forms cannot clear collaboration dirty state');
+  const dirtyStart=dirtyReports.length,confirmStart=confirmCalls;
+  switchTab('图纸与客批');assertContext('directory');
+  roundSelect().props.onChange({target:{value:'round-a'}});render(model);assertContext('directory');
+  testId(model,'customer-project-list-nav').props.onClick();render(model);assertContext('directory');
+  assert.equal(dirtyReports.slice(dirtyStart).includes(false),false,'Blocked navigation never reports clean to the workspace');
+  assert.equal(confirmCalls,confirmStart,'Collaboration blocks leaving; it never offers to discard with confirm');
+  assert(nodes(model.tree).some(node=>text(node).includes('跨部门待办还有未保存内容')),'Blocked navigation shows the save-or-cancel explanation');
+  collaboration().props.onDirtyChange(false);render(model);assert.equal(dirtyReports.at(-1),false);
+  component('CPFormDialog').props.onClose();render(model);
+  switchTab('需求与款色');assertContext('overview');
+  collaboration().props.onDirtyChange(true);render(model);
+  const historySection=nodes(model.tree).find(node=>node.type?.name==='CPSection'&&node.props.title==='开发轮次历史');
+  const historyTable=nodes(historySection).find(node=>node.type?.name==='CPTable'),firstRound=historyTable.props.rows.find(row=>text(row[0])==='Synthetic first round');
+  const viewRound=nodes(firstRound).find(node=>node.type==='button'&&text(node)==='查看本轮');assert(viewRound);
+  viewRound.props.onClick();render(model);assertContext('overview','round-a2');
+  collaboration().props.onDirtyChange(false);render(model);
+  roundSelect().props.onChange({target:{value:'round-a'}});render(model);assertContext('overview','round-a');
+  switchTab('图纸与客批');assertContext('drawings','round-a');
+  testId(model,'customer-project-list-nav').props.onClick();render(model);expectCodes(model,['A','B','C','D','E','F','G','H']);
+  assert.equal(nodes(model.tree).some(node=>node.type?.name==='ProjectStepCollaboration'),false);assert.equal(dirtyReports.at(-1),false);
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Dirty-guard checks never save, complete or otherwise mutate a task');
+  pass('collaboration dirty state independently blocks tab, round selector, historical-round and list navigation; unrelated form cleanup cannot clear it, and clearing collaboration restores navigation');
+
+  const linkedFixture=structuredClone(integration);
+  linkedFixture.collaborationTasks.push(
+   {id:'collaboration-old-round',projectId:'project-A',roundId:'round-a',stepKey:'drawings',title:'Synthetic historical round task',ownerId:'owner-a',status:'open'},
+   {id:'collaboration-project-level',projectId:'project-A',roundId:'',stepKey:'drawings',title:'Synthetic project-level task',ownerId:'owner-a',status:'open'},
+   {id:'collaboration-other-project',projectId:'project-B',roundId:'round-b',stepKey:'drawings',title:'Synthetic other-project task',ownerId:'owner-a',status:'open'},
+   {id:'collaboration-invalid-round',projectId:'project-A',roundId:'round-b',stepKey:'drawings',title:'Synthetic invalid linked round',ownerId:'owner-a',status:'open'}
+  );
+  const linkedContext=recordId=>({initialContext:{projectId:'project-A',customerId:'customer-a',recordId,tab:'drawings'}});
+  await mount(linkedFixture,null,linkedContext('collaboration-old-round'));assertContext('drawings','round-a');
+  await mount(linkedFixture,null,linkedContext('collaboration-project-level'));assertContext('drawings','');
+  assert(nodes(roundSelect()).some(node=>node.type==='option'&&node.props.value===''&&text(node).includes('项目级')),'Project-level selection is explicit rather than a placeholder for the latest round');
+  roundSelect().props.onChange({target:{value:'round-a2'}});render(model);assertContext('drawings','round-a2');
+  roundSelect().props.onChange({target:{value:''}});render(model);assertContext('drawings','');
+  await mount(linkedFixture,null,linkedContext('collaboration-other-project'));assertContext('drawings','round-a2');
+  await mount(linkedFixture,null,linkedContext('nonexistent-collaboration'));assertContext('drawings','round-a2');
+  await mount(linkedFixture,null,linkedContext('collaboration-invalid-round'));
+  assertContext('drawings','');assert.notEqual(roundSelect().props.value,'round-b','A task cannot select a round from another project or silently use the latest round');
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Deep links resolve against the provided authorized project feed only');
+  pass('task deep links restore the exact older round or explicit project-level scope; unknown or cross-project task IDs cannot select another project or round');
   return checks;
  }finally{
   if(model)unmount(model);

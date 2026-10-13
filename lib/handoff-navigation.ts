@@ -18,6 +18,7 @@ export const handoffNavigation = [
 ] as const;
 /** Original workspace names stay one click away alongside the new department pages. */
 export const directWorkspaceNavigation = [
+ {id:'personal-tasks',label:'我的待办',icon:'production'},
  {id:'customer-projects',label:'客户项目开发',icon:'business'},
  {id:'sales',label:'业务工作台',icon:'business'},
  {id:'customer-quotes',label:'客户报价',icon:'chart'},
