@@ -6,7 +6,7 @@ import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,customerQuoteVersion,type CustomerQuote} from './customer-quotes';
 import {currentStage,warehouse} from './ledger';
 import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,canManageProjectAssignments,canManageProjectTasks,projectTaskPermissions,projectKey,type CustomerProject,type CustomerProjectTask,type CustomerProjectTaskReviewEvent,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
-import {customerProjectAssignmentRosterId,customerProjectAssignmentRoster,projectTaskAssignmentCandidates} from './customer-project-assignment';
+import {customerProjectAssignmentRosterId,customerProjectAssignmentRoster,projectTaskAssignmentCandidates,projectTaskParticipantsInScope} from './customer-project-assignment';
 
 const id=z.string().trim().min(1).max(160),text=(n=2000)=>z.string().trim().max(n).default(''),ids=z.array(id).max(300).refine(v=>new Set(v).size===v.length,'编号不能重复').default([]),token=z.string().uuid();
 const day=text(10).refine(v=>{try{return !v||/^\d{4}-\d{2}-\d{2}$/.test(v)&&strictDate(v)===v;}catch{return false;}},'日期须为有效YYYY-MM-DD');
@@ -78,7 +78,7 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
  const assignmentRoster=customerProjectAssignmentRoster(s),assignableByCustomer=new Map<string,string[]>();
  const assignableMembers=(customerId:string)=>{let ids=assignableByCustomer.get(customerId);if(!ids){ids=members.filter(assigned=>access(assigned,customerId).write).map(assigned=>assigned.id);assignableByCustomer.set(customerId,ids);}return ids;};
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(c=>access(m,c.id).read),customerIds=new Set(customers.map(c=>c.id));
- const projects=(all(s,'customer_project') as CustomerProject[]).filter(p=>customerIds.has(p.customerId)).map(p=>({...p,...projectTaskAssignmentCandidates(assignmentRoster,assignableMembers(p.customerId))})),projectIds=new Set(projects.map(p=>p.id));
+ const projects=(all(s,'customer_project') as CustomerProject[]).filter(p=>customerIds.has(p.customerId)).map(p=>({...p,...projectTaskAssignmentCandidates(s,p,assignmentRoster,assignableMembers(p.customerId))})),projectIds=new Set(projects.map(p=>p.id));
  const projectById=new Map(projects.map(p=>[p.id,p as CustomerProject]));
  const rows=(kind:string)=>all(s,kind).filter(r=>projectIds.has(r.projectId)&&customerIds.has(r.customerId));
  const ownedSamples=all(s,'customer_project_sample').filter(r=>internalSampleAccess(s,m,r)),samples=all(s,'customer_project_sample').filter(r=>projectIds.has(r.projectId)||ownedSamples.some(x=>x.id===r.id));
@@ -204,10 +204,10 @@ function validateTaskRosterAssignments(s:State,p:CustomerProject,task:Pick<Custo
  const roster=customerProjectAssignmentRoster(s);if(!roster.configured)return;
  if(!roster.valid)throw new AppError('项目跟进与审核人员名单配置无效，请由管理员核对。',409);
  const writable=(all(s,'member') as Member[]).filter(assigned=>projectAccess(s,assigned,p.customerId).write).map(assigned=>assigned.id);
- const candidates=projectTaskAssignmentCandidates(roster,writable);
- if(changed.owner&&!candidates.taskOwnerMemberIds.includes(task.ownerId))throw new AppError('客服跟进人须在已配置的客服名单内，并具有当前客户项目权限。',403);
- if(changed.service&&!candidates.taskServiceReviewerMemberIds.includes(task.serviceReviewerId||''))throw new AppError('客服审核人须在已配置的客服名单内，并具有当前客户项目权限。',403);
- if(changed.sales&&!candidates.taskSalesReviewerMemberIds.includes(task.salesReviewerId||''))throw new AppError('业务审核人须在已配置的业务审核名单内，并具有当前客户项目权限。',403);
+ const candidates=projectTaskAssignmentCandidates(s,p,roster,writable);
+ if(changed.owner&&!candidates.taskOwnerMemberIds.includes(task.ownerId))throw new AppError('客服跟进人须为当前客户负责组内已授权的客服名单成员，请重新选择。',403);
+ if(changed.service&&!candidates.taskServiceReviewerMemberIds.includes(task.serviceReviewerId||''))throw new AppError('客服审核人须属于当前客户负责组并已获客户权限，请重新指派。',403);
+ if(changed.sales&&!candidates.taskSalesReviewerMemberIds.includes(task.salesReviewerId||''))throw new AppError('业务审核人须为当前客户负责组内已授权的业务审核名单成员，请重新指派。',403);
 }
 async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:string,input:any){
  const before=input.id?all(s,'customer_project_task').find(task=>task.id===input.id) as CustomerProjectTask|undefined:undefined;
@@ -222,6 +222,10 @@ async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:
  }else{
   const reviewerId=input.stage==='service'?before?.serviceReviewerId:before?.salesReviewerId;
   if(!before||reviewerId!==m.id||before.ownerId===m.id)throw new AppError('仅本阶段指定审核人可审核，跟进人不能审核自己的事项。',403);
+ }
+ if(name!=='task-save'&&before&&customerProjectAssignmentRoster(s).configured){
+  validateTaskAssignments(s,p,before);
+  if(!projectTaskParticipantsInScope(s,p,[before.ownerId,before.serviceReviewerId||'',before.salesReviewerId||'']))throw new AppError('跟进或审核人员已不属于当前客户负责组，或人员名单配置无效。请由项目业务负责人重新指派后继续；原记录保留。',403);
  }
  const repeated=await replay(s,m,action,input);if(repeated)return repeated;
  if(before)fresh(before,input.version);else if(!input.token)throw new AppError('新记录需要唯一请求编号。');
