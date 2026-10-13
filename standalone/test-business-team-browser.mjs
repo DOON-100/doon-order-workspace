@@ -96,8 +96,13 @@ try{
  for(const group of [groups[0],groups[2]])assert.equal(await page.getByRole('row').filter({hasText:group.projectTitle}).count(),0);
  await page.reload();await page.getByRole('row').filter({hasText:selected.projectTitle}).waitFor();
  assert.equal(await selector.inputValue(),selected.team.id);
+ await page.getByRole('row').filter({hasText:selected.projectTitle}).getByRole('button',{name:'打开项目'}).click();
+ await page.getByTestId('customer-project-list-nav').click();
+ await page.getByRole('row').filter({hasText:selected.projectTitle}).waitFor();
+ assert.equal(await selector.inputValue(),selected.team.id);
+ for(const group of [groups[0],groups[2]])assert.equal(await page.getByRole('row').filter({hasText:group.projectTitle}).count(),0);
  await page.screenshot({path:path.join(dir,'shared-group-projects.png'),fullPage:true});
- pass('客服事项→客户清单→前期开发共用同一工作组，刷新后保持且各页面不混入其他组');
+ pass('客服事项→客户清单→前期开发共用同一工作组，刷新和返回项目清单后保持且各页面不混入其他组');
 
  await page.goto(origin+'/service-followups');
  await page.getByRole('button',{name:selected.title,exact:true}).waitFor();
