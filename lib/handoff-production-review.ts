@@ -3,6 +3,7 @@ import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import type {BusinessRow} from './handoff-business';
 import {businessEvidenceCurrent} from './handoff-business-evidence';
+import {assertProjectNotTrashed} from './customer-projects';
 
 export const productionReviewPolicyId='handoff_business_production_review_policy';
 export const productionReviewPolicySchema=z.object({token:z.string().uuid(),expectedVersion:z.number().int().min(0),drawingLeadMemberId:z.string().trim().min(1).max(160),engineeringSupervisorMemberId:z.string().trim().min(1).max(160)}).strict();
@@ -29,6 +30,7 @@ export async function productionReviewPost(action:string,req:Request,s:State,m:M
  const isPolicy=action.endsWith('review-policy'),parsed=(isPolicy?productionReviewPolicySchema:signSchema).safeParse(await req.json());if(!parsed.success)throw new AppError(parsed.error.issues[0].message);const input=parsed.data as any;
  if(isPolicy&&m.role!=='admin')throw new AppError('仅管理员可按已核实人员配置双签岗位',403);
  const reviewerRole=role(s,m);if(!isPolicy&&!reviewerRole)throw new AppError('仅已配置画图组长或工程主管可签核，管理员不默认代签',403);
+ if(!isPolicy){const source=all(s,'handoff_business_source').find(r=>r.id===input.sourceId&&r.type==='engineering_drawing');if(source?.projectId){const project=all(s,'customer_project').find(p=>p.id===source.projectId);if(project)assertProjectNotTrashed(project);}}
  const fingerprint=JSON.stringify({action,input}),prior=s.records.find(r=>r.id==='handoff_business_request_'+input.token);
  if(prior){if(prior.actorId!==m.id||prior.fingerprint!==fingerprint)throw new AppError('操作编号冲突',409);return json({ok:true,idempotent:true,...productionReviewData(s,m)});}
  const p=policy(s);let updates:Entity[]=[];

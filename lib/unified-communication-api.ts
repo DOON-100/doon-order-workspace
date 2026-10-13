@@ -4,6 +4,7 @@ import {AppError,audit,commit,json} from './store';
 import {communicationAccess,communicationSchemas,canReviewCommunication,publicCommunication,type Communication,type CommunicationLinks} from './unified-communication';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {frameworkChannelMatches} from './framework-channel-access';
+import {isProjectTrashed} from './customer-projects';
 
 const prefix='unified-communication-';
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{
@@ -40,7 +41,7 @@ export async function unifiedCommunicationGet(action:string,req:Request,s:State,
   return json({item:publicCommunication(s,m,row),revisions:all(s,'unified_communication_revision').filter(visible).sort((a,b)=>b.version-a.version),reviews:all(s,'unified_communication_review').filter(visible).sort((a,b)=>b.version-a.version)});
  }
  const customers=all(s,'customer_account').filter(c=>communicationAccess(s,m,{customerId:c.id,projectId:'',orderId:''}));
- const projects=all(s,'customer_project').filter(p=>communicationAccess(s,m,{customerId:p.customerId,projectId:p.id,orderId:''}));
+ const projects=all(s,'customer_project').filter(p=>!isProjectTrashed(p)&&communicationAccess(s,m,{customerId:p.customerId,projectId:p.id,orderId:''}));
  const customerByOrderKey=new Map<string,string>();
  for(const customer of customers)for(const key of serviceOrderCustomerKeys(s,customer as CustomerAccount))customerByOrderKey.set(clean(key).toLowerCase(),customer.id);
  const orders=(all(s,'order') as Order[]).filter(o=>canRead(m,o)&&customerByOrderKey.has(clean(o.customer).toLowerCase())).map(o=>({id:o.id,customerId:customerByOrderKey.get(clean(o.customer).toLowerCase())!,orderNo:o.orderNo,drawing:o.drawing}));

@@ -5,7 +5,7 @@ import {sha} from './workbooks';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,customerQuoteVersion,type CustomerQuote} from './customer-quotes';
 import {currentStage,warehouse} from './ledger';
-import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,canManageProjectAssignments,canManageProjectTasks,projectTaskPermissions,projectKey,type CustomerProject,type CustomerProjectTask,type CustomerProjectTaskReviewEvent,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
+import {projectAccess,requireProject,projectRound,canReadProject,internalSampleAccess,remainingRoundScope,projectServiceMemberIds,canManageProjectAssignments,canManageProjectTasks,projectTaskPermissions,projectKey,assertProjectNotTrashed,type CustomerProject,type CustomerProjectTask,type CustomerProjectTaskReviewEvent,type CustomerProjectRound,type ProjectScope,type CustomerProjectSample} from './customer-projects';
 import {customerProjectAssignmentRosterId,customerProjectAssignmentRoster,projectTaskAssignmentCandidates,projectTaskParticipantsInScope} from './customer-project-assignment';
 import {officialProjectHandovers} from './customer-projects';
 import {saveCustomerProjectEntry} from './customer-project-entries';
@@ -16,6 +16,8 @@ const qty=z.number().int().positive().max(10_000_000),scope=z.array(z.object({it
 const mutation={id:id.optional(),version:z.number().int().positive().optional(),token:token.optional()};
 const append={token,projectId:id,roundId:text(160)};
 export const customerProjectSchemas={
+ trash:z.object({id,version:z.number().int().positive(),token,reason:z.string().trim().min(1).max(2000)}).strict(),
+ restore:z.object({id,version:z.number().int().positive(),token}).strict(),
  'assignment-roster-save':z.object({...mutation,token,serviceFollowerIds:ids.removeDefault(),salesReviewerIds:ids.removeDefault()}).strict(),
  'team-save':z.object({...mutation,name:id,leaderIds:ids,salesMemberIds:ids,serviceMemberIds:ids,customerIds:ids,active:z.boolean().default(true)}).strict(),
  save:z.object({...mutation,customerId:id,code:text(120),title:id,description:text(10000),teamId:text(160),salesMemberId:text(160),serviceMemberId:text(160).optional(),serviceMemberIds:ids.optional(),serviceReviewerId:text(160).optional(),salesReviewerId:text(160).optional(),dueDate:day,status:z.enum(['active','paused','cancelled','archived']).default('active'),development:z.object({stage:z.enum(['待核实','需求了解','可行性','报价','打样','样品反馈','商务确认','暂缓','关闭']),next:z.string().trim().max(300),notes:z.string().max(12000)}).strict().optional()}).strict(),
@@ -50,6 +52,10 @@ function scopedRecord(s:State,m:Member,kind:string,recordId:string,write=true){c
 function nextState(s:State,updates:Entity[]){const changed=new Set(updates.map(r=>r.id));return {...s,records:[...s.records.filter(r=>!changed.has(r.id)),...updates]};}
 function safeRecord(row:Entity){const {fileKey,requestFingerprint,executionSnapshot,...safe}=row;return safe;}
 function safeSample(row:Entity){const {paymentSnapshot,quoteLinkId,...safe}=safeRecord(row);return safe;}
+function safeTrashedProject(project:CustomerProject){
+ const {id,kind,customerId,code,title,teamId,salesMemberId,serviceMemberId,status,version,createdAt,createdBy,updatedAt,updatedBy,trashedAt,trashedBy,trashedById,trashReason}=project;
+ return {id,kind,customerId,code,title,teamId,salesMemberId,serviceMemberId,serviceMemberIds:projectServiceMemberIds(project),status,version,createdAt,createdBy,updatedAt,updatedBy,trashedAt,trashedBy,trashedById,trashReason,canWrite:false,canManageAssignments:true,canManageRecycle:true};
+}
 function quoteVisible(s:State,m:Member,link:Entity){if(!link.quoteId)return true;const quote=all(s,'customer_quote').find(q=>q.id===link.quoteId) as CustomerQuote|undefined;return !!quote&&canReadCustomerQuote(s,m,quote);}
 function publicLink(s:State,m:Member,link:Entity){return quoteVisible(s,m,link)?safeRecord(link):{id:link.id,kind:link.kind,projectId:link.projectId,roundId:link.roundId,itemIds:link.itemIds,accepted:true,restricted:true};}
 async function replay(s:State,m:Member,action:string,input:any){if(!input.token)return null;const found=all(s,'customer_project_request').find(r=>r.id==='customer_project_request_'+input.token);if(!found)return null;const hash=await sha(JSON.stringify({action,input}));if(found.actorId!==m.id||found.action!==action||found.hash!==hash)throw new AppError('请求编号已用于其他内容，请刷新核对。',409);const result=s.records.find(r=>r.id===found.resultId);if(!result)throw new AppError('原操作结果待核对。',409);if(result.kind==='customer_project_quote_link'&&!quoteVisible(s,m,result))throw new AppError('当前报价授权已变更，不能通过重放历史请求读取。',403);return json({ok:true,item:result.kind==='customer_project_sample'?safeSample(result):safeRecord(result),idempotent:true});}
@@ -114,15 +120,17 @@ export async function customerProjectGet(action:string,req:Request,s:State,m:Mem
  const assignmentRoster=customerProjectAssignmentRoster(s),assignableByCustomer=new Map<string,string[]>();
  const assignableMembers=(customerId:string)=>{let ids=assignableByCustomer.get(customerId);if(!ids){ids=members.filter(assigned=>access(assigned,customerId).write).map(assigned=>assigned.id);assignableByCustomer.set(customerId,ids);}return ids;};
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(c=>access(m,c.id).read),customerIds=new Set(customers.map(c=>c.id));
- const projects=(all(s,'customer_project') as CustomerProject[]).filter(p=>customerIds.has(p.customerId)).map(p=>({...p,...projectTaskAssignmentCandidates(s,p,assignmentRoster,assignableMembers(p.customerId))})),projectIds=new Set(projects.map(p=>p.id));
+ const allProjects=all(s,'customer_project') as CustomerProject[],liveProjectIds=new Set(allProjects.filter(p=>!p.trashedAt).map(p=>p.id));
+ const trashedProjects=allProjects.filter(p=>!!p.trashedAt&&customerIds.has(p.customerId)&&canManageProjectAssignments(s,m,p)).map(safeTrashedProject);
+ const projects=allProjects.filter(p=>!p.trashedAt&&customerIds.has(p.customerId)).map(p=>({...p,...projectTaskAssignmentCandidates(s,p,assignmentRoster,assignableMembers(p.customerId))})),projectIds=new Set(projects.map(p=>p.id));
  const projectById=new Map(projects.map(p=>[p.id,p as CustomerProject]));
  const rows=(kind:string)=>all(s,kind).filter(r=>projectIds.has(r.projectId)&&customerIds.has(r.customerId));
- const ownedSamples=all(s,'customer_project_sample').filter(r=>internalSampleAccess(s,m,r)),samples=all(s,'customer_project_sample').filter(r=>projectIds.has(r.projectId)||ownedSamples.some(x=>x.id===r.id));
- const technicalIds=new Set(ownedSamples.flatMap(x=>x.drawingIds)),drawings=all(s,'customer_project_drawing').filter(r=>projectIds.has(r.projectId)||technicalIds.has(r.id));
+ const ownedSamples=all(s,'customer_project_sample').filter(r=>liveProjectIds.has(r.projectId)&&internalSampleAccess(s,m,r)),samples=all(s,'customer_project_sample').filter(r=>projectIds.has(r.projectId)||ownedSamples.some(x=>x.id===r.id));
+ const technicalIds=new Set(ownedSamples.flatMap(x=>x.drawingIds)),drawings=all(s,'customer_project_drawing').filter(r=>liveProjectIds.has(r.projectId)&&(projectIds.has(r.projectId)||technicalIds.has(r.id)));
  const technicalFiles=new Set(drawings.filter(d=>technicalIds.has(d.id)).flatMap(d=>d.attachmentIds));
  const teams=all(s,'customer_project_team').filter(t=>m.role==='admin'||t.customerIds.some((c:string)=>customerIds.has(c))).map(t=>({...t,customerIds:t.customerIds.filter((c:string)=>m.role==='admin'||customerIds.has(c))}));
  const quotes=(all(s,'customer_quote') as CustomerQuote[]).filter(q=>customerIds.has(q.customerAccountId||'')&&canReadCustomerQuote(s,m,q)).flatMap(q=>{const versions=all(s,'customer_quote_revision').filter(r=>r.quoteId===q.id&&r.snapshot?.status==='confirmed').map(r=>r.snapshot);return versions.filter(v=>v.customerAccountId===q.customerAccountId).map(v=>({id:v.id,version:v.version,quoteNo:v.quoteNo,customerId:v.customerAccountId,status:v.status,lines:v.lines.map((l:any)=>({id:l.id,model:l.model}))}));});
- return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,salesName:c.salesName,serviceName:c.serviceName,active:c.active,assignableMemberIds:assignableMembers(c.id)})),teams,projects:projects.map(p=>({...p,serviceMemberIds:projectServiceMemberIds(p as CustomerProject),canWrite:access(m,p.customerId).write,canManageTasks:canManageProjectTasks(s,m,p as CustomerProject),canManageAssignments:canManageProjectAssignments(s,m,p as CustomerProject),assignableMemberIds:assignableMembers(p.customerId)})),items:rows('customer_project_item'),rounds:rows('customer_project_round').map(r=>({...r,remainingScope:remainingRoundScope(s,r as CustomerProjectRound)})),communications:rows('customer_project_communication'),tasks:rows('customer_project_task').map(task=>({...task,reviewHistory:Array.isArray(task.reviewHistory)?task.reviewHistory:[],reviewCycle:task.reviewCycle||0,...projectTaskPermissions(s,m,projectById.get(task.projectId)!,task as CustomerProjectTask)})),drawings,confirmations:rows('customer_project_confirmation'),quoteLinks:rows('customer_project_quote_link').map(q=>publicLink(s,m,q)),samples:samples.map(sample=>({...safeSample(sample),canExecute:internalSampleAccess(s,m,sample),canCommunicate:projectIds.has(sample.projectId)&&access(m,sample.customerId).write})),dispatches:rows('customer_project_dispatch'),feedback:rows('customer_project_feedback'),handovers:rows('customer_project_handover').map(h=>{const {paymentSnapshot,...safe}=safeRecord(h);return safe;}),attachments:all(s,'customer_project_attachment').filter(a=>projectIds.has(a.projectId)||technicalFiles.has(a.id)).map(safeRecord),orders:safeOrders(s,m,customers),quotes,members:members.filter(x=>x.active&&x.role!=='supplier').map(x=>({id:x.id,name:x.name,role:x.role})),canManageTeams:m.role==='admin',canWrite:customers.some(c=>access(m,c.id).write),canExecute:ownedSamples.length>0});
+ return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,salesName:c.salesName,serviceName:c.serviceName,active:c.active,assignableMemberIds:assignableMembers(c.id)})),teams,trashedProjects,projects:projects.map(p=>({...p,serviceMemberIds:projectServiceMemberIds(p as CustomerProject),canWrite:access(m,p.customerId).write,canManageTasks:canManageProjectTasks(s,m,p as CustomerProject),canManageAssignments:canManageProjectAssignments(s,m,p as CustomerProject),assignableMemberIds:assignableMembers(p.customerId)})),items:rows('customer_project_item'),rounds:rows('customer_project_round').map(r=>({...r,remainingScope:remainingRoundScope(s,r as CustomerProjectRound)})),communications:rows('customer_project_communication'),tasks:rows('customer_project_task').map(task=>({...task,reviewHistory:Array.isArray(task.reviewHistory)?task.reviewHistory:[],reviewCycle:task.reviewCycle||0,...projectTaskPermissions(s,m,projectById.get(task.projectId)!,task as CustomerProjectTask)})),drawings,confirmations:rows('customer_project_confirmation'),quoteLinks:rows('customer_project_quote_link').map(q=>publicLink(s,m,q)),samples:samples.map(sample=>({...safeSample(sample),canExecute:internalSampleAccess(s,m,sample),canCommunicate:projectIds.has(sample.projectId)&&access(m,sample.customerId).write})),dispatches:rows('customer_project_dispatch'),feedback:rows('customer_project_feedback'),handovers:rows('customer_project_handover').map(h=>{const {paymentSnapshot,...safe}=safeRecord(h);return safe;}),attachments:all(s,'customer_project_attachment').filter(a=>projectIds.has(a.projectId)||technicalFiles.has(a.id)).map(safeRecord),orders:safeOrders(s,m,customers),quotes,members:members.filter(x=>x.active&&x.role!=='supplier').map(x=>({id:x.id,name:x.name,role:x.role})),canManageTeams:m.role==='admin',canWrite:customers.some(c=>access(m,c.id).write),canExecute:ownedSamples.length>0});
 }
 
 export async function customerProjectPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
@@ -132,6 +140,27 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  if(!(name in customerProjectSchemas))return null;
  if(!m.active)throw new AppError('账号已停用。',403);
  const input:any=parse(customerProjectSchemas[name as keyof typeof customerProjectSchemas],await req.json());
+ if(name==='trash'||name==='restore'){
+  // Recycling neither changes workflow status nor bypasses current customer/management authorization.
+  const before=requireProject(s,m,input.id);
+  if(!canManageProjectAssignments(s,m,before))throw new AppError('仅当前客户范围内的项目业务负责人、所属小组组长或管理员可移入回收站或恢复项目。',403);
+  const repeated=await replay(s,m,action,input);if(repeated)return repeated;
+  fresh(before,input.version);
+  if(name==='trash'&&before.trashedAt)throw new AppError('项目已在回收站，请刷新列表。',409);
+  if(name==='restore'&&!before.trashedAt)throw new AppError('项目已恢复，请刷新列表。',409);
+  if(name==='trash'){
+   const handovers=officialProjectHandovers(s).filter(h=>h.projectId===before.id),sampleIds=new Set(handovers.map(h=>h.sampleId).filter(Boolean));
+   if(all(s,'customer_project_sample').some(sample=>sample.projectId===before.id&&sampleIds.has(sample.id)&&!['closed','cancelled'].includes(sample.status)))throw new AppError('已有正式下达且未关闭的内部样办，请先完成或取消样办后再移入回收站。',409);
+   const orderIds=new Set(handovers.flatMap(h=>h.orderLinks||[]).map(link=>link.orderId));
+   if([...orderIds].some(orderId=>{const order=all(s,'order').find(row=>row.id===orderId);return !order||order.lifecycle!=='archived'&&order.workflowStatus!=='已完成';}))throw new AppError('已有未完成的正式大货交接订单，请先完成关联订单后再移入回收站。',409);
+   const {projectFinanceOpenReasons}=await import('./customer-project-finance'),reasons=projectFinanceOpenReasons(s,before.id);
+   if(reasons.length)throw new AppError('项目还有未结财务事项，暂不能移入回收站：'+reasons.join('；'),409);
+  }
+  const item:CustomerProject={...before,...meta(m,before)};
+  if(name==='trash')Object.assign(item,{trashedAt:now(),trashedBy:m.name,trashedById:m.id,trashReason:input.reason});
+  else{delete item.trashedAt;delete item.trashedBy;delete item.trashedById;delete item.trashReason;}
+  return persist(s,m,action,input,item,before);
+ }
  if(name==='assignment-roster-save'){
   if(m.role!=='admin')throw new AppError('仅管理员可维护项目跟进与审核人员名单。',403);
   if(input.id&&input.id!==customerProjectAssignmentRosterId)throw new AppError('项目人员名单使用固定记录编号。');
@@ -152,6 +181,9 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
  }
  if(name==='save'){
   if(!projectAccess(s,m,input.customerId).write)throw new AppError('只能建立或维护原客户责任清单中负责的客户项目。',403);
+  if(input.id){const existing=requireProject(s,m,input.id);assertProjectNotTrashed(existing);}
+  // A create request replay can point to a project that has since been recycled.
+  if(input.token){const prior=all(s,'customer_project_request').find(row=>row.id==='customer_project_request_'+input.token);const existing=prior&&all(s,'customer_project').find(row=>row.id===prior.resultId);if(existing){requireProject(s,m,existing.id);assertProjectNotTrashed(existing as CustomerProject);}}
   const repeated=await replay(s,m,action,input);if(repeated)return repeated;const before=existingOrNew(s,m,'customer_project',input) as CustomerProject|null;
   if(before&&input.development!==undefined)throw new AppError('已有项目的开发资料须在项目资料页按独立版本维护，不能由旧主档表单覆盖。',409);
   if(before&&before.customerId!==input.customerId)throw new AppError('项目不能换到另一个客户。');
@@ -305,6 +337,7 @@ async function taskAction(s:State,m:Member,p:CustomerProject,action:string,name:
 
 async function upload(req:Request,s:State,m:Member){
  const form=await req.formData(),project=requireProject(s,m,String(form.get('projectId')||''));if(!projectAccess(s,m,project.customerId).write)throw new AppError('没有当前客户项目的修改权限。',403);
+ assertProjectNotTrashed(project);
  const category=parse(z.enum(['general','original-communication']).default('general'),form.get('category')??undefined),original=category==='original-communication',roundId=String(form.get('roundId')||'');
  if(original&&roundId)throw new AppError('原始沟通文档保存在项目级，请不要关联开发轮次。');if(roundId)requireRound(s,project,roundId);
  const file=form.get('file');if(!(file instanceof File)||file.size<=0||file.size>50*1024*1024)throw new AppError('请选择非空且不超过 50 MiB 的项目资料。');
@@ -349,6 +382,8 @@ async function updateSample(s:State,m:Member,action:string,input:any,name:string
  const before=all(s,'customer_project_sample').find(x=>x.id===input.id) as CustomerProjectSample|undefined;if(!before)throw new AppError('样办执行单不存在或无权限。',403);fresh(before,input.version);
  if(name==='sample-promise'){requireProject(s,m,before.projectId,{write:true});if(!input.promisedDate)throw new AppError('请填写已核对的对客回复日期。');return persist(s,m,action,input,{...before,promisedDate:input.promisedDate,promiseNote:input.promiseNote,...meta(m,before)},before);}
  if(!internalSampleAccess(s,m,before))throw new AppError('仅所分配的内部样办负责人或管理员可维护样办执行。',403);
+ const parent=all(s,'customer_project').find(project=>project.id===before.projectId&&project.customerId===before.customerId) as CustomerProject|undefined;
+ if(!parent)throw new AppError('样办所属项目不存在。',409);assertProjectNotTrashed(parent);
  const transitions:Record<string,string[]>={pending:['accepted','cancelled'],accepted:['making','cancelled'],making:['qc','cancelled'],qc:['making','ready','cancelled'],ready:['closed','making','cancelled'],closed:[],cancelled:[]};if(input.status!==before.status&&!transitions[before.status].includes(input.status))throw new AppError('样办状态不能跳过接单、制作或品质核对。');if(['cancelled','making'].includes(input.status)&&input.status!==before.status&&!input.note)throw new AppError('请记录执行或取消依据。');
  const extra:Entity[]=[];if(input.plannedDate!==before.plannedDate){if(!input.note)throw new AppError('变更内部预计日期须记录原因。');const project=all(s,'customer_project').find(p=>p.id===before.projectId) as CustomerProject;extra.push(newRecord('customer_project_task',project,m,{roundId:before.roundId,title:'样办预计完成期已变，请核对对客复期',description:`原计划${before.plannedDate||'未定'} → ${input.plannedDate||'未定'}；${input.note}`,ownerId:project.serviceMemberId||project.salesMemberId||m.id,waitingFor:'客服',dueDate:input.plannedDate,status:'open',result:'',sampleId:before.id}));}
  return persist(s,m,action,input,{...before,status:input.status,plannedDate:input.plannedDate,note:input.note,...meta(m,before)},before,extra);

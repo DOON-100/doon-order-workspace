@@ -3,7 +3,7 @@ import {all,canRead,clean,newId,now,type Entity,type Member,type State} from './
 import {AppError,commit,json} from './store';
 import {sha} from './workbooks';
 import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-workspace';
-import {projectAccess,projectKey} from './customer-projects';
+import {assertProjectNotTrashed,projectAccess,projectKey} from './customer-projects';
 import {canVerifyProjectFinance,paymentGate,pfDay,pfId,pfMoney,pfPositive,pfText,pfToken,projectAllocationNet,projectChargeAmounts,projectChargePaid,projectCreditSourceAvailable,projectCurrencies,projectFinanceTotals,projectReceiptAvailable,projectReceiptRefunded,projectReceiptReversed,type ProjectCharge,type ProjectReceipt} from './customer-project-finance';
 
 const edit={id:pfId.optional(),version:z.number().int().positive().optional()},token={token:pfToken};
@@ -54,12 +54,26 @@ function access(s:State,m:Member,customerId:string,mode:'read'|'write'|'verify'=
 }
 function project(s:State,m:Member,projectId:string,roundId?:string,mode:'read'|'write'|'verify'='read'){
  const p=all(s,'customer_project').find(r=>r.id===projectId);if(!p)throw new AppError('项目不存在或不可访问。',403);access(s,m,p.customerId,mode);
+ if(mode!=='read')assertProjectNotTrashed(p);
  const r=roundId?all(s,'customer_project_round').find(r=>r.id===roundId&&r.projectId===p.id&&r.customerId===p.customerId):null;
  if(roundId&&!r)throw new AppError('开发轮次与项目不一致。');
  return {p,r,customerId:p.customerId as string};
 }
 function row(s:State,m:Member,kind:string,id:string,mode:'read'|'write'|'verify'='read'){
- const r=all(s,kind).find(r=>r.id===id);if(!r)throw new AppError('记录不存在或不可访问。',403);access(s,m,r.customerId,mode);return r;
+ const r=all(s,kind).find(r=>r.id===id);if(!r)throw new AppError('记录不存在或不可访问。',403);access(s,m,r.customerId,mode);if(mode!=='read')assertFinancialProjectsWritable(s,r);return r;
+}
+// Documents may contain several projects, and customer-level receipts may link
+// payment notices. Follow explicit sources without locking unrelated receipts.
+function assertFinancialProjectsWritable(s:State,record:Entity,seen=new Set<string>()){
+ if(record.id){if(seen.has(record.id))return;seen.add(record.id);}
+ if(record.projectId){const p=all(s,'customer_project').find(p=>p.id===record.projectId);if(p)assertProjectNotTrashed(p);}
+ const references=[record.chargeId,record.sourceChargeId,record.targetChargeId,record.caseId,record.receiptId,record.documentId,...(record.chargeIds||[]),...(record.adjustmentIds||[]),...(record.noticeIds||[])].filter(Boolean);
+ for(const id of references){const linked=s.records.find(r=>r.id===id&&financialKinds.has(r.kind));if(linked)assertFinancialProjectsWritable(s,linked,seen);}
+ if(record.kind==='project_receipt'){
+  const linked=[...all(s,'project_payment_notice').filter(r=>r.receiptId===record.id),...all(s,'project_allocation').filter(r=>r.receiptId===record.id&&projectAllocationNet(s,r)>0),...all(s,'project_refund').filter(r=>r.receiptId===record.id&&r.status!=='cancelled')];
+  for(const source of linked)assertFinancialProjectsWritable(s,source,seen);
+ }
+ for(const line of record.lines||[])assertFinancialProjectsWritable(s,line,seen);
 }
 function current(row:Entity,version:number|undefined){if((row.version||1)!==version)throw new AppError('记录已更新，请刷新后重试。',409);}
 function verifyChargePlan(record:Entity){
@@ -98,15 +112,17 @@ export async function customerProjectFinanceGet(action:string,req:Request,s:Stat
  if(customerId)access(s,m,customerId);
  const customers=all(s,'customer_account').filter(c=>(!customerId||c.id===customerId)&&accountAccess(s,m,c.id).read);
  const ids=new Set(customers.map(c=>c.id));
+ const liveProjects=all(s,'customer_project').filter(p=>ids.has(p.customerId)&&!p.trashedAt),liveProjectIds=new Set(liveProjects.map(p=>p.id));
+ const projectWritable=!projectId||liveProjectIds.has(projectId);
  const visible=(kind:string)=>all(s,kind).filter(r=>ids.has(r.customerId));
  const charges=visible('project_charge') as ProjectCharge[],receipts=visible('project_receipt') as ProjectReceipt[];
  const entries=visible('project_finance_entry').filter(r=>!projectId||r.projectId===projectId);
  const withEntries=(type:keyof typeof entryKinds,records:Entity[])=>[...records,...entries.filter(r=>r.entryType===type).map(r=>({...financialDto(s,m,r),independent:true,status:'draft',availableCents:0,refundedCents:0,remainingCents:0,reversed:false,entryType:type==='allocations'?'allocate':r.entryType}))];
  const publicReceipt=(r:ProjectReceipt)=>{const verified=accountAccess(s,m,r.customerId).verify,{account,payer,...safe}=r;return {...safe,...(verified?{account,payer}:{}),availableCents:projectReceiptAvailable(s,r),refundedCents:projectReceiptRefunded(s,r.id),reversed:projectReceiptReversed(s,r.id)};};
  return json({customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,canWrite:accountAccess(s,m,c.id).write,canVerify:accountAccess(s,m,c.id).verify})),
-  projects:all(s,'customer_project').filter(p=>ids.has(p.customerId)).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code,status:p.status})),rounds:all(s,'customer_project_round').filter(r=>ids.has(r.customerId)).map(r=>({id:r.id,projectId:r.projectId,title:r.title,type:r.type,status:r.status})),
+  projects:liveProjects.map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code,status:p.status})),rounds:all(s,'customer_project_round').filter(r=>ids.has(r.customerId)&&liveProjectIds.has(r.projectId)).map(r=>({id:r.id,projectId:r.projectId,title:r.title,type:r.type,status:r.status})),
   charges:charges.map(c=>({...c,net:projectChargeAmounts(s,c),creditSourceAvailableCents:projectCreditSourceAvailable(s,c)})),receipts:withEntries('receipts',receipts.map(publicReceipt)),allocations:withEntries('allocations',visible('project_allocation').map(a=>({...a,currency:a.currency||charges.find(c=>c.id===a.chargeId)?.currency||'USD',remainingCents:projectAllocationNet(s,a)}))),adjustments:withEntries('adjustments',visible('project_adjustment')),creditApplications:withEntries('creditApplications',visible('project_credit_application')),documents:visible('project_billing_document'),notices:visible('project_payment_notice'),cases:visible('project_after_sale'),costs:visible('project_after_sale_cost'),refunds:withEntries('refunds',visible('project_refund').map(r=>financialDto(s,m,r))),requirements:visible('project_payment_requirement'),sends:visible('project_document_send'),reversals:visible('project_receipt_reversal'),
-   grants:m.role==='admin'?all(s,'project_finance_grant'):[],grantCustomers:m.role==='admin'?all(s,'customer_account').map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})):[],canVerify:!!customerId&&accountAccess(s,m,customerId).verify,canWrite:!!customerId&&accountAccess(s,m,customerId).write,totalsByCurrency:projectFinanceTotals(s,charges,receipts),totalsScope:'customer',
+   grants:m.role==='admin'?all(s,'project_finance_grant'):[],grantCustomers:m.role==='admin'?all(s,'customer_account').map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})):[],canVerify:projectWritable&&!!customerId&&accountAccess(s,m,customerId).verify,canWrite:projectWritable&&!!customerId&&accountAccess(s,m,customerId).write,totalsByCurrency:projectFinanceTotals(s,charges,receipts),totalsScope:'customer',
   projectTotalsByCurrency:projectId?projectFinanceTotals(s,charges.filter(c=>c.projectId===projectId),[]):null,gates:projectId?all(s,'customer_project_round').filter(r=>r.projectId===projectId).map(r=>({roundId:r.id,...paymentGate(s,projectId,r.id)})):[]});
 }
 
@@ -117,9 +133,10 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
  if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(x=>`${x.path.join('.')}：${x.message}`).join('；'));
  const input=parsed.data as any,fingerprint=await sha(JSON.stringify({action,input})),requestId='project_finance_request_'+input.token;
  const repeated=all(s,'project_finance_request').find(r=>r.id===requestId);
- if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);if(repeated.customerId){const verifyActions=['project-charge-confirm','project-payment-requirement','project-receipt-verify','project-receipt-reverse','project-allocation','project-allocation-release','project-adjustment','project-credit-apply','project-refund-execute','project-refund-cancel'];access(s,m,repeated.customerId,(verifyActions.includes(action)||(action==='project-finance-entry-save'&&repeated.result?.record?.kind!=='project_finance_entry')||(action==='project-charge-save'&&repeated.result?.record?.status==='confirmed'))?'verify':'write');}else if(m.role!=='admin')throw new AppError('需要管理员权限。',403);return json({...repeated.result,...(repeated.result?.record?.customerId?{record:financialDto(s,m,repeated.result.record)}:{}),idempotent:true});}
+ if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);if(repeated.customerId){const verifyActions=['project-charge-confirm','project-payment-requirement','project-receipt-verify','project-receipt-reverse','project-allocation','project-allocation-release','project-adjustment','project-credit-apply','project-refund-execute','project-refund-cancel'];access(s,m,repeated.customerId,(verifyActions.includes(action)||(action==='project-finance-entry-save'&&repeated.result?.record?.kind!=='project_finance_entry')||(action==='project-charge-save'&&repeated.result?.record?.status==='confirmed'))?'verify':'write');}else if(m.role!=='admin')throw new AppError('需要管理员权限。',403);if(repeated.result?.record){assertFinancialProjectsWritable(s,repeated.result.record);const latest=s.records.find(r=>r.id===repeated.result.record.id);if(latest)assertFinancialProjectsWritable(s,latest);}return json({...repeated.result,...(repeated.result?.record?.customerId?{record:financialDto(s,m,repeated.result.record)}:{}),idempotent:true});}
  const meta=()=>({createdAt:now(),createdBy:m.name,createdById:m.id});
  async function save(customerId:string,updates:Entity[],result:Record<string,unknown>,before:Entity|null=null){
+  for(const target of updates){if(!financialKinds.has(target.kind))continue;assertFinancialProjectsWritable(s,target);const previous=s.records.find(r=>r.id===target.id&&r.kind===target.kind);if(previous)assertFinancialProjectsWritable(s,previous);}
   const at=now(),history:Entity[]=updates.filter(r=>financialKinds.has(r.kind)).map(target=>({id:newId('project_finance_history'),kind:'project_finance_history',customerId,targetId:target.id,projectId:target.projectId||'',action,actorId:m.id,actor:m.name,createdAt:at,before:before?.id===target.id?before:s.records.find(r=>r.id===target.id&&r.kind===target.kind)||null,after:structuredClone(target)}));
   const resultBody={ok:true,...result};await commit(s.revision,[...updates,...history,{id:requestId,kind:'project_finance_request',customerId,actorId:m.id,fingerprint,result:resultBody,createdAt:at}]);return json(resultBody);
  }

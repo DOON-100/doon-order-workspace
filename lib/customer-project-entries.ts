@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,canRead,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
-import {projectAccess,projectKey,type CustomerProject} from './customer-projects';
+import {projectAccess,projectKey,assertProjectNotTrashed,type CustomerProject} from './customer-projects';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,type CustomerQuote} from './customer-quotes';
 
@@ -75,6 +75,7 @@ export async function saveCustomerProjectEntry(req:Request,s:State,m:Member){
  if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(issue=>issue.path.join('.')+'：'+issue.message).join('；'));
  const input:any=parsed.data,p=all(s,'customer_project').find(row=>row.id===input.projectId) as CustomerProject|undefined;
  if(!p||!projectAccess(s,m,p.customerId).write)throw new AppError('项目不存在或不在你负责的客户范围内。',403);
+ assertProjectNotTrashed(p);
  const kind=kindFor[entryType],before=input.id?all(s,kind).find(row=>row.id===input.id):undefined;
  if(input.id&&(!before||before.projectId!==p.id||before.customerId!==p.customerId))throw new AppError('记录不存在或不属于当前客户项目。',403);
  if(before?.kind==='customer_project_quote_link'&&!quoteReadable(s,m,before))throw new AppError('没有当前报价的读取权限。',403);

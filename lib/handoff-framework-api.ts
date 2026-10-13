@@ -10,6 +10,7 @@ import {serviceOrderCustomerKeys} from './service-workspace';
 import {frameworkOffboardingGet,frameworkOffboardingPost} from './framework-offboarding';
 import {businessEvidenceCurrent} from './handoff-business-evidence';
 import {businessAccess} from './handoff-business';
+import {assertProjectNotTrashed,isProjectTrashed} from './customer-projects';
 import {frameworkFinanceTaskGet,frameworkFinanceTaskPost} from './framework-finance-task';
 
 const manager=(m:Member)=>m.active&&['admin','programmer'].includes(m.role);
@@ -45,7 +46,7 @@ export async function frameworkGet(action:string,req:Request,s:State,m:Member):P
  if(action.startsWith('framework-finance-task'))return frameworkFinanceTaskGet(action,req,s,m);
  if(action.startsWith('framework-offboarding'))return frameworkOffboardingGet(action,req,s,m);
  if(!['framework-settings','framework-channels','framework-channel-history','framework-channel-context','framework-knowledge','framework-knowledge-document','framework-notices'].includes(action))return null;actorAllowed(m);
- if(action==='framework-notices')return json({items:noticeRows(s,m).map(r=>{const receipt=all(s,'framework_notice_receipt').find(a=>a.targetId===r.id&&a.memberId===m.id),customer=all(s,'customer_account').find(c=>c.id===r.customerId);return {id:r.id,type:r.type,number:r.number,version:r.version,customerId:r.customerId,customer:customer?.customer||'授权客户',projectId:r.projectId,orderId:r.orderId,updatedAt:r.updatedAt,received:receipt?.sourceVersion===r.version,receivedAt:receipt&&receipt.sourceVersion===r.version?receipt.createdAt:'',canReceive:true};}),asOf:now()});
+ if(action==='framework-notices')return json({items:noticeRows(s,m).map(r=>{const receipt=all(s,'framework_notice_receipt').find(a=>a.targetId===r.id&&a.memberId===m.id),customer=all(s,'customer_account').find(c=>c.id===r.customerId);return {id:r.id,type:r.type,number:r.number,version:r.version,customerId:r.customerId,customer:customer?.customer||'授权客户',projectId:r.projectId,orderId:r.orderId,updatedAt:r.updatedAt,received:receipt?.sourceVersion===r.version,receivedAt:receipt&&receipt.sourceVersion===r.version?receipt.createdAt:'',canReceive:!r.projectId||!all(s,'customer_project').some(p=>p.id===r.projectId&&isProjectTrashed(p))};}),asOf:now()});
  if(action==='framework-knowledge')return json({documents:frameworkKnowledgeMetadata(s,m),asOf:now()});
  if(action==='framework-knowledge-document'){
   const id=new URL(req.url).searchParams.get('id'),row=all(s,'framework_knowledge_document').find(r=>r.id===id);
@@ -78,7 +79,7 @@ export async function frameworkGet(action:string,req:Request,s:State,m:Member):P
  const messages=all(s,'unified_communication').filter(r=>r.channel===requested&&linked(s,m,r)).map(r=>viewMessage(s,m,r));
  const inquiries=all(s,'framework_channel_inquiry').filter(r=>r.channel===requested&&!r.linkedCommunicationId&&frameworkAccountAccess(s,m,r.accountId)).map(r=>viewMessage(s,m,r));
  const customers=all(s,'customer_account').filter(c=>communicationAccess(s,m,{customerId:c.id,projectId:'',orderId:''})).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,canWrite:communicationAccess(s,m,{customerId:c.id,projectId:'',orderId:''},true)}));
- const projects=all(s,'customer_project').filter(p=>communicationAccess(s,m,{customerId:p.customerId,projectId:p.id,orderId:''})).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code}));
+ const projects=all(s,'customer_project').filter(p=>!isProjectTrashed(p)&&communicationAccess(s,m,{customerId:p.customerId,projectId:p.id,orderId:''})).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code}));
  const orderCustomers=new Map<string,string>();for(const c of all(s,'customer_account').filter(c=>customers.some(x=>x.id===c.id)))for(const key of serviceOrderCustomerKeys(s,c as CustomerAccount))orderCustomers.set(clean(key).toLowerCase(),c.id);
  const orders=(all(s,'order') as Order[]).filter(o=>canRead(m,o)&&orderCustomers.has(clean(o.customer).toLowerCase())).map(o=>({id:o.id,customerId:orderCustomers.get(clean(o.customer).toLowerCase()),orderNo:o.orderNo,drawing:o.drawing}));
  return json({items:[...messages,...inquiries].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))),accounts,customers,projects,orders,members:all(s,'member').filter(a=>accounts.some(b=>b.ownerId===a.id)).map(a=>({id:a.id,name:a.name})),capabilities:{canSend:false,manualOnly:true},asOf:now()});
@@ -89,7 +90,7 @@ export async function frameworkPost(action:string,req:Request,s:State,m:Member):
  if(!['framework-config-save','framework-account-save','framework-message-save','framework-message-link','framework-message-process','framework-message-bind','framework-notice-receive'].includes(action))return null;actorAllowed(m);
  const raw=await req.text();if(raw.length>260000)throw new AppError('内容超过大小上限。');let body:unknown;try{body=JSON.parse(raw);}catch{throw new AppError('请求内容无效。');}
  if(action==='framework-notice-receive'){
-  const input=parse(receiveSchema,body),source=noticeRows(s,m).find(r=>r.id===input.id);if(!source)throw new AppError('资料不可见、未核对或来源已变更。',403);matchesVersion(source,input.expectedVersion);const prior=await replay(s,m,action,input);if(prior)return prior;
+  const input=parse(receiveSchema,body),source=noticeRows(s,m).find(r=>r.id===input.id);if(!source)throw new AppError('资料不可见、未核对或来源已变更。',403);if(source.projectId){const project=all(s,'customer_project').find(p=>p.id===source.projectId);if(project)assertProjectNotTrashed(project);}matchesVersion(source,input.expectedVersion);const prior=await replay(s,m,action,input);if(prior)return prior;
   const before=all(s,'framework_notice_receipt').find(r=>r.targetId===source.id&&r.memberId===m.id);if(before?.sourceVersion===source.version)throw new AppError('你已经确认收阅该版本。',409);
   const row={id:before?.id||newId('framework_notice_receipt'),kind:'framework_notice_receipt',version:(before?.version||0)+1,targetId:source.id,sourceVersion:source.version,customerId:source.customerId,memberId:m.id,memberName:m.name,createdAt:now(),meaning:'本人收阅指定资料版本，不代表内容审批、财务到账或生产采用'};return persist(s,m,action,input,row,[],before);
  }

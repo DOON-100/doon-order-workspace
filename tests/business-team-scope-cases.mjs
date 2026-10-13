@@ -15,13 +15,14 @@ export async function runBusinessTeamScopeCases({api,identity,admin,rawInsert,ra
  const [oa,ob,ou]=[order('A',a),order('B',b),order('Loose',loose)];
  const project=(name,teamId)=>({id:id('project_'+name),kind:'customer_project',customerId:shared.id,teamId,title:name,code:name,status:'active',salesMemberId:'',serviceMemberId:'',description:'',dueDate:'',version:1,createdAt:at,updatedAt:at,createdBy:'test',updatedBy:'test'});
  const p1=project('One',t1.id),p2=project('Two',t2.id);
+ const trash1={...project('RecycledOne',t1.id),trashedAt:at,trashedBy:'Synthetic',trashReason:'Synthetic recycle'},trash2={...project('RecycledTwo',t2.id),trashedAt:at,trashedBy:'Synthetic',trashReason:'Synthetic recycle'};
  const service=(name,c,amount,teamId='')=>({id:id('service_'+name),kind:'service_record',type:'receivable',customerId:c.id,teamId,orderId:'',title:name,description:'',status:'open',waitingFor:'none',dueDate:'',nextFollowUp:'',details:{invoiceNo:'SCOPE-'+name,currency:'USD',amountCents:amount},version:1,createdAt:at,updatedAt:at,updatedBy:'test'});
  const sa=service('A',a,10000),sb=service('B',b,20000),ss=service('Shared',shared,30000,t2.id);
  const task={id:id('task_1'),kind:'customer_project_task',projectId:p1.id,customerId:shared.id,roundId:'',status:'open',ownerId:'',title:'Scoped child',description:'',waitingFor:'',dueDate:'',result:'',version:1};
  const charge=(name,p,amount)=>({id:id('charge_'+name),kind:'project_charge',customerId:shared.id,projectId:p.id,roundId:'',title:name,category:'sample',currency:'USD',amountCents:amount,prepayCents:0,status:'confirmed',version:1,plan:[]});
  const ca=charge('A',p1,10000),cb=charge('B',p2,20000);
  const receipt={id:id('warehouse_receipt'),kind:'receipt',supplier:'Synthetic vendor',lines:[{lineId:oa.id,accepted:2},{lineId:ob.id,accepted:3},{lineId:id('missing_order'),accepted:4}]};
- for(const row of [reader,a,b,shared,loose,t1,t2,oa,ob,ou,p1,p2,sa,sb,ss,task,ca,cb,receipt])rawInsert(row);
+ for(const row of [reader,a,b,shared,loose,t1,t2,oa,ob,ou,p1,p2,trash1,trash2,sa,sb,ss,task,ca,cb,receipt])rawInsert(row);
  const call=(action,teamId='',user=admin)=>identity.run(user,()=>api.GET(new Request('https://orders.test/api/workspace/'+action,{headers:teamId?{'X-Workspace-Team':teamId}:{}}),{params:Promise.resolve({action:action.split('?')[0]})}));
  const read=async(action,teamId='')=>{const response=await call(action,teamId),body=await response.json();assert.equal(response.status,200,JSON.stringify(body));return body;};
  const catalog=await read('business-team-data',t1.id);assert(catalog.teams.some(row=>row.id===t1.id));assert(catalog.teams.some(row=>row.id===t2.id));
@@ -40,6 +41,9 @@ export async function runBusinessTeamScopeCases({api,identity,admin,rawInsert,ra
  const serviceData=await read('service-data',t1.id);assert(serviceData.records.some(row=>row.id===sa.id));assert(!serviceData.records.some(row=>row.id===sb.id||row.id===ss.id));
  assert.equal(serviceData.totalsByCurrency.USD.amountCents,10000);assert(serviceData.teams.some(row=>row.id===t2.id));assert(serviceData.assignmentOptions.some(row=>row.teamId===t2.id));
  const projects=await read('customer-project-data',t1.id);assert(projects.projects.some(row=>row.id===p1.id));assert(!projects.projects.some(row=>row.id===p2.id));assert(projects.tasks.some(row=>row.id===task.id));
+ assert(!projects.projects.some(row=>[trash1.id,trash2.id].includes(row.id)));assert(projects.trashedProjects.some(row=>row.id===trash1.id));assert(!projects.trashedProjects.some(row=>row.id===trash2.id));
+ const otherTrash=(await read('customer-project-data',t2.id)).trashedProjects;assert(otherTrash.some(row=>row.id===trash2.id));assert(!otherTrash.some(row=>row.id===trash1.id));
+ pass('回收站沿用当前组范围，同客户跨组项目独立筛选且不会回流普通清单');
  const finance=await read('project-finance-data',t1.id);assert(finance.charges.some(row=>row.id===ca.id));assert(!finance.charges.some(row=>row.id===cb.id));assert.equal(finance.totalsByCurrency.USD.contractCents,10000);assert.equal(finance.totalsScope,'team');
  pass('客服和项目显式分组优先、子任务继承项目组、客服及项目财务汇总按当前组重算');
 

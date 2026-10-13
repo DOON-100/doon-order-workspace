@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {all,canRead,clean,strictDate,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-workspace';
-import {canReadProject,projectAccess} from './customer-projects';
+import {canReadProject,isProjectTrashed,projectAccess} from './customer-projects';
 import {matchesCustomerResponsibility} from './customer-responsibility';
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {frameworkChannelAccess} from './framework-channel-access';
@@ -43,7 +43,7 @@ export function communicationAccess(s:State,m:Member,links:CommunicationLinks,wr
  if(links.projectId){
   const project=all(s,'customer_project').find(p=>p.id===links.projectId);
   if(!project||project.customerId!==customer.id||!canReadProject(s,m,project))return false;
-  if(write&&(!projectAccess(s,m,customer.id).write||project.status==='archived'))return false;
+  if(write&&(!projectAccess(s,m,customer.id).write||project.status==='archived'||isProjectTrashed(project)))return false;
  }
  if(links.orderId){
   const order=all(s,'order').find(o=>o.id===links.orderId) as Order|undefined;

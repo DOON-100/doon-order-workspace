@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {assertProjectNotTrashed} from './customer-projects';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {actor,AppError,bucket,json,snapshot} from './store';
 import {sha} from './workbooks';
@@ -16,7 +17,7 @@ function parse<T extends z.ZodTypeAny>(schema:T,input:unknown):z.output<T>{const
 export function workflowFileAccess(s:State,m:Member,value:{customerId:string;projectId?:string;folder?:string;category?:string},write=false){
  const customer=workflowCustomer(s,m,value.customerId),capabilities=workflowCapabilities(s,m,customer);
  if(write&&!capabilities.writeProfile&&!(value.category==='银行资料证明'&&capabilities.writeBank))throw new AppError('没有当前客户附件维护权限。',403);
- if(value.projectId){if(!all(s,'customer_project').some(p=>p.id===value.projectId&&p.customerId===customer.id))throw new AppError('附件项目不属于当前客户。',403);}
+ if(value.projectId){const project=all(s,'customer_project').find(p=>p.id===value.projectId&&p.customerId===customer.id);if(!project)throw new AppError('附件项目不属于当前客户。',403);if(write)assertProjectNotTrashed(project);}
  if(value.category==='银行资料证明'&&!(write?capabilities.writeBank:capabilities.readBank))throw new AppError('当前银行资料权限未开放。',403);
  if(value.folder==='04_工程报价'&&!canSeeCustomerQuoteInternal(s,m,customer))throw new AppError('工程报价资料需当前客户内部报价权限。',403);
  if(value.folder==='05_销售报价'&&!(write?canMaintainCustomerQuoteAccount(s,m,customer):assignedCustomerQuoteAccount(s,m,customer)||customerServiceQuoteReader(s,m,customer)))throw new AppError('销售报价资料读取或维护权限不足；客服历史查看不包含修改权限。',403);
@@ -29,20 +30,21 @@ function validDestination(input:any){
 }
 function safe(item:Entity){const {fileKey,...result}=item;return result;}
 function visible(s:State,m:Member,row:Entity){try{workflowFileAccess(s,m,row as any);return true;}catch{return false;}}
+function writable(s:State,m:Member,customerId:string,projectId:string){try{workflowFileAccess(s,m,{customerId,projectId},true);return true;}catch{return false;}}
 export async function customerWorkflowFileGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['customer-workflow-files','customer-workflow-file','customer-workflow-project-document','customer-workflow-project'].includes(action))return null;
  const params=new URL(req.url).searchParams;
  if(action==='customer-workflow-project'){
   const customerId=params.get('customerId')||'',projectId=params.get('projectId')||'';workflowFileAccess(s,m,{customerId,projectId});if(!projectId)throw new AppError('请选择项目。');
-  return json({project:all(s,'customer_workflow_project').find(row=>row.customerId===customerId&&row.projectId===projectId)||null,logs:all(s,'customer_workflow_project_log').filter(row=>row.customerId===customerId&&row.projectId===projectId),canWrite:workflowCapabilities(s,m,workflowCustomer(s,m,customerId)).writeProfile});
+  return json({project:all(s,'customer_workflow_project').find(row=>row.customerId===customerId&&row.projectId===projectId)||null,logs:all(s,'customer_workflow_project_log').filter(row=>row.customerId===customerId&&row.projectId===projectId),canWrite:writable(s,m,customerId,projectId)});
  }
  if(action==='customer-workflow-files'){
   const customerId=params.get('customerId')||'',projectId=params.get('projectId')||'';workflowFileAccess(s,m,{customerId,projectId});
-  return json({files:all(s,'customer_workflow_attachment').filter(r=>r.customerId===customerId&&(r.projectId||'')===projectId&&visible(s,m,r)).map(safe),canWrite:workflowCapabilities(s,m,workflowCustomer(s,m,customerId)).writeProfile});
+  return json({files:all(s,'customer_workflow_attachment').filter(r=>r.customerId===customerId&&(r.projectId||'')===projectId&&visible(s,m,r)).map(safe),canWrite:writable(s,m,customerId,projectId)});
  }
  if(action==='customer-workflow-project-document'){
   const customerId=params.get('customerId')||'',projectId=params.get('projectId')||'';workflowFileAccess(s,m,{customerId,projectId});if(!projectId)throw new AppError('请选择项目。');
-  return json({document:all(s,'customer_workflow_document').find(r=>r.customerId===customerId&&r.projectId===projectId)||null,revisions:all(s,'customer_workflow_document_revision').filter(r=>r.customerId===customerId&&r.projectId===projectId).map(r=>({id:r.id,version:r.version,content:r.content,reason:r.reason,createdAt:r.createdAt,createdBy:r.createdBy})),canWrite:workflowCapabilities(s,m,workflowCustomer(s,m,customerId)).writeProfile});
+  return json({document:all(s,'customer_workflow_document').find(r=>r.customerId===customerId&&r.projectId===projectId)||null,revisions:all(s,'customer_workflow_document_revision').filter(r=>r.customerId===customerId&&r.projectId===projectId).map(r=>({id:r.id,version:r.version,content:r.content,reason:r.reason,createdAt:r.createdAt,createdBy:r.createdBy})),canWrite:writable(s,m,customerId,projectId)});
  }
  const file=all(s,'customer_workflow_attachment').find(r=>r.id===params.get('id'));if(!file)throw new AppError('附件不存在。',404);workflowFileAccess(s,m,file as any);
  const stored=await bucket().get(file.fileKey);if(!stored)throw new AppError('原附件暂不可用，请核对存储。',404);const bytes=await stored.arrayBuffer();if(bytes.byteLength!==file.size||await sha(bytes)!==file.hash)throw new AppError('附件完整性校验未通过，未提供下载。',409);

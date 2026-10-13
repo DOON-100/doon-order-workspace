@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
-import {projectAccess} from './customer-projects';
+import {assertProjectNotTrashed,isProjectTrashed,projectAccess} from './customer-projects';
 import {followupAccess,followupMailAccess,followupCategories,followupStatuses} from './customer-project-followup';
 
 const id=z.string().trim().min(1).max(160),text=(max=6000)=>z.string().max(max).default(''),token=z.string().uuid();
@@ -32,7 +32,7 @@ function validateAssignment(s:State,m:Member,fields:any,before?:Entity){
  if(m.role!=='admin'&&fields.ownerId!==(before?.ownerId||m.id))throw new AppError('只有管理员可转交跟进负责人。',403);
  if(fields.customerId){const actor=projectAccess(s,m,fields.customerId),assigned=projectAccess(s,owner,fields.customerId);if(!actor.write||!assigned.write)throw new AppError('客户须在操作人及跟进负责人的现有责任范围内。',403);}
  else if(fields.projectId)throw new AppError('关联项目须先指定客户。');
- if(fields.projectId&&!all(s,'customer_project').some(p=>p.id===fields.projectId&&p.customerId===fields.customerId))throw new AppError('项目不属于所选客户。');
+ if(fields.projectId){const project=all(s,'customer_project').find(p=>p.id===fields.projectId&&p.customerId===fields.customerId);if(!project)throw new AppError('项目不属于所选客户。');assertProjectNotTrashed(project);}
  if(!fields.customerId&&m.role!=='admin'&&owner.id!==m.id)throw new AppError('仅跟进负责人或管理员可将记录退回待归属。',403);
 }
 async function replay(s:State,m:Member,action:string,input:any){
@@ -61,12 +61,13 @@ export async function customerProjectFollowupGet(action:string,req:Request,s:Sta
   // Historical snapshots can contain earlier customer associations. Check those too.
   return json({history:all(s,'audit').filter(a=>a.targetId===row.id&&[a.before,a.after].filter(Boolean).every(r=>r.kind==='customer_project_followup_mail'?followupMailAccess(s,m,r):followupAccess(s,m,r))).map(a=>({...a,before:a.before?publicRecord(a.before):null,after:a.after?publicRecord(a.after):null})).reverse()});
  }
- const followups=all(s,'customer_project_followup').filter(r=>followupAccess(s,m,r)).map(r=>({...publicRecord(r),canWrite:followupAccess(s,m,r,true),canPromote:followupAccess(s,m,r,true)&&!r.projectId}));
+ const trashedIds=new Set(all(s,'customer_project').filter(isProjectTrashed).map(p=>p.id));
+ const followups=all(s,'customer_project_followup').filter(r=>!trashedIds.has(r.projectId)&&followupAccess(s,m,r)).map(r=>({...publicRecord(r),canWrite:followupAccess(s,m,r,true),canPromote:followupAccess(s,m,r,true)&&!r.projectId}));
  const customers=all(s,'customer_account').filter(c=>c.active&&projectAccess(s,m,c.id).read);
  const members=all(s,'member').filter(r=>r.active&&['admin','sales','clerk','pmc'].includes(r.role));
  const salesIds=new Set(all(s,'customer_account').filter(c=>c.active).flatMap(c=>c.salesMemberIds||[]));
  const people=members.filter(r=>r.role==='sales'||r.role==='admin'&&r.owner).sort((a,b)=>Number(!!b.owner)-Number(!!a.owner)||Number(salesIds.has(b.id))-Number(salesIds.has(a.id))).map(r=>({id:r.id,name:r.name}));
- return json({followups,mails:all(s,'customer_project_followup_mail').filter(r=>followupMailAccess(s,m,r)).map(r=>({...publicRecord(r),canClassify:followupMailAccess(s,m,r,true)})),sourceBundles:all(s,'customer_project_followup_source').filter(r=>m.role==='admin'||r.ownerId===m.id).map(publicRecord),customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode})),projects:all(s,'customer_project').filter(p=>customers.some(c=>c.id===p.customerId)).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code})),people,members:members.map(r=>({id:r.id,name:r.name,role:r.role})),canImport:m.role==='admin'});
+ return json({followups,mails:all(s,'customer_project_followup_mail').filter(r=>followupMailAccess(s,m,r)).map(r=>({...publicRecord(r),canClassify:followupMailAccess(s,m,r,true)})),sourceBundles:all(s,'customer_project_followup_source').filter(r=>m.role==='admin'||r.ownerId===m.id).map(publicRecord),customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode})),projects:all(s,'customer_project').filter(p=>!isProjectTrashed(p)&&customers.some(c=>c.id===p.customerId)).map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code})),people,members:members.map(r=>({id:r.id,name:r.name,role:r.role})),canImport:m.role==='admin'});
 }
 export async function customerProjectFollowupPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  const names:Record<string,keyof typeof customerProjectFollowupSchemas>={'customer-project-followup-save':'save','customer-project-followup-mail-classify':'classify','customer-project-followup-promote':'promote','customer-project-followup-import':'import'};
@@ -114,7 +115,7 @@ async function importWorkspace(s:State,m:Member,action:string,input:any){
  const mailResults:Entity[]=[],fileResults:Entity[]=[];
  for(const row of input.mails){
   const found=existing('customer_project_followup_mail',row.sourceId),sourceHash=await sha(JSON.stringify(row.source));if(found){if(found.sourceHash!==sourceHash)throw new AppError('原始邮件内容已变化，请建立新来源版本。',409);mailResults.push(found);skipped.mails++;continue;}
-  const followupIds=row.followupSourceIds.map((sourceId:string)=>{const f=mapped.get(sourceId)||existing('customer_project_followup',sourceId);if(!f)throw new AppError('邮件关联的源跟进记录不存在。');return f.id;});
+  const followupIds=row.followupSourceIds.map((sourceId:string)=>{const f=mapped.get(sourceId)||existing('customer_project_followup',sourceId);if(!f)throw new AppError('邮件关联的源跟进记录不存在。');assertAccess(s,m,f,true);return f.id;});
   const {followupSourceIds:_,...mail}=row,item={...mail,...base('customer_project_followup_mail',row.sourceId),followupIds,sourceHash};changes.push({item});mailResults.push(item);created.mails++;
  }
  let total=0;

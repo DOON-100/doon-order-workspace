@@ -115,6 +115,7 @@ const {testCustomerProjectFinanceEntries}=await import('./customer-project-finan
 const {testEngineeringDrawings}=await import('./engineering-drawing-cases.mjs');await testEngineeringDrawings(projectHarness);
 const {testEngineeringSop}=await import('./engineering-sop-cases.mjs');await testEngineeringSop(projectHarness);
 const {testCustomerProjectAssignmentRoster}=await import('./customer-project-assignment-roster-cases.mjs');await testCustomerProjectAssignmentRoster(projectHarness);
+const {testCustomerProjectRecycle}=await import('./customer-project-recycle-cases.mjs');await testCustomerProjectRecycle(projectHarness);
 const {runBusinessTeamScopeCases}=await import('./business-team-scope-cases.mjs');await runBusinessTeamScopeCases({api,identity,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record)),pass});
 const {runBusinessTeamExportCases}=await import('./business-team-export-cases.mjs');await runBusinessTeamExportCases({api,identity,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record)),pass});
 console.log('Total business checks:',checks.length);

@@ -3,7 +3,7 @@ import {all,clean,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {canUseCustomerQuotes} from './customer-quote-access';
 import {canManageDrawings,drawingRevision,type EngineeringDrawing} from './engineering-drawings';
-import {projectAccess,taskReviewConfigurationValid,type CustomerProject,type CustomerProjectTask} from './customer-projects';
+import {isProjectTrashed,projectAccess,taskReviewConfigurationValid,type CustomerProject,type CustomerProjectTask} from './customer-projects';
 import {communicationAccess} from './unified-communication';
 import {customerTaskOpenStatuses,customerTaskOwnerEligible,customerTaskRevisionChanges,type CustomerWorkflowTask} from './customer-workflow-tasks';
 import {frameworkFinanceOpenStatuses,frameworkFinanceBusinessAccess,frameworkFinanceTaskRevision,type FrameworkFinanceTask} from './framework-finance-task';
@@ -25,6 +25,12 @@ async function hash(v:unknown){return Array.from(new Uint8Array(await crypto.sub
 function parse<T extends z.ZodTypeAny>(schema:T,input:unknown):z.output<T>{const result=schema.safeParse(input);if(!result.success)throw new AppError(result.error.issues.slice(0,3).map(x=>x.path.join('.')+': '+x.message).join('；'));return result.data;}
 function departingMember(s:State,id:string){const m=all(s,'member').find(m=>m.id===id) as Member|undefined;if(!m||m.role==='supplier'||m.owner)throw new AppError('请选择非初始管理员的内部成员。',403);return m;}
 function title(r:Entity){return String(r.customerCode||r.code||r.orderNo||r.number||r.title||r.name||r.label||r.modelNo||r.sampleNo||r.id).slice(0,240);}
+function recycledProjectRecord(s:State,record:Entity):boolean{
+ if(record.kind==='customer_project')return isProjectTrashed(record);
+ if(record.projectId){const project=all(s,'customer_project').find(p=>p.id===record.projectId);if(project&&isProjectTrashed(project))return true;}
+ // Source email ownership must not be reassigned around its recycled followup.
+ return record.kind==='customer_project_followup_mail'&&Array.isArray(record.followupIds)&&record.followupIds.some((id:string)=>{const followup=all(s,'customer_project_followup').find(f=>f.id===id);return !!followup&&recycledProjectRecord(s,followup);});
+}
 
 /** Explicit current responsibility fields only. Historical authors, messages, signatures and attachments never become assignments. */
 export async function frameworkOffboardingInventory(s:State,member:Member):Promise<OffboardingItem[]>{
@@ -37,7 +43,7 @@ export async function frameworkOffboardingInventory(s:State,member:Member):Promi
  };
  const sales=['sales'],service=['sales','clerk','pmc'],engineering=['admin','clerk'],pmc=['pmc'],business=['sales','clerk','pmc'];
  for(const r of s.records){
-  if(ended(r))continue;
+  if(ended(r)||recycledProjectRecord(s,r))continue;
   if(r.kind.startsWith('customer_project')&&r.projectId){const parent=all(s,'customer_project').find(p=>p.id===r.projectId);if(parent&&['archived','cancelled'].includes(parent.status))continue;}
   if(r.kind==='customer_account'){
    await add(r,'salesMemberIds','负责销售','客户',sales,'ids');await add(r,'serviceMemberIds','负责客服','客户',service,'ids');await add(r,'quoteMemberIds','报价责任范围','客户',business,'ids','',true);
@@ -87,6 +93,7 @@ export function frameworkOffboardingCandidate(s:State,source:Member,item:Offboar
   if(!possible||!customerTaskOwnerEligible({...s,records:s.records.map(r=>r.id===preview.id?preview:r)},target,item.customerId))return false;
  }
  const record=s.records.find(r=>r.id===item.recordId);
+ if(record&&recycledProjectRecord(s,record))return false;
  if(item.kind==='customer_project_task'&&record){const otherFields=item.field==='ownerId'?['serviceReviewerId','salesReviewerId']:['ownerId'];if(otherFields.some(k=>record[k]===target.id))return false;}
  return true;
 }

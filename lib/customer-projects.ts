@@ -5,7 +5,7 @@ import {projectTaskParticipantsInScope} from './customer-project-assignment';
 
 export type ProjectMeta={version:number;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string};
 export type ProjectScope={itemId:string;quantity:number};
-export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;serviceMemberIds?:string[];serviceReviewerId?:string;salesReviewerId?:string;dueDate:string;status:'active'|'paused'|'cancelled'|'archived'};
+export type CustomerProject=Entity&ProjectMeta&{kind:'customer_project';customerId:string;code:string;title:string;description:string;teamId:string;salesMemberId:string;serviceMemberId:string;serviceMemberIds?:string[];serviceReviewerId?:string;salesReviewerId?:string;dueDate:string;status:'active'|'paused'|'cancelled'|'archived';trashedAt?:string;trashedBy?:string;trashedById?:string;trashReason?:string};
 export type CustomerProjectItem=Entity&ProjectMeta&{kind:'customer_project_item';projectId:string;customerId:string;model:string;customerModel:string;drawing:string;color:string;lens:string;material:string;requirements:string;quantity:number};
 export type CustomerProjectRound=Entity&ProjectMeta&{kind:'customer_project_round';projectId:string;customerId:string;title:string;type:'development'|'revision'|'sales_sample'|'preproduction'|'bulk';parentRoundId:string;scope:ProjectScope[];stage:string;requiredDrawingTypes:('2d'|'3d')[];requireQuote:boolean;requiredSampleIds?:string[];sampleGateStage?:'order'|'before_production'|'not_required';sampleGateNote?:string;dueDate:string;status:'open'|'partial'|'transferred'|'cancelled';reason:string};
 export type CustomerProjectTeam=Entity&ProjectMeta&{kind:'customer_project_team';name:string;leaderIds:string[];salesMemberIds:string[];serviceMemberIds:string[];customerIds:string[];active:boolean};
@@ -36,7 +36,7 @@ export function canManageProjectAssignments(s:State,m:Member,project:CustomerPro
  return m.role==='admin'||project.salesMemberId===m.id||all(s,'customer_project_team').some(t=>t.id===project.teamId&&t.active&&t.customerIds.includes(project.customerId)&&t.leaderIds.includes(m.id));
 }
 export function canManageProjectTasks(s:State,m:Member,project:CustomerProject):boolean{
- return project.status==='active'&&canManageProjectAssignments(s,m,project);
+ return !project.trashedAt&&project.status==='active'&&canManageProjectAssignments(s,m,project);
 }
 export function taskReviewConfigurationValid(s:State,project:CustomerProject,task:CustomerProjectTask):boolean{
  if(!task.ownerId||!task.serviceReviewerId||!task.salesReviewerId||[task.serviceReviewerId,task.salesReviewerId].includes(task.ownerId))return false;
@@ -46,7 +46,7 @@ export function taskReviewConfigurationValid(s:State,project:CustomerProject,tas
  });
 }
 export function projectTaskPermissions(s:State,m:Member,project:CustomerProject,task:CustomerProjectTask){
- const writable=project.status==='active'&&task.projectId===project.id&&task.customerId===project.customerId&&projectAccess(s,m,project.customerId).write;
+ const writable=!project.trashedAt&&project.status==='active'&&task.projectId===project.id&&task.customerId===project.customerId&&projectAccess(s,m,project.customerId).write;
  const reviewConfigurationValid=taskReviewConfigurationValid(s,project,task);
  return {reviewConfigurationValid,canManage:writable&&!['done','cancelled'].includes(task.status)&&canManageProjectTasks(s,m,project),canSubmit:writable&&reviewConfigurationValid&&task.ownerId===m.id&&['open','returned'].includes(task.status),canReviewService:writable&&reviewConfigurationValid&&task.serviceReviewerId===m.id&&task.status==='service_review',canReviewSales:writable&&reviewConfigurationValid&&task.salesReviewerId===m.id&&task.status==='sales_review'};
 }
@@ -54,9 +54,15 @@ export function canReadProject(s:State,m:Member,record:Entity){
  const project=record.kind==='customer_project'?record:all(s,'customer_project').find(p=>p.id===record.projectId);
  return !!project&&(!record.customerId||record.customerId===project.customerId)&&projectAccess(s,m,project.customerId).read;
 }
+/** Recycle is independent of workflow status. Call after the route's existing authorization check. */
+export function isProjectTrashed(project:Pick<CustomerProject,'trashedAt'>|Entity){return !!project.trashedAt;}
+export function assertProjectNotTrashed(project:Pick<CustomerProject,'trashedAt'>|Entity){
+ if(isProjectTrashed(project))throw new AppError('项目已移入回收站，请先恢复后再修改。',409);
+}
 export function requireProject(s:State,m:Member,id:string,options:{write?:boolean}={}):CustomerProject{
  const project=all(s,'customer_project').find(p=>p.id===id) as CustomerProject|undefined;
  if(!project||!(options.write?projectAccess(s,m,project.customerId).write:canReadProject(s,m,project)))throw new AppError('项目不存在或不在你负责的客户范围内。',403);
+ if(options.write)assertProjectNotTrashed(project);
  if(options.write&&project.status==='archived')throw new AppError('项目已归档，请先由管理员重新开启。',409);
  return project;
 }
