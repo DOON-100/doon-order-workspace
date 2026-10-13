@@ -1,6 +1,7 @@
 import {all,clean,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {assignedServiceCustomer} from './service-workspace';
 import {AppError} from './store';
+import {projectTaskParticipantsInScope} from './customer-project-assignment';
 
 export type ProjectMeta={version:number;createdAt:string;createdBy:string;updatedAt:string;updatedBy:string};
 export type ProjectScope={itemId:string;quantity:number};
@@ -39,7 +40,7 @@ export function canManageProjectTasks(s:State,m:Member,project:CustomerProject):
 }
 export function taskReviewConfigurationValid(s:State,project:CustomerProject,task:CustomerProjectTask):boolean{
  if(!task.ownerId||!task.serviceReviewerId||!task.salesReviewerId||[task.serviceReviewerId,task.salesReviewerId].includes(task.ownerId))return false;
- return [task.ownerId,task.serviceReviewerId,task.salesReviewerId].every(memberId=>{
+ return projectTaskParticipantsInScope(s,project,[task.ownerId,task.serviceReviewerId,task.salesReviewerId])&&[task.ownerId,task.serviceReviewerId,task.salesReviewerId].every(memberId=>{
   const assigned=all(s,'member').find(row=>row.id===memberId) as Member|undefined;
   return !!assigned&&projectAccess(s,assigned,project.customerId).write;
  });
