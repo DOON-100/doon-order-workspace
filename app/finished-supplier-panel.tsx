@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
@@ -42,7 +43,7 @@ const blankOperation=():CompanyForm=>({operation:'receive',shipmentId:'',stageId
 class OperationError extends Error {constructor(message:string, public status=0){super(message);}}
 async function api(action:string,body?:unknown):Promise<any>{
  let response:Response;
- try{response=await fetch('/api/workspace/finished-supplier-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});}catch{throw new OperationError('连接服务失败。本次提交可能尚未收到回执，请重试原提交。');}
+ try{response=await businessTeamFetch('/api/workspace/finished-supplier-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'});}catch{throw new OperationError('连接服务失败。本次提交可能尚未收到回执，请重试原提交。');}
  let result:any;try{result=await response.json();}catch{throw new OperationError('未收到完整回执，请重试原提交。',response.ok?0:response.status);}
  if(!response.ok)throw new OperationError(result.error||'操作未完成，请核对后重试。',response.status);
  return result;

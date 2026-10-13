@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 
 import {useEffect,useState,type ReactNode} from 'react';
 import {ArrowLeft,ArrowRight,RefreshCw} from 'lucide-react';
@@ -41,7 +42,7 @@ class SectionError extends Error{
 }
 
 async function readSection<T>(action:string,field:string,customerId:string,decode:(row:Row)=>T,signal:AbortSignal):Promise<T[]>{
- const response=await fetch('/api/workspace/'+action,{method:'GET',credentials:'same-origin',cache:'no-store',signal});
+ const response=await businessTeamFetch('/api/workspace/'+action,{method:'GET',credentials:'same-origin',cache:'no-store',signal});
  if(response.status===401)throw new SectionError('登录已失效，请重新登录后查看。');
  if(response.status===403)throw new SectionError('当前账号没有此模块的读取权限。',true);
  if(!response.ok)throw new SectionError('此模块暂时读取失败，请重试或进入对应功能核对。');

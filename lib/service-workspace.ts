@@ -10,6 +10,7 @@ export type ServiceType=typeof serviceTypes[number];
 export type ServiceCurrency=typeof serviceCurrencies[number];
 export type ServiceRecord=Entity & {
  kind:'service_record';type:ServiceType;version:number;customerId:string;orderId:string;
+ teamId?:string;ownerId?:string;serviceReviewerId?:string;salesReviewerId?:string;
  title:string;description:string;status:'open'|'done'|'cancelled';
  waitingFor:'none'|'customer'|'factory'|'jennifer';dueDate:string;nextFollowUp:string;
  details:Record<string,string|number>;createdAt:string;updatedAt:string;updatedBy:string;
@@ -21,6 +22,7 @@ export type ServiceReceipt=Entity & {
 };
 export type ServiceAttachment=Entity & {
  kind:'service_attachment';recordId:string;customerId:string;filename:string;fileKey:string;
+ category?:'general'|'reference-image';
  contentType:string;size:number;hash:string;note:string;actorId:string;actor:string;createdAt:string;
 };
 export type ServiceRevision=Entity & {
@@ -105,6 +107,8 @@ export const serviceDetailsSchemas={
 export const serviceSaveSchema=z.object({
  id:serviceIdSchema.optional(),version:z.number().int().positive().optional(),
  type:z.enum(serviceTypes),customerId:serviceIdSchema,orderId:z.string().trim().max(160).default(''),
+ teamId:z.string().trim().max(160).optional(),ownerId:z.string().trim().max(160).optional(),
+ serviceReviewerId:z.string().trim().max(160).optional(),salesReviewerId:z.string().trim().max(160).optional(),
  title:z.string().trim().min(1,'请填写标题').max(300),description:text(10000),
  status:z.enum(['open','done','cancelled']).default('open'),
  waitingFor:z.enum(['none','customer','factory','jennifer']).default('none'),

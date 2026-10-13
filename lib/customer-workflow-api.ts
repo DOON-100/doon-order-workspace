@@ -1,4 +1,6 @@
 import {z} from 'zod';
+import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
+import {requestedExportBusinessTeam} from './business-team-export';
 import {all,newId,now,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {assignedServiceCustomer} from './service-workspace';
@@ -80,9 +82,9 @@ export async function customerWorkflowGet(action:string,req:Request,s:State,m:Me
   if(!m.active||m.role!=='admin')throw new AppError('仅管理员可导出客户完整资料记录。',403);
   const customers=all(s,'customer_account'),ids=new Set(customers.map(c=>c.id)),projects=all(s,'customer_project').filter(p=>ids.has(p.customerId)),projectIds=new Set(projects.map(p=>p.id));
   const included=s.records.filter(row=>ids.has(row.customerId)&&(row.kind.startsWith('customer_workflow_')&&row.kind!=='customer_workflow_request'||row.kind.startsWith('customer_project')||['service_record','service_attachment'].includes(row.kind))||projectIds.has(row.projectId)&&row.kind.startsWith('customer_project'));
-  const records=[...customers,...projects,...included].filter((row,index,rows)=>rows.findIndex(other=>other.id===row.id)===index).map(row=>{const {fileKey,...value}=row;return value;});
-  const result={format:'doon-customer-record-export-v1',exportedAt:now(),revision:s.revision,attachmentBytesIncluded:false,scope:'客户主档、客户补充资料及流转、精确客户ID关联的客服资料与项目记录；不含附件原件、账号或会话。',records};
-  return new Response(JSON.stringify(result,null,2),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="customer-records-${new Date().toISOString().slice(0,10)}.json"`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+  const teamId=requestedExportBusinessTeam(s,m,req),records=filterBusinessTeamRows(s,[...customers,...projects,...included].filter((row,index,rows)=>rows.findIndex(other=>other.id===row.id)===index),teamId).map(row=>{const {fileKey,...value}=row;return value;});
+  const result={format:'doon-customer-record-export-v1',exportedAt:now(),revision:s.revision,attachmentBytesIncluded:false,...(teamId?{businessTeamId:teamId}:{}),scope:(teamId?'当前业务组范围内的':'')+'客户主档、客户补充资料及流转、精确客户ID关联的客服资料与项目记录；不含附件原件、账号或会话。',records};
+  return new Response(JSON.stringify(result,null,2),{headers:{'Content-Type':'application/json; charset=utf-8','Content-Disposition':`attachment; filename="customer-records-${new Date().toISOString().slice(0,10)}.json"`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':businessTeamHeader}});
  }
  const file=await customerWorkflowFileGet(action,req,s,m);if(file)return file;
  const transfer=customerWorkflowTransferGet(action,req,s,m);if(transfer)return transfer;

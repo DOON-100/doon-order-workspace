@@ -1,6 +1,8 @@
 import * as XLSX from 'xlsx';
 import {AppError} from './store';
 import {type Member,type State} from './domain';
+import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
+import {requestedExportBusinessTeam} from './business-team-export';
 import {metricDefinitions,metricSource,metricRows,filterMetricRows,sortMetricRows,metricSummary,metricValue,detailColumns,summaryColumns,followupColumns,type MetricKey} from './metric-details';
 
 export function metricExport(req:Request,s:State,m:Member){
@@ -8,7 +10,7 @@ export function metricExport(req:Request,s:State,m:Member){
  if(!Object.hasOwn(metricDefinitions,kind))throw new AppError('请选择有效的汇总项目。');
  if(q.get('revision')!==String(s.revision))throw new AppError('共享数据已更新，请刷新明细后再导出，确保汇总与文件一致。',409);
  const filters=Object.fromEntries(['q','customer','owner','stage','issue','orderNo'].map(k=>[k,q.get(k)||'']));
- const allRows=metricRows(kind,metricSource(s,m)),rows=sortMetricRows(filterMetricRows(allRows,filters),q.get('sort')||'原表行号',q.get('desc')==='1'),meta=metricDefinitions[kind],book=XLSX.utils.book_new();
+ const teamId=requestedExportBusinessTeam(s,m,req),allRows=filterBusinessTeamRows(s,metricRows(kind,metricSource(s,m)),teamId),rows=sortMetricRows(filterMetricRows(allRows,filters),q.get('sort')||'原表行号',q.get('desc')==='1'),meta=metricDefinitions[kind],book=XLSX.utils.book_new();
  const add=(title:string,data:Record<string,unknown>[],headers:string[])=>{
   const sheet=XLSX.utils.json_to_sheet(data,{header:headers});
   sheet['!autofilter']={ref:sheet['!ref']||'A1'};
@@ -23,5 +25,5 @@ export function metricExport(req:Request,s:State,m:Member){
  ],['项目','内容']);
  const bytes=XLSX.write(book,{type:'array',bookType:'xlsx'}) as ArrayBuffer;
  const name=`${meta.title}_明细跟进_${new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})}.xlsx`;
- return new Response(bytes,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
+ return new Response(bytes,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':businessTeamHeader}});
 }

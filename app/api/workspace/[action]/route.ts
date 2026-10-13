@@ -31,6 +31,7 @@ import {customerProjectFinanceGet,customerProjectFinancePost} from '@/lib/custom
 import {canReadServiceRecord} from '@/lib/service-workspace';
 import {collaborationAssignments} from '@/lib/collaboration-api';
 import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/lib/customer-quotes';
+import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from '@/lib/business-team-scope';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -69,8 +70,8 @@ function filterOrders(orders:Order[],reports:Report[],m:Member,f:Record<string,s
  const q=clean(f.q).toLowerCase();return o.lifecycle!=='archived'&&(!q||[o.orderNo,o.customer,o.customerPO,o.drawing,o.color,o.lens,productTypeOf(o)].some(v=>v.toLowerCase().includes(q)))&&(!f.customer||o.customer===f.customer)&&(!f.owner||o.ownerEmail===f.owner||ownerLabel(o)===f.owner)&&(!f.mine||o.ownerEmail===m.email)&&(!f.status|| (f.status==='unfinished'?(balance(o,reports)??o.quantity)>0:f.status==='packed'?(balance(o,reports)??o.quantity)<=0: f.status==='late'?!!o.requestedDate&&o.requestedDate<new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'})&&(balance(o,reports)??o.quantity)>0:true));});}
 function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.isArray(input))throw new AppError('字段内容无效。');const patch:Record<string,any>={};for(const [k,v] of Object.entries(input)){if(!fields.some(([key])=>key===k))throw new AppError('不支持的修改字段。');try{patch[k]=normalizeField(k,v);}catch(e){throw new AppError(`${fieldLabels[k]}：${(e as Error).message}`);}}return patch;}
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
-export async function GET(req:Request,ctx:Context){try{
- const {action}=await ctx.params,s=await snapshot(),m=await actor(s),url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
+async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
+ const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
  const handoffBusiness=await handoffBusinessGet(action,req,s,m);if(handoffBusiness)return handoffBusiness;
@@ -100,6 +101,12 @@ export async function GET(req:Request,ctx:Context){try{
  }
  if(action==='backup'){requireAdmin(m);const data={format:'doon-workspace-snapshot-v1',createdAt:now(),revision:s.revision,records:s.records,note:'结构化数据快照。原始工作表和附件保存在文件存储，需分别保留；恢复前需校验文件与账号映射。'};return fileResponse(JSON.stringify(data,null,2),'订单中台数据快照.json','application/json');}
  throw new AppError('接口不存在。',404);
+}catch(e){return failure(e);}}
+export async function GET(req:Request,ctx:Context){try{
+ const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ if(action==='business-team-data')return json(businessTeamData(s,m));
+ const response=await workspaceGet(req,ctx,s,m);
+ return await scopeBusinessTeamResponse(action,req,s,m,response);
 }catch(e){return failure(e);}}
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
@@ -193,7 +200,7 @@ export async function POST(req:Request,ctx:Context){try{
  }
  if(action==='export'){
   const input=z.object({type:z.enum(['working','summary','customer','completion','progress']),filters:z.record(z.string()).default({})}).parse(body);
-  const allReports=all(s,'report') as Report[],orders=filterOrders(visible(s,m),allReports,m,input.filters),ids=new Set(orders.map(o=>o.id));const exportId=newId('export'),createdAt=now();
+  const allReports=all(s,'report') as Report[],orders=filterBusinessTeamRows(s,filterOrders(visible(s,m),allReports,m,input.filters),input.filters.businessTeamId||''),ids=new Set(orders.map(o=>o.id));const exportId=newId('export'),createdAt=now();
   let rows:Record<string,any>[],title:string;
   if(input.type==='completion'){
    title='包装完工明细';rows=allReports.filter(r=>ids.has(r.lineId)&&validApproval(r)&&(!input.filters.from||r.reportedAt.slice(0,10)>=input.filters.from)&&(!input.filters.to||r.reportedAt.slice(0,10)<=input.filters.to)).map(r=>{const o=orders.find(o=>o.id===r.lineId)!;return {'客户':o.customer,'订单号':o.orderNo,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'色号':o.color,'镜片类型':o.lens,'交货批次':o.batch,'报工编号':r.nativeId||r.id,'工单号':r.workOrder,'良品数':r.quantity,'报工时间':r.reportedAt,'审批状态':r.approval,'来源文件':r.source,'数据截止时间':createdAt};});

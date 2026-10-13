@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {Select,SelectContent,SelectItem,SelectTrigger,SelectValue} from '@/components/ui/select';
 import {Table,TableHeader,TableBody,TableRow,TableHead,TableCell} from '@/components/ui/table';
 import {Input} from '@/components/ui/input';
@@ -12,7 +13,7 @@ export function Empty({title='暂无数据',detail='导入工作表后，数据�
 export function Grid({headers,rows}:{headers:string[];rows:React.ReactNode[][]}){return <Table><TableHeader><TableRow>{headers.map((h,i)=><TableHead key={i}>{h}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.length?rows.map((r,i)=><TableRow key={i}>{r.map((v,j)=><TableCell key={j}>{v??'—'}</TableCell>)}</TableRow>):<TableRow><TableCell colSpan={headers.length}><Empty/></TableCell></TableRow>}</TableBody></Table>;}
 export async function request(action:string,body?:unknown,options?:{signal?:AbortSignal}):Promise<any>{
  let response:Response;
- try{response=await fetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:body instanceof FormData?undefined:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body),signal:options?.signal});}catch{if(options?.signal?.aborted)throw new DOMException('请求已取消。','AbortError');throw new Error('连接公司主机失败，请检查内网连接后重试。');}
+ try{response=await businessTeamFetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:body instanceof FormData?undefined:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body),signal:options?.signal});}catch{if(options?.signal?.aborted)throw new DOMException('请求已取消。','AbortError');throw new Error('连接公司主机失败，请检查内网连接后重试。');}
  let result:any;try{result=await response.json();}catch{if(options?.signal?.aborted)throw new DOMException('请求已取消。','AbortError');throw new Error(response.status===413?'文件不能超过 10 MB。':'服务器没有返回完整结果，请刷新页面后重试。');}
  if(!response.ok)throw new Error(result.error||(response.status===401?'登录已失效，请重新登录。':response.status===403?'权限受限，请联系管理员分配对应权限。':'操作未完成，请重试。'));return result;
 }

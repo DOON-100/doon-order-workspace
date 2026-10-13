@@ -1,5 +1,7 @@
 import {z} from 'zod';
 import * as XLSX from 'xlsx';
+import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
+import {requestedExportBusinessTeam} from './business-team-export';
 import {all,canRead,now,strictDate,type State,type Member,type Order} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {today} from './ledger';
@@ -36,12 +38,12 @@ export async function lossGet(action:string,req:Request,s:State,m:Member){
  const params=new URL(req.url).searchParams,month=params.get('month')||'';
  if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw new AppError('请选择有效的报表月份。');
  const orders=all(s,'order') as Order[],ids=new Set(orders.filter(o=>canRead(m,o)).map(o=>o.id));
- const records=filterLosses((all(s,'loss') as LossRecord[]).filter(r=>ids.has(r.lineId)),{month,department:params.get('department')||'',q:params.get('q')||'',customer:params.get('customer')||''});
+ const records=filterLosses(filterBusinessTeamRows(s,(all(s,'loss') as LossRecord[]).filter(r=>ids.has(r.lineId)),requestedExportBusinessTeam(s,m,req)),{month,department:params.get('department')||'',q:params.get('q')||'',customer:params.get('customer')||''});
  const summaries=summarizeLosses(records).filter(d=>!params.get('department')||d.department===params.get('department'));
  const book=XLSX.utils.book_new();
  const summary=XLSX.utils.aoa_to_sheet([['度昂 · 部门损耗月报',month],['口径','按确认日期归月；当月净损耗 = 新增 − 冲减。未登记不等于零损耗。'],['说明','各工序合计为工序数量，不等同于成品短缺；部门订单数量按明细去重，不可跨部门累加。'],['数据截止',now()],[],['责任部门','涉及订单数','涉及明细数','涉及订单数量','新增损耗','冲减损耗','当月净损耗','确认记录数'],...summaries.map(d=>[d.name,d.orders,d.lines,d.orderQuantity,d.added,d.reduced,d.net,d.records])]);
  summary['!cols']=[{wch:24},...Array.from({length:7},()=>({wch:19}))];XLSX.utils.book_append_sheet(book,summary,'部门月度汇总');
  const details=XLSX.utils.aoa_to_sheet([['确认日期','月份','责任部门','工序','订单号','客户','款号','色号','镜片','订单数量快照','累计投入','累计合格完成','仍在制','累计确认损耗','本次损耗增减','类型','核对依据','登记人','登记时间','原表行号','明细编号','记录编号','报工版本','损耗来源','MES 凭证'],...records.map(r=>[r.reportDate,r.month,departmentName(r.department),processName(r.process),r.orderNo,r.customer,r.drawing,r.color,r.lens,r.orderQuantity,r.input,r.good,r.wip,r.loss,r.delta,r.correction?'冲减更正':'确认',r.reason,r.actor,r.createdAt,r.sourceRow,r.lineId,r.id,r.orderVersion,r.source==='mes'?'MES 已确认损耗（人工核对录入）':'部门核对公式',r.sourceRef])]);
  details['!cols']=Array.from({length:25},(_,i)=>({wch:i===16?48:[20,21,24].includes(i)?46:18}));details['!autofilter']={ref:details['!ref']!};XLSX.utils.book_append_sheet(book,details,'损耗确认明细');
- return new Response(XLSX.write(book,{type:'buffer',bookType:'xlsx'}) as BodyInit,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent('部门损耗月报_'+month+'.xlsx'),'Cache-Control':'no-store'}});
+ return new Response(XLSX.write(book,{type:'buffer',bookType:'xlsx'}) as BodyInit,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent('部门损耗月报_'+month+'.xlsx'),'Cache-Control':'no-store','Vary':businessTeamHeader}});
 }

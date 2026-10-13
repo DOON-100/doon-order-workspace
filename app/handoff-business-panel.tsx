@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -30,7 +31,7 @@ const labels:Record<string,string>={deposit:'定金',balance:'尾款',refund:'�
 const empty:Feed={revision:0,items:[],customers:[],orders:[],projects:[],members:[],queues:{drawings:[],sops:[],orders:[],factory:[],service:[],finance:{},quotes:[]}};
 class BusinessRequestError extends Error{constructor(message:string,public definitive:boolean){super(message);}}
 async function api(action:string,body?:unknown,signal?:AbortSignal){
- const multipart=body instanceof FormData;const r=await fetch('/api/workspace/handoff-business-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined||multipart?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:multipart?body:JSON.stringify(body),cache:'no-store',signal});
+ const multipart=body instanceof FormData;const r=await businessTeamFetch('/api/workspace/handoff-business-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined||multipart?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:multipart?body:JSON.stringify(body),cache:'no-store',signal});
  let parsed:Row;try{parsed=await r.json();}catch{throw new BusinessRequestError('未能读取服务器返回；请保留输入并核实结果。',false);}if(!r.ok)throw new BusinessRequestError(parsed.error||'操作失败',r.status>=400&&r.status<500);return parsed;
 }
 const fromRow=(r:Row):Draft=>({id:r.id,expectedVersion:r.version,kind:r.kind==='handoff_business_source'?'source':'document',type:r.type,customerId:r.customerId,projectId:r.projectId,orderId:r.orderId,number:r.number,fields:{...r.fields},lines:r.lines.map((l:Row)=>({...l})),sourceRefs:r.sourceRefs.map((v:Row)=>({...v})),originRefs:(r.originRefs||[]).map((v:Row)=>({...v}))});

@@ -1,6 +1,7 @@
 'use client';
 import {useMemo,useState,useEffect} from 'react';
 import {Button} from '@/components/ui/button';
+import {BusinessTeamDownloadButton} from './business-team-download';
 import {Progress} from '@/components/ui/progress';
 import {Textarea} from '@/components/ui/textarea';
 import {Download,ArrowUpRight,AlertTriangle,Archive,CheckCircle2,UploadCloud,Save} from 'lucide-react';
@@ -16,7 +17,7 @@ import {lossBalance} from '@/lib/losses';
 import type {Data} from './workspace';
 const fmt=(n:number|null|undefined)=>n===null||n===undefined?'待核对':n.toLocaleString('zh-CN');
 type Props={data:Data;act:Act;busy:boolean;openOrder:(o:Order)=>void};
-function Export({mode,filters={}}:{mode:string;filters?:Record<string,string>}){return <Button variant="outline" asChild><a href={'/api/workspace/ledger-export?'+new URLSearchParams({mode,...filters})}><Download size={16}/>导出当前明细</a></Button>;}
+function Export({mode,filters={}}:{mode:string;filters?:Record<string,string>}){return <BusinessTeamDownloadButton variant="outline" href={'/api/workspace/ledger-export?'+new URLSearchParams({mode,...filters})}><Download size={16}/>导出当前明细</BusinessTeamDownloadButton>;}
 export function LedgerImport({data,act,busy,initialFile,onWorkingFile}:Omit<Props,'openOrder'>&{initialFile?:File|null;onWorkingFile?:(file:File)=>void}){
  const [mode,setMode]=useState('active'),[job,setJob]=useState<any>(null),[running,setRunning]=useState(false),[error,setError]=useState('');
  useEffect(()=>{if(initialFile&&broad(data.me))void upload(initialFile);},[initialFile]);

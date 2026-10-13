@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {MessageSquareText,Plus,Save,History,ShieldCheck} from 'lucide-react';
@@ -24,7 +25,7 @@ function uuid(){const b=crypto.getRandomValues(new Uint8Array(16));b[6]=(b[6]&15
 class CommunicationRequestError extends Error{constructor(message:string,public status=0,public definitive=false){super(message);}}
 async function communicationRequest(action:string,body?:unknown,signal?:AbortSignal){
  let response:Response;
- try{response=await fetch('/api/workspace/unified-communication-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal});}
+ try{response=await businessTeamFetch('/api/workspace/unified-communication-'+action,{method:body===undefined?'GET':'POST',headers:body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal});}
  catch{throw new CommunicationRequestError('连接公司主机失败，请检查内网连接。');}
  let result:any;try{result=await response.json();}catch{throw new CommunicationRequestError('服务器未返回完整结果。',response.status);}
  if(!response.ok)throw new CommunicationRequestError(result.error||'操作未完成，请重新核对。',response.status,response.status<500);

@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
+import {serviceAssignmentData,validateServiceAssignment} from './service-workspace-assignment';
 import {
  assignedServiceCustomer,canReadServiceRecord,canWriteServiceWorkspace,publicServiceAttachment,publicServiceReceipt,publicServiceRecord,
  serviceCustomerAccounts,serviceDetailsSchemas,serviceOrderCustomerKeys,serviceReceivedCents,serviceReceiptReverseSchema,serviceReceiptSchema,serviceSaveSchema,serviceTotalsByCurrency,
@@ -50,6 +51,19 @@ function financial(record:ServiceRecord){
  if(!Number.isSafeInteger(record.details.amountCents)||!['CNY','USD','EUR','GBP','HKD'].includes(String(record.details.currency)))throw new AppError('应收账款金额或币种异常，请联系管理员核对原记录。',409);
 }
 async function fingerprint(value:unknown){return sha(JSON.stringify(value));}
+const imageExtensions:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
+function imageContentType(bytes:ArrayBuffer){
+ const data=new Uint8Array(bytes),matches=(offset:number,values:number[])=>values.every((value,index)=>data[offset+index]===value);
+ if(matches(0,[137,80,78,71,13,10,26,10]))return 'image/png';
+ if(matches(0,[255,216,255]))return 'image/jpeg';
+ if(matches(0,[71,73,70,56,55,97])||matches(0,[71,73,70,56,57,97]))return 'image/gif';
+ if(matches(0,[82,73,70,70])&&matches(8,[87,69,66,80]))return 'image/webp';
+ return '';
+}
+function verifiedImageType(bytes:ArrayBuffer,filename:string){
+ const expected=imageExtensions[filename.split('.').at(-1)?.toLowerCase()||''],actual=imageContentType(bytes);
+ return expected&&actual===expected?actual:'';
+}
 function repeatReceipt(s:State,m:Member,id:string,expected:string,record:ServiceRecord){
  const prior=s.records.find(row=>row.id===id) as ServiceReceipt|undefined;
  if(!prior)return null;
@@ -63,11 +77,12 @@ export async function serviceWorkspaceGet(action:string,req:Request,s:State,m:Me
  if(!m.active)throw new AppError('账号已停用。',403);
  if(action==='service-data'){
   const records=(all(s,'service_record') as ServiceRecord[]).filter(record=>canReadServiceRecord(s,m,record)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
-  const ids=new Set(records.map(row=>row.id));
+  const ids=new Set(records.map(row=>row.id)),customers=serviceCustomerAccounts(s,m);
   return json({records:records.map(record=>publicServiceRecord(s,record)),
    receipts:(all(s,'service_receipt') as ServiceReceipt[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceReceipt),
    attachments:(all(s,'service_attachment') as ServiceAttachment[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceAttachment),
-   customers:serviceCustomerAccounts(s,m).map(account=>({id:account.id,customer:account.customer,customerCode:account.customerCode,active:account.active,salesName:account.salesName,serviceName:account.serviceName,orderKeys:serviceOrderCustomerKeys(s,account)})),
+   customers:customers.map(account=>({id:account.id,customer:account.customer,customerCode:account.customerCode,active:account.active,salesName:account.salesName,serviceName:account.serviceName,orderKeys:serviceOrderCustomerKeys(s,account)})),
+   ...serviceAssignmentData(s,customers,records),
    canWrite:canWriteServiceWorkspace(s,m),totalsByCurrency:serviceTotalsByCurrency(s,records)});
  }
  const id=new URL(req.url).searchParams.get('id')||'';
@@ -79,6 +94,12 @@ export async function serviceWorkspaceGet(action:string,req:Request,s:State,m:Me
  const item=all(s,'service_attachment').find(row=>row.id===id) as ServiceAttachment|undefined;
  if(!item||!canReadServiceRecord(s,m,item))throw new AppError('附件不存在或没有该客户的访问权限。',403);
  const object=await bucket().get(item.fileKey);if(!object)throw new AppError('附件文件暂不可用，请联系管理员核对存储；原附件记录仍保留。',404);
+ if(new URL(req.url).searchParams.get('preview')==='1'){
+  const bytes=await new Response(object.body).arrayBuffer(),contentType=verifiedImageType(bytes,item.filename);
+  if(!contentType||item.contentType!==contentType)throw new AppError('仅支持预览经校验的 PNG、JPG、GIF 或 WebP 图片，请下载原附件查看。',415);
+  return new Response(bytes,{headers:{'Content-Type':contentType,'Content-Disposition':`inline; filename*=UTF-8''${encodeURIComponent(item.filename)}`,
+   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+ }
  return new Response(object.body,{headers:{'Content-Type':item.contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(item.filename)}`,
   'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
 }
@@ -91,6 +112,7 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
   if(before){current(before,input.version);if(before.customerId!==input.customerId||before.type!==input.type)throw new AppError('已保存记录的客户和业务类型不能改换，请为其他客户或类型新建记录；原记录及历史会保留。');}
   const account=all(s,'customer_account').find(row=>row.id===input.customerId) as CustomerAccount|undefined;
   if(!account?.active||!assignedServiceCustomer(s,m,account))throw new AppError('只能选择客户责任清单中自己跟进的有效客户。',403);
+  validateServiceAssignment(s,account.id,input,before);
   linkedOrder(s,account,input.orderId);
   const validated=parse(serviceDetailsSchemas[input.type],input.details);
   let details:Record<string,string|number>=validated as Record<string,string|number>;
@@ -146,16 +168,19 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
  }
  const form=await req.formData(),recordId=String(form.get('recordId')||''),before=editable(s,m,recordId),version=Number(form.get('version'));
  if(!Number.isSafeInteger(version)||version<1)throw new AppError('上传附件时必须提供当前版本号。');current(before,version);
- const file=form.get('file'),note=parse(z.string().trim().max(3000),String(form.get('note')||''));
+ const file=form.get('file'),note=parse(z.string().trim().max(3000),String(form.get('note')||'')),category=parse(z.enum(['general','reference-image']),form.get('category')??'general');
  if(!(file instanceof File)||file.size===0||file.size>10*1024*1024)throw new AppError('请选择不超过 10 MB 的附件。');
  const extensions:Record<string,string>={pdf:'application/pdf',png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',webp:'image/webp',gif:'image/gif',
   xls:'application/vnd.ms-excel',xlsx:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document'};
  const ext=file.name.split('.').at(-1)?.toLowerCase()||'';if(!extensions[ext])throw new AppError('附件支持 PDF、PNG、JPG、WebP、GIF、XLS、XLSX 和 DOCX。');
+ if(category==='reference-image'&&!imageExtensions[ext])throw new AppError('参考图片仅支持 PNG、JPG、GIF 和 WebP。');
  const filename=file.name.replace(/[\\/\u0000-\u001f\u007f]/g,'_').slice(0,240);if(!filename)throw new AppError('附件名称不能为空。');
- const bytes=await file.arrayBuffer(),hash=await sha(bytes);
- const prior=all(s,'service_attachment').find(row=>row.recordId===recordId&&row.hash===hash&&row.filename===filename&&row.note===note) as ServiceAttachment|undefined;
+ const bytes=await file.arrayBuffer();
+ if(category==='reference-image'&&!verifiedImageType(bytes,filename))throw new AppError('参考图片内容与扩展名不一致，请上传有效的 PNG、JPG、GIF 或 WebP 图片。');
+ const hash=await sha(bytes);
+ const prior=all(s,'service_attachment').find(row=>row.recordId===recordId&&row.hash===hash&&row.filename===filename&&row.note===note&&(row.category||'general')===category) as ServiceAttachment|undefined;
  if(prior)return json({ok:true,idempotent:true,record:publicServiceRecord(s,before),attachment:publicServiceAttachment(prior)});
- const record=advance(before,m),attachment:ServiceAttachment={id:newId('service_attachment'),kind:'service_attachment',recordId,customerId:record.customerId,filename,
+ const record=advance(before,m),attachment:ServiceAttachment={id:newId('service_attachment'),kind:'service_attachment',recordId,customerId:record.customerId,filename,category,
   fileKey:newId('service_file'),contentType:extensions[ext],size:file.size,hash,note,actorId:m.id,actor:m.name,createdAt:record.updatedAt};
  // New opaque keys make every object immutable. A failed optimistic commit can
  // leave an unreferenced object, but never delete or overwrite a historical one.

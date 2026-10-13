@@ -1,3 +1,5 @@
+import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
+import {requestedExportBusinessTeam} from './business-team-export';
 import {z} from 'zod';
 import * as XLSX from 'xlsx';
 import {all,broad,newId,now,strictDate,type State,type Member,type Entity} from './domain';
@@ -14,7 +16,7 @@ export async function purchaseGet(action:string,req:Request,s:State,m:Member):Pr
  const rows=visiblePurchases(s,m),url=new URL(req.url);
  if(action==='purchase-data')return json({rows,canEdit:broad(m),jobs:broad(m)?all(s,'purchase_import').slice(-8).reverse():[]});
  if(action==='purchase-history'){const p=rows.find(r=>r.id===url.searchParams.get('id'));if(!p)throw new AppError('此采购明细不在可查看范围。',403);return json({events:all(s,'purchase_event').filter(r=>r.purchaseId===p.id).reverse(),edits:all(s,'audit').filter(r=>r.targetId===p.id).slice(-50).reverse().map(r=>({id:r.id,action:r.action,actor:r.actor,createdAt:r.createdAt,source:r.source,before:r.before&&Object.fromEntries(Object.keys(followFields).map(k=>[k,r.before[k]])),after:r.after&&Object.fromEntries(Object.keys(followFields).map(k=>[k,r.after[k]]))}))});}
- if(action==='purchase-export'){const filters=Object.fromEntries(url.searchParams),filtered=filterPurchases(rows,filters);const columns=[...purchaseHeaders,...Object.keys(exported({raw:{}} as Purchase)).filter(k=>!purchaseHeaders.includes(k))];return download(excel(filtered.map(exported),'采购跟单总表',columns),`${filters.mode==='archived'?'供应商已交货档案':'采购跟单总表'}${filters.supplier?'_'+filters.supplier:''}.xlsx`);}
+ if(action==='purchase-export'){const filters=Object.fromEntries(url.searchParams),filtered=filterPurchases(filterBusinessTeamRows(s,rows,requestedExportBusinessTeam(s,m,req)),filters);const columns=[...purchaseHeaders,...Object.keys(exported({raw:{}} as Purchase)).filter(k=>!purchaseHeaders.includes(k))];const response=download(excel(filtered.map(exported),'采购跟单总表',columns),`${filters.mode==='archived'?'供应商已交货档案':'采购跟单总表'}${filters.supplier?'_'+filters.supplier:''}.xlsx`);response.headers.set('Vary',businessTeamHeader);return response;}
  if(action==='purchase-held'){manage(m);const job=all(s,'purchase_import').find(r=>r.id===url.searchParams.get('id'));if(!job)throw new AppError('找不到导入批次。');const blob=await bucket().get(job.rowsKey);if(!blob)throw new AppError('导入明细未找到。');const data=await blob.json<any>();return download(excel(data.held.map((r:any)=>({...r.row.raw,'源行':r.row.sourceRow,'暂缓原因':r.reason})),'待核对明细'),'采购导入待核对.xlsx');}
  return null;
 }

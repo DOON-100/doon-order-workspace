@@ -1,4 +1,6 @@
 import {z} from 'zod';
+import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
+import {requestedExportBusinessTeam} from './business-team-export';
 import * as XLSX from 'xlsx';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
@@ -62,14 +64,14 @@ export async function customerQuoteTemplateGet(action:string,req:Request,s:State
   return json({templates:(all(s,'customer_quote_template') as TemplateRecord[]).filter(t=>t.customerAccountId===accountId).map(publicTemplate),canRegister:isCustomerQuoteAdministrator(m,s)});
  }
  if(action==='customer-quote-completed-export'){
-  const rows=visibleCompletedCustomerQuotes(s,m),book=XLSX.utils.book_new();
+  const teamId=requestedExportBusinessTeam(s,m,req),rows=filterBusinessTeamRows(s,visibleCompletedCustomerQuotes(s,m),teamId),book=XLSX.utils.book_new();
   const data=rows.map(row=>({'客户编号':row.customerCode,'客户名称':row.customerName,'品牌':row.brand||'','业务类型':row.businessType||'','报价单号':row.quoteNo,'确认版本':row.quoteVersion,'报价日期':row.quoteDate,'有效期':row.validUntil,'厂款':row.factoryModel||row.model,'客款':row.customerModel||'','客户物料号':row.materialNumber||'','部件':row.component||'','左右':row.side||'none','供货状态':row.supplyStage||'finished','产品类型':row.productType||'frame','报价模式':row.quoteMode||'order','数量':row.quantity,'数量基准':row.quantityBasisEn||'','币种':row.currency,'单位':row.unit||'pair','对客单价':row.unitPrice??row.unitPriceUsd,'产品说明':row.descriptionEn,'确认时间':row.confirmedAt,'客户模板':row.templateBinding?.title||'','客户文件下载':row.templateBinding?`/api/workspace/customer-quote-template-export?quoteId=${encodeURIComponent(row.quoteId)}&quoteVersion=${row.quoteVersion}`:''}));
   for(const [index,row] of rows.entries()){
    Object.assign(data[index],{'模具费':row.toolingFee??row.toolingFeeUsd,'数量条件中文':row.quantityBasisZh||'','供货范围中文':row.scopeNotesZh||'','供货范围英文':row.scopeNotesEn||'','已报价客户':row.quotedCustomer,'已发报价附件下载':row.media.filter(media=>media.category==='sent_quote').map(media=>`${url.origin}/api/workspace/customer-quote-media-file?id=${encodeURIComponent(media.id)}&download=1`).join('\n')});
    if(data[index]['客户文件下载'])data[index]['客户文件下载']=url.origin+data[index]['客户文件下载'];
   }
   XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(data),'已完成报价总表');
-  return download(XLSX.write(book,{type:'array',bookType:'xlsx'}),'已完成报价总表.xlsx');
+  const response=download(XLSX.write(book,{type:'array',bookType:'xlsx'}),'已完成报价总表.xlsx');response.headers.set('Vary',businessTeamHeader);return response;
  }
  if(action==='customer-quote-template-output-file'){
   const output=all(s,'customer_quote_template_output').find(record=>record.id===url.searchParams.get('id')) as OutputRecord|undefined;

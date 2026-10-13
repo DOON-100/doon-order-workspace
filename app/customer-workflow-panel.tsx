@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {useEffect,useState,type FormEvent} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -10,7 +11,7 @@ import './customer-workflow.css';
 export type CustomerWorkflowFeed={customer:{id:string;customer:string;customerCode:string;country:string};profile:{version:number;fields:CustomerProfileData};workflow:Entity|null;primarySalesMemberId:string;salesMemberIds:string[];followups:Entity[];events:Entity[];reminder:string;poolEligibility:{status:string;basis:string;start:string;due:string;eligible:boolean};capabilities:{writeProfile:boolean;readBank:boolean;writeBank:boolean;writeWorkflow:boolean;canAssign:boolean}};
 export class WorkflowRequestError extends Error{constructor(message:string,public status=0){super(message);}}
 export async function workflowRequest(action:string,body?:unknown,signal?:AbortSignal){
- const response=await fetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',signal,headers:body===undefined||body instanceof FormData?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});
+ const response=await businessTeamFetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',credentials:'same-origin',cache:'no-store',signal,headers:body===undefined||body instanceof FormData?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});
  let result:any;try{result=await response.json();}catch{throw new WorkflowRequestError('未取得完整返回，请核实或使用同一请求重试。',response.status>=400?response.status:0);}
  if(!response.ok)throw new WorkflowRequestError(result.error||'操作未完成，请核对。',response.status);return result;
 }

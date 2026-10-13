@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {cloneElement,isValidElement,useEffect,useId,useRef,useState} from 'react';
 import {Download,FileText,Languages,PencilLine,Plus,Printer,RefreshCw,Save,UploadCloud} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -37,7 +38,7 @@ const lineScope=(line:QuoteLine,q:Quote)=>{const legacy=q.quoteMode===undefined&
 function savePayload(q:Quote){return {id:q.id,version:q.version,companyEn:q.companyEn,companyZh:q.companyZh,collectionEn:q.collectionEn||'',collectionZh:q.collectionZh||'',customerCode:q.customerCode,customerName:q.customerName,customerAccountId:q.customerAccountId||null,contactName:q.contactName||'',quoteNo:q.quoteNo,quoteDate:q.quoteDate,validUntil:q.validUntil,currency:q.currency,...(q.currencyReviewed===undefined?{}:{currencyReviewed:q.currencyReviewed}),...(q.brand===undefined?{}:{brand:q.brand}),...(q.businessType===undefined?{}:{businessType:q.businessType}),...(q.quoteMode===undefined?{}:{quoteMode:q.quoteMode}),...(q.pricingBasis===undefined?{}:{pricingBasis:q.pricingBasis}),...(q.canSeeInternal===false?{}:{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:numeric(q.exchangeRateCnyPerUsd),internalCosts:(q.internalCosts||[]).map(c=>({...c,rmb:numeric(c.rmb)}))}),customerCharges:(q.customerCharges||[]).map(c=>({...c,amount:numeric(c.amount)})),lines:q.lines.map(l=>({...l,quantity:numeric(l.quantity),unitPrice:numeric(l.unitPrice),toolingFee:numeric(l.toolingFee)})),terms:q.terms,reviewNotes:q.reviewNotes};}
 class QuoteRequestError extends Error{constructor(message:string,readonly status:number){super(message);}}
 async function quoteRequest(action:string,body?:unknown){
- let response:Response;try{response=await fetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:body instanceof FormData||body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body),cache:'no-store'});}catch{throw new Error('连接公司主机失败，输入已保留。请检查网络后重试。');}
+ let response:Response;try{response=await businessTeamFetch('/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:body instanceof FormData||body===undefined?undefined:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body),cache:'no-store'});}catch{throw new Error('连接公司主机失败，输入已保留。请检查网络后重试。');}
  let result:any;try{result=await response.json();}catch{if([401,403].includes(response.status))throw new QuoteRequestError('登录状态或报价权限已失效。',response.status);throw new Error('服务器未返回完整结果，输入已保留。请稍后重试。');}
   if(!response.ok)throw new QuoteRequestError(result.error||(response.status===409?'此报价已被其他同事更新。你的输入仍保留，请先记录修改，再点击“读取服务器版本”核对；不会覆盖他人的版本。':'操作未完成，请稍后重试。'),response.status);return result;
 }

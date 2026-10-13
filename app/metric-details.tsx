@@ -1,4 +1,5 @@
 'use client';
+import {businessTeamFetch} from './business-team-client';
 import {useMemo,useState} from 'react';
 import {ArrowDownUp,ChevronRight,Download,RefreshCw,Search,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -28,7 +29,7 @@ export function MetricDetails({kind,data,onClose,openOrder,openMes,refresh}:{kin
  const openRow=(row:MetricRow)=>{if(mode==='summary'){filter('orderNo',String(row.values['订单号']));setMode('detail');setSort('原表行号');}else viewOrder(row);};
  async function exportRows(){setBusy(true);setError('');try{
   const params=new URLSearchParams({metric:kind,revision:String(data.revision),sort,desc:desc?'1':'0',...filters});
-  const res=await fetch('/api/workspace/metric-export?'+params);
+  const res=await businessTeamFetch('/api/workspace/metric-export?'+params);
   if(!res.ok){const value=await res.json() as {error?:string};throw new Error(value.error||'导出失败，请重试。');}
   const url=URL.createObjectURL(await res.blob()),a=document.createElement('a');a.href=url;a.download=decodeURIComponent(res.headers.get('Content-Disposition')?.split("UTF-8''")[1]||`${meta.title}.xlsx`);a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  }catch(e){setError(e instanceof Error?e.message:'连接失败，请重试。');}finally{setBusy(false);}}
