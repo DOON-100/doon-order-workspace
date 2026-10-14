@@ -14,7 +14,7 @@ await fs.mkdir(path.resolve('test-output'),{recursive:true});
 const testRoot=await fs.mkdtemp(path.resolve('test-output/review-mode-'));
 const buildDir=path.join(testRoot,'build'),dataDir=path.join(testRoot,'data');
 await fs.mkdir(buildDir,{recursive:true});
-for(const name of ['runtime.mjs','auth.mjs','server.mjs','supplier-gateway.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(buildDir,name));
+for(const name of ['runtime.mjs','auth.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(buildDir,name));
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(buildDir,'workspace-api-real.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 // Instrument the synthetic test server only: enroll must never dispatch to the API.
 await fs.writeFile(path.join(buildDir,'workspace-api.mjs'),`import * as real from './workspace-api-real.mjs';

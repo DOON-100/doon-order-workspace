@@ -6,11 +6,13 @@ import fs from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
+import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
 const supplierOnly=process.env.DOON_SERVER_MODE==='supplier',gateway=supplierOnly?supplierGatewayConfig():null;
-const port=gateway?.port||Number(process.env.DOON_PORT||8787),host=gateway?.host||process.env.DOON_HOST||'0.0.0.0';
+const employeeGateway=employeeGatewayConfig();
+const port=gateway?.port||employeeGateway?.port||Number(process.env.DOON_PORT||8787),host=gateway?.host||employeeGateway?.host||process.env.DOON_HOST||'0.0.0.0';
 const reviewMessage='验收副本只读，不与正式系统同步；此操作不会保存。';
 let reviewAsOf=null;
 if(reviewMode){
@@ -38,8 +40,8 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
-const localTLS=!supplierOnly&&!!(process.env.DOON_TLS_CERT&&process.env.DOON_TLS_KEY),secure=supplierOnly||localTLS,protocol=localTLS?'https':'http';
-const authOptions=supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:{};
+const localTLS=!supplierOnly&&!!(process.env.DOON_TLS_CERT&&process.env.DOON_TLS_KEY),secure=supplierOnly||!!employeeGateway||localTLS,protocol=localTLS?'https':'http';
+const authOptions=supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{};
 const supplierAuth=new Set(['session','login','logout','password']);
 const supplierActions=new Set(['data','file','accept','progress','promise','exception','shipment','rework-confirm','attachment'].map(a=>'finished-supplier-'+a));
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
@@ -54,6 +56,7 @@ async function handle(req,res){
  try{
   let endpoint;
   if(supplierOnly)endpoint=supplierEndpoint(gateway,req.socket.remoteAddress,req.headers);
+  else if(employeeGateway)endpoint=employeeEndpoint(employeeGateway,req.socket.remoteAddress,req.headers);
   else{const ip=(req.socket.remoteAddress||'').replace(/^::ffff:/,'');if(reviewMode&&ip!=='::1'&&!/^127\./.test(ip))fail('验收副本仅允许本机访问。',403);if(!localIP(ip))fail('此站点仅供公司内网访问。',403);const hostHeader=String(req.headers.host||'').toLowerCase();if(!hosts.has(hostHeader))fail('访问地址未获授权，请使用主机显示的内网地址。',403);endpoint={origin:protocol+'://'+hostHeader,ip:req.socket.remoteAddress};}
   const url=new URL(req.url,endpoint.origin);if(url.origin!==endpoint.origin)fail('访问地址未获授权。',403);if(!['GET','POST','HEAD'].includes(req.method))fail('不支持的请求方法。',405);
   if(req.method==='POST'&&req.headers.origin!==url.origin)fail('不允许跨站提交，请刷新登录页面。',403);
@@ -74,7 +77,7 @@ async function handle(req,res){
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});
   else if(url.pathname==='/health')response=reply({ok:true,service:reviewMode?'度昂订单协作中台·只读验收副本':supplierOnly?'度昂供应商协作门户':'度昂订单协作中台·内网版'});
-  else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null});
+  else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
    if(url.pathname.startsWith('/api/auth/')){
@@ -130,7 +133,7 @@ const server=localTLS?https.createServer({cert:await fs.readFile(process.env.DOO
 server.requestTimeout=30000;server.headersTimeout=15000;server.maxHeadersCount=60;
 server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'网站已在运行，或端口被占用。':e.message);process.exitCode=1;});
 server.listen(port,host,async()=>{
- const status={pid:process.pid,port,startedAt:new Date().toISOString(),localUrl:`${protocol}://${host==='::1'?'[::1]':'127.0.0.1'}:${port}`,...(reviewMode?{mode:'review',readOnly:true,asOf:reviewAsOf}:supplierOnly?{mode:'supplier',publicOrigin:gateway.origin}: {lanUrls:addresses.map(a=>`${protocol}://${a}:${port}`)})};
+ const status={pid:process.pid,port,startedAt:new Date().toISOString(),localUrl:`${protocol}://${host==='::1'?'[::1]':'127.0.0.1'}:${port}`,...(reviewMode?{mode:'review',readOnly:true,asOf:reviewAsOf}:supplierOnly?{mode:'supplier',publicOrigin:gateway.origin}:employeeGateway?{mode:'employee',publicOrigin:employeeGateway.origin}:{lanUrls:addresses.map(a=>`${protocol}://${a}:${port}`)})};
  await fs.writeFile(path.join(dataDir,reviewMode?'review-server-status.json':supplierOnly?'supplier-server-status.json':'server-status.json'),JSON.stringify(status,null,2));console.log(JSON.stringify(status));
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });

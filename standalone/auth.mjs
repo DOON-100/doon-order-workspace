@@ -25,7 +25,7 @@ export function session(request,options={}){
  if(row.expires_at<now||row.last_seen<now-2*3600000){db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(digest);return null;}
  const account=db.prepare('SELECT * FROM local_accounts WHERE id=?').get(row.account_id),member=memberFor(account);
  if(!member?.active||!activeSupplier(member)){db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(row.account_id);return null;}
- if(options.supplierOnly&&member.role!=='supplier')return null;
+ if(options.supplierOnly&&member.role!=='supplier'||options.employeeOnly&&member.role==='supplier')return null;
  db.prepare('UPDATE local_sessions SET last_seen=? WHERE token_hash=?').run(now,digest);return {account,member,digest,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}};
 }
 export function publicSession(s){return s?{username:s.account.username,mustChange:!!s.account.must_change,role:s.member.role,...(s.member.role==='supplier'?{supplierId:s.member.supplierId}:{}),identity:{id:s.member.userId,name:s.member.name,email:s.member.email}}:null;}
@@ -35,7 +35,7 @@ export async function login(body,ip,secure,options={}){const username=String(bod
  const account=db.prepare('SELECT * FROM local_accounts WHERE username=?').get(username),member=memberFor(account);
  const dummy='scrypt-v1$00000000000000000000000000000000$'+'0'.repeat(128);
  const valid=await verify(password,account?.password_hash||dummy);
- if(!valid||!member?.active||!activeSupplier(member)||(options.supplierOnly&&member.role!=='supplier')){for(const k of [key,globalKey])db.prepare('INSERT INTO login_attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET failures=failures+1').run(k,now+15*60000);fail('账号或密码不正确，或账号已停用。',401);}
+ if(!valid||!member?.active||!activeSupplier(member)||(options.supplierOnly&&member.role!=='supplier')||(options.employeeOnly&&member.role==='supplier')){for(const k of [key,globalKey])db.prepare('INSERT INTO login_attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET failures=failures+1').run(k,now+15*60000);fail('账号或密码不正确，或账号已停用。',401);}
  db.prepare('DELETE FROM login_attempts WHERE key=?').run(key);return {cookie:issue(account,secure,options),user:publicSession({account,member})};
 }
 export function logout(s,secure,options={}){if(s)db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(s.digest);return cookie('',secure,true,options);}
