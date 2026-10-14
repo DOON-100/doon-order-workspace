@@ -106,7 +106,10 @@ export function CustomerProjectPanel({data,openOrder,onDirtyChange,initialArea='
  const items=state.items.filter(row=>row.projectId===projectId),memberOptions=cpOptions(data.members.filter(row=>row.active),row=>row.name),itemOptions=cpOptions(items,itemName);
  const projectRows=(key:keyof ProjectData):CPRow[]=>Array.isArray(state[key])?(state[key] as CPRow[]).filter(row=>row.projectId===projectId):[];
  const roundRows=(key:keyof ProjectData)=>projectRows(key).filter(row=>!currentRoundId||!row.roundId||row.roundId===currentRoundId);
- const customerName=(id:string)=>state.customers.find(row=>row.id===id)?.customer||financeCatalog.customers.find(row=>row.id===id)?.customer||'未授权客户';
+ const customerName=(id:string)=>{
+  const row=state.customers.find(row=>row.id===id)||financeCatalog.customers.find(row=>row.id===id);
+  return row?[row.customerCode,row.customer].filter(Boolean).join(' · ')||'未授权客户':'未授权客户';
+ };
  const memberName=(id:string)=>data.members.find(row=>row.id===id)?.name||'待分配';
  const serviceNames=(row:CPRow)=>projectServiceIds(row).map(memberName).join('、')||'待分配';
  const itemLabel=(id:string)=>itemName(items.find(row=>row.id===id)||{id});
