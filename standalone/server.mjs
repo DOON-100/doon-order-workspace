@@ -137,5 +137,5 @@ server.listen(port,host,async()=>{
  await fs.writeFile(path.join(dataDir,reviewMode?'review-server-status.json':supplierOnly?'supplier-server-status.json':'server-status.json'),JSON.stringify(status,null,2));console.log(JSON.stringify(status));
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
-if(!supplierOnly&&!reviewMode){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
+if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
 for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>{db.close();process.exit(0);}));
