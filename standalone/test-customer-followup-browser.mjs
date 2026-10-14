@@ -37,7 +37,7 @@ async function actorContext(actorCookie){
 }
 async function openFollowups(p){
  await p.goto(origin+'/customer-projects');
- await p.getByRole('heading',{name:'客户项目开发',exact:true}).waitFor();
+ await p.getByTestId('customer-project-list-nav').waitFor();
  await p.getByRole('button',{name:'我的客户跟进',exact:true}).click();
  await p.getByTestId('customer-followup-panel').waitFor();
 }
@@ -98,6 +98,9 @@ try{
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[0]}).innerText(),/重要出货/);
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[2]}).innerText(),/★★★/);
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[1]}).innerText(),/客户待确认/);
+ assert.match(await page.getByTestId('followup-link-summary').innerText(),/35 条跟进：0 条已关联 0 个项目，35 条未关联项目/);
+ await page.getByRole('heading',{name:'尚未建立客户跟进的项目',exact:true}).waitFor();
+ await page.getByRole('row').filter({hasText:'SYNTH-FOLLOW-EXISTING'}).getByRole('button',{name:'打开项目',exact:true}).waitFor();
  await page.screenshot({path:path.join(dir,'followup-owner-board.png'),fullPage:true});
  pass('负责人能在我的客户跟进入口看到 35 条，未归属、重要出货及三星标记明确');
 
@@ -129,6 +132,25 @@ try{
  assert.equal(ownerData.followups.find(f=>f.sourceId==='p2').projectId,existingProject.id);
  assert.equal((await workspace('customer-project-data')).projects.length,1);
  pass('已有客户跟进显式关联完整项目，不重复建立项目');
+
+ // Stay within the SPA: the parent list must use the same linked entry immediately.
+ await page.getByTestId('customer-project-list-nav').click();
+ let linkedProjectRow=page.getByRole('row').filter({hasText:'SYNTH-FOLLOW-EXISTING'});
+ await linkedProjectRow.getByText('合成下一步 2',{exact:true}).waitFor();
+ await linkedProjectRow.getByRole('button',{name:'查看客户跟进',exact:true}).click();
+ dialog=page.getByRole('dialog',{name:'更新客户跟进',exact:true});await dialog.waitFor();
+ assert.equal(await dialog.getByLabel('跟进标题',{exact:true}).inputValue(),titles[2]);
+ await dialog.getByLabel('下一步',{exact:true}).fill('合成关联后的最新下一步');
+ await dialog.getByLabel('下一跟进日期',{exact:true}).fill('2026-11-25');
+ await saveDialog(dialog);
+ await page.getByTestId('customer-project-list-nav').click();
+ linkedProjectRow=page.getByRole('row').filter({hasText:'SYNTH-FOLLOW-EXISTING'});
+ await linkedProjectRow.getByText('合成关联后的最新下一步',{exact:true}).waitFor();
+ assert.match(await linkedProjectRow.innerText(),/2026-11-25/);
+ await page.screenshot({path:path.join(dir,'followup-project-same-action.png'),fullPage:true});
+ await page.getByRole('button',{name:'我的客户跟进',exact:true}).click();
+ await page.getByTestId('followup-card').filter({hasText:titles[4]}).waitFor();
+ pass('无需整页刷新，项目清单显示同条客户跟进的下一步和日期，并可直接打开原跟进编辑');
 
  dialog=await openCard(page,titles[4]);
  await dialog.getByRole('button',{name:'创建并关联完整项目',exact:true}).click();
@@ -207,6 +229,16 @@ try{
  assert.deepEqual(ownerData.mails.find(m=>m.sourceId==='synthetic-mail-unassigned').followupIds,[ownerData.followups.find(f=>f.sourceId==='p1').id]);
  const finalProjectData=await workspace('customer-project-data');assert.equal(finalProjectData.projects.length,2);assert.equal(finalProjectData.items.length,0);assert.equal(finalProjectData.rounds.length,0);assert.equal(finalProjectData.tasks.length,0);assert.equal((await workspace('data')).orders.length,0);
  pass('重复导入不覆盖共享跟进或项目关联，正式任务审核及订单体系保持独立');
+ await workspace('customer-project-entry-save',{token:token(),entryType:'task',projectId:existingProject.id,title:'合成关联项目待办',ownerId:owner.member.id,dueDate:'2026-11-20'});
+ await openFollowups(page);
+ await page.getByTestId('followup-card').filter({hasText:titles[2]}).getByText(/合成关联项目待办/).waitFor();
+ dialog=await openCard(page,titles[2]);
+ assert.match(await dialog.getByTestId('followup-project-tasks').innerText(),/合成关联项目待办/);
+ assert.match(await dialog.getByTestId('followup-project-tasks').innerText(),/2026-11-20/);
+ assert.equal(await dialog.getByLabel('下一跟进日期',{exact:true}).inputValue(),'2026-11-25');
+ await page.screenshot({path:path.join(dir,'followup-linked-project-tasks.png'),fullPage:true});
+ await dialog.getByRole('button',{name:'关闭',exact:true}).click();await dialog.waitFor({state:'hidden'});
+ pass('同项目审核待办同步显示在客户跟进中，来源与日期分别展示，不覆盖客户跟进自身字段');
  assert.equal(errors.length,0,errors.join('\n'));pass('全部核心浏览器路径无 JavaScript 错误');
  await fs.writeFile('test-output/customer-followup-browser-result.json',JSON.stringify({passed:checks.length,checks,errors,manifestSha256:evidence.manifestSha256,at:new Date().toISOString(),artifacts:dir},null,2));
  console.log(JSON.stringify({passed:checks.length,artifacts:dir}));

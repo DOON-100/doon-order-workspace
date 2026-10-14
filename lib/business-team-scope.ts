@@ -3,6 +3,7 @@ import {AppError} from './store';
 import {assignedServiceCustomer,serviceOrderCustomerKeys,serviceTotalsByCurrency,type ServiceRecord} from './service-workspace';
 import {readableCustomerQuoteAccounts} from './customer-quote-access';
 import {drawingCustomers} from './engineering-drawings';
+import {customerProjectFollowupSummary} from './customer-project-followup';
 import {canVerifyProjectFinance,projectFinanceTotals,type ProjectCharge,type ProjectReceipt} from './customer-project-finance';
 
 export const businessTeamHeader='X-Workspace-Team';
@@ -114,7 +115,7 @@ export function scopeBusinessTeamPayload(action:string,payload:Row,s:State,teamI
   return belongs(row)?[nested(row)]:[];
  }):[];
  const data={...payload};
- const collections=['customers','customerAccounts','records','items','rows','orders','projects','trashedProjects','rounds','communications','tasks','collaborationTasks','drawings','confirmations','quoteLinks','samples','dispatches','feedback','handovers','attachments','receipts','uploads','events','details','followups','mails','sourceBundles','quotes','selections','charges','allocations','adjustments','creditApplications','documents','notices','cases','costs','refunds','requirements','sends','reversals','pool','handoffs','poolRequests','claims','reports','comments','corrections','outsource','losses','supplierFollowups','factory','service','sourceRequests','availableOrders','shipments','reworks'];
+ const collections=['customers','customerAccounts','records','items','rows','orders','projects','trashedProjects','rounds','communications','tasks','collaborationTasks','projectTasks','drawings','confirmations','quoteLinks','samples','dispatches','feedback','handovers','attachments','receipts','uploads','events','details','followups','mails','sourceBundles','quotes','selections','charges','allocations','adjustments','creditApplications','documents','notices','cases','costs','refunds','requirements','sends','reversals','pool','handoffs','poolRequests','claims','reports','comments','corrections','outsource','losses','supplierFollowups','factory','service','sourceRequests','availableOrders','shipments','reworks'];
  for(const field of collections)if(Array.isArray(data[field]))data[field]=filter(data[field]);
  if(Array.isArray(data.templates))data.templates=data.templates.filter((row:Row)=>!hasRouting(row)||belongs(row));
  // Service/project team catalogs intentionally retain all authorized choices for switching.
@@ -138,6 +139,7 @@ export function scopeBusinessTeamPayload(action:string,payload:Row,s:State,teamI
   data.collaborationAssignments=filter(payload.collaborationAssignments);
   if(Array.isArray(data.receipts))data.receipts=data.receipts.filter((row:Row)=>row.lines?.length);
  }
+ if(action==='customer-project-followup-data')data.summary=customerProjectFollowupSummary(data.followups||[],data.projects||[]);
  if(action==='service-data')data.totalsByCurrency=serviceTotalsByCurrency(s,data.records as ServiceRecord[]);
  if(action==='pmc-data'){
   data.rounds=(payload.rounds||[]).map((row:Row)=>({...row,lineIds:ids(row.lineIds).filter(id=>{const order=index.byId.get(id);return !!order&&belongs(order);}),lastLineId:row.lastLineId&&index.byId.has(row.lastLineId)&&belongs(index.byId.get(row.lastLineId)!)?row.lastLineId:''}));

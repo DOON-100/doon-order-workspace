@@ -70,6 +70,11 @@ export function projectRound(s:State,project:CustomerProject,id:string):Customer
  const round=all(s,'customer_project_round').find(r=>r.id===id&&r.projectId===project.id&&r.customerId===project.customerId) as CustomerProjectRound|undefined;
  if(!round)throw new AppError('开发轮次不存在或不属于当前项目。');return round;
 }
+/** A revision chain must resolve within its project and never point back to itself. */
+export function validateProjectRoundParent(s:State,project:CustomerProject,roundId:string,parentRoundId:string){
+ const seen=new Set<string>(roundId?[roundId]:[]);let next=parentRoundId;
+ while(next){if(seen.has(next))throw new AppError('源轮次关联不能形成循环。');seen.add(next);next=projectRound(s,project,next).parentRoundId||'';}
+}
 export function internalSampleAccess(s:State,m:Member,sample:Entity){return !!m.active&&['admin','pmc','production'].includes(m.role)&&(m.role==='admin'||sample.ownerId===m.id);}
 export function projectKey(value:unknown){return clean(value).toLocaleLowerCase();}
 /** Independent registration does not consume an order or change a released snapshot. */

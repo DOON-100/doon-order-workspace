@@ -295,6 +295,7 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   const adjustments=input.adjustmentIds.map((id:string)=>row(s,m,'project_adjustment',id,'write'));
   if(adjustments.some((a:Entity)=>!input.chargeIds.includes(a.chargeId)||a.type==='debit'))throw new AppError('贷项单只能引用选中收费的减免调整。');
   const lines=charges.map((c:ProjectCharge)=>({chargeId:c.id,projectId:c.projectId,roundId:c.roundId,title:c.title,currency:c.currency,...projectChargeAmounts(s,c),plan:c.plan,creditCents:adjustments.filter((a:Entity)=>a.chargeId===c.id).reduce((n:number,a:Entity)=>n+a.amountCents,0)}));
+  if(input.roundId&&!input.projectId)throw new AppError('关联开发轮次时须同时指定所属项目。');
   if(input.projectId){const parent=project(s,m,input.projectId,input.roundId,'write');if(parent.customerId!==input.customerId)throw new AppError('单据项目与客户不一致。');}
   if(before?.projectId&&input.projectId!==before.projectId)throw new AppError('单据项目归属不能改换。');
   if(input.manualTitle||input.manualAmount||!lines.length)lines.push({chargeId:'',projectId:input.projectId,roundId:input.roundId,title:input.manualTitle,currency:input.currency,amountCents:input.manualAmount,prepayCents:0,receivedCents:0,balanceCents:input.manualAmount,plan:[],creditCents:input.documentType==='CREDIT'?input.manualAmount:0});
@@ -319,6 +320,11 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   const customerId=projectId?project(s,m,projectId,input.roundId,'write').customerId:document?.customerId;
   if(!customerId)throw new AppError('请指定发送记录所属项目。');
   if(document&&document.customerId!==customerId||before&&before.customerId!==customerId)throw new AppError('发送记录客户不一致。');
+  if(before?.projectId&&before.projectId!==projectId)throw new AppError('发送记录项目归属不能改换。');
+  const linkedDocument=before?.documentId===documentId&&before?.documentSnapshot?before.documentSnapshot:document;
+  const documentProjects=new Set([linkedDocument?.projectId,...(linkedDocument?.lines||[]).map((line:any)=>line.projectId)].filter(Boolean));
+  if(documentProjects.size&&projectId&&!documentProjects.has(projectId))throw new AppError('发送记录须属于关联单据包含的项目。');
+  if(input.roundId&&!projectId)throw new AppError('关联开发轮次时须同时指定所属项目。');
   // The document snapshot is frozen when the send is registered. Editing delivery
   // details never rewrites the version that was actually sent.
   const record={...before,id:before?.id||newId('project_document_send'),kind:'project_document_send',customerId,projectId,roundId:input.roundId,documentId,documentVersion:before&&before.documentId===documentId?before.documentVersion:document?.version||0,documentSnapshot:before&&before.documentId===documentId?before.documentSnapshot||null:document?structuredClone(document):null,date:input.date,recipient:input.recipient,reference:input.reference,version:(before?.version||0)+1,...(before?{}:meta()),updatedAt:now(),updatedBy:m.name};

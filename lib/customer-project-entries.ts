@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,canRead,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
-import {projectAccess,projectKey,assertProjectNotTrashed,type CustomerProject} from './customer-projects';
+import {projectAccess,projectKey,assertProjectNotTrashed,validateProjectRoundParent,type CustomerProject} from './customer-projects';
 import {serviceOrderCustomerKeys} from './service-workspace';
 import {canReadCustomerQuote,type CustomerQuote} from './customer-quotes';
 
@@ -50,13 +50,29 @@ function quoteReadable(s:State,m:Member,row:Entity){if(!row.quoteId)return true;
 function projectReference(s:State,p:CustomerProject,kind:string,recordId:string){if(!recordId)return;const found=all(s,kind).find(row=>row.id===recordId&&row.projectId===p.id&&row.customerId===p.customerId);if(!found)throw new AppError('关联记录不存在或不属于当前客户项目。');return found;}
 function validateReferences(s:State,m:Member,p:CustomerProject,item:Entity,before?:Entity){
  if(item.kind==='customer_project_attachment'&&item.category==='original-communication'&&item.roundId)throw new AppError('原始沟通文档保存在项目级，不能关联开发轮次。');
- projectReference(s,p,'customer_project_round',item.roundId||'');
- projectReference(s,p,'customer_project_round',item.parentRoundId||'');
- if(item.kind==='customer_project_round'&&item.parentRoundId===item.id)throw new AppError('源轮次不能是当前轮次。');
+ const round=projectReference(s,p,'customer_project_round',item.roundId||'');
+ if(item.kind==='customer_project_round')validateProjectRoundParent(s,p,item.id,item.parentRoundId||'');
  for(const itemId of [...(item.itemIds||[]),...(item.scope||[]).map((line:any)=>line.itemId),...(item.lines||[]).map((line:any)=>line.itemId),item.itemId||''])projectReference(s,p,'customer_project_item',itemId);
  for(const attachmentId of item.attachmentIds||[])projectReference(s,p,'customer_project_attachment',attachmentId);
  for(const drawingId of [...(item.drawingIds||[]),item.drawingId||'',item.previousId||'',item.pairedDrawingId||''])projectReference(s,p,'customer_project_drawing',drawingId);
  for(const sampleId of [...(item.requiredSampleIds||[]),item.sampleId||''])projectReference(s,p,'customer_project_sample',sampleId);
+ // Missing draft details remain optional. Once both sides specify a scope,
+ // their explicit references must agree instead of creating competing views.
+ const scopedItemIds=[...(item.itemIds||[]),...(item.scope||[]).map((line:any)=>line.itemId),...(item.lines||[]).map((line:any)=>line.itemId),...(item.orderLinks||[]).map((line:any)=>line.itemId),item.itemId||''].filter(Boolean);
+ if(round?.scope?.length&&scopedItemIds.some(itemId=>!round.scope.some((line:any)=>line.itemId===itemId)))throw new AppError('关联款色不属于所选开发轮次。');
+ const sample=projectReference(s,p,'customer_project_sample',item.sampleId||'');
+ if(sample&&['customer_project_dispatch','customer_project_feedback'].includes(item.kind)){
+  if(item.roundId&&sample.roundId&&item.roundId!==sample.roundId)throw new AppError('寄样或反馈的轮次须与关联样办一致。');
+  if(!item.roundId&&sample.roundId)item.roundId=sample.roundId;
+  if(sample.scope?.length&&scopedItemIds.some(itemId=>!sample.scope.some((line:any)=>line.itemId===itemId)))throw new AppError('寄样或反馈款色不属于关联样办。');
+ }
+ const drawing=projectReference(s,p,'customer_project_drawing',item.drawingId||'');
+ if(item.kind==='customer_project_confirmation'&&drawing?.itemIds?.length&&(item.itemIds||[]).some((itemId:string)=>!drawing.itemIds.includes(itemId)))throw new AppError('确认款色不属于关联图纸。');
+ if(item.kind==='customer_project_drawing'){
+  const seen=new Set<string>([item.id]);let previous=item.previousId;
+  while(previous){if(seen.has(previous))throw new AppError('图纸上一版本关联不能形成循环。');seen.add(previous);previous=projectReference(s,p,'customer_project_drawing',previous)?.previousId;}
+  if(item.pairedDrawingId===item.id)throw new AppError('配套图纸不能关联自身。');
+ }
  const linkedQuote=projectReference(s,p,'customer_project_quote_link',item.quoteLinkId||'');if(linkedQuote&&item.quoteLinkId!==before?.quoteLinkId&&!quoteReadable(s,m,linkedQuote))throw new AppError('没有关联报价的读取权限。',403);
  for(const memberId of [item.ownerId,item.serviceReviewerId,item.salesReviewerId].filter(Boolean))if(!all(s,'member').some(member=>member.id===memberId&&member.active&&member.role!=='supplier'))throw new AppError('关联成员不存在或已停用。');
  if(item.quoteId){

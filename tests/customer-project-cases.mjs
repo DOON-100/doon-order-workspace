@@ -27,6 +27,12 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  await denied('customer-project-team-save',{id:team.id,version:team.version,name:team.name,customerIds:team.customerIds,token:token()},users.sales);
  pass('客户项目小组仅作组织视图，不改旧客户权限；同组既有责任人共享，其他组及小组未授权成员隔离');
  const editProject=patch=>({...projectPayload,token:token(),id:project.id,version:current(project.id).version,...patch});
+ const preservedSource={followupId:'synthetic_project_source_followup',sourceFollowupId:'synthetic_project_source_followup',source:'synthetic-import',sourceReferences:[{file:'synthetic.xlsx',row:2}]};
+ rawInsert({id:preservedSource.followupId,kind:'customer_project_followup',version:1,customerId:customer.id,projectId:project.id,ownerId:mid('sales'),title:'合成来源跟进',category:'engineering',stars:0,status:'pending',followUpDate:'',notes:'',nextAction:'',checklist:[],sourceKey:'',sourceId:'',source:null});
+ rawUpdate({...current(project.id),...preservedSource});
+ project=(await ok('customer-project-save',editProject({description:'维护资料保留来源关联'}),users.sales)).item;
+ for(const [key,value]of Object.entries(preservedSource))assert.deepEqual(project[key],value,'Project edits retain server-owned source references');
+ pass('维护项目资料保留既有跟进来源和导入关联，不因保存主档而丢失跨页关系');
  for(const invalidIds of [[mid('service'),mid('other')],[mid('service'),mid('inactive')],[mid('service'),mid('service')]])await denied('customer-project-save',editProject({serviceMemberIds:invalidIds}),users.sales,400);
  const legacyPayload=()=>{const body=editProject({});delete body.serviceMemberIds;return body;};
  project=(await ok('customer-project-save',legacyPayload(),users.service)).item;assert.deepEqual(project.serviceMemberIds,serviceIds);
@@ -150,6 +156,14 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  const general=await ok('data',undefined,users.pmc);assert(!general.audits.some(a=>String(a.after?.kind||'').startsWith('customer_project')));
  await denied('customer-project-history?projectId='+project.id,undefined,users.other);
  pass('正式大货拒绝草稿及未客批，成功关联不写旧订单；撤回图纸生成异常，历史审计按客户隔离');
+ const inconsistent=[];
+ for(const [key,kind]of [['items','customer_project_item'],['tasks','customer_project_task'],['drawings','customer_project_drawing'],['samples','customer_project_sample'],['attachments','customer_project_attachment']]){
+  const id='synthetic_project_mismatched_customer_'+key;inconsistent.push({key,id});rawInsert({id,kind,projectId:project.id,customerId:otherCustomer.id,ownerId:mid('pmc'),status:'cancelled',scope:[],drawingIds:key==='samples'?['synthetic_project_mismatched_customer_drawings']:[],attachmentIds:key==='drawings'?['synthetic_project_mismatched_customer_attachments']:[],itemIds:[],version:1});
+ }
+ const consistentData=await ok('customer-project-data');assert(consistentData.customers.some(c=>c.id===customer.id)&&consistentData.customers.some(c=>c.id===otherCustomer.id));
+ for(const {key,id}of inconsistent)assert(!consistentData[key].some(row=>row.id===id),'A visible customer is insufficient when the child belongs to a different customer than its project');
+ await denied('customer-project-file?id=synthetic_project_mismatched_customer_attachments',undefined,users.pmc);
+ pass('同时可见两个客户也不展示客户与父项目不符的款色、任务、样办、图纸及附件');
  const preserved=new Map(rawRecords().map(record=>[record.id,record]));
  for(const before of original)assert.deepEqual(preserved.get(before.id),before,'原记录不得被项目功能改写 '+before.id);
  assert.deepEqual(current(customer.id),customerBefore);

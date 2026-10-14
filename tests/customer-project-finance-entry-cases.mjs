@@ -45,6 +45,17 @@ export async function testCustomerProjectFinanceEntries({ok,call,state,pass,rawR
  const sameNumberDraft=(await ok('project-document-save',{...documentBody,token:token()},sales)).record;assert.equal(sameNumberDraft.status,'draft');
  const duplicateConfirm=await call('project-document-confirm',{token:token(),id:sameNumberDraft.id,version:sameNumberDraft.version},sales);assert.equal(duplicateConfirm.status,409);
  let sent=(await ok('project-document-sent',{...base(),documentId:document.id,date:'2026-10-12',recipient:'Synthetic',reference:'合成已发'},sales)).record;
+ const otherProject={...project,id:'pfe_other_same_customer_project',title:'同客户另一项目'},otherRound={id:'pfe_other_same_customer_round',kind:'customer_project_round',customerId:customer.id,projectId:otherProject.id,title:'另一项目轮次',scope:[],status:'open',type:'development',parentRoundId:'',requiredDrawingTypes:[],requiredSampleIds:[]};rawInsert(otherProject);rawInsert(otherRound);
+ const rejectRelation=async(action,body)=>{const before=structuredClone(rawRecords()),response=await call(action,body,sales);assert.equal(response.status,400,await response.text());assert.deepEqual(rawRecords(),before,'Wrong finance relationships must not write');};
+ await rejectRelation('project-document-sent',{...base(),projectId:otherProject.id,documentId:document.id,date:'2026-10-12'});
+ await rejectRelation('project-document-sent',{...base(),projectId:otherProject.id,sendId:sent.id,version:sent.version,documentId:'',date:'2026-10-12'});
+ await rejectRelation('project-document-save',{...documentBody,token:token(),projectId:'',roundId:otherRound.id});
+ const originalMultiDocument={...document,id:'pfe_multipoject_document',projectId:'',roundId:'',version:1,lines:[{projectId:project.id,roundId:'',title:'已发送的A项目',currency:'USD',amountCents:2500}],chargeIds:[]};
+ rawInsert({...originalMultiDocument,version:2,lines:[{...originalMultiDocument.lines[0],projectId:otherProject.id,title:'修订后的B项目'}]});
+ const historicalSend={...sent,id:'pfe_historical_document_send',documentId:originalMultiDocument.id,documentVersion:1,documentSnapshot:originalMultiDocument};rawInsert(historicalSend);
+ const maintainedSend=(await ok('project-document-sent',{...base(),sendId:historicalSend.id,version:historicalSend.version,documentId:originalMultiDocument.id,date:'2026-10-12',recipient:'Historical recipient corrected'},sales)).record;
+ assert.equal(maintainedSend.recipient,'Historical recipient corrected');assert.deepEqual(maintainedSend.documentSnapshot,originalMultiDocument);assert.equal(maintainedSend.documentVersion,1);
+ pass('单据轮次必须携带所属项目，发送不能错绑同客户无关项目或改换既有项目归属');
  const sentSnapshot=structuredClone(sent.documentSnapshot),sentVersion=sent.documentVersion;
  const revised=(await ok('project-document-save',{...documentBody,token:token(),id:document.id,version:document.version,manualTitle:'修改独立单据',manualAmount:'50'},sales)).record;
  assert.equal(revised.status,'draft');assert.equal(revised.version,document.version+1);

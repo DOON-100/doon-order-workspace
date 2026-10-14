@@ -11,7 +11,7 @@ db.exec("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT NOT NULL,data TEXT N
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:db.prepare(this.sql).all(...this.args)};}async run(){return db.prepare(this.sql).run(...this.args);}}
 const files=new Map();globalThis.__followupTestEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=statements.map(s=>db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key)}:null}};
 await fs.mkdir('test-output',{recursive:true});
-await build({stdin:{contents:"export * from './lib/customer-project-followup-api';export {collaborationPost} from './lib/collaboration-api';",resolveDir:process.cwd(),loader:'ts'},outfile:'test-output/customer-project-followup-api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'followup-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},a=>({contents:a.path==='env'?'export const env=globalThis.__followupTestEnv;':'export async function getChatGPTUser(){return null;}'}));}}]});
+await build({stdin:{contents:"export * from './lib/customer-project-followup-api';export {collaborationPost} from './lib/collaboration-api';export {customerProjectGet} from './lib/customer-project-api';export {scopeBusinessTeamPayload} from './lib/business-team-scope';",resolveDir:process.cwd(),loader:'ts'},outfile:'test-output/customer-project-followup-api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'followup-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},a=>({contents:a.path==='env'?'export const env=globalThis.__followupTestEnv;':'export async function getChatGPTUser(){return null;}'}));}}]});
 const api=await import(pathToFileURL(path.resolve('test-output/customer-project-followup-api.mjs')).href);
 const put=row=>db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(row.id,row.kind,JSON.stringify(row));
 const records=()=>db.prepare('SELECT data FROM records').all().map(r=>JSON.parse(r.data));
@@ -55,6 +55,54 @@ const promote={token:uuid(),id:f2,version:1,customerId:'c1',title:'Synthetic ful
 const promoted=await ok('promote',promote);assert.equal((await ok('promote',promote)).idempotent,true);assert.equal(one(f2).projectId,promoted.project.id);assert.equal(records().filter(r=>r.kind==='customer_project').length,1);assert.equal(records().filter(r=>r.kind==='customer_project_item').length,0);await denied('save',{token:uuid(),id:f2,version:2,...followup({customerId:'c1'})},alice,409);await denied('promote',{...promote,token:uuid(),version:2},alice,409);
 assert.equal(promoted.project.dueDate,'');
 console.log('PASS explicit promotion keeps one full project and never creates placeholder quantities');
+const linked=await ok('save',{token:uuid(),...followup({customerId:'c1',projectId:promoted.project.id,title:'Second followup on same project',followUpDate:'2026-10-22',nextAction:'Confirm revised drawing'})});
+const unusedProject={...promoted.project,id:'synthetic-unlinked-project',followupId:'',title:'Project without a daily followup'};
+put(unusedProject);put({...unusedProject,id:'synthetic-other-project',customerId:'c2',salesMemberId:'other'});
+const invalidFollowups=[{...one(f2),id:'synthetic-orphan-followup',projectId:'missing-project'},{...one(f2),id:'synthetic-mismatched-followup',projectId:'synthetic-other-project'}];
+for(const row of invalidFollowups)put(row);
+put({id:'synthetic-invalid-mail',kind:'customer_project_followup_mail',ownerId:alice.id,followupIds:[invalidFollowups[1].id]});
+put({...promoted.project,id:'synthetic-trashed-project',trashedAt:'2026-10-14T01:00:00.000Z'});
+put({...one(f2),id:'synthetic-trashed-followup',projectId:'synthetic-trashed-project'});
+for(const row of [
+ {id:'synthetic-project-task',kind:'customer_project_task',projectId:promoted.project.id,customerId:'c1',title:'Project review',ownerId:'service',dueDate:'2026-10-23',status:'open'},
+ {id:'synthetic-collaboration-task',kind:'customer_project_collaboration_task',projectId:promoted.project.id,customerId:'c1',title:'Engineering reply',ownerId:'service',dueDate:'2026-10-24',status:'in_progress'},
+ {id:'synthetic-invalid-task',kind:'customer_project_task',projectId:promoted.project.id,customerId:'c2',title:'Wrong customer must not be shown',ownerId:'other',status:'open'}
+])put(row);
+let linkedFeed=await ok('data');
+assert.deepEqual(linkedFeed.summary,{visibleProjects:2,linkedFollowups:2,linkedProjects:1,unlinkedFollowups:1,unassignedCustomers:0,projectsWithoutFollowups:1});
+assert.deepEqual(linkedFeed.projectTasks.map(row=>[row.id,row.source]),[['synthetic-project-task','project'],['synthetic-collaboration-task','collaboration']]);
+assert.equal(linkedFeed.projectTasks.find(row=>row.id==='synthetic-collaboration-task').ownerName,service.name);
+assert.equal(linkedFeed.followups.some(row=>invalidFollowups.some(invalid=>invalid.id===row.id)),false);
+assert.equal(linkedFeed.mails.some(row=>row.id==='synthetic-invalid-mail'),false);
+assert.equal((await ok('data',undefined,other)).followups.some(row=>row.id===f2),false);
+for(const row of invalidFollowups)await denied('save',{token:uuid(),id:row.id,version:row.version,...followup({customerId:'c1',projectId:promoted.project.id})},admin);
+assert.equal((await ok('data',undefined,admin)).projectTasks.some(row=>row.id==='synthetic-invalid-task'),false);
+const coreFeed=await (await api.customerProjectGet('customer-project-data',new Request('https://synthetic.invalid/api/workspace/customer-project-data'),state(),alice)).json();
+assert.deepEqual(coreFeed.followups.map(row=>row.id).sort(),linkedFeed.followups.filter(row=>row.projectId).map(row=>row.id).sort());
+assert.equal(coreFeed.followups.find(row=>row.id===linked.item.id).nextAction,'Confirm revised drawing');
+assert.equal(coreFeed.followups.find(row=>row.id===linked.item.id).followUpDate,'2026-10-22');
+for(const row of [{id:'synthetic-team',customerIds:['c1']},{id:'synthetic-other-team',customerIds:['c2']}])put({...row,kind:'customer_project_team',active:true,leaderIds:[],salesMemberIds:[],serviceMemberIds:[]});
+const teamFeed=api.scopeBusinessTeamPayload('customer-project-followup-data',await ok('data',undefined,admin),state(),'synthetic-team');
+assert.deepEqual(teamFeed.summary,linkedFeed.summary);
+assert.deepEqual(teamFeed.projectTasks.map(row=>row.id),linkedFeed.projectTasks.map(row=>row.id));
+const otherTeamFeed=api.scopeBusinessTeamPayload('customer-project-followup-data',await ok('data',undefined,admin),state(),'synthetic-other-team');
+assert.deepEqual(otherTeamFeed.summary,{visibleProjects:1,linkedFollowups:0,linkedProjects:0,unlinkedFollowups:0,unassignedCustomers:0,projectsWithoutFollowups:1});
+assert.deepEqual(otherTeamFeed.projectTasks,[]);
+const activeAdminSummary=(await ok('data',undefined,admin)).summary;
+put({...customer,active:false});
+const inactiveFeed=await ok('data',undefined,admin);
+assert.deepEqual(inactiveFeed.summary,activeAdminSummary);
+assert.ok(inactiveFeed.followups.every(row=>!row.canWrite));
+assert.equal(inactiveFeed.customers.find(row=>row.id===customer.id).active,false);
+assert.equal((await ok('data')).followups.length,0);
+await denied('save',{token:uuid(),id:linked.item.id,version:linked.item.version,...followup({customerId:'c1',projectId:promoted.project.id})},admin);
+put(customer);
+put({...promoted.project,status:'archived'});
+linkedFeed=await ok('data');assert.equal(linkedFeed.followups.find(row=>row.id===f2).canWrite,false);assert.equal(linkedFeed.projects.find(row=>row.id===promoted.project.id).status,'archived');
+await denied('save',{token:uuid(),id:linked.item.id,version:linked.item.version,...followup({customerId:'c1',projectId:promoted.project.id})});
+await denied('save',{token:uuid(),...followup({customerId:'c1',projectId:promoted.project.id})},alice,409);
+put(promoted.project);
+console.log('PASS shared relation summary respects one-to-many links, customer/project integrity, recycled and archived lifecycle, and project task sources');
 const stale=state(),newPayload={token:uuid(),...followup({title:'Synthetic concurrent A'})};await ok('save',newPayload,alice,stale);const failed=await call('save',{token:uuid(),...followup({title:'Synthetic concurrent B'})},alice,stale);assert.equal(failed.status,409);assert.equal(records().some(r=>r.title==='Synthetic concurrent B'),false);
 console.log('PASS revision guard rejects concurrent stale mutation atomically');
 const saveCustomer=async body=>api.collaborationPost('customer-save',new Request('https://synthetic.invalid/api/workspace/customer-save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),state(),admin);

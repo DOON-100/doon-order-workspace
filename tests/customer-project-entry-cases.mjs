@@ -32,6 +32,24 @@ export async function testCustomerProjectEntries({ok,call,state,pass,rawRecords,
  const beforePriceAttempt=structuredClone(rawRecords()),priceAttempt=await call('customer-quote-save',{id:sourceQuote.id,version:sourceQuote.version},users.writer);assert.equal(priceAttempt.status,403);assert.deepEqual(rawRecords(),beforePriceAttempt);
  pass('独立保存保留客户权限、关联归属、并发版本和幂等校验，拒绝客户端伪造冻结资料与文件存储键');
 
+ const relationItem=await create('item',{model:'关联校验款色'}),otherRelationItem=await create('item',{model:'关联校验另一款色'});
+ const relationRound=await create('round',{scope:[{itemId:relationItem.id,quantity:1}]}),childRound=await create('round',{parentRoundId:relationRound.id});
+ await deny(save('round',{id:relationRound.id,version:relationRound.version,parentRoundId:childRound.id}));
+ await deny(save('drawing',{roundId:relationRound.id,itemIds:[otherRelationItem.id]}));
+ const relationSample=await create('sample',{roundId:relationRound.id,scope:[{itemId:relationItem.id,quantity:1}]});
+ await deny(save('dispatch',{sampleId:relationSample.id,roundId:childRound.id}));
+ await deny(save('feedback',{sampleId:relationSample.id,itemId:otherRelationItem.id}));
+ const relationFeedback=await create('feedback',{sampleId:relationSample.id,itemId:relationItem.id});assert.equal(relationFeedback.roundId,relationRound.id,'Sample feedback inherits its linked sample round');
+ const relationDrawing=await create('drawing',{itemIds:[relationItem.id]}),nextDrawing=await create('drawing',{previousId:relationDrawing.id});
+ await deny(save('confirmation',{drawingId:relationDrawing.id,itemIds:[otherRelationItem.id]}));
+ await deny(save('drawing',{id:relationDrawing.id,version:relationDrawing.version,previousId:nextDrawing.id}));
+ await deny(save('drawing',{id:relationDrawing.id,version:relationDrawing.version,pairedDrawingId:relationDrawing.id}));
+ const liveItem=(await ok('customer-project-entry-save',{entryType:'item',token:token(),projectId:original.id,model:'合成正式轮次款色'})).item;
+ const liveParent=(await ok('customer-project-round-save',{token:token(),projectId:original.id,title:'合成父轮次',type:'development',scope:[{itemId:liveItem.id,quantity:1}]})).item;
+ const liveChild=(await ok('customer-project-round-save',{token:token(),projectId:original.id,title:'合成子轮次',type:'revision',parentRoundId:liveParent.id,reason:'合成修改',scope:[{itemId:liveItem.id,quantity:1}]})).item;
+ const beforeCycle=structuredClone(rawRecords()),cycle=await call('customer-project-round-save',{token:token(),id:liveParent.id,version:liveParent.version,projectId:original.id,title:liveParent.title,type:'development',parentRoundId:liveChild.id,scope:liveParent.scope});assert.equal(cycle.status,400);assert.deepEqual(rawRecords(),beforeCycle);
+ pass('独立与正式轮次拒绝循环来源；寄样、反馈、图纸确认及轮次款色关联一致，缺省反馈轮次沿用样办');
+
  const editableRound=await create('round',{scope:[{itemId:created.item.id,quantity:10}]});
  const order={id:'synthetic_entry_formal_order',kind:'order',version:1,customer:customer.customerCode,orderNo:'SYN-ENTRY-ORDER',drawing:'SYN-ENTRY-DRAWING',color:'',lens:'',quantity:10,ownerEmail:users.writer.email,sourceStatus:'正式订单',workflowStatus:'PMC待接单',createdAt:'2026-10-13',updatedAt:'2026-10-13'};rawInsert(order);
  const released={...created.handover,id:'synthetic_entry_released_handover',independentEntry:false,roundId:editableRound.id,version:1,type:'bulk',scope:[{itemId:created.item.id,quantity:4}],orderLinks:[{itemId:created.item.id,orderId:order.id,quantity:4,orderVersion:1}],drawingIds:[],quoteLinkId:'',paymentSnapshot:{allowed:true,missing:[]}};rawInsert(released);

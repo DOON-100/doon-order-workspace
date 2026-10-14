@@ -294,6 +294,30 @@ export async function runCustomerProjectListFiltersUiTests(){
   assertContext('drawings','');assert.notEqual(roundSelect().props.value,'round-b','A task cannot select a round from another project or silently use the latest round');
   assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Deep links resolve against the provided authorized project feed only');
   pass('task deep links restore the exact older round or explicit project-level scope; unknown or cross-project task IDs cannot select another project or round');
+  const followupFixture=structuredClone(fixture);
+  followupFixture.followups=[
+   {id:'linked-followup',projectId:'project-A',title:'Synthetic client followup',nextAction:'Confirm linked client feedback',followUpDate:'2026-10-10',ownerId:'owner-b',status:'waiting_customer'},
+   {id:'closed-followup',projectId:'project-B',title:'Closed client action',followUpDate:'2026-10-01',ownerId:'owner-b',status:'completed'},
+   {id:'unlinked-followup',projectId:'',title:'Unlinked action',followUpDate:'2026-10-01',status:'pending'}
+  ];
+  await mount(followupFixture);
+  let linkedAction=tableFor(model).props.rows.find(row=>text(row[0]).includes('FLT-A'))[5];
+  assert(text(linkedAction).includes('Confirm linked client feedback'));
+  assert(text(linkedAction).includes('客户跟进'));
+  assert(!text(tableFor(model)).includes('Closed client action'));
+  change('筛选行动负责人','owner-b');change('搜索下一行动','linked client');expectCodes(model,['A']);clear();
+  nodes(linkedAction).find(node=>node.type==='button'&&text(node)==='查看客户跟进').props.onClick();render(model);
+  const followupPanel=nodes(model.tree).find(node=>node.type?.name==='CustomerProjectFollowupPanel');
+  assert.equal(followupPanel.props.initialFollowupId,'linked-followup');
+  source.followups[0].nextAction='Updated linked client feedback';source.followups[0].followUpDate='2026-10-09';
+  followupPanel.props.onDataChanged();await settle(model);
+  testId(model,'customer-project-list-nav').props.onClick();await settle(model);
+  linkedAction=tableFor(model).props.rows.find(row=>text(row[0]).includes('FLT-A'))[5];
+  assert(text(linkedAction).includes('Updated linked client feedback'));
+  assert(text(linkedAction).includes('2026-10-09'));
+  assert(requests.every(row=>['customer-project-data','project-finance-data'].includes(row.action)));
+  metric('前期跟进中');expectCodes(model,['A','C','G','H'],'Paused/cancelled/archived projects are not counted as active development');
+  pass('linked client followups share next-action date/owner with project lists; source links select the same followup and saves refresh the parent without inventing tasks');
   return checks;
  }finally{
   if(model)unmount(model);
