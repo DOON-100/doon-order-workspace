@@ -318,6 +318,34 @@ export async function runCustomerProjectListFiltersUiTests(){
   assert(requests.every(row=>['customer-project-data','project-finance-data'].includes(row.action)));
   metric('前期跟进中');expectCodes(model,['A','C','G','H'],'Paused/cancelled/archived projects are not counted as active development');
   pass('linked client followups share next-action date/owner with project lists; source links select the same followup and saves refresh the parent without inventing tasks');
+  const sharedCustomerFixture=structuredClone(fixture);
+  sharedCustomerFixture.teams=[
+   {id:'team-a',name:'Synthetic custom development',active:true,customerIds:['customer-a'],salesMemberIds:['sales-a'],leaderIds:[],serviceMemberIds:['service-a']},
+   {id:'team-b',name:'Synthetic stock business',active:true,customerIds:['customer-a'],salesMemberIds:['sales-b'],leaderIds:[],serviceMemberIds:['service-b']},
+   {id:'team-unrelated',name:'Synthetic unrelated team',active:true,customerIds:['customer-b'],salesMemberIds:['sales-b'],leaderIds:[],serviceMemberIds:['service-b']}
+  ];
+  await mount(sharedCustomerFixture);button(model,'新建项目').props.onClick();render(model);
+  const sharedForm=component('CPFormDialog').props.form;
+  let values={...sharedForm.initial,customerId:'customer-a',teamId:'team-a',salesMemberId:'sales-a',serviceMemberIds:['service-a'],serviceReviewerId:'service-a',salesReviewerId:'sales-a'};
+  const choices=key=>sharedForm.fields.find(field=>field.key===key).optionsFor(values).map(option=>option.value);
+  assert.deepEqual(choices('teamId'),['team-a','team-b']);assert.deepEqual(choices('salesMemberId'),['sales-a']);assert.deepEqual(choices('serviceMemberIds'),['service-a']);
+  assert.deepEqual(choices('serviceReviewerId'),['sales-a','service-a']);assert.deepEqual(choices('salesReviewerId'),['sales-a']);
+  values=sharedForm.onFieldChange('teamId',{...values,teamId:'team-b'});
+  assert.equal(values.salesMemberId,'');assert.deepEqual(values.serviceMemberIds,[]);assert.equal(values.serviceReviewerId,'');assert.equal(values.salesReviewerId,'');
+  assert.deepEqual(choices('salesMemberId'),['sales-b']);assert.deepEqual(choices('serviceMemberIds'),['service-b']);
+  values=sharedForm.onFieldChange('customerId',{...values,customerId:'customer-b'});assert.equal(values.teamId,'');assert.deepEqual(choices('teamId'),['team-unrelated']);
+  pass('one customer can select either authorized project team; salesperson/service/reviewer choices follow that team and switching clears incompatible assignments');
+  const navigations=[];
+  await mount(sharedCustomerFixture,{teamId:'team-a',changeTeam(){}},{onOpenProjectInTeam:(id,teamId)=>navigations.push({id,teamId})});
+  const realRequest=globalThis.__projectFilterRequest;
+  globalThis.__projectFilterRequest=async(action,values)=>action==='customer-project-save'?{item:{id:'new-project-b',teamId:'team-b'}}:realRequest(action,values);
+  button(model,'新建项目').props.onClick();render(model);component('CPFormDialog').props.onSubmit({customerId:'customer-a',teamId:'team-b'});await settle(model);
+  assert.deepEqual(navigations,[{id:'new-project-b',teamId:'team-b'}]);
+  globalThis.__projectFilterRequest=realRequest;
+  button(model,'我的客户跟进').props.onClick();render(model);component('CustomerProjectFollowupPanel').props.onOpenProject('promoted-project-b','team-b');await settle(model);
+  assert.deepEqual(navigations.at(-1),{id:'promoted-project-b',teamId:'team-b'});
+  pass('saving or promoting into another scoped group delegates the saved project ID and team together for navigation');
+
   return checks;
  }finally{
   if(model)unmount(model);

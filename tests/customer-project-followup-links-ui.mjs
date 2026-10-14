@@ -27,11 +27,12 @@ let source={
  customers:[{id:'customer',customer:'Synthetic customer',active:true}],members:[{id:'sales',name:'Synthetic sales'}],people:[{id:'sales',name:'Synthetic sales'}],canImport:true,mails:[],sourceBundles:[],
  summary:{visibleProjects:2,linkedFollowups:1,linkedProjects:1,unlinkedFollowups:1,unassignedCustomers:1,projectsWithoutFollowups:1}
 };
-const model={index:0,slots:[],effects:[],changed:false,tree:null};let changed=0,opened='',reads=0,pendingRead,slowRead=false,signals=[],mutations=0;
-const props={meId:'sales',onDirtyChange(){},onBusyChange(){},onDataChanged(){changed++;},onOpenProject:id=>{opened=id;}};
+const model={index:0,slots:[],effects:[],changed:false,tree:null};let changed=0,opened='',openedTeam='',reads=0,pendingRead,slowRead=false,signals=[],mutations=0,promotions=[];
+const props={meId:'sales',onDirtyChange(){},onBusyChange(){},onDataChanged(){changed++;},onOpenProject:(id,teamId)=>{opened=id;openedTeam=teamId;}};
 globalThis.__followupLinksRequest=async(action,values,options)=>{
  if(action==='customer-project-followup-data'){reads++;signals.push(options?.signal);if(slowRead){slowRead=false;const snapshot=structuredClone(source);return await new Promise(resolve=>{pendingRead=()=>resolve(snapshot);});}return structuredClone(source);}
  if(action==='customer-project-followup-save'){mutations++;const item={...source.followups.find(row=>row.id===values.id),...values,version:2};source.followups=source.followups.map(row=>row.id===item.id?item:row);return {item};}
+ if(action==='customer-project-followup-promote'){promotions.push(values);const project={id:'promoted-'+values.id,customerId:values.customerId,teamId:values.teamId,code:values.code,title:values.title,salesMemberId:'sales'},item={...source.followups.find(row=>row.id===values.id),projectId:project.id};return {project,item};}
  throw Error('Unexpected action '+action);
 };
 function nodes(node,out=[]){if(Array.isArray(node))node.forEach(child=>nodes(child,out));else if(node&&typeof node==='object'&&node.type){out.push(node);for(const key of ['children','rows','actions'])nodes(node.props?.[key],out);}return out;}
@@ -66,6 +67,28 @@ try{
  props.initialFollowupId='followup';render();await settle();assert.equal(byLabel('下一步').props.value,'Updated shared action');
  const beforeDirtyFocus=reads;byLabel('下一步').props.onChange({target:{value:'Unsaved change'}});render();for(const listener of [...listeners.get('focus')])listener();await settle();assert.equal(reads,beforeDirtyFocus);assert.equal(byLabel('下一步').props.value,'Unsaved change');
  console.log('PASS project deep links open the exact followup and focus refresh preserves unsaved edits');
+ button('关闭').props.onClick();render();
+ source.teams=[{id:'custom',name:'Synthetic custom group',active:true,customerIds:['customer'],salesMemberIds:['sales'],leaderIds:[],serviceMemberIds:[]},{id:'stock',name:'Synthetic stock group',active:true,customerIds:['customer'],salesMemberIds:['sales'],leaderIds:[],serviceMemberIds:[]}];
+ source.projects[0].teamId='custom';source.projects[1].teamId='stock';
+ source.followups=[row('followup',{canPromote:true,projectId:''})];
+ button('刷新跟进').props.onClick();await settle();button('查看 / 更新跟进').props.onClick();render();
+ const projectChoices=nodes(byLabel('关联完整项目')).filter(node=>node.type==='option').map(text);
+ assert(projectChoices.some(label=>label.includes('Synthetic custom group')&&label.includes('业务：Synthetic sales')));
+ assert(projectChoices.some(label=>label.includes('Synthetic stock group')&&label.includes('业务：Synthetic sales')));
+ button('创建并关联完整项目').props.onClick();render();assert.equal(byLabel('本项目业务客服组').props.value,'');
+ let promoteForm=nodes(model.tree).find(node=>node.type==='form');promoteForm.props.onSubmit({preventDefault(){}});await settle();
+ assert.equal(promotions.length,0);assert.match(text(model.tree),/请明确选择本项目所属组/);
+ byLabel('本项目业务客服组').props.onChange({target:{value:'stock'}});render();
+ promoteForm=nodes(model.tree).find(node=>node.type==='form');promoteForm.props.onSubmit({preventDefault(){}});await settle();
+ assert.equal(promotions.at(-1).teamId,'stock');assert.equal(opened,'promoted-followup');assert.equal(openedTeam,'stock','Successful promotion passes the saved group to project navigation');
+ source.teams=source.teams.filter(team=>team.id==='custom');
+ button('刷新跟进').props.onClick();await settle();button('查看 / 更新跟进').props.onClick();render();button('创建并关联完整项目').props.onClick();render();
+ assert.equal(byLabel('本项目业务客服组').props.value,'custom');
+ button('取消').props.onClick();render();
+ source.teams=[];button('刷新跟进').props.onClick();await settle();button('查看 / 更新跟进').props.onClick();render();button('创建并关联完整项目').props.onClick();render();
+ assert.equal(byLabel('本项目业务客服组').props.value,'');assert.equal(byLabel('本项目业务客服组').props.required,false);
+ console.log('PASS project choices identify group and sales owner; promotion auto-selects one eligible group, requires explicit choice among several and preserves ungrouped compatibility');
+
 }finally{
  pendingRead?.();
  for(const slot of model.slots)slot?.cleanup?.();

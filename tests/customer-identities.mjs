@@ -85,5 +85,12 @@ await reject('customer-save',{createOnly:true,customer:'非法直接公海新客
 const pool={...current(customerId),directory:{...current(customerId).directory,bucket:'搁置与公海'}};db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(pool),customerId);
 await reject('customer-save',input(pool,{directory:{bucket:'现有合作'}}));await ok('customer-save',input(pool,{directory:{country:'只改国家'}}));assert.equal(current(customerId).directory.bucket,'搁置与公海');pass('普通主档不能绕过审批入/出公海，非流转元数据仍可维护');
 assert.deepEqual(current('identity_order'),originalOrder);assert.deepEqual(current('identity_attachment'),originalAttachment);assert.deepEqual(current('identity_service'),originalService);assert.equal(bucketObjects.size,1);
+insert({id:'confirmed_legacy',kind:'customer_workflow_identity',customerId,code:'LEGACY-CONFIRMED',name:'',customerVersion:1,origin:'user-confirmed-legacy-code',confirmedCode:'IMPORT-003',reason:'Synthetic owner confirmed the old code; original master code was blank.',actorId:'synthetic-maintenance'});
+insert({id:'unconfirmed_legacy',kind:'customer_workflow_identity',customerId,code:'LEGACY-UNCONFIRMED',name:'',customerVersion:1,origin:'user-confirmed-legacy-code'});
+const legacyMapped=(await ok('service-data')).customers.find(c=>c.id===customerId);
+assert(legacyMapped.orderKeys.includes('LEGACY-CONFIRMED'));assert(!legacyMapped.orderKeys.includes('LEGACY-UNCONFIRMED'));
+await reject('customer-save',{createOnly:true,customer:'Other synthetic legacy claimant',customerCode:'LEGACY-CONFIRMED'});
+assert.deepEqual(current('identity_order'),originalOrder);assert.deepEqual(current('identity_attachment'),originalAttachment);
+pass('明确用户确认且有依据的旧编号映射到同一客户；未确认来源不授予身份，其他客户不能抢占旧码');
 await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:checks.length,checks,at:new Date().toISOString(),scope:'synthetic in-memory DB only; no production access',originalOrderAndAttachmentUnchanged:true,attachmentObjects:1},null,2));db.close();console.log(JSON.stringify({passed:checks.length,report:path.join(output,'result.json')}));
 

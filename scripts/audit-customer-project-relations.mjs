@@ -33,7 +33,7 @@ export function auditProjectRelations(records) {
   for(const field of ['sourceChargeId','targetChargeId'])ref({...row,projectId:''},field,row[field],'project_charge');
   for(const id of row.chargeIds||[])ref({...row,projectId:''},'chargeIds',id,'project_charge');
   for(const field of ['scope','lines','orderLinks'])for(const line of row[field]||[]){ref(row,field+'.itemId',line.itemId,'customer_project_item');if(line.orderId)ref(row,field+'.orderId',line.orderId,'order');}
-  for(const field of ['ownerId','salesMemberId','serviceMemberId','serviceReviewerId','salesReviewerId'])if(row[field])ref(row,field,row[field],'member',{scope:false});
+  for(const field of ['ownerId','sourceOwnerId','salesMemberId','serviceMemberId','serviceReviewerId','salesReviewerId'])if(row[field])ref(row,field,row[field],'member',{scope:false});
   for(const field of ['leaderIds','salesMemberIds','serviceMemberIds','serviceFollowerIds','salesReviewerIds'])for(const id of row[field]||[])ref(row,field,id,'member',{scope:false});
   if(row.teamId)ref(row,'teamId',row.teamId,'customer_project_team',{scope:false});
   for(const id of row.customerIds||[])ref(row,'customerIds',id,'customer_account',{scope:false});
@@ -46,7 +46,7 @@ export function auditProjectRelations(records) {
    if(!row.projectId)warnings.push({id:row.id,code:'unlinked_followup',title:row.title,customerId:row.customerId,ownerId:row.ownerId});
   }
   if(row.kind==='customer_project'&&row.followupId){const f=ref(row,'followupId',row.followupId,'customer_project_followup');if(f&&f.projectId!==row.id)issue(row,'followupId','followup_project_mismatch',f.id);}
-  if(row.kind==='customer_project_followup_mail')for(const id of row.followupIds||[]){const f=ref(row,'followupIds',id,'customer_project_followup',{scope:false});if(f&&f.ownerId!==row.ownerId)issue(row,'followupIds','mail_owner_mismatch',id);}
+  if(row.kind==='customer_project_followup_mail')for(const id of row.followupIds||[]){const f=ref(row,'followupIds',id,'customer_project_followup',{scope:false});if(f&&(f.sourceOwnerId||f.ownerId)!==(row.sourceOwnerId||row.ownerId))issue(row,'followupIds','mail_owner_mismatch',id);}
   if(row.sourceHash&&createHash('sha256').update(JSON.stringify(row.source)).digest('hex')!==row.sourceHash)issue(row,'sourceHash','original_source_changed',row.sourceId);
  }
  const active=projects.filter(p=>!p.trashedAt),activeIds=new Set(active.map(p=>p.id));

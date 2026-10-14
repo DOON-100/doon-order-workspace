@@ -203,6 +203,10 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
   const selectedTeam=input.teamId?all(s,'customer_project_team').find(t=>t.id===input.teamId&&t.active&&t.customerIds.includes(input.customerId)):undefined;
   if(input.teamId&&!selectedTeam)throw new AppError('小组不包含当前客户，请先由管理员配置组织归属。');
   if(selectedTeam){
+   const sameTeam=before?.teamId===input.teamId,teamSales=new Set([...(selectedTeam.salesMemberIds||[]),...(selectedTeam.leaderIds||[])]);
+   if(input.salesMemberId&&!(sameTeam&&before?.salesMemberId===input.salesMemberId)&&!teamSales.has(input.salesMemberId))throw new AppError('业务负责人须为所选业务客服组的业务成员或组长；切换小组时请重新选择业务。');
+   if(salesReviewerId&&!(sameTeam&&before?.salesReviewerId===salesReviewerId)&&!teamSales.has(salesReviewerId))throw new AppError('默认业务审核人须为所选业务客服组的业务成员或组长。');
+   if(serviceReviewerId&&!(sameTeam&&before?.serviceReviewerId===serviceReviewerId)&&!teamSales.has(serviceReviewerId)&&!selectedTeam.serviceMemberIds.includes(serviceReviewerId))throw new AppError('默认客服审核人须为所选业务客服组的成员。');
    // Keep historical assignments on an unchanged team; additions and team changes use its current service roster.
    const retainedServices=new Set(before&&before.teamId===input.teamId?priorServices:[]);
    const teamServices=new Set(Array.isArray(selectedTeam.serviceMemberIds)?selectedTeam.serviceMemberIds:[]);

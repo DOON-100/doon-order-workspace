@@ -29,4 +29,10 @@ const broken=auditProjectRelations([...records,
  {id:'wrong-item',kind:'customer_project_item',projectId:'p',customerId:'other'},
 ]);
 for(const code of ['missing_reference','round_cycle','missing_project_backlink','project_customer_mismatch'])assert(broken.issues.some(i=>i.code===code),code);
+const transferred=[...records,{id:'original-owner',kind:'member'},{id:'new-owner',kind:'member'},
+ {id:'transferred-followup',kind:'customer_project_followup',customerId:'c',projectId:'p',ownerId:'new-owner',sourceOwnerId:'original-owner'},
+ {id:'original-mail',kind:'customer_project_followup_mail',ownerId:'original-owner',followupIds:['transferred-followup']}];
+assert.equal(auditProjectRelations(transferred).issues.length,0,'transferring responsibility preserves the original mail source');
+transferred.at(-1).ownerId='new-owner';
+assert(auditProjectRelations(transferred).issues.some(i=>i.code==='mail_owner_mismatch'),'a mismatched original source is still detected');
 console.log('PASS read-only project integrity audit distinguishes legitimate many-to-one links and pending attribution from broken references, cycles and mismatched customers');
