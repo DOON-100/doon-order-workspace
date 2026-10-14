@@ -1,3 +1,5 @@
+import type {Member} from './domain';
+
 /** Final visible navigation from the handoff's installed overrides. Stable intranet routes remain valid. */
 export const handoffNavigation = [
  {id:'workbench',label:'工作台',group:'工作区',icon:'home'},
@@ -49,6 +51,12 @@ export const workspaceNavigation=[
  ...directWorkspaceNavigation.map(item=>({...item,group:'工作空间'})),
  ...handoffNavigation.filter(item=>item.id!=='workbench'&&!directWorkspaceIds.has(item.id)),
 ];
+/** Keep finished clerks' daily entry points above the long shared workspace list. */
+export function memberWorkspaceNavigation(member?:Member){
+ if(!member?.active||member.role!=='clerk'||!member.departments?.includes('finished'))return workspaceNavigation;
+ const priority=['finished-outsourcing','department'];
+ return [workspaceNavigation[0],...priority.flatMap(id=>workspaceNavigation.filter(item=>item.id===id)),...workspaceNavigation.slice(1).filter(item=>!priority.includes(item.id))];
+}
 export const handoffDocumentViews = ['order-confirmations','engineering-materials','production-orders','production-shipments','logistics-waybills','finance-documents'] as const;
 export type HandoffDocumentView = typeof handoffDocumentViews[number];
 export function isHandoffDocumentView(view:string):view is HandoffDocumentView{return (handoffDocumentViews as readonly string[]).includes(view);}
