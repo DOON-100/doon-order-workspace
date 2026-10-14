@@ -6,10 +6,16 @@
 | --- | --- |
 | 本机 | Windows 10 家庭中文版，64 位，使用 PowerShell |
 | 服务器地域 | 深圳，`cn-shenzhen` |
-| 服务器规格 | `ecs.e-c1m2.large`，2 vCPU、4GiB 内存 |
+| ECS 实例型号 | `ecs.e-c1m2.large` |
+| 实例系列 | 经济型 e，共享型实例 |
+| CPU 型号（系统显示） | Intel Xeon Platinum；未显示具体型号编号 |
+| CPU / 内存 | 2 vCPU、4GiB 内存；系统识别内存约 3.5GiB |
+| 架构 / 虚拟化 | x86_64 / KVM |
 | 服务器系统 | Ubuntu 24.04.5 LTS，64 位 |
 | 系统盘 | 80GiB；根分区约 79G |
 | 交换空间 | 4GiB |
+
+核实日期：2026-10-14。实例型号来自阿里云实例查询，CPU 信息来自服务器 `lscpu`，磁盘容量来自 `lsblk`；系列名称及标称 CPU / 内存对应[阿里云官方规格表](https://help.aliyun.com/zh/ecs/user-guide/shared-instance-families)。
 
 认证与 RAM 权限已配置，已成功连接。本机配置使用 `default`，日常直接连接即可。以下示例中的实例 ID 需要替换；带实际实例 ID 的个人版保存在本机，不提交到公开仓库。
 
