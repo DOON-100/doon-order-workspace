@@ -58,6 +58,8 @@ npm run preview -- --synthetic --resume "<上次 PREVIEW_READY 的 directory>"
 
 ## 验证与下一阶段
 
+2026-10-16 补充：新增 `tests/adversarial.test.mjs`，8 类对抗请求及 1 类公开演示身份限制，共 9 组；当前完整 P1 套件 32 项通过。独立 DeepSeek 真实模型联调及本轮验收见 [P2 验收记录](../mastra-p2/ACCEPTANCE.md)。下面的真实模型路线是原 P1 计划，P2 已验证其中的工具与审批恢复协议；P1 建议生成仍使用 mock，尚未切换为真实模型。
+
 `tests/policy.test.mjs` 检查权限、DTO、分页和数据不变；`tests/http.test.mjs` 检查真实 HTTP/Agent、来源失效、拒绝写入、完整及部分建议恢复；`tests/sdk.test.mjs` 额外检查 generate/stream、无记忆新上下文、工具审批和 libSQL 跨进程恢复。原 11 项集成与 5 项源码检查仍用原实验命令运行，不能用本目录测试数替代。
 
 后续按以下门槛逐步推进；均未计入本轮通过项：
