@@ -1,0 +1,62 @@
+.production-planning-panel{--production-planning-ink:#263d4d;--production-planning-muted:#687b89;--production-planning-line:#dce5eb;--production-planning-tint:#eef4f7;display:grid;gap:24px;min-width:0;color:var(--production-planning-ink)}
+.production-planning-hero{display:flex;align-items:center;justify-content:space-between;gap:28px;padding:28px 30px;border:1px solid var(--production-planning-line);border-radius:12px;background:linear-gradient(110deg,#f0f6f8,#fff 72%)}
+.production-planning-intro{min-width:0;max-width:720px}
+.production-planning-eyebrow{display:block;margin-bottom:10px;font-size:12px;font-weight:600;letter-spacing:1px;color:#4c6c7d}
+.production-planning-panel .production-planning-hero h1{margin:0;font-size:28px;font-weight:650;line-height:1.35;letter-spacing:.2px;color:var(--production-planning-ink)}
+.production-planning-intro>p{margin:12px 0 21px;font-size:14px;line-height:1.8;color:var(--production-planning-muted)}
+.production-planning-primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;border:1px solid #315b6d;border-radius:7px;background:#315b6d;color:#fff;padding:10px 15px;font-size:13px;font-weight:600;cursor:pointer}
+.production-planning-primary:hover{background:#244858;border-color:#244858}
+.production-planning-count{flex:0 0 190px;border-left:1px solid var(--production-planning-line);padding-left:30px}
+.production-planning-count>span{font-size:12px;color:var(--production-planning-muted)}
+.production-planning-count strong{display:block;margin:5px 0;font-size:44px;font-weight:600;line-height:1.25;font-variant-numeric:tabular-nums;letter-spacing:-1px;color:#315b6d}
+.production-planning-count small{margin-left:8px;font-size:13px;font-weight:400;letter-spacing:0;color:var(--production-planning-muted)}
+.production-planning-count p{margin:0;font-size:12px;line-height:1.6;color:var(--production-planning-muted)}
+.production-planning-toolbar{display:flex;align-items:center;justify-content:space-between;gap:18px}
+.production-planning-directory-title h2{margin:0;font-size:18px;font-weight:600}
+.production-planning-directory-title p{margin:5px 0 0;font-size:12px;color:var(--production-planning-muted)}
+.production-planning-search{display:flex;align-items:center;gap:9px;width:330px;max-width:100%;min-height:42px;padding:0 11px;border:1px solid var(--production-planning-line);border-radius:7px;background:#fff;color:var(--production-planning-muted)}
+.production-planning-search:focus-within{border-color:#668a9d;box-shadow:0 0 0 2px #e2edf2}
+.production-planning-search input{min-width:0;flex:1;width:100%;padding:10px 0;border:0;border-radius:0;background:transparent;font:inherit;font-size:13px;color:var(--production-planning-ink);outline:none;box-shadow:none}
+.production-planning-search input:focus{outline:none}
+.production-planning-search input::-webkit-search-cancel-button{display:none}
+.production-planning-search>svg{flex-shrink:0}
+.production-planning-clear{display:grid;place-items:center;flex-shrink:0;width:25px;height:25px;border:0;border-radius:4px;background:transparent;color:var(--production-planning-muted);cursor:pointer}
+.production-planning-clear:hover{background:var(--production-planning-tint)}
+.production-planning-groups{display:grid;gap:18px}
+.production-planning-group{min-width:0;border:1px solid var(--production-planning-line);border-radius:10px;background:#fff;overflow:hidden}
+.production-planning-group-head{display:flex;align-items:center;gap:12px;padding:18px 21px;border-bottom:1px solid #e6edf1;background:linear-gradient(90deg,#f0f5f8,#fff);position:relative}
+.production-planning-group-head::before{content:'';position:absolute;left:0;top:20px;bottom:20px;width:3px;background:#4f7589;border-radius:0 2px 2px 0}
+.production-planning-group-icon{display:grid;place-items:center;width:35px;height:35px;flex-shrink:0;border:1px solid #dbe7ed;border-radius:8px;background:#fff;color:#4f7589}
+.production-planning-group-head h2{display:flex;align-items:center;gap:10px;margin:0;font-size:16px;font-weight:600;line-height:1.5}
+.production-planning-group-head p{margin:3px 0 0;font-size:12px;line-height:1.65;color:var(--production-planning-muted)}
+.production-planning-group-count{padding:0 6px;min-width:21px;border-radius:4px;background:#e5eef3;color:#527084;font-size:11px;font-weight:500;text-align:center;line-height:20px}
+.production-planning-step{margin-left:auto;padding-left:12px;font-size:22px;font-weight:500;font-variant-numeric:tabular-nums;color:#9aafbc}
+.production-planning-space-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;padding:17px}
+.production-planning-space{display:flex;flex-direction:column;align-items:stretch;gap:10px;min-width:0;min-height:140px;padding:17px;border:1px solid #e1e8ed;border-radius:8px;background:#fff;text-align:left;white-space:normal;color:var(--production-planning-ink);cursor:pointer;transition:background .15s,border-color .15s}
+.production-planning-space:hover{border-color:#8aa7b7;background:#f7fafb}
+.production-planning-space-title{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;font-size:15px;font-weight:600;line-height:1.5}
+.production-planning-space-title>svg{flex-shrink:0;margin-top:2px;color:#66899b}
+.production-planning-space-detail{font-size:12px;line-height:1.8;color:var(--production-planning-muted);overflow-wrap:anywhere}
+.production-planning-space-action{display:flex;align-items:center;gap:5px;margin-top:auto;padding-top:3px;font-size:12px;font-weight:500;color:#456d82}
+.production-planning-empty{display:flex;align-items:center;flex-direction:column;padding:40px 20px;border:1px dashed #c9d9e2;border-radius:10px;background:#fff;text-align:center;color:var(--production-planning-muted)}
+.production-planning-empty>svg{color:#6c8a9c}
+.production-planning-empty h3{margin:12px 0 5px;font-size:16px;color:var(--production-planning-ink)}
+.production-planning-empty p{max-width:440px;margin:0;font-size:13px;line-height:1.8}
+.production-planning-reset{margin-top:16px;padding:8px 13px;border:1px solid #b7cbd6;border-radius:6px;background:var(--production-planning-tint);color:#315b6d;font-size:13px;cursor:pointer}
+.production-planning-reset:hover{background:#e0edf3}
+.production-planning-related{display:flex;align-items:center;gap:25px;padding:21px;border:1px solid var(--production-planning-line);border-radius:10px;background:#f4f7f9}
+.production-planning-related>div:first-child{flex:0 0 185px}
+.production-planning-related h2{margin:0;font-size:15px;font-weight:600}
+.production-planning-related p{margin:5px 0 0;font-size:12px;color:var(--production-planning-muted)}
+.production-planning-related-links{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;flex:1;min-width:0}
+.production-planning-related-links button{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid #dbe5eb;border-radius:7px;background:white;text-align:left;color:#36576a;cursor:pointer}
+.production-planning-related-links button:hover{border-color:#8aa7b7;background:#fbfdfe}
+.production-planning-related-links button>svg{flex-shrink:0}
+.production-planning-related-links strong{font-size:13px;font-weight:600}
+.production-planning-related-links small{display:block;margin-top:4px;font-size:12px;line-height:1.65;color:var(--production-planning-muted)}
+.production-planning-member{margin:-10px 0 0;font-size:11px;line-height:1.7;color:var(--production-planning-muted)}
+.production-planning-panel button:focus-visible{outline:2px solid #608fa4;outline-offset:3px}
+@media(max-width:1150px){.production-planning-space-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.production-planning-related{align-items:flex-start;flex-direction:column;gap:14px}.production-planning-related>div:first-child{flex:auto}.production-planning-related-links{width:100%}}
+@media(max-width:800px){.production-planning-hero{align-items:flex-start;gap:20px;padding:23px}.production-planning-count{flex-basis:145px;padding-left:20px}.production-planning-panel .production-planning-hero h1{font-size:23px}.production-planning-toolbar{align-items:flex-start;flex-direction:column;gap:12px}.production-planning-search{width:100%}.production-planning-group-head{padding:16px}.production-planning-space-grid{gap:10px;padding:13px}.production-planning-space{padding:15px}}
+@media(max-width:620px){.production-planning-panel{gap:19px}.production-planning-hero{flex-direction:column;padding:20px}.production-planning-count{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;flex-basis:auto;width:100%;padding:14px 0 0;border-left:0;border-top:1px solid var(--production-planning-line)}.production-planning-count strong{margin:0;font-size:29px}.production-planning-count p{width:100%}.production-planning-panel .production-planning-hero h1{font-size:22px}.production-planning-intro>p{font-size:13px}.production-planning-space-grid,.production-planning-related-links{grid-template-columns:1fr}.production-planning-space{min-height:125px}.production-planning-group-head{align-items:flex-start;gap:10px}.production-planning-group-head h2{font-size:15px}.production-planning-group-icon{width:31px;height:31px}.production-planning-step{font-size:18px}.production-planning-related{padding:17px}}
+@media(prefers-reduced-motion:reduce){.production-planning-space{transition:none}}
