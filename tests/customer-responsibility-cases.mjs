@@ -56,7 +56,8 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
  team=(await ok('customer-save',{...team,expectedVersion:team.version,customer:team.customer+'已核对',customerCode:team.customerCode+'-R1',serviceMemberIds:[id('teamA')],notes:'本人负责客户核对名称编码'},users.teamA)).item;
  assert.equal(team.customer,oldOwn.customer+'已核对');assert.equal(team.customerCode,oldOwn.customerCode+'-R1');
  assert.deepEqual(team.serviceMemberIds,oldOwn.serviceMemberIds);assert.deepEqual(team.quoteMemberIds,oldOwn.quoteMemberIds);
- for(const row of beforeOwn)if(row.id!==team.id)assert.deepEqual(current(row.id),row);
+ const afterOwn=new Map(rawRecords().map(row=>[row.id,row]));
+ for(const row of beforeOwn)if(row.id!==team.id)assert.deepEqual(afterOwn.get(row.id),row);
  await deny('customer-save',{...oldOwn,expectedVersion:oldOwn.version,notes:'旧版本覆盖'},users.teamA,409);
  await deny('customer-save',{...team,expectedVersion:team.version,customer:'别人客户不能维护'},users.other);
  pass('本人负责客服可按当前版本维护客户名称编码，历史身份保留；原协作与报价成员不丢，跨客户/报价增权/过期写入零变更');
