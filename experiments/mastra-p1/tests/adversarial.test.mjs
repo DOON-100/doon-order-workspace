@@ -5,8 +5,9 @@ import path from 'node:path';
 import {createSyntheticState} from '../fixtures.mjs';
 import {createReadAdapter} from '../policy.mjs';
 import {createSandbox, openSuggestionStore, removeSandbox, sandboxDigest} from '../sandbox.mjs';
-import {startReadonlyServer} from '../server.mjs';
+import {startReadonlyServer,syntheticSession} from '../server.mjs';
 import {generateSyntheticSuggestions} from '../generate.mjs';
+import {createSyntheticIdentity} from '../auth.mjs';
 
 // These names label HTTP protocol simulations only. No installed WorkBuddy/Codex
 // configuration, accounts, sessions, models, or external services are accessed.
@@ -37,15 +38,18 @@ async function setup(t) {
     }
   });
   const adapter = await createReadAdapter(state);
+  const {identity,credentials}=await createSyntheticIdentity({adapter});
   reader = await openSuggestionStore(directory);
   writer = await openSuggestionStore(directory, {readOnly: false});
-  server = await startReadonlyServer({adapter, store: reader});
+  server = await startReadonlyServer({adapter, store: reader,identity});
   const endpoint = new URL(server.origin);
   assert.equal(endpoint.hostname, '127.0.0.1');
   assert.notEqual(endpoint.port, '8787');
   assert.equal(endpoint.protocol, 'http:');
   for (const actorId of ['syn-employee-a', 'syn-employee-b']) {
-    await generateSyntheticSuggestions({origin: server.origin, adapter, store: writer, actorId});
+    const {username,password}=credentials.find(item=>item.actorId===actorId);
+    const sessionCookie=await syntheticSession(server.origin,{username,password});
+    await generateSyntheticSuggestions({origin: server.origin, adapter, store: writer, sessionCookie,resolveSession:server.resolveSession});
   }
   await writeFile(path.join(directory, attachmentKey), attachmentContent, {encoding: 'utf8', flag: 'wx'});
   assert.deepEqual(state, sourceBefore);
@@ -59,12 +63,14 @@ async function setup(t) {
     assert(route.startsWith('/') && !route.startsWith('//'));
     return fetch(server.origin + route, {
       method, redirect: 'error', signal: AbortSignal.timeout(10_000),
-      headers: {'x-http-protocol-simulator': caller, ...(cookie ? {cookie} : {}), ...(json === undefined ? {} : {'content-type': 'application/json'}), ...headers},
+      headers: {origin:server.origin,'x-http-protocol-simulator': caller, ...(cookie ? {cookie} : {}), ...(json === undefined ? {} : {'content-type': 'application/json'}), ...headers},
       ...(json === undefined ? {} : {body: JSON.stringify(json)}),
     });
   }
-  async function session(caller, employeeId) {
-    const response = await request(caller, '/api/demo-session', {method: 'POST', json: {employeeId}});
+  async function provisionTrustedSession(caller, actorId) {
+    // Credential assignment belongs to this trusted test setup, never the simulated attacker.
+    const {username,password}=credentials.find(item=>item.actorId===actorId);
+    const response = await request(caller, '/api/session', {method: 'POST', json: {username,password}});
     assert.equal(response.status, 200);
     const cookie = response.headers.get('set-cookie')?.split(';')[0];
     assert(cookie);
@@ -72,8 +78,8 @@ async function setup(t) {
     return cookie;
   }
   const cookies = new Map();
-  for (const caller of callers) cookies.set(caller, {a: await session(caller, 'syn-employee-a'), b: await session(caller, 'syn-employee-b')});
-  return {request, session, cookies, directory};
+  for (const caller of callers) cookies.set(caller, {a: await provisionTrustedSession(caller, 'syn-employee-a'), b: await provisionTrustedSession(caller, 'syn-employee-b')});
+  return {request, cookies, directory};
 }
 
 async function denied(response, status) {
@@ -105,7 +111,7 @@ test('01 protocol simulators: cross-customer reads return 404 and all cross-cust
   }
 });
 
-test('02 forged cookie/header/query/body identity is rejected; this is not a production login-authentication test', async t => {
+test('02 forged cookie/header/query/body identity cannot replace the credential-bound synthetic identity', async t => {
   const c = await setup(t);
   for (const caller of callers) {
     const {a} = c.cookies.get(caller), name = a.slice(0, a.indexOf('='));
@@ -120,7 +126,7 @@ test('02 forged cookie/header/query/body identity is rejected; this is not a pro
       await denied(await c.request(caller, '/api/orders?' + query, {cookie: a}), 400);
     }
     for (const json of [{employeeId: 'syn-admin'}, {employeeId: 'syn-disabled'}, {employeeId: 'syn-supplier'}, {employeeId: 'syn-employee-a', role: 'admin'}, {employeeId: 'syn-employee-a', memberId: 'syn-employee-b'}]) {
-      await denied(await c.request(caller, '/api/demo-session', {cookie: a, method: 'POST', json}), 400);
+      await denied(await c.request(caller, '/api/session', {cookie: a, method: 'POST', json}), 400);
     }
   }
 });
@@ -132,7 +138,7 @@ test('03 extra fields and duplicate queries fail closed; internal tool functions
     for (const route of ['/api/orders?limit=1&limit=50', '/api/orders?include=ownerEmail,extra,attachments', '/api/suggestions?status=approved', '/api/me?admin=true', '/api/orders/' + sourceA + '?fields=*']) {
       await denied(await c.request(caller, route, {cookie: a}), 400);
     }
-    await denied(await c.request(caller, '/api/demo-session', {method: 'POST', json: {employeeId: 'syn-employee-a', input: {memberId: 'syn-employee-b'}, caller}}), 400);
+    await denied(await c.request(caller, '/api/session', {method: 'POST', json: {username:'synthetic-unknown',password:'synthetic-invalid',input: {memberId: 'syn-employee-b'}, caller}}), 400);
     for (const route of ['/api/tools/readOrder', '/api/tools/record-synthetic-suggestion', '/api/recordSuggestion']) {
       await denied(await c.request(caller, route, {cookie: a}), 404);
       await denied(await c.request(caller, route, {cookie: a, method: 'POST', json: {caller, actorId: 'syn-employee-b', sourceId: sourceB}}), 405);
@@ -222,16 +228,26 @@ test('08 oversized/invalid paging and bulk-write payloads are refused without mu
   }
 });
 
-test('09 known demo limitation: either simulated client can openly choose employee B (200); real identity anti-forgery is NOT implemented', async t => {
+test('09 old demo selector is closed and knowing employee B without its credential cannot obtain its session', async t => {
   const c = await setup(t);
   for (const caller of callers) {
-    // Intentionally public fixture selector: knowing a real employee's ID would
-    // not be authentication. P1 must never be presented as production identity.
-    const cookie = await c.session(caller, 'syn-employee-b');
-    const me = await (await c.request(caller, '/api/me', {cookie})).json();
-    assert.equal(me.id, 'syn-employee-b');assert.equal(me.synthetic, true);
-    const orders = await (await c.request(caller, '/api/orders', {cookie})).json();
-    assert.equal(orders.items.length, 4);
-    assert(orders.items.every(order => order.id.startsWith('syn-order-b-')));
+    const {a}=c.cookies.get(caller);
+    for(const cookie of [undefined,a]) {
+      const oldEntry=await c.request(caller,'/api/demo-session',{cookie,method:'POST',json:{employeeId:'syn-employee-b'}});
+      assert.equal(oldEntry.headers.get('set-cookie'),null);
+      await denied(oldEntry,404);
+    }
+    for(const json of [{},{employeeId:'syn-employee-b'},{username:'syn-employee-b'}]) {
+      const missing=await c.request(caller,'/api/session',{cookie:a,method:'POST',json});
+      assert.equal(missing.headers.get('set-cookie'),null);
+      await denied(missing,400);
+    }
+    const guessed=await c.request(caller,'/api/session',{method:'POST',json:{username:'syn-employee-b',password:'synthetic-guess'}});
+    assert.equal(guessed.headers.get('set-cookie'),null);
+    await denied(guessed,401);
+    await denied(await c.request(caller,'/api/orders/'+sourceB),401);
+    const me=await (await c.request(caller,'/api/me',{cookie:a})).json();
+    assert.equal(me.id,'syn-employee-a');assert.equal(me.synthetic,true);
+    await denied(await c.request(caller,'/api/orders/'+sourceB,{cookie:a}),404);
   }
 });

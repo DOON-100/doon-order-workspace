@@ -3,7 +3,8 @@
 (() => {
   const byId = (id) => document.getElementById(id);
   const ui = {
-    form: byId('session-form'), employee: byId('employee-select'), login: byId('login-button'),
+    form: byId('session-form'), username: byId('username-input'), password: byId('password-input'),
+    login: byId('login-button'), logout: byId('logout-button'),
     session: byId('session-status'), error: byId('page-error'), refresh: byId('refresh-button'),
     search: byId('search-input'), filter: byId('status-select'), list: byId('suggestions-list'),
     count: byId('suggestions-count'), suggestionTime: byId('suggestions-observed'),
@@ -15,7 +16,7 @@
   const state = {
     generation: 0, controller: new AbortController(), me: null, suggestions: [], orders: [],
     nextCursor: null, busy: false, loadingMore: false, suggestionsReady: false, ordersReady: false,
-    suggestionError: '', detailGeneration: 0,
+    suggestionError: '', detailGeneration: 0, sessionExpiresAt: 0, expiryTimer: null,
   };
   const timeFormat = new Intl.DateTimeFormat('zh-CN', {
     timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -54,6 +55,8 @@
   }
 
   function beginGeneration() {
+    clearTimeout(state.expiryTimer);
+    state.expiryTimer = null;
     state.controller.abort();
     state.controller = new AbortController();
     state.generation += 1;
@@ -66,6 +69,7 @@
   const isCurrent = (generation) => generation === state.generation;
 
   async function request(path, options = {}) {
+    const generation = state.generation;
     let response;
     try {
       response = await fetch(path, { credentials: 'same-origin', cache: 'no-store', ...options, signal: state.controller.signal });
@@ -74,8 +78,12 @@
       throw new Error('暂时无法连接验证服务，请稍后重试。');
     }
     if (!response.ok) {
-      if (response.status === 401) throw new Error('查看会话已失效，请重新选择模拟员工并进入查看。');
-      if (response.status === 403 || response.status === 404) throw new Error('该记录不存在或不在当前员工的查看范围内。');
+      if (response.status === 401 || response.status === 403) {
+        const message = path === '/api/session' ? '登录未成功，请核对本轮分配的合成账号和密码。' : '查看会话已失效或权限已变化，内容已清空，请重新登录。';
+        if (isCurrent(generation)) clearSession(message, true);
+        throw new Error(message);
+      }
+      if (response.status === 404) throw new Error('该记录不存在或不在当前员工的查看范围内。');
       if (response.status === 429) throw new Error('请求过于频繁，请稍后再试。');
       throw new Error(`验证服务暂时无法完成请求（${response.status}），请稍后重试。`);
     }
@@ -88,7 +96,10 @@
 
   function updateControls() {
     ui.login.disabled = state.busy;
-    ui.login.textContent = state.busy ? '正在读取…' : '进入查看';
+    ui.login.textContent = state.busy ? '正在处理…' : '登录查看';
+    ui.form.hidden = Boolean(state.me);
+    ui.logout.hidden = !state.me;
+    ui.logout.disabled = false;
     ui.refresh.disabled = !state.me || state.busy;
     ui.more.disabled = state.busy || state.loadingMore;
     ui.more.textContent = state.loadingMore ? '正在加载…' : '加载更多订单';
@@ -119,17 +130,28 @@
     ui.suggestedMetric.textContent = '—';
     ui.staleMetric.textContent = '—';
     ui.orderMetric.textContent = '—';
-    ui.list.replaceChildren(empty('从选择模拟员工开始', '进入后，这里会展示该员工授权范围内的建议。'));
+    ui.list.replaceChildren(empty('登录后查看跟进建议', '使用本轮分配的合成账号和密码，查看授权范围内的建议。'));
   }
 
-  function changeIdentity() {
+  function clearSession(message = '已退出登录，查看内容已清空。', error = false) {
     beginGeneration();
     state.me = null;
     state.busy = false;
+    state.sessionExpiresAt = 0;
+    ui.username.value = '';
+    ui.password.value = '';
     clearData();
     ui.session.classList.remove('is-active');
-    ui.session.textContent = '已清空之前的查看内容。点击“进入查看”读取所选员工的数据。';
+    ui.session.textContent = message;
+    if (error) { ui.error.textContent = message; ui.error.hidden = false; }
     updateControls();
+  }
+
+  function scheduleExpiry(generation, expiresAt) {
+    state.sessionExpiresAt = expiresAt;
+    state.expiryTimer = setTimeout(() => {
+      if (isCurrent(generation)) clearSession('查看会话已过期，内容已清空，请重新登录。');
+    }, Math.max(0, expiresAt - Date.now()));
   }
 
   function renderSuggestions() {
@@ -242,41 +264,40 @@
     }
   }
 
-  async function readCurrentIdentity(createSession) {
-    const selectedEmployee = ui.employee.value;
+  async function readCurrentIdentity(credentials) {
+    if (state.busy) return;
     const generation = beginGeneration();
     state.me = null;
     state.busy = true;
     clearData();
     ui.session.classList.remove('is-active');
-    ui.session.textContent = '正在确认模拟身份并读取授权数据…';
+    ui.session.textContent = '正在验证合成身份并读取授权数据…';
     ui.list.replaceChildren(empty('正在读取建议', '正在获取当前模拟员工的建议与来源。'));
     ui.orderStatus.textContent = '正在读取合成订单…';
     updateControls();
     try {
-      if (createSession) {
-        await request('/api/demo-session', {
+      if (credentials) {
+        await request('/api/session', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ employeeId: selectedEmployee }),
+          body: JSON.stringify(credentials),
         });
+        credentials = null;
       }
       if (!isCurrent(generation)) return;
       const me = await request('/api/me');
       if (!isCurrent(generation)) return;
-      if (!me || me.synthetic !== true || me.id !== selectedEmployee) throw new Error('模拟身份校验未通过，请重新进入查看。');
+      if (!me || me.synthetic !== true || !['syn-employee-a', 'syn-employee-b'].includes(me.id) || !Number.isFinite(me.sessionExpiresAt) || me.sessionExpiresAt <= Date.now()) throw new Error('合成身份校验未通过，请重新登录。');
       state.me = me;
-      ui.session.textContent = `当前查看：${text(me.name)} · ${text(me.role)} · 合成身份`;
+      ui.username.value = '';
+      ui.password.value = '';
+      scheduleExpiry(generation, me.sessionExpiresAt);
+      ui.session.textContent = `当前查看：${text(me.name)} · ${text(me.role)} · 会话到期 ${time(me.sessionExpiresAt)}`;
       ui.session.classList.add('is-active');
+      updateControls();
       await Promise.all([loadSuggestions(generation), loadOrders(generation)]);
     } catch (error) {
       if (!isCurrent(generation) || error.name === 'AbortError') return;
-      state.me = null;
-      ui.error.textContent = error.message;
-      ui.error.hidden = false;
-      ui.session.textContent = '身份未就绪，请重新进入查看。';
-      ui.session.classList.remove('is-active');
-      ui.list.replaceChildren(empty('暂时无法读取建议', '确认模拟身份后重试。', true));
-      ui.orderStatus.textContent = '模拟身份未就绪';
+      clearSession(error.message, true);
     } finally {
       if (isCurrent(generation)) {
         state.busy = false;
@@ -314,9 +335,27 @@
     }
   }
 
-  ui.employee.addEventListener('change', changeIdentity);
-  ui.form.addEventListener('submit', (event) => { event.preventDefault(); readCurrentIdentity(true); });
-  ui.refresh.addEventListener('click', () => { if (state.me && !state.busy) readCurrentIdentity(false); });
+  ui.form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (state.busy) return;
+    const credentials = {username: ui.username.value.trim(), password: ui.password.value};
+    ui.password.value = '';
+    readCurrentIdentity(credentials);
+  });
+  ui.logout.addEventListener('click', async () => {
+    clearSession();
+    const generation = state.generation;
+    state.busy = true;
+    updateControls();
+    try { await request('/api/logout', {method: 'POST'}); }
+    catch (error) {
+      if (isCurrent(generation) && error.name !== 'AbortError') {
+        ui.error.textContent = '页面内容已清空，但退出请求未确认成功。请关闭页面或重新登录。';
+        ui.error.hidden = false;
+      }
+    } finally { if (isCurrent(generation)) { state.busy = false; updateControls(); } }
+  });
+  ui.refresh.addEventListener('click', () => { if (state.me && !state.busy) readCurrentIdentity(); });
   ui.search.addEventListener('input', renderSuggestions);
   ui.filter.addEventListener('change', renderSuggestions);
   ui.more.addEventListener('click', async () => {
@@ -329,4 +368,8 @@
   });
   ui.closeDialog.addEventListener('click', () => ui.dialog.close());
   ui.dialog.addEventListener('close', () => { state.detailGeneration += 1; ui.detail.replaceChildren(); });
+  document.addEventListener('visibilitychange', () => {
+    if (state.sessionExpiresAt && Date.now() >= state.sessionExpiresAt) clearSession('查看会话已过期，内容已清空，请重新登录。');
+  });
+  window.addEventListener('pagehide', () => clearSession('页面已离开，查看内容已清空，请重新登录。'));
 })();

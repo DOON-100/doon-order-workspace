@@ -17,16 +17,17 @@
     <main class="page-width">
       <section class="intro" aria-labelledby="page-title">
         <div><p class="eyebrow">订单协同 / AGENT 建议</p><h1 id="page-title">每条跟进建议，都有依据。</h1><p class="intro-copy">查看授权范围内的合成订单与跟进建议，核对来源和版本。</p></div>
-        <div class="scope-note"><strong>当前验证范围</strong><span>模拟员工身份 · 订单只读查询 · 建议展示</span></div>
+        <div class="scope-note"><strong>当前验证范围</strong><span>合成凭据登录 · 订单只读查询 · 建议展示</span></div>
       </section>
       <section class="session-panel" aria-labelledby="identity-title">
-        <div class="session-description"><h2 id="identity-title">选择模拟员工</h2><p>两个身份用于验证数据范围。切换后需重新进入查看。</p></div>
+        <div class="session-description"><h2 id="identity-title">合成员工登录</h2><p>使用本轮验证分配的独立账号和密码。登录后仅显示授权范围内的记录。</p></div>
         <form id="session-form" class="session-form">
-          <label class="sr-only" for="employee-select">模拟员工身份</label>
-          <select id="employee-select" name="employeeId"><option value="syn-employee-a">模拟员工 A</option><option value="syn-employee-b">模拟员工 B</option></select>
-          <button id="login-button" class="button button-primary" type="submit">进入查看</button>
+          <label class="credential-field" for="username-input"><span>合成账号</span><input id="username-input" name="username" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="128" required placeholder="本轮分配的账号"></label>
+          <label class="credential-field" for="password-input"><span>合成密码</span><input id="password-input" name="password" type="password" autocomplete="off" maxlength="256" required placeholder="本轮分配的密码"></label>
+          <button id="login-button" class="button button-primary" type="submit">登录查看</button>
         </form>
-        <div id="session-status" class="session-status" role="status" aria-live="polite">尚未选择查看身份</div>
+        <button id="logout-button" class="button button-secondary" type="button" hidden>退出登录</button>
+        <div id="session-status" class="session-status" role="status" aria-live="polite">尚未登录。合成凭据由本轮验证的本机私有文件提供。</div>
       </section>
       <div id="page-error" class="alert" role="alert" hidden></div>
       <section class="metrics" aria-label="当前员工可见数据概况">
@@ -41,7 +42,7 @@
           <label class="status-filter" for="status-select"><span>状态</span><select id="status-select"><option value="all">全部建议</option><option value="suggested">可查看</option><option value="stale">来源已更新</option></select></label>
           <span id="suggestions-count" class="result-count">仅搜索已读取的建议</span>
         </div>
-        <div id="suggestions-list" class="suggestions-list" aria-live="polite" aria-busy="false"><div class="empty-state"><span class="empty-symbol" aria-hidden="true">↗</span><h3>从选择模拟员工开始</h3><p>进入后，这里会展示该员工授权范围内的建议。</p></div></div>
+        <div id="suggestions-list" class="suggestions-list" aria-live="polite" aria-busy="false"><div class="empty-state"><span class="empty-symbol" aria-hidden="true">↗</span><h3>登录后查看跟进建议</h3><p>使用本轮分配的合成账号和密码，查看授权范围内的建议。</p></div></div>
       </section>
       <section class="workspace-section orders-section" aria-labelledby="orders-title">
         <div class="section-heading"><div><p class="eyebrow">SOURCE RECORDS</p><h2 id="orders-title">合成订单</h2><p id="orders-observed" class="observed">建议依据来自这些只读记录</p></div><span class="section-badge">来源核对</span></div>

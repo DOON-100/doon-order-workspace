@@ -1,7 +1,11 @@
+import {writeFile} from 'node:fs/promises';
+import {randomUUID} from 'node:crypto';
+import path from 'node:path';
 import {createSyntheticState} from './fixtures.mjs';
 import {createReadAdapter} from './policy.mjs';
-import {createSandbox,openSuggestionStore,assertIsolatedEnvironment} from './sandbox.mjs';
-import {startReadonlyServer} from './server.mjs';
+import {createSandbox,openSuggestionStore,assertIsolatedEnvironment,validateSandbox} from './sandbox.mjs';
+import {startReadonlyServer,syntheticSession} from './server.mjs';
+import {createSyntheticIdentity} from './auth.mjs';
 import {generateSyntheticSuggestions} from './generate.mjs';
 
 assertIsolatedEnvironment();
@@ -15,7 +19,8 @@ for(let index=0;index<args.length;index++) {
 }
 const directory=resume||await createSandbox();
 const adapter=await createReadAdapter(createSyntheticState());
-const reader=await openSuggestionStore(directory),server=await startReadonlyServer({adapter,store:reader});
+const {identity,credentials}=await createSyntheticIdentity({adapter});
+const reader=await openSuggestionStore(directory),server=await startReadonlyServer({adapter,store:reader,identity});
 let stopping=false;
 async function stop(){if(stopping)return;stopping=true;await server.close();reader.close();}
 try {
@@ -23,9 +28,21 @@ try {
   // A nonempty sandbox may be an interrupted partial run. Recompute both fixed
   // synthetic employees; the suggestion ledger preserves existing rows unchanged.
   const writer=await openSuggestionStore(directory,{readOnly:false});
-  try {for(const actorId of ['syn-employee-a','syn-employee-b'])runs.push(await generateSyntheticSuggestions({origin:server.origin,adapter,store:writer,actorId}));}
+  try {
+    for(const actorId of ['syn-employee-a','syn-employee-b']) {
+      const {username,password}=credentials.find(item=>item.actorId===actorId);
+      const sessionCookie=await syntheticSession(server.origin,{username,password});
+      runs.push(await generateSyntheticSuggestions({origin:server.origin,adapter,store:writer,sessionCookie,resolveSession:server.resolveSession}));
+    }
+  }
   finally{writer.close();}
-  console.log('PREVIEW_READY '+JSON.stringify({url:server.origin,directory,suggestions:reader.count(),resumed:Boolean(resume),runs,synthetic:true}));
+  let credentialsFile=null;
+  if(!args.includes('--prepare-only')) {
+    const root=await validateSandbox(directory);
+    credentialsFile=path.join(root,`credentials-${randomUUID()}.json`);
+    await writeFile(credentialsFile,JSON.stringify({application:'doon-mastra-p1',syntheticOnly:true,credentials:credentials.filter(item=>['syn-employee-a','syn-employee-b'].includes(item.actorId))},null,2)+'\n',{encoding:'utf8',flag:'wx',mode:0o600});
+  }
+  console.log('PREVIEW_READY '+JSON.stringify({url:server.origin,directory,credentialsFile,suggestions:reader.count(),resumed:Boolean(resume),runs,synthetic:true}));
   if(args.includes('--prepare-only'))await stop();
   else for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{stop().catch(error=>{console.error(error.message);process.exitCode=1;});});
 }catch(error){await stop();throw error;}
