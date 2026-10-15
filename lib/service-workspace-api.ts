@@ -3,6 +3,7 @@ import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type Or
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
 import {serviceAssignmentData,validateServiceAssignment} from './service-workspace-assignment';
+import {paymentTermsReadOnly} from './payment-terms';
 import {
  assignedServiceCustomer,canReadServiceRecord,canWriteServiceWorkspace,publicServiceAttachment,publicServiceReceipt,publicServiceRecord,
  serviceCustomerAccounts,serviceDetailsSchemas,serviceOrderCustomerKeys,serviceReceivedCents,serviceReceiptReverseSchema,serviceReceiptSchema,serviceSaveSchema,serviceTotalsByCurrency,
@@ -106,6 +107,7 @@ export async function serviceWorkspaceGet(action:string,req:Request,s:State,m:Me
 
 export async function serviceWorkspacePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['service-save','service-receipt','service-receipt-reverse','service-attachment'].includes(action))return null;
+ if(paymentTermsReadOnly(s,m))throw new AppError('当前账号仅有取数与总览权限，不能修改客服记录、登记到账、冲销或上传附件。',403);
  if(!canWriteServiceWorkspace(s,m))throw new AppError('没有客服业务维护权限；只读或全订单查询权限不能用于修改、到账或核销。',403);
  if(action==='service-save'){
   const input=parse(serviceSaveSchema,await req.json()),before=input.id?editable(s,m,input.id):null;

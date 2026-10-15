@@ -3,6 +3,7 @@ import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type S
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {matchesCustomerResponsibility} from './customer-responsibility';
 import {historicalCustomerIdentities} from './customer-identities';
+import {paymentTermsReadOnly} from './payment-terms';
 
 export const serviceTypes=['customer_profile','followup','project','sample','shipment','receivable'] as const;
 export const serviceCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
@@ -62,7 +63,7 @@ export function serviceOrderCustomerKeys(s:State,account:CustomerAccount):string
   [other.customer,other.customerCode,...claims(other.id),...historicalCustomerIdentities(s,other.id)].some(value=>!!nameKey(value)&&nameKey(value)===nameKey(candidate))));
 }
 export function canWriteServiceWorkspace(s:State,m:Member){
- if(!m.active)return false;
+ if(!m.active||paymentTermsReadOnly(s,m))return false;
  if(m.role==='admin')return true;
  // Some customer-service accounts historically carry the PMC role. That role
  // alone grants nothing here: they still need an exact sales/service assignment.

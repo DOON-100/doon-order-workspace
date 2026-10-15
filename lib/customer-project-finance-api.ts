@@ -4,7 +4,8 @@ import {AppError,commit,json} from './store';
 import {sha} from './workbooks';
 import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-workspace';
 import {assertProjectNotTrashed,projectAccess,projectKey} from './customer-projects';
-import {canVerifyProjectFinance,paymentGate,pfDay,pfId,pfMoney,pfPositive,pfText,pfToken,projectAllocationNet,projectChargeAmounts,projectChargePaid,projectCreditSourceAvailable,projectCurrencies,projectFinanceTotals,projectReceiptAvailable,projectReceiptRefunded,projectReceiptReversed,type ProjectCharge,type ProjectReceipt} from './customer-project-finance';
+import {canReadProjectFinance,canVerifyProjectFinance,paymentGate,pfDay,pfId,pfMoney,pfPositive,pfText,pfToken,projectAllocationNet,projectChargeAmounts,projectChargePaid,projectCreditSourceAvailable,projectCurrencies,projectFinanceTotals,projectReceiptAvailable,projectReceiptRefunded,projectReceiptReversed,type ProjectCharge,type ProjectReceipt} from './customer-project-finance';
+import {paymentTermsReadOnly} from './payment-terms';
 
 const edit={id:pfId.optional(),version:z.number().int().positive().optional()},token={token:pfToken};
 const defaulted=<T extends z.ZodTypeAny>(schema:T,value:z.input<T>)=>z.preprocess(v=>v===''||v===undefined?value:v,schema);
@@ -47,7 +48,7 @@ const financialKinds=new Set(['project_charge','project_payment_requirement','pr
 function accountAccess(s:State,m:Member,customerId:string){
  const c=all(s,'customer_account').find(r=>r.id===customerId),verify=canVerifyProjectFinance(s,m,customerId);
  const commercial=!!c&&m.active&&['sales','clerk','pmc'].includes(m.role)&&assignedServiceCustomer(s,m,c as any)&&projectAccess(s,m,customerId).read;
- return {read:verify||commercial||(m.active&&m.role==='admin'&&!!c),write:verify||(commercial&&projectAccess(s,m,customerId).write),verify,customer:c};
+ return {read:canReadProjectFinance(s,m,customerId)||commercial||(m.active&&m.role==='admin'&&!!c),write:!paymentTermsReadOnly(s,m)&&(verify||(commercial&&projectAccess(s,m,customerId).write)),verify,customer:c};
 }
 function access(s:State,m:Member,customerId:string,mode:'read'|'write'|'verify'='read'){
  const result=accountAccess(s,m,customerId);if(!result[mode])throw new AppError(mode==='verify'?'只有明确获授权的财务或核实人可以确认收款及财务调整。':'没有该客户项目财务的访问权限。',403);return result;
@@ -76,6 +77,9 @@ function assertFinancialProjectsWritable(s:State,record:Entity,seen=new Set<stri
  for(const line of record.lines||[])assertFinancialProjectsWritable(s,line,seen);
 }
 function current(row:Entity,version:number|undefined){if((row.version||1)!==version)throw new AppError('记录已更新，请刷新后重试。',409);}
+function assertDocumentNotIssued(s:State,document:Entity){if(all(s,'ar_document_issue').some(issue=>issue.sourceKind===document.kind&&issue.sourceId===document.id))throw new AppError('该 PI 已签发生效并形成应收，原合同与版本已锁定；金额或条款变更须另行记录调整，不能覆盖原单。',409);}
+function issuedCharge(s:State,charge:Entity){return !!charge.sourceDocumentId&&all(s,'ar_document_issue').some(issue=>issue.sourceId===charge.sourceDocumentId&&issue.sourceKind==='project_billing_document'&&Array.isArray(issue.chargeIds)&&issue.chargeIds.includes(charge.id));}
+const chargePlanContract=(plan:any[])=>plan.map(p=>({title:p.title,amountCents:p.amountCents,dueDate:p.dueDate,beforeOrder:p.beforeOrder===true}));
 function verifyChargePlan(record:Entity){
  const plan=record.plan||[];
  if(!record.title||record.amountCents<=0||record.prepayCents>record.amountCents)throw new AppError('核实收费须有费用名称及有效总额，预收要求不能超过收费总额。');
@@ -129,9 +133,11 @@ export async function customerProjectFinanceGet(action:string,req:Request,s:Stat
 export async function customerProjectFinancePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!Object.prototype.hasOwnProperty.call(projectFinanceSchemas,action))return null;
  if(!m.active)throw new AppError('账号已停用。',403);
+ if(paymentTermsReadOnly(s,m))throw new AppError('当前账号仅有取数与总览权限，不能修改项目财务、核实到账、审核或调整账款。',403);
  const raw=await req.json(),schema=projectFinanceSchemas[action as FinanceAction],parsed=schema.safeParse(raw);
  if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(x=>`${x.path.join('.')}：${x.message}`).join('；'));
  const input=parsed.data as any,fingerprint=await sha(JSON.stringify({action,input})),requestId='project_finance_request_'+input.token;
+ if(input.id&&['project-document-save','project-document-revise','project-document-confirm'].includes(action))assertDocumentNotIssued(s,row(s,m,'project_billing_document',input.id,'write'));
  const repeated=all(s,'project_finance_request').find(r=>r.id===requestId);
  if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);if(repeated.customerId){const verifyActions=['project-charge-confirm','project-payment-requirement','project-receipt-verify','project-receipt-reverse','project-allocation','project-allocation-release','project-adjustment','project-credit-apply','project-refund-execute','project-refund-cancel'];access(s,m,repeated.customerId,(verifyActions.includes(action)||(action==='project-finance-entry-save'&&repeated.result?.record?.kind!=='project_finance_entry')||(action==='project-charge-save'&&repeated.result?.record?.status==='confirmed'))?'verify':'write');}else if(m.role!=='admin')throw new AppError('需要管理员权限。',403);if(repeated.result?.record){assertFinancialProjectsWritable(s,repeated.result.record);const latest=s.records.find(r=>r.id===repeated.result.record.id);if(latest)assertFinancialProjectsWritable(s,latest);}return json({...repeated.result,...(repeated.result?.record?.customerId?{record:financialDto(s,m,repeated.result.record)}:{}),idempotent:true});}
  const meta=()=>({createdAt:now(),createdBy:m.name,createdById:m.id});
@@ -215,7 +221,11 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   const before=input.id?row(s,m,'project_charge',input.id,'write'):null;
   if(before){current(before,input.version);if(before.projectId!==input.projectId||before.roundId!==input.roundId||before.customerId!==customerId)throw new AppError('收费归属不能改换。');}
   const plan=input.plan?input.plan.map((p:any)=>({title:p.title,amountCents:p.amount,dueDate:p.dueDate,beforeOrder:p.beforeOrder})):[...(input.prepayAmount?[{title:'Prepayment before order',amountCents:input.prepayAmount,dueDate:input.dueDate,beforeOrder:true}]:[]),...(input.amount>input.prepayAmount?[{title:'Balance payment',amountCents:input.amount-input.prepayAmount,dueDate:input.dueDate,beforeOrder:false}]:[])];
-  const record:ProjectCharge={id:before?.id||newId('project_charge'),kind:'project_charge',customerId,projectId:input.projectId,roundId:input.roundId,title:input.title,category:input.category,currency:input.currency,amountCents:input.amount,prepayCents:input.prepayAmount,dueDate:input.dueDate,note:input.note,status:before?.status||'draft',version:(before?.version||0)+1,plan,...(before?{createdAt:before.createdAt,createdBy:before.createdBy,createdById:before.createdById}:meta()),updatedAt:now(),updatedBy:m.name};
+  const record:ProjectCharge={...before,id:before?.id||newId('project_charge'),kind:'project_charge',customerId,projectId:input.projectId,roundId:input.roundId,title:input.title,category:input.category,currency:input.currency,amountCents:input.amount,prepayCents:input.prepayAmount,dueDate:input.dueDate,note:input.note,status:before?.status||'draft',version:(before?.version||0)+1,plan,...(before?{createdAt:before.createdAt,createdBy:before.createdBy,createdById:before.createdById}:meta()),updatedAt:now(),updatedBy:m.name};
+  if(before&&issuedCharge(s,before)){
+   if(['title','category','currency','amountCents','prepayCents','dueDate'].some(key=>before[key]!==record[key])||JSON.stringify(chargePlanContract(before.plan||[]))!==JSON.stringify(chargePlanContract(record.plan)))throw new AppError('该收费来自已签发 PI，原金额、币种、条款和分期已锁定；请使用独立账务调整记录，不能改写原收费。',409);
+   record.plan=structuredClone(before.plan);
+  }
   if(before?.status==='confirmed'){
    verifyChargePlan(record);
    const financialChange=before.amountCents!==record.amountCents||before.prepayCents!==record.prepayCents||before.currency!==record.currency||JSON.stringify(before.plan)!==JSON.stringify(record.plan);

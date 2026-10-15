@@ -9,6 +9,7 @@ import {serviceOrderCustomerKeys} from './service-workspace';
 import {customerResponsibilityFields,customerResponsibilityListsChanged,matchesCustomerResponsibility,mergeCustomerResponsibilities,type CustomerResponsibilityInput} from './customer-responsibility';
 import {matchesOrderIdentity,orderIdentityKey} from './order-identity';
 import {customerDirectorySchema} from './customer-directory';
+import {activePaymentTerm,paymentTermsReadOnly} from './payment-terms';
 import {conflictingCustomerIdentity,customerIdentityChanges} from './customer-identities';
 import {customerWorkflowMasterInputSchema,prepareCustomerWorkflowMasterChanges} from './customer-workflow-api';
 import {customerMasterCapabilities,customerMasterPolicyVersion,scopedMasterResponsibilities} from './customer-master-policy';
@@ -65,6 +66,7 @@ function orderFor(s:State,id:string){const o=all(s,'order').find(v=>v.id===id) a
 function customerRows(bytes:ArrayBuffer){const book=openWorkbook(bytes),sheetName=book.SheetNames[0];let header=1;for(let i=1;i<=30;i++){const h=sheetRows(book,sheetName,i).headers.map(clean);if(h.some(v=>['客户','客户名称'].includes(v))&&h.some(v=>['业务员','业务负责人','业务'].includes(v))){header=i;break;}}const {headers,body}=sheetRows(book,sheetName,header);const find=(names:string[])=>headers.findIndex(h=>names.includes(clean(h))),indexes={customer:find(['客户','客户名称']),customerCode:find(['客户编码','客户代码']),salesName:find(['业务员','业务负责人','业务']),serviceName:find(['客服','客服负责人']),pmcName:find(['PMC','PMC跟进人']),notes:find(['备注','说明']),expectedVersion:find(['当前版本','版本'])};for(const k of ['customer','salesName','serviceName','pmcName'] as const)if(indexes[k]<0)throw new AppError(`客户清单缺少“${{customer:'客户',salesName:'业务员',serviceName:'客服',pmcName:'PMC'}[k]}”列。`);return body.map(r=>({customer:clean(r.values[indexes.customer]),customerCode:indexes.customerCode<0?undefined:clean(r.values[indexes.customerCode]),salesName:clean(r.values[indexes.salesName]),serviceName:clean(r.values[indexes.serviceName]),pmcName:clean(r.values[indexes.pmcName]),notes:indexes.notes<0?undefined:clean(r.values[indexes.notes]),expectedVersion:indexes.expectedVersion<0?undefined:Number(clean(r.values[indexes.expectedVersion]))})).filter(r=>r.customer);}
 
 export async function collaborationGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ if(action==='customer-master-capabilities'&&paymentTermsReadOnly(s,m))return json({policyVersion:customerMasterPolicyVersion,create:false,master:false,directory:false,responsibility:false,quoteMembers:false,activation:false,customers:[]});
  if(action==='customer-master-capabilities')return json({policyVersion:customerMasterPolicyVersion,...customerMasterCapabilities(s,m),customers:(all(s,'customer_account') as CustomerAccount[]).flatMap(c=>{const rights=customerMasterCapabilities(s,m,c);return rights.master||rights.directory?[{id:c.id,...rights}]:[];})});
  if(action==='factory-order-table-export'){
   if(!roles(m))throw new AppError('无权导出内部订单。',403);
@@ -129,6 +131,7 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   }updates.push({...job,status:'已提交',submittedAt:now()});await commit(s.revision,updates);return json({ok:true,count:job.rows.length});
  }
  if(action==='customer-import'){
+  if(paymentTermsReadOnly(s,m))throw new AppError('当前账号仅有取数与总览权限，不能导入或修改客户责任清单。',403);
   if(!m.active||!['admin','pmc','sales','clerk'].includes(m.role))throw new AppError('没有客户清单维护权限。',403);const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的 Excel 客户清单。');
   const rows=customerRows(await file.arrayBuffer()),seen=new Set<string>(),updates:Entity[]=[],stagedRecords=new Map(s.records.map(row=>[row.id,row]));
   if(!rows.length)throw new AppError('表格中没有可导入的客户。');
@@ -152,6 +155,7 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   if(!manageCustomers(m))throw new AppError('仅管理员或 PMC 可上传金蝶模板。',403);const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024||!/\.(xlsx|xls)$/i.test(file.name))throw new AppError('请上传不超过 10 MB 的金蝶 Excel 模板。');const bytes=await file.arrayBuffer(),book=openWorkbook(bytes),sheet=book.SheetNames[0],header=detectHeader(book,sheet),headers=sheetRows(book,sheet,header).headers.filter(Boolean);const item={id:newId('template'),kind:'collaboration_template',templateType:'kingdee',filename:safe(file.name),fileKey:newId('kingdee_template'),sheet,header,headers,actorId:m.id,actor:m.name,createdAt:now()};await bucket().put(item.fileKey,bytes);await commit(s.revision,[item,audit(m,item,null,'上传金蝶订单模板')]);return json({ok:true,item});
  }
  if(action==='customer-save'){
+  if(paymentTermsReadOnly(s,m))throw new AppError('当前账号仅有取数与总览权限，不能修改客户责任清单。',403);
   if(!m.active||!['admin','pmc','sales','clerk'].includes(m.role))throw new AppError('没有客户主档维护权限。',403);
   const parsed=z.object({id:z.string().optional(),expectedVersion:z.number().int().positive().optional(),createOnly:z.boolean().optional(),customer:z.string().trim().min(1).max(120),customerCode:z.string().trim().max(80).default(''),salesName:z.string().trim().max(80).default(''),serviceName:z.string().trim().max(80).default(''),pmcName:z.string().trim().max(80).default(''),...customerResponsibilityFields,directory:customerDirectorySchema.optional(),workflow:customerWorkflowMasterInputSchema.optional(),notes:z.string().max(1000).default(''),active:z.boolean().default(true)}).safeParse(await req.json());
   if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(issue=>`${issue.path.join('.')||'客户资料'}：${issue.message}`).join('；'));
@@ -159,6 +163,8 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   const before=(input.id?all(s,'customer_account').find(v=>v.id===input.id):customerAccountByName(s,input.customer)) as CustomerAccount|undefined;
   if(input.createOnly&&before)throw new AppError('客户名称已存在，本次仅新增，不覆盖已有客户。',409);
   if(input.id&&!before)throw new AppError('客户记录不存在。');
+  const selectedPaymentTerm=input.directory?.defaultPaymentTermId;
+  if(selectedPaymentTerm&&selectedPaymentTerm!==before?.directory?.defaultPaymentTermId&&!activePaymentTerm(s,selectedPaymentTerm))throw new AppError('客户只能选择公司已授权且仍启用的付款条件版本。',409);
   if(before&&input.directory!==undefined&&input.expectedVersion===undefined)throw new AppError('维护客户目录须提供当前资料版本；请刷新客户清单后重新保存。',409);
   if(before&&input.expectedVersion!==undefined&&input.expectedVersion!==before.version)throw new AppError('客户资料或责任已由其他管理员修改，本次未覆盖；请刷新后重新确认。',409);
   if(conflictingCustomerIdentity(s,before?.id,input.customer,input.customerCode))throw new AppError('客户名称或编号与其他客户的当前/历史身份冲突，请先核实客户归属。',409);

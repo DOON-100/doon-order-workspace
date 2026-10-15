@@ -33,6 +33,8 @@ import {canReadServiceRecord} from '@/lib/service-workspace';
 import {collaborationAssignments} from '@/lib/collaboration-api';
 import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/lib/customer-quotes';
 import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from '@/lib/business-team-scope';
+import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
+import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -41,6 +43,7 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('ar_')||v.kind.startsWith('payment_term'))))return false;
  // Engineering has an independent, scoped history endpoint. Never expose its
  // source emails or snapshots through the broad production audit feed.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('engineering_')))return false;
@@ -106,6 +109,8 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
+ const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
  const response=await workspaceGet(req,ctx,s,m);
  return await scopeBusinessTeamResponse(action,req,s,m,response);
@@ -114,6 +119,8 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
+ const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
  const handoffBusiness=await handoffBusinessPost(action,req,s,m);if(handoffBusiness)return handoffBusiness;

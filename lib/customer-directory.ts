@@ -22,6 +22,7 @@ export const customerDirectorySchema=z.object({
  focus:z.boolean().nullable().optional(),
  registeredOn:directoryDate.optional(),
  handoffOn:directoryDate.optional(),
+ defaultPaymentTermId:z.string().trim().max(160).optional(),
 }).strict();
 
 export type CustomerDirectory=z.infer<typeof customerDirectorySchema>;

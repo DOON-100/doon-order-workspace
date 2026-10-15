@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type Entity,type Member,type State} from './domain';
 import {serviceMoneyCents} from './service-workspace';
+import {paymentTermsReadOnly} from './payment-terms';
 
 export const projectCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
 export type ProjectCurrency=typeof projectCurrencies[number];
@@ -15,7 +16,7 @@ export const pfDay=z.string().trim().default('').superRefine((v,c)=>{if(v)try{if
 export const pfMoney=z.union([z.string(),z.number()]).transform((v,c)=>{try{return serviceMoneyCents(v);}catch(e){c.addIssue({code:z.ZodIssueCode.custom,message:(e as Error).message});return z.NEVER;}});
 export const pfPositive=pfMoney.refine(v=>v>0,'金额须大于零');
 export const pfToken=z.string().uuid();
-export function canVerifyProjectFinance(s:State,m:Member,customerId:string){
+export function canReadProjectFinance(s:State,m:Member,customerId:string){
  const c=all(s,'customer_account').find(r=>r.id===customerId);
  if(!m.active||!c?.active)return false;
  if(m.role==='admin')return true;
@@ -25,6 +26,7 @@ export function canVerifyProjectFinance(s:State,m:Member,customerId:string){
  if(m.role!=='finance')return false;
  return m.customers.some(value=>{const key=clean(value).toLowerCase();if(key===clean(c.id).toLowerCase())return true;if(!key)return false;const matches=all(s,'customer_account').filter(a=>a.active&&[a.customerCode,a.customer].some(v=>clean(v).toLowerCase()===key));return matches.length===1&&matches[0].id===c.id;});
 }
+export function canVerifyProjectFinance(s:State,m:Member,customerId:string){return !paymentTermsReadOnly(s,m)&&canReadProjectFinance(s,m,customerId);}
 export const projectReceiptReversed=(s:State,id:string)=>all(s,'project_receipt_reversal').some(r=>r.receiptId===id);
 export function projectReceiptRefunded(s:State,id:string){return all(s,'project_refund').filter(r=>r.receiptId===id&&r.status==='executed').reduce((n,r)=>n+r.amountCents,0);}
 export function projectAllocationNet(s:State,allocation:Entity){

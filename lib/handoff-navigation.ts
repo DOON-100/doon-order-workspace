@@ -29,6 +29,7 @@ export const directWorkspaceNavigation = [
  {id:'engineering-drawings',label:'工程画图部门',icon:'production'},
  {id:'factory-orders',label:'中英内部订单',icon:'languages'},
  {id:'customers',label:'客户责任清单',icon:'customer'},
+ {id:'ar-workspace',label:'应收账款工作空间',icon:'finance'},
  {id:'pmc-handoff',label:'PMC 交接工作台',icon:'people'},
  {id:'pmc',label:'PMC 排期总表',icon:'production'},
  {id:'finished-outsourcing',label:'成品外发跟进总表',icon:'factory'},
@@ -71,7 +72,7 @@ export const departmentTabs:Record<string,{view:string;label:string;phase:string
  'production-orders':[{view:'production-orders',label:'生产单',phase:'资料核对'},{view:'factory-orders',label:'中英生产单',phase:'客服制单'},{view:'pmc-handoff',label:'PMC 接收',phase:'移交与接收'},{view:'receiving',label:'采购与收货',phase:'备料'},{view:'pmc',label:'排期与进度',phase:'排产'},{view:'department',label:'部门工序',phase:'生产执行'},{view:'finished-outsourcing',label:'成品外发',phase:'外发执行'},{view:'losses',label:'损耗记录',phase:'工序核对'},{view:'dashboard',label:'欠数与异常',phase:'异常跟进'},{view:'orders',label:'生产总表',phase:'全部明细'},{view:'mine',label:'我的生产事项',phase:'负责明细'},{view:'mes',label:'MES 核对',phase:'工序核对'},{view:'completed',label:'完工档案',phase:'完成归档'}],
  'production-shipments':[{view:'production-shipments',label:'生产出货单',phase:'生产完成 → 出库'}],
  'logistics-waybills':[{view:'logistics-waybills',label:'物流与出货',phase:'制单 → 交付'},{view:'shipment-followups',label:'发运与签收',phase:'物流跟进'}],
- 'finance-documents':[{view:'finance-documents',label:'财务资料',phase:'凭证归档'},{view:'project-finance',label:'项目结算',phase:'应收 → 到账 → 核销'},{view:'service-receivables',label:'订单应收',phase:'到账与核销'},{view:'reports',label:'业务报表',phase:'汇总与核对'}],
+ 'finance-documents':[{view:'ar-workspace',label:'应收账款',phase:'组别 → 回款 → 贡献'},{view:'finance-documents',label:'财务资料',phase:'凭证归档'},{view:'project-finance',label:'项目结算',phase:'应收 → 到账 → 核销'},{view:'service-receivables',label:'订单应收',phase:'到账与核销'},{view:'reports',label:'业务报表',phase:'汇总与核对'}],
  documents:[{view:'documents',label:'客户与内部单据',phase:'资料 → 草稿 → 核对'},{view:'customer-quotes',label:'销售报价',phase:'工程报价 → 销售核对'},{view:'customer-price-archive',label:'历史价格档案',phase:'报价依据'}],
  settings:[{view:'settings',label:'系统设置',phase:'规则与配置'},{view:'members',label:'成员与权限',phase:'账号管理'},{view:'maintenance',label:'运行与备份',phase:'系统维护'}],
 };
