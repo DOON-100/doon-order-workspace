@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {assignedCustomerQuoteAccount,canUseCustomerQuotes,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,customerServiceQuoteReader,customerQuoteServiceReadOnly,canMaintainCustomerQuoteAccount} from './customer-quote-access';
+import {assignedCustomerQuoteAccount,canUseCustomerQuotes,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,customerServiceQuoteReader,customerQuoteServiceLimited,canMaintainCustomerQuoteAccount} from './customer-quote-access';
 import type {CustomerQuoteTemplate} from './customer-quote-template';
 import type {QuoteTemplateBinding} from './customer-quote-template-api';
 export {canCreateCustomerQuote,canUseCustomerQuotes,eligibleCustomerQuoteAccounts} from './customer-quote-access';
@@ -141,7 +141,7 @@ export function customerQuoteSentHistory(s:State,m:Member,q:CustomerQuote){
 
 // Explicit response allowlist. Bucket keys and full historical snapshots remain server-side.
 export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
- const account=quoteAccount(s,q.customerAccountId),serviceOnly=!!account&&customerQuoteServiceReadOnly(s,m,account);
+ const account=quoteAccount(s,q.customerAccountId),serviceOnly=!!account&&customerQuoteServiceLimited(s,m,account);
  const internal=canSeeCustomerQuoteInternal(s,m,account),administrator=isCustomerQuoteAdministrator(m,s);
  const archiveWritable=q.status==='confirmed'&&mayChangeQuoteCustomer(s,m,q)&&!!customerQuoteVersion(s,m,q.id,q.version);
  const history=(all(s,'customer_quote_revision') as CustomerQuoteRevision[]).filter(v=>v.quoteId===q.id&&v.snapshot&&canReadCustomerQuote(s,m,v.snapshot)&&(administrator||v.snapshot.customerAccountId===q.customerAccountId)&&!!customerQuoteVersion(s,m,q.id,v.version)).sort((a,b)=>b.version-a.version).map(v=>({
@@ -153,7 +153,7 @@ export function publicCustomerQuote(s:State,m:Member,q:CustomerQuote){
   brand:q.brand||'',businessType:q.businessType||'frame',quoteMode:q.quoteMode||'order',pricingBasis:q.pricingBasis||'row_item',currencyReviewed:q.currencyReviewed??false,
   ...(q.templateBinding?{templateBinding:q.templateBinding}:{}),
   templateOutputs:all(s,'customer_quote_template_output').filter(output=>output.quoteId===q.id&&output.quoteVersion===q.version&&output.customerAccountId===q.customerAccountId&&output.templateId===q.templateBinding?.id).map(output=>({id:output.id,filename:output.filename,sourceHash:output.sourceHash,uploaded:output.uploaded,createdAt:output.createdAt})),
-  ...(internal?{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[]}:{}),canSeeInternal:internal,customerCharges:q.customerCharges||[],
+  ...(internal?{internalNotesZh:q.internalNotesZh||'',exchangeRateCnyPerUsd:q.exchangeRateCnyPerUsd??null,internalCosts:q.internalCosts||[]}:{}),canSeeInternal:internal,canSeeReviewDetails:!serviceOnly,customerCharges:q.customerCharges||[],
   lines:q.lines.map(line=>{const item=publicCustomerQuoteLine(line,q);if(serviceOnly)delete item.sourceFormula;return item;}),terms:serviceOnly?q.terms.map(({reviewNote,...term})=>term):q.terms,reviewNotes:serviceOnly?[]:q.reviewNotes,createdAt:q.createdAt,createdBy:q.createdBy,updatedAt:q.updatedAt,updatedBy:q.updatedBy,
   confirmedAt:q.confirmedAt||'',confirmedBy:q.confirmedBy||'',sourceFilename:q.sourceFilename||'',sourceHash:q.sourceHash||'',hasSource:administrator&&!!q.sourceFileKey,canEdit:canEditCustomerQuote(s,m,q),canConfirm:q.status==='draft'&&administrator,canRevise:q.status==='confirmed'&&mayChangeQuoteCustomer(s,m,q),history,
   media:customerQuoteMedia(s,m,q).map(publicCustomerQuoteMedia),sentHistory:customerQuoteSentHistory(s,m,q),canRegisterSent:archiveWritable,canSupplementArchive:archiveWritable,

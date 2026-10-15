@@ -125,4 +125,5 @@ await import('./payment-terms.mjs');
 await import('./ar-workspace-cases.mjs');
 await import('./ar-record-guards.mjs');
 await import('./planning-control.mjs');
+await import('./customer-quote-write-grants.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
