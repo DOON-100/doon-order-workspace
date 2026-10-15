@@ -36,6 +36,7 @@ import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/li
 import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from '@/lib/business-team-scope';
 import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
+import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -79,6 +80,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const pendingPurchase=await kingdeePendingGet(action,req,s,m);if(pendingPurchase)return pendingPurchase;
  const handoffBusiness=await handoffBusinessGet(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkGet(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowGet(action,req,s,m);if(customerWorkflow)return customerWorkflow;
@@ -126,6 +128,7 @@ export async function POST(req:Request,ctx:Context){try{
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ const pendingPurchase=await kingdeePendingPost(action,req,s,m);if(pendingPurchase)return pendingPurchase;
  const handoffBusiness=await handoffBusinessPost(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkPost(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowPost(action,req,s,m);if(customerWorkflow)return customerWorkflow;
