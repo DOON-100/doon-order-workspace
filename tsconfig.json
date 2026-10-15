@@ -43,6 +43,7 @@
   "exclude": [
     "node_modules",
     "examples",
+    "outputs",
     "test-output",
     "lan-dist",
     "lan-data"
