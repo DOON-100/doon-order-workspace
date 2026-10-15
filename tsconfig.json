@@ -44,6 +44,8 @@
     "node_modules",
     "examples",
     "outputs",
-    "test-output"
+    "test-output",
+    "lan-dist",
+    "lan-data"
   ]
 }

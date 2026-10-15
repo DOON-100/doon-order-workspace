@@ -13,6 +13,13 @@ export async function runCustomerResponsibilityCases({ok,call,state,pass,rawReco
   await ok('enroll',{},user);users[key]=user;
  }
  const members=(await state()).members,member=key=>members.find(row=>row.email===users[key].email),id=key=>member(key).id;
+ const expandedScope=Array.from({length:209},(_,i)=>'TEST-SCOPE-'+i);
+ await ok('member',{...member('teamA'),customers:expandedScope});
+ assert.deepEqual(rawRecords().find(row=>row.id===id('teamA')).customers,expandedScope);
+ assert.equal((await call('member',{...member('teamA'),customers:Array.from({length:1001},(_,i)=>'TEST-OVER-'+i)})).status,400);
+ assert.equal((await call('member',{...member('teamA'),customers:expandedScope},users.teamA)).status,403);
+ await ok('member',{...member('teamA'),customers:[]});
+ pass('管理员可保存超过200项的精确客户范围，超1000项及成员自行扩权被拒绝');
  await ok('member',{...member('disabled'),active:false});
  const current=recordId=>rawRecords().find(row=>row.id===recordId);
  const deny=async(action,payload,user=users.teamA,status=403)=>{

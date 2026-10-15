@@ -5,6 +5,7 @@ export const PRODUCTION_PLANNING_TITLE='度昂生产计划工作台';
 export const productionPlanningSpaces=[
  {id:'pmc-handoff',label:'PMC 交接工作台',area:'订单与排程',detail:'接收客服移交，核对生产要求与交接事项。'},
  {id:'pmc',label:'PMC 排期总表',area:'订单与排程',detail:'统一安排交期、齐料日期和投产计划。'},
+ {id:'planning-control',label:'计划分析与协调',area:'订单与排程',detail:'按九个生产场景核对产能、齐套、插单、换型、周计划、试产与交付依据。'},
  {id:'orders',label:'动态订单总表',area:'订单与排程',detail:'查看在制订单、工序进度与包装入仓情况。'},
  {id:'mine',label:'我的订单',area:'订单与排程',detail:'跟进本人负责的订单明细与待办。'},
  {id:'receiving',label:'供应商收货',area:'齐料与生产执行',detail:'跟进采购、供应商交货、收货与核对凭证。'},

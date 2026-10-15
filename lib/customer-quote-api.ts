@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
-import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,canReadCustomerQuoteHistory,readableCustomerQuoteAccounts} from './customer-quote-access';
+import {customerQuoteAccessPolicy,canSeeCustomerQuoteInternal,isCustomerQuoteAdministrator,canReadCustomerQuoteHistory,readableCustomerQuoteAccounts,customerQuoteServiceLimited,canMaintainCustomerQuoteAccount} from './customer-quote-access';
 import {assertCustomerQuoteConfirmable,completedCustomerQuoteRows,visibleCompletedCustomerQuotes} from './customer-quote-review';
 import {customerQuoteTemplateGet,customerQuoteTemplatePost,detachChangedQuoteTemplate,assertQuoteTemplateMapping,validateTemplateQuoteArchive} from './customer-quote-template-api';
 import {
@@ -48,7 +48,7 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
   return new Response(object.body,{headers:{'Content-Type':media.contentType,'Content-Disposition':`${url.searchParams.get('download')==='1'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(media.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'; frame-ancestors 'self'",'Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer'}});
  }
  if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
- if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:readableCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode})),canUse:canReadCustomerQuoteHistory(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
+ if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:readableCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode,canWrite:canMaintainCustomerQuoteAccount(s,m,a),canSeeInternal:canSeeCustomerQuoteInternal(s,m,a),canSeeReviewDetails:!customerQuoteServiceLimited(s,m,a)})),canUse:canReadCustomerQuoteHistory(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
  if(!canReadCustomerQuote(s,m,q))throw new AppError('无权读取该客户报价的原附件。',403);
  if(!isCustomerQuoteAdministrator(m,s))throw new AppError('原附件可能含内部核价或多客户资料，仅报价管理员可读取。',403);
@@ -75,7 +75,7 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
  }
  if(action==='customer-quote-revise'){
   const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive()}).strict(),await req.json()),before=quoteFor(s,input.id);
-  if(!mayChangeQuoteCustomer(s,m,before))throw new AppError('客服可查看对客报价历史，不可改价或修订报价。',403);
+  if(!mayChangeQuoteCustomer(s,m,before))throw new AppError('当前账号没有此客户报价的写入授权，不能修订报价。',403);
   current(before,input.version);if(before.status!=='confirmed')throw new AppError('仅已确认的报价可以创建修订草稿。',409);
   const at=now(),quote:CustomerQuote={...before,status:'draft',version:before.version+1,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   delete quote.confirmedAt;delete quote.confirmedBy;delete quote.confirmedById;
@@ -86,7 +86,16 @@ export async function customerQuotePost(action:string,req:Request,s:State,m:Memb
   const input=parse(customerQuoteInput,await req.json()),{id,version,...fields}=input;
   const before=id?quoteFor(s,id):null;
   if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId&&!isCustomerQuoteAdministrator(m,s))throw new AppError('已保存报价的客户关联只能由管理员核对变更，请为其他客户新建报价。',403);}
-  if(!canSeeCustomerQuoteInternal(s,m))for(const key of ['internalNotesZh','exchangeRateCnyPerUsd','internalCosts'] as const){if(Object.prototype.hasOwnProperty.call(fields,key)){const value=fields[key],empty=value==null||value===''||(Array.isArray(value)&&!value.length);if(!empty)throw new AppError('当前账号无权读取或修改内部核价字段。',403);delete fields[key];}if(before?.[key]!==undefined)(fields as Record<string,unknown>)[key]=before[key];}
+  const account=quoteAccount(s,fields.customerAccountId);
+  if(!canSeeCustomerQuoteInternal(s,m,account))for(const key of ['internalNotesZh','exchangeRateCnyPerUsd','internalCosts'] as const){if(Object.prototype.hasOwnProperty.call(fields,key)){const value=fields[key],empty=value==null||value===''||(Array.isArray(value)&&!value.length);if(!empty)throw new AppError('当前账号无权读取或修改内部核价字段。',403);delete fields[key];}if(before?.[key]!==undefined)(fields as Record<string,unknown>)[key]=before[key];}
+  if(account&&customerQuoteServiceLimited(s,m,account)){
+   if(fields.reviewNotes.some(value=>value.trim())||fields.lines.some(line=>line.sourceFormula?.trim())||fields.terms.some(term=>term.reviewNote?.trim()))throw new AppError('当前账号无权读取或修改内部公式与核对说明。',403);
+   // Clients edit the redacted view. Preserve hidden fields by stable row IDs
+   // instead of replacing them with omitted or empty values from that view.
+   fields.reviewNotes=before?.reviewNotes||[];
+   for(const line of fields.lines){delete line.sourceFormula;const previous=before?.lines.find(value=>value.id===line.id);if(previous?.sourceFormula!==undefined)line.sourceFormula=previous.sourceFormula;}
+   for(const term of fields.terms){delete term.reviewNote;const previous=before?.terms.find(value=>value.id===term.id);if(previous?.reviewNote!==undefined)term.reviewNote=previous.reviewNote;}
+  }
   if(!mayChangeQuoteCustomer(s,m,fields))throw new AppError('只能关联客户责任清单中自己跟进的有效客户，未关联客户的报价不能由业务成员保存。',403);
   if(fields.customerAccountId){const account=quoteAccount(s,fields.customerAccountId);if(!account||!account.active)throw new AppError('选定的客户档案不存在或已停用。');if(fields.customerName!==account.customer||(account.customerCode&&fields.customerCode!==account.customerCode))throw new AppError('报价客户名称 / 编号与所选档案不一致，请先核对；系统不会自动修改客户档案。');}
   const at=now(),quote:CustomerQuote={...before,...fields,id:before?.id||newId('customer_quote'),kind:'customer_quote',status:'draft',version:(before?.version||0)+1,createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};

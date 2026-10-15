@@ -28,7 +28,7 @@ export function SupplierPanel(props:Props&{onDirtyChange:(v:boolean)=>void}){
  function dirtyChanged(v:boolean){setDirty(v);props.onDirtyChange(v);}
  return <><div className="supplier-top-tabs"><button className={view==='purchase'?'selected':''} disabled={dirty} onClick={()=>setView('purchase')}>采购部跟单总表 / 已交货档案</button><button className={view==='outsource'?'selected':''} disabled={dirty} onClick={()=>setView('outsource')}>工序外发与送货单</button></div>{view==='purchase'?<PurchasePanel me={props.data.me} onDirtyChange={dirtyChanged}/>:<LegacySupplierPanel {...props}/>}</>;
 }
-function LegacySupplierPanel({data,act,busy,openOrder}:Props){
+export function LegacySupplierPanel({data,act,busy,openOrder}:Props){
  const manage=managesSuppliers(data.me),createAllowed=canCreateOutsource(data.me),orders=data.orders.filter(active),sources=data.outsource||[],suppliers=data.suppliers||[],pending=sources.filter(supplierPending),buyers=data.members.filter(m=>m.active&&['pmc','admin'].includes(m.role));
  const [view,setView]=useState('tracking'),[query,setQuery]=useState(''),[status,setStatus]=useState('pending'),[supplier,setSupplier]=useState(''),[buyer,setBuyer]=useState(''),[page,setPage]=useState(0),[orderQuery,setOrderQuery]=useState(''),[orderPage,setOrderPage]=useState(0),[error,setError]=useState(''),[create,setCreate]=useState<any>(null),[edit,setEdit]=useState<any>(null),[master,setMaster]=useState<any>(null),[cancel,setCancel]=useState(false),[cancelReason,setCancelReason]=useState(''),[receiptId,setReceiptId]=useState('');
  const byId=new Map(data.orders.map(o=>[o.id,o]));

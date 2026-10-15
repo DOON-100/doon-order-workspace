@@ -30,8 +30,8 @@ export function ProductionPlanningPanel({data,onNavigate}:{data:Data;onNavigate:
     <span className="production-planning-eyebrow">生产计划 · 一级工作空间</span>
     <h1>{PRODUCTION_PLANNING_TITLE}</h1>
     <p>从订单接收到排期、齐料、生产执行与交付，集中进入各项生产计划工作。</p>
-    <button type="button" className="production-planning-primary" onClick={()=>onNavigate('pmc')}>
-     进入 PMC 排期总表 <ArrowUpRight size={17} aria-hidden="true"/>
+    <button type="button" className="production-planning-primary" onClick={()=>onNavigate('planning-control')}>
+     进入计划分析与协调 <ArrowUpRight size={17} aria-hidden="true"/>
     </button>
    </div>
    <div className="production-planning-count">

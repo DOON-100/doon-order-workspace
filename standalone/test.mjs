@@ -21,6 +21,11 @@ try{
  assert.equal((await request('/api/auth/login',{username:'admin',password:initial},'',{Origin:'https://evil.example'})).status,403);pass('匿名、伪造身份头及跨站登录均无法进入');
  const login=await ok('/api/auth/login',{username:'admin',password:initial});adminCookie=login.res.headers.get('set-cookie').split(';')[0];assert(login.data.user.mustChange);assert.match(login.res.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);assert.equal((await request('/api/workspace/data',undefined,adminCookie)).status,403);
  const changed=await ok('/api/auth/password',{currentPassword:initial,password:'Test-Only-Admin-2026!'},adminCookie);const old=adminCookie;adminCookie=changed.res.headers.get('set-cookie').split(';')[0];assert.equal((await request('/api/workspace/data',undefined,old)).status,401);pass('首次改密后才可操作，旧会话失效');
+ const expandedCustomers=Array.from({length:209},(_,i)=>'TEST-CUSTOMER-'+i);
+ await ok('/api/auth/accounts',{username:'scope_test',name:'客户范围容量测试',password:'Test-Scope-Initial!',role:'sales',customers:expandedCustomers},adminCookie);
+ assert.deepEqual((await ok('/api/workspace/data',undefined,adminCookie)).data.members.find(m=>m.name==='客户范围容量测试').customers,expandedCustomers);
+ assert.equal((await request('/api/auth/accounts',{username:'scope_overflow',name:'超限测试',password:'Test-Scope-Initial!',role:'sales',customers:Array.from({length:1001},(_,i)=>'TEST-CUSTOMER-'+i)},adminCookie)).status,400);
+ pass('员工账号创建支持超过200个客户身份，超1000项仍拒绝');
  await ok('/api/auth/accounts',{username:'clerk',name:'电镀测试',password:'Test-Clerk-Initial!',role:'clerk',departments:['plating'],customers:[]},adminCookie);
  const cl=await ok('/api/auth/login',{username:'clerk',password:'Test-Clerk-Initial!'});clerkCookie=cl.res.headers.get('set-cookie').split(';')[0];const cc=await ok('/api/auth/password',{currentPassword:'Test-Clerk-Initial!',password:'Test-Clerk-Personal!'},clerkCookie);clerkCookie=cc.res.headers.get('set-cookie').split(';')[0];
  assert.equal((await request('/api/auth/accounts',{username:'attack',name:'提升',password:'No-Permissions-12345!',role:'admin'},clerkCookie)).status,403);pass('文员不能创建账号或提升自身权限');

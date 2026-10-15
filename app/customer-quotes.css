@@ -42,11 +42,17 @@ body:has(.customer-quote-panel) .heading .actions{display:none!important}
  body:has(.customer-quote-panel) .topbar,
  body:has(.customer-quote-panel) .heading,
  body:has(.customer-quote-panel) .page-footer,
+ body:has(.customer-quote-panel) .business-team-bar,
+ body:has(.customer-quote-panel) .handoff-page-head,
+ body:has(.customer-quote-panel) .department-tabs,
+ body:has(.customer-quote-panel) .handoff-subtabs,
  body:has(.customer-quote-panel) .main>.content>.notice,
  body:has(.customer-quote-panel) .cq-no-print{display:none!important}
  body:has(.customer-quote-panel) .workspace,
  body:has(.customer-quote-panel) .main,
- body:has(.customer-quote-panel) .content{
+ body:has(.customer-quote-panel) .content,
+ body:has(.customer-quote-panel) .department-workspace,
+ body:has(.customer-quote-panel) .department-body{
   display:block!important;width:100%!important;max-width:none!important;min-width:0!important;
   min-height:0!important;height:auto!important;margin:0!important;padding:0!important;background:#fff!important
  }

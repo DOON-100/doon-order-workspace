@@ -89,6 +89,7 @@ if(process.env.DOON_TEST_ORIGINALS==='1'){
 const {testLosses}=await import('./loss-cases.mjs');await testLosses({ok,call,state,original,admin,clerk,sales,pass});
 const {testPmc}=await import('./pmc-cases.mjs');await testPmc({ok,call,state,original,admin,clerk,sales,pass});
 const {testPurchases}=await import('./purchase-cases.mjs');await testPurchases({ok,call,sales,pass});
+const {testKingdeePending}=await import('./kingdee-pending-cases.mjs');await testKingdeePending({ok,call,api,identity,admin,files,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
 const {testCollaborationFixes}=await import('./collaboration-fixes.mjs');await testCollaborationFixes({ok,call,state,original,admin,clerk,sales,pass,preview});
 const {testFactoryOrderTable}=await import('./factory-order-table.mjs');await testFactoryOrderTable({ok,call,state,pass,admin,clerk});
 const {testCustomerQuotes}=await import('./customer-quote-cases.mjs');await testCustomerQuotes({ok,call,state,admin,clerk,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
@@ -123,4 +124,6 @@ console.log('Total business checks:',checks.length);
 await import('./payment-terms.mjs');
 await import('./ar-workspace-cases.mjs');
 await import('./ar-record-guards.mjs');
+await import('./planning-control.mjs');
+await import('./customer-quote-write-grants.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

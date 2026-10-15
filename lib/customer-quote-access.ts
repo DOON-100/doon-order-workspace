@@ -6,7 +6,7 @@ import {explicitCustomerResponsibility,matchesCustomerResponsibility} from './cu
 // Names and account IDs are configuration data, never a source-code allowlist.
 export type CustomerQuoteAccessPolicy=Entity & {
  kind:'customer_quote_access';memberIds:string[];aliasesByMember:Record<string,string[]>;
- administratorMemberIds?:string[];internalMemberIds?:string[];customerMemberIds?:Record<string,string[]>;
+ administratorMemberIds?:string[];internalMemberIds?:string[];writableMemberIds?:string[];customerMemberIds?:Record<string,string[]>;
 };
 const nonempty=z.string().trim().min(1).max(240);
 const accessPolicySchema=z.object({
@@ -15,6 +15,7 @@ const accessPolicySchema=z.object({
   aliasesByMember:z.record(z.array(nonempty).max(30)),
   administratorMemberIds:z.array(nonempty).max(1000).optional(),
   internalMemberIds:z.array(nonempty).max(1000).optional(),
+  writableMemberIds:z.array(nonempty).max(1000).optional(),
   customerMemberIds:z.record(z.array(nonempty).max(1000)).optional(),
 }).passthrough();
 
@@ -25,11 +26,11 @@ export function customerQuoteAccessPolicy(s:State):CustomerQuoteAccessPolicy|nul
  const result=accessPolicySchema.safeParse(records[0]);
  if(!result.success)return null;
  const policy=result.data as CustomerQuoteAccessPolicy;
- for(const ids of [policy.administratorMemberIds||[],policy.internalMemberIds||[],...Object.values(policy.customerMemberIds||{})])if(new Set(ids).size!==ids.length||ids.some(id=>!policy.memberIds.includes(id)))return null;
+ for(const ids of [policy.administratorMemberIds||[],policy.internalMemberIds||[],policy.writableMemberIds||[],...Object.values(policy.customerMemberIds||{})])if(new Set(ids).size!==ids.length||ids.some(id=>!policy.memberIds.includes(id)))return null;
  return policy;
 }
 export const isCustomerQuoteAdministrator=(m:Member,s?:State)=>!!m.active&&(m.role==='admin'||!!(s&&customerQuoteAccessPolicy(s)?.administratorMemberIds?.includes(m.id)));
-export const canSeeCustomerQuoteInternal=(s:State,m:Member,account?:CustomerAccount)=>canUseCustomerQuotes(s,m)&&(!account||!customerQuoteServiceReadOnly(s,m,account))&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.internalMemberIds?.includes(m.id));
+export const canSeeCustomerQuoteInternal=(s:State,m:Member,account?:CustomerAccount)=>canUseCustomerQuotes(s,m)&&(!account||!customerQuoteServiceLimited(s,m,account))&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.internalMemberIds?.includes(m.id));
 export function canUseCustomerQuotes(s:State,m:Member){
  return !!m.active&&(isCustomerQuoteAdministrator(m,s)||!!customerQuoteAccessPolicy(s)?.memberIds.includes(m.id));
 }
@@ -55,8 +56,8 @@ export function canCreateCustomerQuote(s:State,m:Member){
  return isCustomerQuoteAdministrator(m,s)||eligibleCustomerQuoteAccounts(s,m).some(a=>!customerQuoteServiceReadOnly(s,m,a));
 }
 
-// Confirmed 2026-10-13: customer-service staff may read the customer-facing
-// history of their assigned accounts, without price editing or internal costs.
+// Default policy: customer-service staff may read customer-facing history of
+// their assigned accounts. Price editing needs the separate explicit write grant.
 // This read grant is deliberately separate from the existing quotation grant:
 // it must not unlock engineering cost sources, methods, or quote administration.
 export function customerServiceQuoteReader(s:State,m:Member,account:CustomerAccount){
@@ -64,10 +65,17 @@ export function customerServiceQuoteReader(s:State,m:Member,account:CustomerAcco
  const aliases=customerQuoteAccessPolicy(s)?.aliasesByMember?.[m.id]||[];
  return matchesCustomerResponsibility(account,m,'service',aliases);
 }
-export function customerQuoteServiceReadOnly(s:State,m:Member,account:CustomerAccount){
+// Content restrictions stay independent of the explicit customer-facing write grant.
+export function customerQuoteServiceLimited(s:State,m:Member,account:CustomerAccount){
  if(isCustomerQuoteAdministrator(m,s)||!customerServiceQuoteReader(s,m,account))return false;
  const aliases=customerQuoteAccessPolicy(s)?.aliasesByMember?.[m.id]||[];
  return !matchesCustomerResponsibility(account,m,'sales',aliases);
+}
+export function customerQuoteServiceReadOnly(s:State,m:Member,account:CustomerAccount){
+ if(!customerQuoteServiceLimited(s,m,account))return false;
+ // This grant removes only the legacy service-only write restriction. The caller
+ // must still enforce the quotation member list and the current customer binding.
+ return !(['sales','clerk','pmc'].includes(m.role)&&customerQuoteAccessPolicy(s)?.writableMemberIds?.includes(m.id));
 }
 export function readableCustomerQuoteAccounts(s:State,m:Member){
  return (all(s,'customer_account') as CustomerAccount[]).filter(a=>assignedCustomerQuoteAccount(s,m,a)||customerServiceQuoteReader(s,m,a));

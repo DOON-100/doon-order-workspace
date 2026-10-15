@@ -27,6 +27,7 @@ import {customerProjectFollowupGet,customerProjectFollowupPost} from '@/lib/cust
 import {unifiedCommunicationGet,unifiedCommunicationPost} from '@/lib/unified-communication-api';
 import {handoffBusinessGet,handoffBusinessPost} from '@/lib/handoff-business-api';
 import {frameworkGet,frameworkPost} from '@/lib/handoff-framework-api';
+import {planningControlGet,planningControlPost} from '@/lib/planning-control-api';
 import {customerWorkflowGet,customerWorkflowPost} from '@/lib/customer-workflow-api';
 import {customerProjectFinanceGet,customerProjectFinancePost} from '@/lib/customer-project-finance-api';
 import {canReadServiceRecord} from '@/lib/service-workspace';
@@ -35,6 +36,7 @@ import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/li
 import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from '@/lib/business-team-scope';
 import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
+import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -78,6 +80,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const pendingPurchase=await kingdeePendingGet(action,req,s,m);if(pendingPurchase)return pendingPurchase;
  const handoffBusiness=await handoffBusinessGet(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkGet(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowGet(action,req,s,m);if(customerWorkflow)return customerWorkflow;
@@ -109,6 +112,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
@@ -119,10 +123,12 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
+ const pendingPurchase=await kingdeePendingPost(action,req,s,m);if(pendingPurchase)return pendingPurchase;
  const handoffBusiness=await handoffBusinessPost(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkPost(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowPost(action,req,s,m);if(customerWorkflow)return customerWorkflow;
@@ -177,7 +183,7 @@ export async function POST(req:Request,ctx:Context){try{
   const input=z.object({id:z.string(),done:z.boolean()}).parse(body),item=s.records.find(r=>r.id===input.id&&r.kind==='comment');if(!item)throw new AppError('跟进事项不存在。');const o=line(s,m,item.lineId);if(!allowedFields(m,o).length&&!departmentColumns(m,o).length)throw new AppError('没有跟进权限。',403);const next={...item,done:input.done,completedBy:m.name,completedAt:now()};await commit(s.revision,[next,audit(m,next,item,'更新待办状态')]);return json({ok:true});
  }
  if(action==='member'){
-  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),supplierId:z.string().optional(),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(200),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished','engineering','engineering_review'])).default([]),active:z.boolean()}).parse(body);
+  requireAdmin(m);const input=z.object({id:z.string().optional(),name:z.string().trim().min(1).max(100),email:z.string().email(),role:z.enum(roles),supplierId:z.string().optional(),orderScope:z.enum(['all','assigned']).optional(),customers:z.array(z.string().trim().min(1).max(100)).max(1000),departments:z.array(z.enum(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished','engineering','engineering_review'])).default([]),active:z.boolean()}).parse(body);
   const existing=input.id?s.records.find(r=>r.id===input.id&&r.kind==='member'):undefined;if(input.id&&!existing)throw new AppError('成员不存在。');
   if(existing?.active&&!input.active)await assertFrameworkMemberDisableAllowed(s,existing as Member);
   if((existing?.role==='supplier')!==(input.role==='supplier')&&existing)throw new AppError('供应商账号与员工账号不能互换角色，请分别建立账号。',403);

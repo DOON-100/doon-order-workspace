@@ -5,8 +5,8 @@
 .production-planning-nav-toggle:hover{background:#245144}
 .production-planning-nav-toggle svg{transition:transform .15s}
 .production-planning-nav-toggle[aria-expanded=false] svg{transform:rotate(-90deg)}
-.handoff-shell #production-planning-spaces[hidden]{display:none}
-.handoff-shell #production-planning-spaces{margin-top:3px}
+.handoff-shell .workspace-navigation-spaces[hidden]{display:none}
+.handoff-shell .workspace-navigation-spaces{margin-top:3px}
 .production-planning-breadcrumb{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .production-planning-breadcrumb button{color:#4f678e;text-align:left;text-decoration:underline;text-underline-offset:3px}
-@media(max-width:540px){.handoff-shell .production-planning-nav-parent{grid-column:1/-1}.handoff-shell .production-planning-nav-heading>.nav-item{font-size:14px;flex:0 1 auto}.handoff-shell #production-planning-spaces [data-slot=sidebar-menu]{grid-template-columns:repeat(2,minmax(0,1fr));padding:4px 0 10px}.handoff-shell #production-planning-spaces .nav-child{border-left:2px solid #527967;padding-left:4px}.production-planning-nav-toggle{width:36px}}
+@media(max-width:540px){.handoff-shell .production-planning-nav-parent{grid-column:1/-1}.handoff-shell .production-planning-nav-heading>.nav-item{font-size:14px;flex:0 1 auto}.handoff-shell .workspace-navigation-spaces [data-slot=sidebar-menu]{grid-template-columns:repeat(2,minmax(0,1fr));padding:4px 0 10px}.handoff-shell .workspace-navigation-spaces .nav-child{border-left:2px solid #527967;padding-left:4px}.production-planning-nav-toggle{width:36px}}

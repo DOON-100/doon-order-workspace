@@ -11,7 +11,7 @@ const outfile=path.join(output,'navigation.mjs');
 await build({stdin:{contents:"export * from './lib/production-planning';export * from './lib/handoff-navigation';",resolveDir:process.cwd(),loader:'ts'},outfile,bundle:true,platform:'node',format:'esm'});
 const nav=await import(pathToFileURL(outfile).href);
 const {PRODUCTION_PLANNING_ID:parentId,PRODUCTION_PLANNING_TITLE:parentTitle,productionPlanningSpaces:spaces,productionPlanningNavigation:groupNavigation}=nav;
-const expectedSpaces=['pmc-handoff','pmc','orders','mine','receiving','department','finished-outsourcing','mes','dashboard','losses','completed','imports','reports'];
+const expectedSpaces=['pmc-handoff','pmc','planning-control','orders','mine','receiving','department','finished-outsourcing','mes','dashboard','losses','completed','imports','reports'];
 const ids=items=>items.map(item=>item.id),spaceIds=new Set(expectedSpaces),checks=[];
 const pass=message=>{checks.push(message);console.log('PASS '+message);};
 const member=(role='sales',departments=[])=>({id:'synthetic-navigation-member',kind:'member',email:'navigation@test.invalid',name:'合成导航成员',role,departments,customers:[],userId:'synthetic-navigation-user',active:true,createdAt:'2026-10-15T00:00:00Z'});
@@ -24,7 +24,7 @@ const assertUnique=items=>{
 assert.equal(parentId,'production-planning');
 assert.equal(parentTitle,'度昂生产计划工作台');
 assert.deepEqual(ids(spaces),expectedSpaces);
-assert.equal(new Set(ids(spaces)).size,13);
+assert.equal(new Set(ids(spaces)).size,14);
 for(const space of spaces){
  for(const field of ['label','area','detail'])assert.equal(typeof space[field],'string',`${space.id}.${field} must be display text.`);
  for(const field of ['label','area','detail'])assert(space[field].trim(),`${space.id}.${field} must not be empty.`);
@@ -32,7 +32,7 @@ for(const space of spaces){
 }
 assert(nav.isProductionPlanningView(parentId));
 for(const view of ['workbench','sales','customers','factory-orders','production-orders','engineering-drawings','ar-workspace','members','maintenance','unknown'])assert.equal(nav.isProductionPlanningView(view),false,view+' keeps its existing scope.');
-pass('Production planning defines one named root and exactly 13 existing secondary spaces.');
+pass('Production planning defines one named root and exactly 14 existing secondary spaces.');
 
 for(const user of [undefined,member(),member('clerk',['plastic']),member('pmc')]){
  const original=nav.memberWorkspaceNavigation(user),snapshot=JSON.stringify(original),grouped=groupNavigation(original,user);
@@ -61,8 +61,8 @@ assert.deepEqual(ids(finishedParent.children),expectedSpaces.filter(id=>!['finis
 assert.deepEqual(ids(leaves(finishedNavigation)).sort(),ids(originalFinished).sort());
 assertUnique(finishedNavigation);
 assert.equal(JSON.stringify(originalFinished),finishedSnapshot);
-assert.deepEqual(ids(spaces),expectedSpaces,'The overview still contains all 13 spaces for finished clerks.');
-pass('Finished clerks retain priority shortcuts without duplicates, and the overview keeps all 13 entry cards.');
+assert.deepEqual(ids(spaces),expectedSpaces,'The overview still contains all 14 spaces for finished clerks.');
+pass('Finished clerks retain priority shortcuts without duplicates, and the overview keeps all 14 entry cards.');
 
 const incoming={customerId:'synthetic-customer',projectId:'synthetic-project',orderId:'synthetic-order',recordId:'synthetic-pmc-record',tab:'pmc'};
 const incomingSnapshot=JSON.stringify(incoming);
