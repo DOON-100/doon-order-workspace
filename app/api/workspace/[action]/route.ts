@@ -27,6 +27,7 @@ import {customerProjectFollowupGet,customerProjectFollowupPost} from '@/lib/cust
 import {unifiedCommunicationGet,unifiedCommunicationPost} from '@/lib/unified-communication-api';
 import {handoffBusinessGet,handoffBusinessPost} from '@/lib/handoff-business-api';
 import {frameworkGet,frameworkPost} from '@/lib/handoff-framework-api';
+import {planningControlGet,planningControlPost} from '@/lib/planning-control-api';
 import {customerWorkflowGet,customerWorkflowPost} from '@/lib/customer-workflow-api';
 import {customerProjectFinanceGet,customerProjectFinancePost} from '@/lib/customer-project-finance-api';
 import {canReadServiceRecord} from '@/lib/service-workspace';
@@ -109,6 +110,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
@@ -119,6 +121,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;

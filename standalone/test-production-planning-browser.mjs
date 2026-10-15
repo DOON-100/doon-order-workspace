@@ -22,7 +22,7 @@ execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const firstPassword='Synthetic-Planning-Initial-2026!',personalPassword='Synthetic-Planning-Personal-2026!';
 const title='度昂生产计划工作台';
-const spaceIds=['pmc-handoff','pmc','orders','mine','receiving','department','finished-outsourcing','mes','dashboard','losses','completed','imports','reports'];
+const spaceIds=['pmc-handoff','pmc','planning-control','orders','mine','receiving','department','finished-outsourcing','mes','dashboard','losses','completed','imports','reports'];
 const admin={cookie:''},sessions={},checks=[],errors=[];
 const pass=message=>{checks.push(message);console.log('PASS '+message);};
 let server,browser,page,logs='';
@@ -46,8 +46,8 @@ async function overview(current){
  await current.locator('[data-space-id="pmc"]').waitFor();
  assert.equal(new URL(current.url()).pathname,'/production-planning');
  const ids=await current.locator('[data-space-id]').evaluateAll(elements=>elements.map(element=>element.dataset.spaceId));
- assert.deepEqual(ids,spaceIds,'All 13 existing spaces appear in workflow order.');
- assert.equal(new Set(ids).size,13);
+ assert.deepEqual(ids,spaceIds,'All 14 existing spaces appear in workflow order.');
+ assert.equal(new Set(ids).size,14);
 }
 async function routeHeading(current,route,label){
  await current.waitForURL(url=>url.pathname===route);
@@ -97,7 +97,7 @@ try{
  const desktop=await signedPage(sessions.synthetic_planning_pmc,{width:1536,height:1000});page=desktop.page;
  await overview(page);await page.reload();await overview(page);
  await page.screenshot({path:path.join(root,'production-planning-desktop.png'),fullPage:true});
- pass('Direct access and refresh show the exact overview title and all 13 secondary workspace cards.');
+ pass('Direct access and refresh show the exact overview title and all 14 secondary workspace cards.');
 
  const navigation=page.getByRole('navigation',{name:'中台主导航',exact:true});
  const toggle=navigation.locator('button[aria-controls="production-planning-spaces"]'),children=navigation.locator('#production-planning-spaces');
