@@ -1,5 +1,44 @@
 # Portable private data tools
 
+## 工具统一入口
+
+本目录集中存放可复用的文件处理和数据维护代码，测试集中在 `tests/data-tools/`。网站日常运行不启动这些脚本；迁移已有数据时保留完整数据库与附件，不用重跑历史 Excel 导入。
+
+| 脚本 | 用途 | 输入和运行位置 |
+| --- | --- | --- |
+| `workbook.py` | 检查 Excel、提取行和图片 | 显式文件路径，可在维护机运行 |
+| `split-workbook.mjs` | 按审核过的归属清单拆分工作表 | 私有 JSON 配置、原表与归属数据 |
+| `merge_workbooks.py` | 合并新增工作表并保留原表内容 | 原表、新表、全新输出文件 |
+| `prepare-quote.mjs` | 把报价配置和原件整理成可搬运任务包 | 私有配置、Excel/图片等原件，不写数据库 |
+| `export-workspace.mjs` | 只读导出报价快照或客户归属 | 显式已有 SQLite 数据目录；输出属于私有业务数据 |
+| `quote-maintenance.mjs` | 报价创建与费用维护，先演练再应用 | 已验收构建、目标数据目录、私有任务包与报告目录 |
+
+代码、测试、客户数据的边界如下：
+
+```text
+scripts/data-tools/       通用脚本、共享库、依赖说明
+tests/data-tools/         只含合成数据的测试
+private-data-tools/       客户原表、图片、配置、结果与检查点，Git 忽略
+```
+
+历史原件和任务目录保留在原处，不为了整理代码而移动、删除或提交客户文件。私有任务也可以放在仓库外。路径参数化意味着可换机器运行，并不意味着所有输入都已经存进数据库。
+
+### 尚在原位置的旧脚本
+
+这些链接用于识别历史工具，不是迁移执行顺序。它们尚未全部搬入本目录，旧调用和相对路径保持原样；以后迁址需同步修改引用并完成适用测试。
+
+| 旧位置 | 定位与使用限制 |
+| --- | --- |
+| `scripts/inspect-purchase.py` | 早期采购表检查，输出可能含原始明细；通用检查优先用本目录 workbook.py |
+| `scripts/import-purchase-live.mjs` | 指定采购数据导入，需来源及验收清单；不作为迁云初始化 |
+| `scripts/setup-jinbo-pilot.mjs` | 指定业务试用和账号设置，属于一次性历史工具，禁止作为通用安装步骤 |
+| `standalone/import-customer-quote.mjs` | 旧报价草稿导入；新任务优先使用准备任务包、演练和维护流程 |
+| `standalone/import-customer-price-archive.mjs`、`customer-price-template-to-json.mjs` | 历史价格档案/模板专用转换与导入，保留原件和专用验收 |
+| `standalone/import-customer-followup.mjs`、`import-ivy-service.mjs`、`import-engineering-drawings.mjs` | 跟进、客户服务和工程图纸专项维护，不能用来重建已迁移业务 |
+| `standalone/configure-customer-quote-access.mjs`、`update-customer-quote-access.mjs`、`set-customer-price-selection.mjs` | 权限或业务选择维护，不属于文件转换，更不是部署必跑脚本 |
+
+备份、守护和部署脚本属于运维工具，仍由 `standalone/` 和 `scripts/` 中对应入口管理，不混入 Excel 处理执行流程。
+
 These offline tools separate reusable code from customer files and task configuration. They do not run when the website starts. All examples refer to private job files, not to production customer data. Original task scripts and input documents remain in their original locations.
 
 The current storage adapter is the standalone application's SQLite database plus its `files` directory. Running a maintenance tool on a cloud server still requires access to that server's data and validated application build. Changing an HTTP address does not turn these tools into remote API clients. Filesystem access is an operator privilege; these CLIs must not be exposed as public upload endpoints.
