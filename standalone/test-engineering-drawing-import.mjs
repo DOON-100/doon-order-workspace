@@ -21,7 +21,7 @@ const rows=[completed,[...completed],pending],book=XLSX.utils.book_new();XLSX.ut
 const source=path.join(temporary,'synthetic-drawings.xlsx'),bytes=XLSX.write(book,{type:'buffer',bookType:'xlsx'});await fs.writeFile(source,bytes);
 const input=path.join(temporary,'reviewed.json'),reviewed={sourceSha256:sha(bytes),records:rows.map((values,i)=>({sourceSheet:'智能表1',sourceRow:i+2,sourceValues:Object.fromEntries(values.map((value,col)=>[XLSX.utils.encode_cell({r:i+1,c:col}),value])),qualityIssues:[]}))};await fs.writeFile(input,JSON.stringify(reviewed));
 const env={...process.env,DOON_DATA_DIR:data};
-const call=(...args)=>JSON.parse(execFileSync(process.execPath,[path.join(root,'standalone/import-engineering-drawings.mjs'),'--input',input,'--source',source,'--actor-id','admin',...args],{cwd:root,env,encoding:'utf8',stdio:['ignore','pipe','pipe']}));
+const call=(...args)=>JSON.parse(execFileSync(process.execPath,[path.join(root,'scripts/data-tools/import-engineering-drawings.mjs'),'--input',input,'--source',source,'--actor-id','admin',...args],{cwd:root,env,encoding:'utf8',stdio:['ignore','pipe','pipe']}));
 const snapshot=()=>db.prepare('SELECT id,kind,data FROM records ORDER BY id').all();
 const before=snapshot(),preview=call();assert.equal(preview.mode,'preview');assert.deepEqual(snapshot(),before);assert.equal(preview.counts.newDrawings,3);
 const checkpoint=path.join(temporary,'checkpoint.json');execFileSync(process.execPath,['scripts/verify-engineering-drawing-deployment.mjs','before',checkpoint],{cwd:root,env,stdio:'pipe'});

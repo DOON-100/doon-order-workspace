@@ -7,7 +7,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync,backup} from 'node:sqlite';
 import assert from 'node:assert/strict';
 const args=process.argv.slice(2),filename=args.shift();
-if(!filename)throw new Error('Usage: node standalone/import-customer-followup.mjs <private-payload.json> [--plan private-plan.json] [--build directory] [--data directory] [--report private-report.json] [--apply --preflight private-report.json]');
+if(!filename)throw new Error('Usage: node scripts/data-tools/import-customer-followup.mjs <private-payload.json> [--plan private-plan.json] [--build directory] [--data directory] [--report private-report.json] [--apply --preflight private-report.json]');
 const options={};while(args.length){const key=args.shift();if(key==='--apply'){options.apply=true;continue;}if(!['--plan','--build','--data','--report','--preflight'].includes(key)||!args.length)throw new Error('Unexpected option');options[key.slice(2)]=args.shift();}
 const sha=b=>createHash('sha256').update(b).digest('hex');
 const sourceData=path.resolve(options.data||'lan-data'),dist=path.resolve(options.build||'lan-dist');

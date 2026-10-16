@@ -24,7 +24,7 @@ $preview=$null
 if (-not $CodeOnly) {
  $InputPath=(Resolve-Path -LiteralPath $InputPath).Path
  $SourcePath=(Resolve-Path -LiteralPath $SourcePath).Path
- $previewOutput=& $nodePath 'standalone/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId
+ $previewOutput=& $nodePath 'scripts/data-tools/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId
  if ($LASTEXITCODE -ne 0) { throw 'Import preflight failed; production has not changed.' }
  $preview=$previewOutput | ConvertFrom-Json
 }
@@ -91,11 +91,11 @@ try {
  if ($LASTEXITCODE -ne 0) { throw 'Code deployment changed business data; investigate before continuing.' }
  if (-not $CodeOnly) {
   # Refresh the read-only plan after the stop, including changes made during the online backup.
-  $previewOutput=& $nodePath 'standalone/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId
+  $previewOutput=& $nodePath 'scripts/data-tools/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId
   if ($LASTEXITCODE -ne 0) { throw 'Stopped-service import preflight failed.' }
   $preview=$previewOutput | ConvertFrom-Json
   $dataWritesStarted=$true
-  $importOutput=& $nodePath 'standalone/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId --apply --plan-hash $preview.planHash
+  $importOutput=& $nodePath 'scripts/data-tools/import-engineering-drawings.mjs' --input $InputPath --source $SourcePath --actor-id $ActorId --apply --plan-hash $preview.planHash
   if ($LASTEXITCODE -ne 0) { throw 'Import did not finish; inspect the retained backup and drawing rows. Do not restore an old database.' }
   $importResult=$importOutput | ConvertFrom-Json
   & $nodePath 'scripts/verify-engineering-drawing-deployment.mjs' after $checkpoint

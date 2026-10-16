@@ -1,0 +1,53 @@
+name: Portable data tools
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/data-tools/**'
+      - 'tests/data-tools/**'
+      - 'tests/service-ivy-import-cases.mjs'
+      - 'tests/customer-project-relations-audit.mjs'
+      - 'standalone/test-customer-quote-import.mjs'
+      - 'standalone/test-customer-quote-access-config.mjs'
+      - 'standalone/test-customer-price-template.mjs'
+      - 'standalone/test-customer-price-archive.mjs'
+      - 'standalone/test-engineering-drawing-import.mjs'
+      - '.github/workflows/data-tools.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  pull_request:
+    paths:
+      - 'scripts/data-tools/**'
+      - 'tests/data-tools/**'
+      - 'tests/service-ivy-import-cases.mjs'
+      - 'tests/customer-project-relations-audit.mjs'
+      - 'standalone/test-customer-quote-import.mjs'
+      - 'standalone/test-customer-quote-access-config.mjs'
+      - 'standalone/test-customer-price-template.mjs'
+      - 'standalone/test-customer-price-archive.mjs'
+      - 'standalone/test-engineering-drawing-import.mjs'
+      - '.github/workflows/data-tools.yml'
+      - 'package.json'
+      - 'package-lock.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --no-audit --no-fund
+      - run: python -m pip install -r scripts/data-tools/requirements.txt
+      - run: node tests/data-tools/run.mjs

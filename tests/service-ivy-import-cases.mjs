@@ -85,7 +85,7 @@ export async function runIvyMigrationCases({pass=console.log}={}){
  const sourcePath=path.join(tmp,'source.json'),mappingPath=path.join(tmp,'mapping.json');
  const sourceBytes=Buffer.from(JSON.stringify(source,null,2)),mappingBytes=Buffer.from(JSON.stringify(mapping,null,2));
  await fs.writeFile(sourcePath,sourceBytes);await fs.writeFile(mappingPath,mappingBytes);
- const baseArgs=[path.join(root,'standalone/import-ivy-service.mjs'),'--backup',sourcePath,'--mapping',mappingPath,'--actor-id',actor.id];
+ const baseArgs=[path.join(root,'scripts/data-tools/import-ivy-service.mjs'),'--backup',sourcePath,'--mapping',mappingPath,'--actor-id',actor.id];
  const invokeFor=(directory,extra)=>JSON.parse(execFileSync(process.execPath,[...baseArgs,...extra],{cwd:root,env:{...process.env,DOON_DATA_DIR:directory},encoding:'utf8',timeout:60000,stdio:['ignore','pipe','pipe']}));
  const invoke=extra=>invokeFor(dataDir,extra);
  const readDb=fn=>{const connection=new DatabaseSync(databasePath,{readOnly:true});try{return fn(connection);}finally{connection.close();}};

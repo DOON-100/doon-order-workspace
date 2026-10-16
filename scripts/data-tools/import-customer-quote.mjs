@@ -6,7 +6,7 @@ import {pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 
 const args=process.argv.slice(2),option=name=>{const i=args.indexOf(name);return i<0?'':args[i+1]||'';};
-for(const name of ['--build-dir','--draft','--source'])if(!option(name))throw new Error('Required: --build-dir <validated build> --draft <private JSON> --source <original workbook, PDF or reference image>');
+for(const name of ['--build-dir','--draft','--source'])if(!option(name))throw new Error('Usage: node scripts/data-tools/import-customer-quote.mjs --build-dir <validated build> --draft <private JSON> --source <original workbook, PDF or reference image>');
 const buildDir=path.resolve(option('--build-dir'));
 const draft=JSON.parse(await fs.readFile(option('--draft'),'utf8'));
 const source=await fs.readFile(option('--source'));

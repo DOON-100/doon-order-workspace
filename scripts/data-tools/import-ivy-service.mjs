@@ -6,7 +6,7 @@ import path from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const args=process.argv.slice(2),options=new Map(),supported=new Set(['--backup','--mapping','--actor-id','--apply','--plan-hash']);
 for(let index=0;index<args.length;index++){
  const flag=args[index];if(!supported.has(flag)||options.has(flag))throw new Error('存在未知或重复的迁入参数。');

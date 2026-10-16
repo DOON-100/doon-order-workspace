@@ -43,9 +43,12 @@ const byLabel=label=>{const node=nodes(model.tree).find(node=>node.props?.['aria
 const byTestId=id=>nodes(model.tree).find(node=>node.props?.['data-testid']===id);
 const followupCard=()=>nodes(model.tree).find(node=>node.props?.['data-testid']==='followup-card'&&text(node).includes('Synthetic followup'));
 const button=label=>{const node=nodes(model.tree).find(node=>node.type==='button'&&text(node)===label);assert(node,label);return node;};
+const personButton=name=>{const node=nodes(byLabel('按人员查看客户跟进')).find(node=>node.type==='button'&&text(node).startsWith(name));assert(node,name);return node;};
+const unlinkedProjectRows=()=>{const section=nodes(model.tree).find(node=>node.props?.title==='尚未建立客户跟进的项目');return section?nodes(section).find(node=>node.type==='table').props.rows:[];};
+const assertProjectCount=(label,count)=>{const card=byTestId('followup-project-count');assert(card);assert.match(text(card),new RegExp(label));assert.equal(text(nodes(card).find(node=>node.type==='b')),String(count));};
 try{
  render();await settle();
- assert.match(text(byTestId('followup-link-summary')),/2 条跟进：1 条已关联 1 个项目，1 条未关联项目/);
+ assert.match(text(byTestId('followup-link-summary')),/2 条跟进记录：1 条已关联 1 个项目，1 条未关联项目/);
  assert.match(text(byTestId('followup-link-summary')),/全部可见项目 2 个/);
  assert.match(text(followupCard()),/项目另有 1 条未完成待办/);
  const projectSection=nodes(model.tree).find(node=>node.props?.title==='尚未建立客户跟进的项目');assert(projectSection);
@@ -88,6 +91,67 @@ try{
  source.teams=[];button('刷新跟进').props.onClick();await settle();button('查看 / 更新跟进').props.onClick();render();button('创建并关联完整项目').props.onClick();render();
  assert.equal(byLabel('本项目业务客服组').props.value,'');assert.equal(byLabel('本项目业务客服组').props.required,false);
  console.log('PASS project choices identify group and sales owner; promotion auto-selects one eligible group, requires explicit choice among several and preserves ungrouped compatibility');
+
+ button('取消').props.onClick();render();
+ source={
+  followups:[row('other-linked',{ownerId:'other',projectId:'service-project',title:'Synthetic other-owned followup'})],
+  projects:[
+   {id:'sales-project',customerId:'customer',code:'SYN-SALES',title:'Synthetic sales assignment',salesMemberId:'zero',serviceMemberIds:['zero']},
+   {id:'service-project',customerId:'customer',code:'SYN-SERVICE',title:'Synthetic service assignment',salesMemberId:'other',serviceMemberIds:['zero']},
+   {id:'task-project',customerId:'customer',code:'SYN-TASK',title:'Synthetic task assignment',salesMemberId:'other',serviceMemberIds:[]},
+   {id:'unrelated-project',customerId:'customer',code:'SYN-UNRELATED',title:'Synthetic unrelated project',salesMemberId:'other',serviceMemberIds:[]}
+  ],
+  projectTasks:[
+   {id:'sales-task-1',projectId:'sales-project',source:'project',title:'Synthetic first action',ownerId:'zero',dueDate:'2026-10-16',status:'open'},
+   {id:'sales-task-2',projectId:'sales-project',source:'collaboration',title:'Synthetic second action',ownerId:'zero',dueDate:'2026-10-17',status:'open'},
+   {id:'task-1',projectId:'task-project',source:'project',title:'Synthetic completed task',ownerId:'zero',dueDate:'2026-10-14',status:'completed'},
+   {id:'task-2',projectId:'task-project',source:'collaboration',title:'Synthetic current task',ownerId:'zero',dueDate:'2026-10-18',status:'open'},
+   {id:'unrelated-task',projectId:'unrelated-project',source:'project',title:'Synthetic unrelated action',ownerId:'other',dueDate:'2026-10-19',status:'open'}
+  ],
+  customers:[{id:'customer',customer:'Synthetic customer',active:true}],
+  members:[{id:'zero',name:'Synthetic zero'},{id:'other',name:'Synthetic other'}],
+  people:[{id:'zero',name:'Synthetic zero'},{id:'other',name:'Synthetic other'}],
+  teams:[],canImport:true,mails:[],sourceBundles:[],
+  summary:{visibleProjects:4,linkedFollowups:1,linkedProjects:1,unlinkedFollowups:0,unassignedCustomers:0,projectsWithoutFollowups:3}
+ };
+ const mutationsBeforeScope=mutations;
+ button('刷新跟进').props.onClick();await settle();
+ assert.match(text(personButton('Synthetic zero')),/跟进记录\s*0\s*条/);
+ assert.match(text(personButton('Synthetic zero')),/负责项目\s*3\s*个/,'Sales, service and task responsibility counts projects once, including a project linked to another owner’s followup');
+ assert.match(text(personButton('Synthetic other')),/跟进记录\s*1\s*条/);
+ assert.match(text(personButton('Synthetic other')),/负责项目\s*3\s*个/);
+ assert.match(text(personButton('全部可见')),/跟进记录\s*1\s*条/);
+ assert.match(text(personButton('全部可见')),/可见项目\s*4\s*个/);
+ assertProjectCount('可见项目',4);
+ assert.equal(byTestId('followup-project-count').props.onClick,undefined,'Project count is explanatory, not a followup queue filter');
+ assert.equal(unlinkedProjectRows().length,3);
+
+ personButton('Synthetic zero').props.onClick();render();
+ assert.equal(byLabel('跟进负责人范围').props.value,'zero');
+ assert.equal(personButton('Synthetic zero').props['aria-pressed'],true);
+ assert.equal(nodes(model.tree).filter(node=>node.props?.['data-testid']==='followup-card').length,0);
+ assertProjectCount('负责项目',3);
+ const zeroEmpty=text(nodes(model.tree).find(node=>node.type==='empty'));
+ assert.match(zeroEmpty,/Synthetic zero/);
+ assert.match(zeroEmpty,/跟进记录/);
+ assert.match(zeroEmpty,/3\s*个.*项目|项目.*3\s*个/,'Zero followups must still explain the owner’s assigned projects');
+ assert.equal(unlinkedProjectRows().length,2);
+ assert.match(text(unlinkedProjectRows()),/SYN-SALES/);
+ assert.match(text(unlinkedProjectRows()),/SYN-TASK/);
+ assert.doesNotMatch(text(unlinkedProjectRows()),/SYN-UNRELATED|SYN-SERVICE/);
+
+ byLabel('跟进负责人范围').props.onChange({target:{value:'other'}});render();
+ assert.equal(personButton('Synthetic other').props['aria-pressed'],true);
+ assert.equal(nodes(model.tree).filter(node=>node.props?.['data-testid']==='followup-card').length,1);
+ assertProjectCount('负责项目',3);
+ assert.equal(unlinkedProjectRows().length,2);
+ assert.doesNotMatch(text(unlinkedProjectRows()),/SYN-SALES/);
+ personButton('全部可见').props.onClick();render();
+ assert.equal(byLabel('跟进负责人范围').props.value,'');
+ assertProjectCount('可见项目',4);
+ assert.equal(unlinkedProjectRows().length,3);
+ assert.equal(mutations,mutationsBeforeScope,'Viewing owner counts must not create followup records');
+ console.log('PASS people and summary show followup records separately from deduplicated responsible projects, including zero-record owners and all-visible scope');
 
 }finally{
  pendingRead?.();

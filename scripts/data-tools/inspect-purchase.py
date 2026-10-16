@@ -6,7 +6,7 @@ from collections import Counter
 import openpyxl
 
 if len(sys.argv) != 2:
-    raise SystemExit('Usage: python scripts/inspect-purchase.py WORKBOOK.xlsx')
+    raise SystemExit('Usage: python scripts/data-tools/inspect-purchase.py WORKBOOK.xlsx')
 source=Path(sys.argv[1])
 book=openpyxl.load_workbook(source,data_only=True,read_only=False)
 def value(x):

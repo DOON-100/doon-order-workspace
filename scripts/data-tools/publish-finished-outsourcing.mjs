@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
 import {z} from 'zod';
 const mode=process.argv[2],planPath=process.argv[3];
-if(!['preview','apply'].includes(mode)||!planPath)throw new Error('Usage: publish-finished-outsourcing.mjs preview|apply <private-plan.json>');
+if(!['preview','apply'].includes(mode)||!planPath)throw new Error('Usage: node scripts/data-tools/publish-finished-outsourcing.mjs preview|apply <private-plan.json>');
 const businessDate=z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{const d=new Date(value+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===value;},'Invalid calendar date.');
 const plan=z.object({format:z.literal('finished-outsourcing-pending-plan-v1'),supplier:z.string().trim().min(1),lines:z.array(z.object({lineId:z.string().min(1),orderVersion:z.number().int().positive(),quantity:z.number().int().positive(),productType:z.literal('成品'),businessType:z.literal('finished_full_outsource'),unit:z.enum(['付','副']),note:z.string().trim().min(3).max(2000),confirmToken:z.string().uuid(),taskToken:z.string().uuid(),cutoffDate:businessDate,dueDate:z.union([z.literal(''),businessDate]),steps:z.array(z.object({id:z.string().regex(/^[a-z][a-z0-9_-]{0,39}$/),label:z.string().trim().min(1).max(40)}).strict()).min(1).max(20).refine(rows=>new Set(rows.map(x=>x.id)).size===rows.length&&rows.some(x=>x.id==='packing'),'Steps must be unique and include packing.')}).strict()).min(1).max(20)}).strict().parse(JSON.parse(await fs.readFile(planPath,'utf8')));
 const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});

@@ -29,7 +29,7 @@ const configPath=path.join(root,'private-test-config.json');
 const rows=()=>{const connection=new DatabaseSync(dbPath,{readOnly:true});try{return connection.prepare('SELECT id,kind,data FROM records ORDER BY id').all();}finally{connection.close();}};
 async function run(value=config,mode='--dry-run',success=true){
  await fs.writeFile(configPath,JSON.stringify(value));
- const result=spawnSync(process.execPath,['standalone/configure-customer-quote-access.mjs','--build-dir',buildDir,'--config',configPath,mode],{env:{...process.env,DOON_DATA_DIR:dataDir},encoding:'utf8',windowsHide:true});
+ const result=spawnSync(process.execPath,['scripts/data-tools/configure-customer-quote-access.mjs','--build-dir',buildDir,'--config',configPath,mode],{env:{...process.env,DOON_DATA_DIR:dataDir},encoding:'utf8',windowsHide:true});
  assert.equal(result.status===0,success,result.stderr||result.stdout);
  return result.stdout.trim()?JSON.parse(result.stdout.trim()):null;
 }

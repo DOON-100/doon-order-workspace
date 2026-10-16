@@ -19,7 +19,7 @@ if ($browser.passed -lt 15 -or $business.passed -lt 73) { throw 'Required quotat
 foreach ($file in @('workspace-api.mjs','runtime.mjs','auth.mjs','server.mjs','manage.mjs','client\index.html')) { if (-not (Test-Path -LiteralPath (Join-Path $stage $file))) { throw "Missing build artifact: $file" } }
 if ($AccessConfigPath) {
  $AccessConfigPath=(Resolve-Path -LiteralPath $AccessConfigPath).Path
- & $nodePath 'standalone/configure-customer-quote-access.mjs' --build-dir $stage --config $AccessConfigPath --dry-run
+ & $nodePath 'scripts/data-tools/configure-customer-quote-access.mjs' --build-dir $stage --config $AccessConfigPath --dry-run
  if ($LASTEXITCODE -ne 0) { throw 'Quotation access preflight failed; service has not been stopped.' }
 }
 $task=Get-ScheduledTask -TaskName 'DOON-Order-Workspace'
@@ -62,14 +62,14 @@ try {
  if ($LASTEXITCODE -ne 0) { throw 'Code deployment changed data; stop and investigate.' }
  if (-not $CodeOnly) {
   $dataWritesStarted=$true
-  & $nodePath 'standalone/import-customer-quote.mjs' --build-dir $live --draft $DraftPath --source $SourcePath
+  & $nodePath 'scripts/data-tools/import-customer-quote.mjs' --build-dir $live --draft $DraftPath --source $SourcePath
   if ($LASTEXITCODE -ne 0) { throw 'Draft import did not finish. Existing data has not been rolled back; inspect any newly created draft.' }
   & $nodePath 'scripts/verify-customer-quote-deployment.mjs' after $checkpoint
   if ($LASTEXITCODE -ne 0) { throw 'Post-import preservation check failed. Do not roll back the database.' }
   # First customer binding is an explicitly approved, versioned change. Its own
   # preservation gate permits only that change and the dedicated access policy.
   if ($AccessConfigPath) {
-   $accessResult=& $nodePath 'standalone/configure-customer-quote-access.mjs' --build-dir $live --config $AccessConfigPath --apply
+   $accessResult=& $nodePath 'scripts/data-tools/configure-customer-quote-access.mjs' --build-dir $live --config $AccessConfigPath --apply
    if ($LASTEXITCODE -ne 0) { throw 'Quotation access configuration failed; inspect the preservation report. Never restore old data.' }
   }
  }

@@ -27,7 +27,7 @@ const draft={companyEn:'Synthetic Eyewear Ltd',companyZh:'合成测试公司',co
 const draftPath=path.join(root,'draft.json');
 async function run(value=draft,bytes=png,filename='synthetic.png',success=true){
  const sourcePath=path.join(root,filename);await fs.writeFile(draftPath,JSON.stringify(value));await fs.writeFile(sourcePath,bytes);
- const result=spawnSync(process.execPath,['standalone/import-customer-quote.mjs','--build-dir',buildDir,'--draft',draftPath,'--source',sourcePath],{env:{...process.env,DOON_DATA_DIR:dataDir},encoding:'utf8',windowsHide:true});
+ const result=spawnSync(process.execPath,['scripts/data-tools/import-customer-quote.mjs','--build-dir',buildDir,'--draft',draftPath,'--source',sourcePath],{env:{...process.env,DOON_DATA_DIR:dataDir},encoding:'utf8',windowsHide:true});
  assert.equal(result.status===0,success,result.stderr||result.stdout);
  return {report:result.stdout.trim()?JSON.parse(result.stdout.trim()):null,error:result.stderr};
 }
