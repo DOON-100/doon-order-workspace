@@ -98,7 +98,7 @@ try{
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[0]}).innerText(),/重要出货/);
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[2]}).innerText(),/★★★/);
  assert.match(await page.getByTestId('followup-card').filter({hasText:titles[1]}).innerText(),/客户待确认/);
- assert.match(await page.getByTestId('followup-link-summary').innerText(),/35 条跟进：0 条已关联 0 个项目，35 条未关联项目/);
+ assert.match(await page.getByTestId('followup-link-summary').innerText(),/35 条跟进记录：0 条已关联 0 个项目，35 条未关联项目/);
  await page.getByRole('heading',{name:'尚未建立客户跟进的项目',exact:true}).waitFor();
  await page.getByRole('row').filter({hasText:'SYNTH-FOLLOW-EXISTING'}).getByRole('button',{name:'打开项目',exact:true}).waitFor();
  await page.screenshot({path:path.join(dir,'followup-owner-board.png'),fullPage:true});
