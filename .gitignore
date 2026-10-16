@@ -71,3 +71,6 @@ __pycache__/
 
 # Private import jobs, customer configuration, source files, and generated reports.
 /private-data-tools/
+
+# Retired one-off task script retained locally; do not publish it again.
+/scripts/setup-jinbo-pilot.mjs

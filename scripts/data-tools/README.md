@@ -21,17 +21,16 @@ tests/data-tools/         只含合成数据的测试
 private-data-tools/       客户原表、图片、配置、结果与检查点，Git 忽略
 ```
 
-历史原件和任务目录保留在原处，不为了整理代码而移动、删除或提交客户文件。私有任务也可以放在仓库外。路径参数化意味着可换机器运行，并不意味着所有输入都已经存进数据库。
+历史原件和任务目录保留在原处，不为了整理代码而移动、删除或提交客户文件。一次性业务任务脚本只保存在本机被忽略的 `private-data-tools/one-off-scripts/` 或仓库外，不提交到 GitHub。路径参数化意味着可换机器运行，并不意味着所有输入都已经存进数据库。
 
-### 尚在原位置的旧脚本
+### 其他通用维护入口
 
-这些链接用于识别历史工具，不是迁移执行顺序。它们尚未全部搬入本目录，旧调用和相对路径保持原样；以后迁址需同步修改引用并完成适用测试。
+以下程序按输入参数或私有配置处理任务，仍有独立用途或测试、部署调用，因此保留在原位置。这份索引不是迁移执行顺序；以后迁址需同步修改引用并完成适用测试。
 
-| 旧位置 | 定位与使用限制 |
+| 位置 | 定位与使用限制 |
 | --- | --- |
 | `scripts/inspect-purchase.py` | 早期采购表检查，输出可能含原始明细；通用检查优先用本目录 workbook.py |
 | `scripts/import-purchase-live.mjs` | 指定采购数据导入，需来源及验收清单；不作为迁云初始化 |
-| `scripts/setup-jinbo-pilot.mjs` | 指定业务试用和账号设置，属于一次性历史工具，禁止作为通用安装步骤 |
 | `standalone/import-customer-quote.mjs` | 旧报价草稿导入；新任务优先使用准备任务包、演练和维护流程 |
 | `standalone/import-customer-price-archive.mjs`、`customer-price-template-to-json.mjs` | 历史价格档案/模板专用转换与导入，保留原件和专用验收 |
 | `standalone/import-customer-followup.mjs`、`import-ivy-service.mjs`、`import-engineering-drawings.mjs` | 跟进、客户服务和工程图纸专项维护，不能用来重建已迁移业务 |
