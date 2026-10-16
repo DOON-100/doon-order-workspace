@@ -17,7 +17,7 @@ export async function generateSyntheticSuggestions(options) {
   if(!options || Object.keys(options).some(key=>!optionNames.has(key)))fail('P1_GENERATION_OPTIONS_REJECTED');
   const {origin,adapter,store,sessionCookie,resolveSession,providerOptions}=options;
   if(typeof resolveSession!=='function'||typeof sessionCookie!=='string'||!sessionCookie||typeof store?.addBatch!=='function')fail('P1_TRUSTED_SESSION_REQUIRED');
-  const actor=resolveSession(sessionCookie),actorId=actor.id;
+  const actor=await resolveSession(sessionCookie),actorId=actor.id;
   if(!['syn-employee-a','syn-employee-b'].includes(actorId)||actor.role!=='sales')fail('P1_ACTOR_REJECTED');
   const runId=options.runId??`syn-run-${actorId}-20261015`;
   if(!/^syn-[A-Za-z0-9-]{1,100}$/.test(runId))fail('P1_RUN_ID_REJECTED');
@@ -25,14 +25,13 @@ export async function generateSyntheticSuggestions(options) {
   if(!['scripted-offline-v1','deepseek-v4-pro'].includes(modelId))fail('P1_MODEL_REJECTED');
   let observedOrders,readCount=0,stepsObserved=0,reportedCalls=0,violation=false;
   const proposals=new Map();
-  function currentActor() {
-    const current=resolveSession(sessionCookie);
+  async function currentActor() {
+    const current=await resolveSession(sessionCookie);
     if(current.id!==actorId||current.role!=='sales')fail('P1_SESSION_CHANGED');
     adapter.actor(actorId);
     return current;
   }
   function validateProposal(input) {
-    currentActor();
     if(!observedOrders)fail('P1_READ_REQUIRED');
     const observed=observedOrders.find(order=>order.id===input.sourceId);
     if(!observed)fail('P1_UNOBSERVED_SOURCE');
@@ -44,10 +43,10 @@ export async function generateSyntheticSuggestions(options) {
     inputSchema:readSchema,
     execute:async input=>{
       try {
-        readSchema.parse(input);currentActor();
+        readSchema.parse(input);await currentActor();
         if(++readCount!==1)fail('P1_READ_LIMIT');
         const response=await readOrdersFromApi(origin,sessionCookie);
-        currentActor();
+        await currentActor();
         if(!Array.isArray(response.items)||response.items.length>50)fail('P1_READ_RESPONSE_REJECTED');
         for(const order of response.items)if(sourceDigest(adapter.getOrder(actorId,order.id))!==sourceDigest(order))fail('P1_READ_SOURCE_MISMATCH');
         observedOrders=structuredClone(response.items);
@@ -59,7 +58,7 @@ export async function generateSyntheticSuggestions(options) {
     inputSchema:suggestSchema,
     execute:async input=>{
       try {
-        suggestSchema.parse(input);validateProposal(input);
+        suggestSchema.parse(input);await currentActor();validateProposal(input);
         if(proposals.has(input.sourceId)||proposals.size>=50)fail('P1_PROPOSAL_LIMIT');
         proposals.set(input.sourceId,structuredClone(input));
         return {sourceId:input.sourceId,staged:true,synthetic:true};
@@ -105,7 +104,7 @@ export async function generateSyntheticSuggestions(options) {
     });
   } catch {fail('P1_MODEL_RUN_FAILED');}
   if(violation||output.error||output.finishReason!=='stop'||readCount!==1||!observedOrders||reportedCalls!==1+proposals.size)fail('P1_GENERATION_REJECTED');
-  currentActor();
+  await currentActor();
   const expected=observedOrders.filter(order=>draftForOrder(order));
   if(expected.length!==proposals.size||expected.some(order=>!proposals.has(order.id)))fail('P1_INCOMPLETE_PROPOSALS');
   // No rows are persisted while the model runs. Recheck every source before one
@@ -115,7 +114,7 @@ export async function generateSyntheticSuggestions(options) {
     validateProposal(input);
     recordSuggestion({adapter,store:{add:item=>{rows.push(item);return true;}},actorId,...input,runId});
   }
-  currentActor();
+  // No await between the final current-source checks above and the transaction.
   const results=store.addBatch(rows);
   return {actorId,runId,created:results.filter(Boolean).length,modelCalls:stepsObserved,readCalls:readCount,selected:rows.length,model:modelId,synthetic:true};
 }

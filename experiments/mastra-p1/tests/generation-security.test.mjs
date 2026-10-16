@@ -213,3 +213,27 @@ test('fixture prompt injection cannot authorize a cross-customer suggestion even
   assert.equal(injectedSourceReachedModel,true);
   assert.deepEqual(c.state,before);
 });
+
+test('asynchronous session checks cannot bypass rejection or the final source recheck',async t=>{
+  await t.test('rejected identity promise stops before any model call',async sub=>{
+    const c=await setup(sub),model=makeScriptedModel(()=>done);
+    await rejectedWithoutWrites(c,model,{resolveSession:async()=>{
+      await new Promise(resolve=>setImmediate(resolve));
+      throw Object.assign(new Error('synthetic revoked session'),{status:401});
+    }});
+    assert.equal(model.calls.length,0);
+  });
+  await t.test('source changes while awaiting the final identity check',async sub=>{
+    const c=await setup(sub);let modelFinished=false,changed=false;
+    const model=afterRead(({callIndex})=>{
+      if(callIndex===1)return proposals();
+      modelFinished=true;return done;
+    });
+    await rejectedWithoutWrites(c,model,{resolveSession:async cookie=>{
+      await new Promise(resolve=>setImmediate(resolve));
+      if(modelFinished&&!changed){c.state.records.find(item=>item.id===sourceA).quantity++;changed=true;}
+      return c.server.resolveSession(cookie);
+    }});
+    assert.equal(changed,true);
+  });
+});

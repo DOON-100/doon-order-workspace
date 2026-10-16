@@ -118,6 +118,29 @@ test('credential login exposes a bounded expiry; logout and expiration revoke re
   assert.equal(await sandboxDigest(c.directory),before);assert.deepEqual(c.state,c.before);
 });
 
+test('HTTP logout and account switching never report success after a backend revocation failure',async t=>{
+  const state=createSyntheticState(),before=structuredClone(state),adapter=await createReadAdapter(state);
+  let broken=false,issued=0;const revoked=[];
+  const identity={sessionTtlMs:60_000,
+    async login(){issued++;return {token:(issued===1?'a':'b').repeat(43)};},
+    async resolveSession(){return {...adapter.actor('syn-employee-a'),sessionExpiresAt:Date.now()+60_000};},
+    async logout(token){revoked.push(token);if(broken)throw new Error('synthetic revocation unavailable');},
+    async close(){},
+  };
+  const server=await startReadonlyServer({adapter,identity,store:{list:()=>[]}});
+  t.after(()=>server.close());
+  const cookie=await syntheticSession(server.origin,{username:'synthetic',password:'synthetic'});
+  const request=(route,options={})=>fetch(server.origin+route,{...options,headers:{origin:server.origin,cookie,...options.headers},redirect:'error'});
+  broken=true;
+  const logout=await request('/api/logout',{method:'POST'});
+  assert.equal(logout.status,500);assert.equal(logout.headers.get('set-cookie'),null);
+  assert.equal((await request('/api/me')).status,200,'simulated backend still accepts the old token; logout must not claim success');
+  const change=await request('/api/session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({username:'synthetic',password:'synthetic'})});
+  assert.equal(change.status,500);assert.equal(change.headers.get('set-cookie'),null);
+  assert.deepEqual(revoked,['a'.repeat(43),'a'.repeat(43),'b'.repeat(43)]);
+  assert.deepEqual(state,before);
+});
+
 async function syntheticPage(fetchImpl) {
   // A minimal DOM harness executes the actual browser script, using fake fetch only.
   class Node {

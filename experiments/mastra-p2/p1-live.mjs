@@ -22,13 +22,13 @@ try {
   await writeRunJson(budgetDirectory,attemptId+'.json',report);
   stage='setup';
   const [{createP2Model},{createSyntheticState},{createReadAdapter},{createSandbox,openSuggestionStore,sandboxDigest},
-    {createSyntheticIdentity},{startReadonlyServer,syntheticSession},{generateSyntheticSuggestions}]=await Promise.all([
+    {createProjectIdentity},{startReadonlyServer,syntheticSession},{generateSyntheticSuggestions}]=await Promise.all([
       import('./model.mjs'),import('../mastra-p1/fixtures.mjs'),import('../mastra-p1/policy.mjs'),import('../mastra-p1/sandbox.mjs'),
-      import('../mastra-p1/auth.mjs'),import('../mastra-p1/server.mjs'),import('../mastra-p1/generate.mjs'),
+      import('../mastra-p1/project-auth.mjs'),import('../mastra-p1/server.mjs'),import('../mastra-p1/generate.mjs'),
     ]);
   const state=createSyntheticState(),sourceBefore=structuredClone(state),adapter=await createReadAdapter(state);
   sandbox=await createSandbox();reader=await openSuggestionStore(sandbox);writer=await openSuggestionStore(sandbox,{readOnly:false});
-  const provision=await createSyntheticIdentity({adapter});identity=provision.identity;
+  const provision=await createProjectIdentity({state,adapter});identity=provision.identity;
   server=await startReadonlyServer({adapter,store:reader,identity});
   const key=process.env.DEEPSEEK_API_KEY;assert(key);
   for(const suffix of ['a','b']) {
@@ -92,7 +92,7 @@ try {
   report??={attemptId,synthetic:true};report.status='failed';report.failedStage=stage;
   report.errorCode=/^P1_[A-Z_]+$/.test(error?.message)?error.message:'P1_LIVE_VALIDATION_FAILED';
 } finally {
-  try {if(server)await server.close();else identity?.close();writer?.close();reader?.close();}catch{process.exitCode=1;if(report){report.status='failed';report.errorCode='P1_CLEANUP_FAILED';}}
+  try {if(server)await server.close();else await identity?.close();writer?.close();reader?.close();}catch{process.exitCode=1;if(report){report.status='failed';report.errorCode='P1_CLEANUP_FAILED';}}
   if(report){report.finishedAt=new Date().toISOString();report.sandbox=sandbox??null;
     // A failed model run still costs money. Include all reservations, including
     // unknown usage, instead of reporting null/zero after partial completion.

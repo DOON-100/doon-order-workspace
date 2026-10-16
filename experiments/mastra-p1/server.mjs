@@ -8,7 +8,7 @@ const publicFiles=new Map([
   ['/app.js',['app.js','text/javascript; charset=utf-8']],
   ['/style.css',['style.css','text/css; charset=utf-8']],
 ]);
-export async function startReadonlyServer({adapter,store,identity}) {
+export async function startReadonlyServer({adapter,store,identity,projectPolicy}) {
   assertIsolatedEnvironment();
   if(!identity || !['login','resolveSession','logout','close'].every(key=>typeof identity[key]==='function') || !Number.isInteger(identity.sessionTtlMs) || identity.sessionTtlMs<=0)throw new TypeError('必须显式提供可信合成认证');
   let origin,cookieName;
@@ -25,6 +25,13 @@ export async function startReadonlyServer({adapter,store,identity}) {
   }
   function resolveSession(cookieHeader) {
     return identity.resolveSession(sessionToken(cookieHeader));
+  }
+  async function revokeCookie(cookieHeader) {
+    let token;
+    try {token=sessionToken(cookieHeader);}catch(error){if(error.status===401)return;throw error;}
+    // Missing cookies are harmless. A backend revocation failure must not be
+    // reported as a successful logout while the old session may remain valid.
+    await identity.logout(token);
   }
   function cookie(token,clear=false) {
     return `${cookieName}=${clear?'':token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear?0:Math.ceil(identity.sessionTtlMs/1000)}`;
@@ -50,7 +57,11 @@ export async function startReadonlyServer({adapter,store,identity}) {
         queryKeys(url);
         if(req.headers.origin!==origin)return send(res,403,{error:'登录需要当前实验页面来源'});
         const data=await readJson(req), result=await identity.login(data,req.socket.remoteAddress||'unknown-peer');
-        try{identity.logout(sessionToken(req.headers.cookie));}catch{}
+        try {await revokeCookie(req.headers.cookie);}catch(error){
+          // Do not return a fresh token when replacing the previous session fails.
+          try {await identity.logout(result.token);}catch{}
+          throw error;
+        }
         return send(res,200,{synthetic:true},{'Set-Cookie':cookie(result.token)});
       }
       if(url.pathname==='/api/logout' && req.method==='POST') {
@@ -58,7 +69,7 @@ export async function startReadonlyServer({adapter,store,identity}) {
         if(req.headers.origin!==origin)return send(res,403,{error:'退出需要当前实验页面来源'});
         const data=await readJson(req,{allowEmpty:true});
         if(!data||typeof data!=='object'||Array.isArray(data)||Object.keys(data).length)return send(res,400,{error:'退出请求不接受额外字段'});
-        try{identity.logout(sessionToken(req.headers.cookie));}catch{}
+        await revokeCookie(req.headers.cookie);
         return send(res,200,{synthetic:true},{'Set-Cookie':cookie('',true)});
       }
       if(req.method!=='GET')return send(res,405,{error:'仅支持只读查询；本阶段不提供批准、保存或写回'}, {'Allow':'GET'});
@@ -68,7 +79,7 @@ export async function startReadonlyServer({adapter,store,identity}) {
       }
       if(url.pathname==='/health'){queryKeys(url);return send(res,200,{ok:true,service:'doon-mastra-p1-synthetic',synthetic:true});}
       if(!url.pathname.startsWith('/api/'))return send(res,404,{error:'页面不存在'});
-      const session=resolveSession(req.headers.cookie),id=session.id;
+      const session=await resolveSession(req.headers.cookie),id=session.id;
       if(url.pathname==='/api/me'){queryKeys(url);return send(res,200,{...session,synthetic:true});}
       if(url.pathname==='/api/orders') {
         queryKeys(url,['limit','cursor']);
@@ -79,6 +90,21 @@ export async function startReadonlyServer({adapter,store,identity}) {
         return send(res,200,adapter.getOrder(id,sourceId));
       }
       if(url.pathname==='/api/suggestions'){queryKeys(url);return send(res,200,{items:visibleSuggestions(adapter,store,id),observedAt:adapter.listOrders(id,{limit:1}).observedAt,synthetic:true});}
+      if(projectPolicy) {
+        if(url.pathname==='/api/teams'){queryKeys(url);return send(res,200,projectPolicy.listTeams(id));}
+        for(const [resource,list,get] of [['customers','listCustomers','getCustomer'],['tasks','listTasks','getTask']]) {
+          const route='/api/'+resource;
+          if(url.pathname===route) {
+            queryKeys(url,['limit','teamId']);
+            return send(res,200,projectPolicy[list](id,{limit:url.searchParams.has('limit')?Number(url.searchParams.get('limit')):20,teamId:url.searchParams.get('teamId')||''}));
+          }
+          if(url.pathname.startsWith(route+'/')) {
+            queryKeys(url);let resourceId;
+            try{resourceId=decodeURIComponent(url.pathname.slice(route.length+1));}catch{return send(res,400,{error:'资源编号无效'});}
+            return send(res,200,projectPolicy[get](id,resourceId));
+          }
+        }
+      }
       return send(res,404,{error:'接口不存在'});
     } catch(error) {
       const status=[400,401,403,404,409,413,415,429].includes(error.status)?error.status:500;
@@ -91,7 +117,10 @@ export async function startReadonlyServer({adapter,store,identity}) {
   if(port===8787){server.close();throw new Error('实验禁止使用8787');}
   origin=`http://127.0.0.1:${port}`;cookieName=`doon_mastra_p1_${port}`;
   let closing;
-  return {origin,port,resolveSession,close:()=>closing??=new Promise((resolve,reject)=>{identity.close();server.close(error=>error?reject(error):resolve());server.closeAllConnections();})};
+  return {origin,port,resolveSession,close:()=>closing??=(async()=>{
+    await new Promise((resolve,reject)=>{server.close(error=>error?reject(error):resolve());server.closeAllConnections();});
+    await identity.close();
+  })()};
 }
 
 export async function syntheticSession(origin,credentials) {

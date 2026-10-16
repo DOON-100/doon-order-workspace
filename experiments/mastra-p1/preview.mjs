@@ -5,7 +5,8 @@ import {createSyntheticState} from './fixtures.mjs';
 import {createReadAdapter} from './policy.mjs';
 import {createSandbox,openSuggestionStore,assertIsolatedEnvironment,validateSandbox} from './sandbox.mjs';
 import {startReadonlyServer,syntheticSession} from './server.mjs';
-import {createSyntheticIdentity} from './auth.mjs';
+import {createProjectIdentity} from './project-auth.mjs';
+import {createProjectReadPolicy} from './project-policy.mjs';
 import {generateSyntheticSuggestions} from './generate.mjs';
 
 assertIsolatedEnvironment();
@@ -18,12 +19,20 @@ for(let index=0;index<args.length;index++) {
   throw new Error('不支持的实验参数');
 }
 const directory=resume||await createSandbox();
-const adapter=await createReadAdapter(createSyntheticState());
-const {identity,credentials}=await createSyntheticIdentity({adapter});
-const reader=await openSuggestionStore(directory),server=await startReadonlyServer({adapter,store:reader,identity});
-let stopping=false;
-async function stop(){if(stopping)return;stopping=true;await server.close();reader.close();}
+// Reject an invalid resume path before provisioning any synthetic accounts.
+await validateSandbox(directory);
+let identity,reader,server,stopping=false;
+async function stop(){
+  if(stopping)return;stopping=true;
+  try {if(server)await server.close();else await identity?.close();}
+  finally {reader?.close();}
+}
 try {
+  const state=createSyntheticState(),adapter=await createReadAdapter(state),projectPolicy=await createProjectReadPolicy(state);
+  const provision=await createProjectIdentity({state,adapter});identity=provision.identity;
+  const {credentials}=provision;
+  reader=await openSuggestionStore(directory);
+  server=await startReadonlyServer({adapter,store:reader,identity,projectPolicy});
   const runs=[];
   // A nonempty sandbox may be an interrupted partial run. Recompute both fixed
   // synthetic employees; the suggestion ledger preserves existing rows unchanged.
