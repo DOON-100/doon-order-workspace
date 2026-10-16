@@ -47,6 +47,8 @@ next-env.d.ts
 /.npm-cache/
 /test-output/
 *.tsbuildinfo
+__pycache__/
+*.py[cod]
 /lan-data/
 /lan-dist/
 
