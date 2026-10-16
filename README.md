@@ -1,5 +1,7 @@
 # 度昂订单协作中台
 
+Agent 的目标能力、Mastra 前期验证、架构、触发、上下文、Memory、权限及实施验收方案见 [Agent 系统设计构想](docs/agent-system-design.md)。该文档是待分阶段实施的设计基线，不代表功能已上线。
+
 本轮整理的可复用 Excel 与数据维护工具统一放在 [scripts/data-tools](scripts/data-tools/README.md)，按需运行，不接入网站启动流程。客户原表、图片、任务配置与结果保存在私有目录，和代码分开管理。
 
 ## 客户报价（双语草稿与确认归档）
