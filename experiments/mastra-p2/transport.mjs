@@ -3,7 +3,16 @@ import path from 'node:path';
 import os from 'node:os';
 import {createHash, randomUUID} from 'node:crypto';
 
-export const limits = Object.freeze({budgetCny:10, requests:24, outputTokens:4096, bodyBytes:65536});
+export const limits = Object.freeze({budgetCny:10, requests:32, outputTokens:4096, bodyBytes:65536});
+export const p1AttemptRequestLimit = 8;
+/** Share one guard across both synthetic actors; reject before transport reservation. */
+export function createP1AttemptRequestGuard() {
+  let requests=0;
+  return ()=>{
+    if(requests>=p1AttemptRequestLimit)throw new Error('P1_ATTEMPT_REQUEST_LIMIT');
+    requests++;
+  };
+}
 // Official CNY peak rates; count every input token as an uncached token.
 export const rates = Object.freeze({inputPerMillion:9, outputPerMillion:27});
 const sha = value => createHash('sha256').update(value).digest('hex');

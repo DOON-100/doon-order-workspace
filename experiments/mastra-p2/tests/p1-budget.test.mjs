@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp, readFile, writeFile, realpath, lstat, readdir, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 import os from 'node:os';
@@ -18,7 +19,7 @@ async function removeNewDirectory(directory,temporaryRoot,prefix) {
   await rm(directory,{recursive:true,force:false});
 }
 
-async function runWithoutKey(t,{entries,budgetCny}) {
+async function runWithoutKey(t,{entries,budgetCny,priorChargedUpperCny=entries*0.125}) {
   const temporaryRoot=await realpath(os.tmpdir());
   const directory=await mkdtemp(path.join(temporaryRoot,'doon-mastra-p2-'));
   t.after(()=>removeNewDirectory(directory,temporaryRoot,'doon-mastra-p2-'));
@@ -27,9 +28,10 @@ async function runWithoutKey(t,{entries,budgetCny}) {
   // synthetic records, not copied from a live run or a provider response.
   const ledger={format:1,budgetCny,rates,entries:Array.from({length:entries},(_,index)=>({
     id:index+1,caseId:'synthetic-prior',phase:'initial',thinking:'enabled',stream:false,
-    state:'network-error',reservedCny:0.125,chargedCny:0.125,usageKnown:false,
+    state:'network-error',reservedCny:index===entries-1?priorChargedUpperCny:0,
+    chargedCny:index===entries-1?priorChargedUpperCny:0,usageKnown:false,
     requestReasoning:[],
-  })),chargedUpperCny:entries*0.125};
+  })),chargedUpperCny:priorChargedUpperCny};
   const markerBytes=JSON.stringify(marker)+'\n',ledgerBytes=JSON.stringify(ledger)+'\n';
   await writeFile(path.join(directory,'run.json'),markerBytes,{flag:'wx'});
   await writeFile(path.join(directory,'budget.json'),ledgerBytes,{flag:'wx'});
@@ -88,6 +90,16 @@ async function runWithoutKey(t,{entries,budgetCny}) {
   assert.equal(report.costVerificationUnavailable,undefined);
   const audit=JSON.parse(await readFile(auditFile,'utf8'));
   assert.equal(audit.fetchCalls,0);
+  if(audit.keyChecks>0) {
+    const productionSourceHashes={};
+    for(const name of ['auth.mjs','runtime.mjs']) {
+      const original=await readFile(new URL('../../../standalone/'+name,import.meta.url));
+      productionSourceHashes['standalone/'+name]=createHash('sha256').update(original).digest('hex');
+    }
+    assert.deepEqual(report.authentication,{
+      implementation:'project-auth',sourceImplementation:'unmodified-project-auth-in-child',syntheticOnly:true,productionSourceHashes,
+    });
+  }
   assert.equal(await readFile(path.join(directory,'run.json'),'utf8'),markerBytes);
   assert.equal(await readFile(path.join(directory,'budget.json'),'utf8'),ledgerBytes);
   assert.deepEqual((await readdir(directory)).sort(),[
@@ -96,14 +108,31 @@ async function runWithoutKey(t,{entries,budgetCny}) {
   return {report,result,audit};
 }
 
-test('P1 refuses seventeen prior requests before setup and preserves cumulative reservations',async t=>{
-  assert.equal(limits.requests,24);
-  const {report,result,audit}=await runWithoutKey(t,{entries:17,budgetCny:10});
+test('P1 refuses twenty-five prior requests before setup and preserves cumulative reservations',async t=>{
+  assert.equal(limits.requests,32);
+  const {report,result,audit}=await runWithoutKey(t,{entries:25,budgetCny:5});
   assert.equal(audit.keyChecks,0);
   assert.equal(report.failedStage,'preflight');
   assert.equal(report.errorCode,'P1_INSUFFICIENT_REQUEST_ALLOWANCE');
   assert.equal(result.sandbox,null);
   assert.equal(report.sandbox,null);
+});
+
+test('P1 admits twenty-two prior requests without resetting their five-yuan ledger or recorded costs',async t=>{
+  const {report,audit}=await runWithoutKey(t,{entries:22,budgetCny:5,priorChargedUpperCny:0.191215});
+  assert(audit.keyChecks>0,'The request allowance must pass before the intentionally missing key is checked.');
+  assert.equal(report.failedStage,'setup');
+  assert.equal(report.priorProviderRequests,22);
+  assert.equal(report.priorChargedUpperCny,0.191215);
+  assert.equal(report.ledgerBudgetCny,5);
+});
+
+test('P1 admits exactly eight remaining requests at the new cumulative boundary',async t=>{
+  const {report,audit}=await runWithoutKey(t,{entries:24,budgetCny:5});
+  assert(audit.keyChecks>0);
+  assert.equal(report.failedStage,'setup');
+  assert.equal(report.priorProviderRequests,24);
+  assert.equal(report.ledgerBudgetCny,5);
 });
 
 test('P1 missing-key setup failure reports prior costs without resetting or increasing a five-yuan ledger',async t=>{

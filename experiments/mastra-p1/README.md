@@ -1,8 +1,8 @@
 # Mastra P1：合成订单只读 API 与员工建议工作台
 
-本目录延续 `codex/mastra-local-validation` 的隔离实验。原 P0 实验保留在 [`examples/mastra-local`](../../examples/mastra-local/README.md)。最新主线登录与权限适配见 [PROJECT-AUTH-ACCEPTANCE.md](./PROJECT-AUTH-ACCEPTANCE.md)；此前独立合成认证下的真实 DeepSeek 结果见 [AUTH-MODEL-ACCEPTANCE.md](./AUTH-MODEL-ACCEPTANCE.md)，早期记录保留在 [ACCEPTANCE.md](./ACCEPTANCE.md)。
+本目录延续 `codex/mastra-local-validation` 的隔离实验。原 P0 实验保留在 [`examples/mastra-local`](../../examples/mastra-local/README.md)。最新模型复测、员工网关及云容量状态见 [LOGIN-LIVE-ACCEPTANCE.md](./LOGIN-LIVE-ACCEPTANCE.md)；此前主线登录与权限适配见 [PROJECT-AUTH-ACCEPTANCE.md](./PROJECT-AUTH-ACCEPTANCE.md)，独立合成认证下的真实 DeepSeek 结果见 [AUTH-MODEL-ACCEPTANCE.md](./AUTH-MODEL-ACCEPTANCE.md)，早期记录保留在 [ACCEPTANCE.md](./ACCEPTANCE.md)。
 
-预览订单、客户和员工来自 `fixtures.mjs`；`project-fixtures.mjs` 额外提供多角色、团队和三类任务权限测试，全部为合成数据。默认预览使用脚本模拟模型，显式真实联调使用 DeepSeek V4 Pro。两种入口均已接入主线认证适配器，共享受信会话、工具与建议事务链路；本轮只免费验证了新认证链路，未重跑收费模型。仅新增独立建议记录，不创建正式任务或修改订单。页面不提供批准、保存、派发或业务写回。
+预览订单、客户和员工来自 `fixtures.mjs`；`project-fixtures.mjs` 额外提供多角色、团队和三类任务权限测试，全部为合成数据。默认预览使用脚本模拟模型，显式真实联调使用 DeepSeek V4 Pro。两种入口均已接入主线认证适配器，共享受信会话、工具与建议事务链路；新认证后的真实模型复测已通过，两名员工各生成 2 条建议，累计保守费用 ¥0.283556。仅新增独立建议记录，不创建正式任务或修改订单。页面不提供批准、保存、派发或业务写回。
 
 ## 运行
 
@@ -37,6 +37,8 @@ npm run live:p1 -- --budget-ledger "<已有 P2 临时目录>"
 测试自动创建并清理自己的临时目录。预览目录可能被系统清理，不作为正式持久存储。安装只使用本目录的依赖与 lockfile，不需要在业务根目录执行安装、构建、部署或迁移。
 
 ## 数据与权限边界
+
+可选员工网关协议预览：`node preview.mjs --synthetic --gateway-auth`；只验证初始化并立即关闭可追加 `--prepare-only`。`gateway-identity.mjs` 为此新建独立网关与 SQL 库，先通过原生 HTTP 路由完成初始改密，再把 P1 的登录／会话／退出交给该网关，每次使用都核对原生会话和只读身份上下文。它不接受自定义生产 URL、数据库或端口。`--resume` 仅恢复建议记录，不恢复该桥接器的会话。此模式仍是本机合成实验，代理头由实验客户端模拟，尚未验证真实 TLS 或浏览器对 Secure Cookie 的执行。
 
 - `policy.mjs` 在内存中编译当前分支的 `lib/domain.ts` 并调用真实 `canRead`。编译入口只允许该纯规则文件，禁止新增依赖，不加载业务 store、运行时、数据库或附件目录。
 - `project-auth.mjs` 将当前分支未修改的 `standalone/auth.mjs`、`runtime.mjs` 原文复制并核对 SHA-256，在严格限定的新临时目录中启动独立认证子进程。该进程只收到白名单环境，`DOON_DATA_DIR` 固定到合成库，不加载主 server 或业务库。复用真实建账号、首次改密、scrypt、会话、注销、撤销和登录审计。
@@ -77,7 +79,7 @@ npm run live:p1 -- --budget-ledger "<已有 P2 临时目录>"
 
 ## 验证与下一阶段
 
-2026-10-16 更新：新增主线认证、订单／客户／团队／三类任务权限矩阵、真实认证 HTTP 和异步会话提交检查；最新计数及证据见 [本轮报告](./PROJECT-AUTH-ACCEPTANCE.md)。此前独立认证模式下 DeepSeek 已在两名合成员工上生成 4 条建议，该真实记录保留，不计作新主线认证适配后的再次实测。
+2026-10-16 更新：主线认证、订单／客户／团队／三类任务权限矩阵、真实认证 HTTP 和异步会话提交检查见 [前轮报告](./PROJECT-AUTH-ACCEPTANCE.md)。新主线认证适配后的 DeepSeek 再次实测通过；本轮证据、员工网关验证及仍未完成的云验收见 [本轮报告](./LOGIN-LIVE-ACCEPTANCE.md)。历史记录保留，各轮分别计数。
 
 `tests/policy.test.mjs` 检查权限、DTO、分页和数据不变；`tests/http.test.mjs` 检查真实 HTTP/Agent、来源失效、拒绝写入、完整及部分建议恢复；`tests/sdk.test.mjs` 额外检查 generate/stream、无记忆新上下文、工具审批和 libSQL 跨进程恢复。原 11 项集成与 5 项源码检查仍用原实验命令运行，不能用本目录测试数替代。
 

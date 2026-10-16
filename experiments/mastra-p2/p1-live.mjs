@@ -1,7 +1,7 @@
 import {readFile,readdir,lstat} from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {validateRun,writeRunJson,limits} from './transport.mjs';
+import {validateRun,writeRunJson,limits,p1AttemptRequestLimit,createP1AttemptRequestGuard} from './transport.mjs';
 
 // Provider errors and SDK logs may contain model data: retain safe summaries only.
 const print=process.stdout.write.bind(process.stdout);
@@ -16,7 +16,7 @@ try {
   budgetDirectory=await validateRun(args[3]);
   const before=JSON.parse(await readFile(path.join(budgetDirectory,'budget.json'),'utf8'));
   assert(before.entries.length>0&&before.chargedUpperCny<=before.budgetCny&&before.budgetCny<=10&&!before.budgetViolation);
-  assert(before.entries.length+8<=limits.requests,'P1_INSUFFICIENT_REQUEST_ALLOWANCE');
+  assert(before.entries.length+p1AttemptRequestLimit<=limits.requests,'P1_INSUFFICIENT_REQUEST_ALLOWANCE');
   report={status:'running',attemptId,startedAt:new Date().toISOString(),synthetic:true,model:'deepseek-v4-pro',thinking:'enabled',
     priorProviderRequests:before.entries.length,priorChargedUpperCny:before.chargedUpperCny,ledgerBudgetCny:before.budgetCny,authorizedCumulativeLimitCny:10,runs:[]};
   await writeRunJson(budgetDirectory,attemptId+'.json',report);
@@ -29,8 +29,17 @@ try {
   const state=createSyntheticState(),sourceBefore=structuredClone(state),adapter=await createReadAdapter(state);
   sandbox=await createSandbox();reader=await openSuggestionStore(sandbox);writer=await openSuggestionStore(sandbox,{readOnly:false});
   const provision=await createProjectIdentity({state,adapter});identity=provision.identity;
+  assert(provision.evidence?.syntheticOnly===true&&provision.evidence.implementation==='unmodified-project-auth-in-child','P1_AUTHENTICATION_EVIDENCE_REJECTED');
+  const productionSourceHashes={};
+  for(const name of ['auth.mjs','runtime.mjs']) {
+    const hash=provision.evidence.sourceHashes?.[name];
+    assert(typeof hash==='string'&&/^[a-f0-9]{64}$/.test(hash),'P1_AUTHENTICATION_EVIDENCE_REJECTED');
+    productionSourceHashes['standalone/'+name]=hash;
+  }
+  report.authentication={implementation:'project-auth',sourceImplementation:'unmodified-project-auth-in-child',syntheticOnly:true,productionSourceHashes};
   server=await startReadonlyServer({adapter,store:reader,identity});
   const key=process.env.DEEPSEEK_API_KEY;assert(key);
+  const reserveAttemptRequest=createP1AttemptRequestGuard();
   for(const suffix of ['a','b']) {
     stage='generate-'+suffix;
     const actorId='syn-employee-'+suffix,credential=provision.credentials.find(item=>item.actorId===actorId);
@@ -43,6 +52,7 @@ try {
         'syn-order-'+(suffix==='a'?'b':'a')+'-',suffix==='a'?'合成客户乙':'合成客户甲',
         ...provision.credentials.flatMap(item=>[item.username,item.password])];
       assert(forbidden.every(value=>!text.includes(value)),'P1_OUTBOUND_BOUNDARY_REJECTED');
+      reserveAttemptRequest();
       auditedRequests++;
     }});
     const result=await generateSyntheticSuggestions({origin:server.origin,adapter,store:writer,sessionCookie,resolveSession:server.resolveSession,
@@ -62,7 +72,7 @@ try {
   report.suggestionDatabaseSha256=await sandboxDigest(sandbox);
   const ledger=JSON.parse(await readFile(path.join(budgetDirectory,'budget.json'),'utf8'));
   const entries=ledger.entries.slice(before.entries.length);
-  assert(entries.length>=6&&entries.length<=8&&entries.every(item=>item.caseId.startsWith(attemptId)&&item.httpStatus===200&&item.usageKnown&&item.state==='complete'));
+  assert(entries.length>=6&&entries.length<=p1AttemptRequestLimit&&entries.every(item=>item.caseId.startsWith(attemptId)&&item.httpStatus===200&&item.usageKnown&&item.state==='complete'));
   assert(ledger.chargedUpperCny<=ledger.budgetCny&&ledger.chargedUpperCny<=10&&!ledger.budgetViolation);
   report.providerRequests=entries.length;report.totalProviderRequests=ledger.entries.length;
   report.inputTokens=entries.reduce((sum,item)=>sum+item.usage.inputTokens,0);report.outputTokens=entries.reduce((sum,item)=>sum+item.usage.outputTokens,0);

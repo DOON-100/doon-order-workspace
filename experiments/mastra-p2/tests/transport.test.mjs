@@ -6,7 +6,7 @@ import os from 'node:os';
 import {createHash} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {createGuardedFetch, limits, rates, validateRun, writeRunJson} from '../transport.mjs';
+import {createGuardedFetch, limits, rates, validateRun, writeRunJson, createP1AttemptRequestGuard, p1AttemptRequestLimit} from '../transport.mjs';
 
 // Every fetch below is injected. This suite never reads environment credentials or calls a provider.
 const endpoint = 'https://api.deepseek.com/chat/completions';
@@ -54,7 +54,7 @@ test('run marker accepts exactly the three synthetic-run fields', async t => {
 test('run markers allow only explicit five or ten yuan within the hard ceiling', async t => {
   const directory=await temporaryRun(t,10);
   assert.equal(limits.budgetCny,10);
-  assert.equal(limits.requests,24);
+  assert.equal(limits.requests,32);
   assert.equal(await validateRun(directory,10),directory);
   for(const budgetCny of [0,4,6,11,'5','10',null]) {
     await writeFile(path.join(directory,'run.json'),JSON.stringify({...marker,budgetCny}));
@@ -234,7 +234,7 @@ test('reservation is durably present before network; completion includes reasoni
   assert.ok(entry.chargedCny<charge(100,150));
 });
 
-test('request count survives fresh guard instances and blocks before the 25th fetch', async t => {
+test('request count survives fresh guard instances and blocks before the 33rd fetch', async t => {
   const directory=await temporaryRun(t);
   let calls=0;
   const fake=async()=>{calls++;return reply({prompt_tokens:0,completion_tokens:0});};
@@ -242,6 +242,46 @@ test('request count survives fresh guard instances and blocks before the 25th fe
   await assert.rejects(guard(directory,fake,{phase:'resume'})(endpoint,request()),/P2_REQUEST_LIMIT/);
   assert.equal(calls,limits.requests);
   assert.equal((await ledger(directory)).entries.length,limits.requests);
+});
+
+test('resuming twenty-two requests preserves their charges and the five-yuan ceiling through request thirty-two', async t => {
+  const directory=await temporaryRun(t);
+  const markerBefore=await readFile(path.join(directory,'run.json'),'utf8');
+  // Entirely synthetic history: preserve its individual records, including an
+  // unknown-usage reservation, while exercising the previously exhausted limit.
+  const history=Array.from({length:22},(_,index)=>({
+    id:index+1,caseId:'synthetic-prior',phase:'initial',thinking:'enabled',stream:false,
+    state:index===21?'network-error':'complete',usageKnown:index!==21,
+    reservedCny:index===21?0.191215:0,chargedCny:index===21?0.191215:0,
+    requestReasoning:[],
+  }));
+  await writeRunJson(directory,'budget.json',{format:1,budgetCny:5,rates,entries:history,chargedUpperCny:0.191215});
+  let calls=0;
+  const fake=async()=>{calls++;return reply({prompt_tokens:0,completion_tokens:0});};
+  const reserveAttemptRequest=createP1AttemptRequestGuard();
+  const attemptRequest=async caseId=>{
+    reserveAttemptRequest();
+    return guard(directory,fake,{caseId})(endpoint,request());
+  };
+  assert.equal(p1AttemptRequestLimit,8);
+  for(let index=0;index<8;index++)await attemptRequest(index<4?'synthetic-new-attempt-a':'synthetic-new-attempt-b');
+  const afterEight=await ledger(directory);
+  assert.equal(afterEight.entries.length,30);
+  assert.deepEqual(afterEight.entries.slice(0,22),history);
+  assert.equal(afterEight.chargedUpperCny,0.191215);
+  assert.equal(afterEight.budgetCny,5);
+  assert.deepEqual(afterEight.entries.slice(22).map(item=>item.id),[23,24,25,26,27,28,29,30]);
+  const beforeNinth=await readFile(path.join(directory,'budget.json'),'utf8');
+  await assert.rejects(attemptRequest('synthetic-new-attempt-b'),/P1_ATTEMPT_REQUEST_LIMIT/);
+  assert.equal(calls,8);
+  assert.equal(await readFile(path.join(directory,'budget.json'),'utf8'),beforeNinth);
+  for(let index=0;index<2;index++)await guard(directory,fake,{phase:'resume'})(endpoint,request());
+  const beforeDenied=await readFile(path.join(directory,'budget.json'),'utf8');
+  await assert.rejects(guard(directory,fake)(endpoint,request()),/P2_REQUEST_LIMIT/);
+  assert.equal(calls,10);
+  assert.equal((await ledger(directory)).entries.length,32);
+  assert.equal(await readFile(path.join(directory,'budget.json'),'utf8'),beforeDenied);
+  assert.equal(await readFile(path.join(directory,'run.json'),'utf8'),markerBefore);
 });
 
 test('unknown usage reservation survives a fresh guard and enforces the five-yuan budget', async t => {
