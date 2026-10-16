@@ -40,7 +40,7 @@ try {
     & $nodePath 'scripts/verify-pmc-deployment.mjs' after
     if ($LASTEXITCODE -ne 0) { throw '代码部署前后既有数据不一致。' }
     $installed = $true
-    & $nodePath 'scripts/import-purchase-live.mjs' $Workbook $SourceAsOf
+    & $nodePath 'scripts/data-tools/import-purchase-live.mjs' $Workbook $SourceAsOf
     if ($LASTEXITCODE -ne 0) { throw '采购导入未全部完成，保留批次供继续处理。' }
 } finally {
     if ($paused) {

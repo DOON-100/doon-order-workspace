@@ -2,7 +2,7 @@
 
 ## 工具统一入口
 
-本目录集中存放可复用的文件处理和数据维护代码，测试集中在 `tests/data-tools/`。网站日常运行不启动这些脚本；迁移已有数据时保留完整数据库与附件，不用重跑历史 Excel 导入。
+本目录集中存放可复用的文件处理、导入和数据维护代码，统一测试入口为 `tests/data-tools/run.mjs`。网站日常运行不启动这些脚本；迁移已有数据时保留完整数据库与附件，不用重跑历史 Excel 导入。
 
 | 脚本 | 用途 | 输入和运行位置 |
 | --- | --- | --- |
@@ -18,23 +18,28 @@
 ```text
 scripts/data-tools/       通用脚本、共享库、依赖说明
 tests/data-tools/         只含合成数据的测试
+standalone/test-*.mjs     既有专项合成测试，相关用例由统一入口调用
 private-data-tools/       客户原表、图片、配置、结果与检查点，Git 忽略
 ```
 
 历史原件和任务目录保留在原处，不为了整理代码而移动、删除或提交客户文件。一次性业务任务脚本只保存在本机被忽略的 `private-data-tools/one-off-scripts/` 或仓库外，不提交到 GitHub。路径参数化意味着可换机器运行，并不意味着所有输入都已经存进数据库。
 
-### 其他通用维护入口
+### 专项导入和维护入口
 
-以下程序按输入参数或私有配置处理任务，仍有独立用途或测试、部署调用，因此保留在原位置。这份索引不是迁移执行顺序；以后迁址需同步修改引用并完成适用测试。
+以下程序也统一放在本目录，按输入参数或私有配置处理任务。旧路径已移除，调用时使用 `scripts/data-tools/<脚本名>`。这份索引不是迁移执行顺序。
 
-| 位置 | 定位与使用限制 |
+| 脚本 | 定位与使用限制 |
 | --- | --- |
-| `scripts/inspect-purchase.py` | 早期采购表检查，输出可能含原始明细；通用检查优先用本目录 workbook.py |
-| `scripts/import-purchase-live.mjs` | 指定采购数据导入，需来源及验收清单；不作为迁云初始化 |
-| `standalone/import-customer-quote.mjs` | 旧报价草稿导入；新任务优先使用准备任务包、演练和维护流程 |
-| `standalone/import-customer-price-archive.mjs`、`customer-price-template-to-json.mjs` | 历史价格档案/模板专用转换与导入，保留原件和专用验收 |
-| `standalone/import-customer-followup.mjs`、`import-ivy-service.mjs`、`import-engineering-drawings.mjs` | 跟进、客户服务和工程图纸专项维护，不能用来重建已迁移业务 |
-| `standalone/configure-customer-quote-access.mjs`、`update-customer-quote-access.mjs`、`set-customer-price-selection.mjs` | 权限或业务选择维护，不属于文件转换，更不是部署必跑脚本 |
+| `inspect-purchase.py` | 采购表检查，输出可能含原始明细；通用检查优先用 workbook.py |
+| `import-purchase-live.mjs` | 指定采购数据导入，需来源及验收清单；不作为迁云初始化 |
+| `import-customer-quote.mjs` | 报价草稿专用导入；新任务优先使用准备任务包、演练和维护流程 |
+| `import-customer-price-archive.mjs`、`customer-price-template-to-json.mjs` | 历史价格档案/模板专用转换与导入，保留原件和专用验收 |
+| `import-customer-followup.mjs`、`import-ivy-service.mjs`、`import-engineering-drawings.mjs` | 跟进、客户服务和工程图纸专项维护，不能用来重建已迁移业务 |
+| `configure-customer-quote-access.mjs`、`update-customer-quote-access.mjs`、`set-customer-price-selection.mjs` | 权限或业务选择维护，不属于文件转换，更不是部署必跑脚本 |
+| `publish-finished-outsourcing.mjs` | 根据私有计划预览或发布委外记录，使用目标数据库及已验收构建 |
+| `audit-customer-project-relations.mjs` | 只读检查客户项目关联与附件完整性，报告属于私有数据 |
+
+这些既有入口保留各自参数约定，部分默认使用当前工作目录下的 `lan-data`、`lan-dist` 或 `test-output`。运行前按对应说明显式指定目标数据、构建及输出路径；整理目录不代表每个旧入口都具备 `quote-maintenance.mjs` 的演练与应用保护。Excel、JSON 和图片原件仍是私有输入，数据库保存导入后的业务记录，二者分别保留。
 
 备份、守护和部署脚本属于运维工具，仍由 `standalone/` 和 `scripts/` 中对应入口管理，不混入 Excel 处理执行流程。
 
@@ -52,6 +57,8 @@ node tests/data-tools/run.mjs
 ```
 
 Set `DOON_PYTHON` to a Python executable if `python` is not the desired environment. The test suite creates synthetic workbooks, customers, members, quotations and databases in temporary directories. It does not read desktop files, production databases, or employee passwords.
+
+The unified runner also invokes the existing quotation, price archive, access, engineering drawing, Ivy migration and relationship-audit regressions from `standalone/` and `tests/`. New CLI relocation checks use isolated builds and synthetic data. Test files stay at their existing paths so other validation entry points continue to work.
 
 Node workbook generation uses the project's existing `xlsx` package. No tool here requires Codex, `@oai/artifact-tool`, a Windows drive letter, a company network share, or a running GUI copy of Excel. Formula results are not recalculated: existing cached values are retained, and newly linked cells refer to the unchanged original sheet.
 

@@ -79,7 +79,7 @@ export function convertTemplateRows(sheets,{customerCode,customerName=customerCo
 async function main(){
  const args=process.argv.slice(2),options={};const flags=['--input','--output','--customer-code','--customer-name','--source-root','--allow-demo'];
  for(let i=0;i<args.length;i++){const key=args[i];if(!flags.includes(key)||Object.hasOwn(options,key))throw new Error('未知或重复参数：'+key);options[key]=key==='--allow-demo'?true:required(args[++i],key);}
- if(!options['--input']||!options['--output']||!options['--customer-code'])throw new Error('用法：--input <模板.xlsx> --output <私有JSON> --customer-code <客户代码> [--customer-name <名称>] [--source-root <原件目录>]');
+ if(!options['--input']||!options['--output']||!options['--customer-code'])throw new Error('用法：node scripts/data-tools/customer-price-template-to-json.mjs --input <模板.xlsx> --output <私有JSON> --customer-code <客户代码> [--customer-name <名称>] [--source-root <原件目录>]');
  const workbook=XLSX.read(await fs.readFile(options['--input']),{type:'buffer',cellDates:false});const grids={};
  for(const name of Object.keys(templateFields)){
   const sheet=workbook.Sheets[name];if(!sheet)throw new Error('缺少工作表：'+name);

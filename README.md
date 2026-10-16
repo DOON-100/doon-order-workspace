@@ -14,7 +14,7 @@
 
 每次保存及原文件上传都保留不可变历史快照与审计；旧版本提交返回冲突。附件支持 Excel、PDF、PNG/JPEG 参考图片，仅作原件归档，不自动改写报价内容。新增报价不创建、覆盖或自动绑定客户主档，不修改订单。报价使用专属授权名单，并按客户责任清单的业务／客服负责人隔离；全订单、PMC、财务或创建人身份不会额外授予报价权。未绑定的新客草稿仅管理员可见，客户责任及已保存报价的客户关联仅由管理员核对。报价权限配置缺失时非管理员默认拒绝。
 
-报价回归：`node tests/run.mjs`；设置 `DOON_BUILD_DIR=test-output/quote-review-build` 后构建，运行 `node standalone/test.mjs`、`node standalone/test-customer-quotes-browser.mjs` 和 `node standalone/test-customer-quote-import.mjs`（浏览器依赖可由 `DOON_PLAYWRIGHT_MODULE` 指定）。`standalone/import-customer-quote.mjs` 仅用于明确授权的私有草稿导入，参数为 `--build-dir`、`--draft`、`--source`；校验来源摘要和草稿内容，重复报价不覆盖，并逐条验证所有既有记录未变。部署脚本先备份，再停服追加一致性备份与数据校验；可通过 `AccessConfigPath` 应用单独确认的权限配置／首次客户绑定，其独立保全检查不允许修改报价内容或旧版本。不要将私有 JSON、原始报价或数据库提交到公开仓库。
+报价回归：`node tests/run.mjs`；设置 `DOON_BUILD_DIR=test-output/quote-review-build` 后构建，运行 `node standalone/test.mjs`、`node standalone/test-customer-quotes-browser.mjs` 和 `node standalone/test-customer-quote-import.mjs`（浏览器依赖可由 `DOON_PLAYWRIGHT_MODULE` 指定）。`scripts/data-tools/import-customer-quote.mjs` 仅用于明确授权的私有草稿导入，参数为 `--build-dir`、`--draft`、`--source`；校验来源摘要和草稿内容，重复报价不覆盖，并逐条验证所有既有记录未变。部署脚本先备份，再停服追加一致性备份与数据校验；可通过 `AccessConfigPath` 应用单独确认的权限配置／首次客户绑定，其独立保全检查不允许修改报价内容或旧版本。不要将私有 JSON、原始报价或数据库提交到公开仓库。
 
 仅更新代码时运行 `standalone/部署客户报价.ps1 -CodeOnly`，不传草稿、附件或权限配置参数；该模式不运行导入或权限维护，并要求全部业务记录、附件和账号身份元数据保持不变。保全门槛的合成测试为 `node standalone/test-customer-quote-preservation.mjs`。不要用重新导入替代用户在线编辑报价。
 

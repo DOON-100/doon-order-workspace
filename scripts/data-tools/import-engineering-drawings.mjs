@@ -7,7 +7,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {createHash,randomUUID} from 'node:crypto';
 import * as XLSX from 'xlsx';
 
-const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const args=process.argv.slice(2),options=new Map();
 for(let i=0;i<args.length;i++){
  const flag=args[i];if(!['--input','--source','--actor-id','--apply','--plan-hash'].includes(flag)||options.has(flag))throw new Error('Unknown or duplicate import option.');

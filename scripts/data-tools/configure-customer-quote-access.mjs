@@ -6,7 +6,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 
-const args=process.argv.slice(2),usage='Usage: --build-dir <validated build> --config <private JSON> [--dry-run | --apply]';
+const args=process.argv.slice(2),usage='Usage: node scripts/data-tools/configure-customer-quote-access.mjs --build-dir <validated build> --config <private JSON> [--dry-run | --apply]';
 const flags=new Set(['--build-dir','--config','--dry-run','--apply']),options={};
 for(let i=0;i<args.length;i++){
  const key=args[i];if(!flags.has(key)||Object.hasOwn(options,key))throw new Error(usage);

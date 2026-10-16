@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 
 const options={},args=process.argv.slice(2);
 for(let i=0;i<args.length;i++){const k=args[i];if(!['--build-dir','--config','--dry-run','--apply'].includes(k)||Object.hasOwn(options,k))throw new Error('Unknown or repeated option');if(['--apply','--dry-run'].includes(k))options[k]=true;else{const v=args[++i];if(!v||v.startsWith('--'))throw new Error('Missing option value');options[k]=v;}}
-if(!options['--build-dir']||!options['--config']||options['--apply']&&options['--dry-run'])throw new Error('Usage: --build-dir <validated build> --config <private reviewed JSON> [--dry-run|--apply]');
+if(!options['--build-dir']||!options['--config']||options['--apply']&&options['--dry-run'])throw new Error('Usage: node scripts/data-tools/set-customer-price-selection.mjs --build-dir <validated build> --config <private reviewed JSON> [--dry-run|--apply]');
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort((a,b)=>a.localeCompare(b)).map(k=>[k,canonical(v[k])])):v;
 const hash=v=>createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');
 const config=JSON.parse((await fs.readFile(options['--config'],'utf8')).replace(/^\uFEFF/,''));

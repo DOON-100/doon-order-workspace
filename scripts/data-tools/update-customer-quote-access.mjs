@@ -7,7 +7,7 @@ import {createHash} from 'node:crypto';
 
 const args=process.argv.slice(2),options={},flags=new Set(['--build-dir','--config','--dry-run','--apply']);
 for(let i=0;i<args.length;i++){const key=args[i];if(!flags.has(key)||Object.hasOwn(options,key))throw new Error('Unknown or repeated option');if(['--dry-run','--apply'].includes(key))options[key]=true;else{const v=args[++i];if(!v||v.startsWith('--'))throw new Error('Missing option value');options[key]=v;}}
-if(!options['--build-dir']||!options['--config']||(options['--apply']&&options['--dry-run']))throw new Error('Usage: --build-dir <validated build> --config <private reviewed JSON> [--dry-run|--apply]');
+if(!options['--build-dir']||!options['--config']||(options['--apply']&&options['--dry-run']))throw new Error('Usage: node scripts/data-tools/update-customer-quote-access.mjs --build-dir <validated build> --config <private reviewed JSON> [--dry-run|--apply]');
 const apply=!!options['--apply'],dataDir=path.resolve(process.env.DOON_DATA_DIR||'lan-data'),buildDir=path.resolve(options['--build-dir']);
 const canonical=v=>Array.isArray(v)?v.map(canonical):v&&typeof v==='object'?Object.fromEntries(Object.keys(v).sort((a,b)=>a.localeCompare(b)).map(k=>[k,canonical(v[k])])):v;
 const hash=v=>createHash('sha256').update(JSON.stringify(canonical(v))).digest('hex');

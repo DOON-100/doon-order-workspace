@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {templateFields,convertTemplateRows} from './customer-price-template-to-json.mjs';
+import {templateFields,convertTemplateRows} from '../scripts/data-tools/customer-price-template-to-json.mjs';
 const grids=()=>Object.fromEntries(Object.entries(templateFields).map(([name,fields])=>[name,[[],[],[],[],[],[...fields]]]));
 const add=(s,name,row)=>s[name].push(templateFields[name].map(k=>row[k]??null));
 const fixture=()=>{

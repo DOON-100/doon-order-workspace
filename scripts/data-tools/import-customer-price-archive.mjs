@@ -1,17 +1,17 @@
 // Explicit, append-only historical import. Defaults to dry-run; never reads passwords or sessions.
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import {pathToFileURL} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {createHash} from 'node:crypto';
 import {build} from 'esbuild';
 
 const args=process.argv.slice(2),options={},flags=new Set(['--build-dir','--dataset','--customer-id','--source-root','--actor-member-id','--dry-run','--apply']);
 for(let i=0;i<args.length;i++){const key=args[i];if(!flags.has(key)||Object.hasOwn(options,key))throw new Error('Unknown or repeated option');if(['--dry-run','--apply'].includes(key))options[key]=true;else{const value=args[++i];if(!value||value.startsWith('--'))throw new Error('Missing option value');options[key]=value;}}
-if(!options['--build-dir']||!options['--dataset']||!options['--customer-id']||(options['--apply']&&options['--dry-run']))throw new Error('Usage: --build-dir <validated build> --dataset <private JSON> --customer-id <confirmed customer ID> [--source-root <immutable source snapshot>] [--actor-member-id <confirmed administrator>] [--dry-run|--apply]');
+if(!options['--build-dir']||!options['--dataset']||!options['--customer-id']||(options['--apply']&&options['--dry-run']))throw new Error('Usage: node scripts/data-tools/import-customer-price-archive.mjs --build-dir <validated build> --dataset <private JSON> --customer-id <confirmed customer ID> [--source-root <immutable source snapshot>] [--actor-member-id <confirmed administrator>] [--dry-run|--apply]');
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex'),apply=!!options['--apply'],dataDir=path.resolve(process.env.DOON_DATA_DIR||'lan-data'),buildDir=path.resolve(options['--build-dir']);
 for(const filename of ['runtime.mjs','workspace-api.mjs'])await fs.access(path.join(buildDir,filename));
-const compiled=await build({entryPoints:['lib/customer-price-archive.ts'],bundle:true,platform:'node',format:'esm',write:false});
+const compiled=await build({entryPoints:[fileURLToPath(new URL('../../lib/customer-price-archive.ts',import.meta.url))],bundle:true,platform:'node',format:'esm',write:false});
 const model=await import('data:text/javascript;base64,'+Buffer.from(compiled.outputFiles[0].text).toString('base64'));
 const dataset=JSON.parse((await fs.readFile(options['--dataset'],'utf8')).replace(/^\uFEFF/,''));model.customerPriceDatasetSchema.parse(dataset);
 const datasetSha256=hash(model.canonicalPriceJson(dataset)),archiveId='customer_price_archive_'+hash(options['--customer-id']+'|'+datasetSha256);

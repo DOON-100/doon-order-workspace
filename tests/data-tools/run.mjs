@@ -12,6 +12,14 @@ const jobs=[
   [process.execPath,['tests/data-tools/split-merge.mjs']],
   [process.execPath,['tests/data-tools/prepare-export.mjs']],
   [process.execPath,['tests/data-tools/quote-maintenance.mjs']],
+  [process.execPath,['standalone/test-customer-quote-import.mjs']],
+  [process.execPath,['standalone/test-customer-quote-access-config.mjs']],
+  [process.execPath,['standalone/test-customer-price-template.mjs']],
+  [process.execPath,['standalone/test-customer-price-archive.mjs']],
+  [process.execPath,['standalone/test-engineering-drawing-import.mjs']],
+  [process.execPath,['tests/customer-project-relations-audit.mjs']],
+  [process.execPath,['tests/data-tools/ivy-import.mjs']],
+  [process.execPath,['tests/data-tools/relocated-imports.mjs']],
 ];
 const results=[];
 const reportFile=path.join(root,'test-output/data-tools-result.json');

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {auditProjectRelations} from '../scripts/audit-customer-project-relations.mjs';
+import {auditProjectRelations} from '../scripts/data-tools/audit-customer-project-relations.mjs';
 const records=[
  {id:'c',kind:'customer_account'},
  {id:'p',kind:'customer_project',customerId:'c'},
