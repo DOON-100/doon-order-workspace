@@ -57,5 +57,17 @@ try{
  pass('提交中阻止重复与关闭；成功自动关闭、明确提示，仅目标成员改密且旧会话失效');
  await row('reset_a').getByRole('button',{name:'重置密码',exact:true}).click();await page.setViewportSize({width:390,height:844});await dialog.waitFor();assert.equal(await first.inputValue(),'');const box=await dialog.boundingBox();assert(box.x>=0&&box.x+box.width<=390);await page.screenshot({path:path.join(dir,'reset-mobile.png'),animations:'disabled'});await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});assert.deepEqual(errors,[]);
  pass('手机宽度弹窗不溢出，重新打开不保留密码，Escape可取消');
+ await page.setViewportSize({width:1440,height:1050});
+ const loginHistory=page.getByRole('region',{name:'账号登录历史'});
+ await loginHistory.getByRole('button',{name:'刷新登录历史',exact:true}).click();
+ await loginHistory.getByRole('status').filter({hasText:/已显示/}).waitFor();
+ await loginHistory.getByRole('combobox',{name:'筛选登录账号'}).click();await page.getByRole('option',{name:'reset_b',exact:true}).click();
+ await loginHistory.getByRole('status').filter({hasText:'已显示 2 条记录'}).waitFor();
+ assert.equal(await loginHistory.getByRole('cell',{name:'reset_b',exact:true}).count(),2);
+ assert.equal(await loginHistory.getByRole('cell',{name:'登录成功',exact:true}).count(),2);
+ assert.equal(await loginHistory.getByRole('cell',{name:'admin',exact:true}).count(),0);
+ await loginHistory.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(dir,'login-history-desktop.png'),animations:'disabled'});
+ await page.setViewportSize({width:390,height:844});await loginHistory.scrollIntoViewIfNeeded();await page.screenshot({path:path.join(dir,'login-history-mobile.png'),animations:'disabled'});
+ assert.deepEqual(errors,[]);pass('管理员可查看并刷新登录历史，账号筛选显示对应事件，桌面和手机均可访问');
  await fs.writeFile(path.join(dir,'results.json'),JSON.stringify({checks},null,2));console.log('Evidence: '+dir);
 }finally{if(browser)await browser.close();server.kill();if(logs.includes('Error'))console.error(logs.slice(-1500));}

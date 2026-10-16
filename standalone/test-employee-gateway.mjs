@@ -33,6 +33,9 @@ try{
  assert.equal((await request('/api/auth/login',{username:'supplier',password:'Synthetic-Supplier-2026!'})).status,401);
  const signed=await request('/api/auth/login',{username:'admin',password:'Synthetic-Employee-2026!'});assert.equal(signed.status,200);const cookie=signed.headers['set-cookie'][0];assert.match(cookie,/^doon_employee_session=.*HttpOnly; SameSite=Strict.*Secure/);const token=cookie.split(';')[0];
  assert.equal((await request('/api/workspace/data',undefined,{Cookie:token})).status,200);
+ const loginHistory=await request('/api/auth/history',undefined,{Cookie:token});assert.equal(loginHistory.status,200);
+ const events=JSON.parse(loginHistory.body).events;assert(events.some(e=>e.username==='admin'&&e.event==='login_success'&&e.ip==='198.51.100.9'&&e.source==='员工 HTTPS 入口'));
+ assert(events.some(e=>e.username==='supplier'&&e.event==='login_failure'&&e.actor==='未认证访问者'));
  assert.equal(JSON.parse((await request('/api/auth/session',undefined,{Cookie:token.replace('doon_employee_session','doon_session')})).body).user,null);
  assert.equal(JSON.parse((await request('/api/review-mode')).body).syntheticOnly,true);
  // Separate clients behind the same proxy must not share login throttling buckets.

@@ -1,5 +1,6 @@
 import {randomBytes,randomUUID,createHash,scrypt as scryptCallback,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
+import {isIP} from 'node:net';
 import {db,memberFor,transaction,saveRecords,auditLocal} from './runtime.mjs';
 const scrypt=promisify(scryptCallback);
 const hashToken=token=>createHash('sha256').update(token).digest('hex');
@@ -31,14 +32,31 @@ export function session(request,options={}){
 export function publicSession(s){return s?{username:s.account.username,mustChange:!!s.account.must_change,role:s.member.role,...(s.member.role==='supplier'?{supplierId:s.member.supplierId}:{}),identity:{id:s.member.userId,name:s.member.name,email:s.member.email}}:null;}
 function cookie(token,secure,clear=false,options={}){return `${cookieName(options)}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear?0:43200}${secure?'; Secure':''}`;}
 function issue(account,secure,options={}){const token=randomBytes(32).toString('base64url'),now=Date.now();db.prepare('DELETE FROM local_sessions WHERE expires_at<?').run(now);db.prepare('INSERT INTO local_sessions VALUES(?,?,?,?)').run(sessionDigest(token,options),account.id,now+12*3600000,now);return cookie(token,secure,false,options);}
-export async function login(body,ip,secure,options={}){const username=String(body.username||'').trim().toLowerCase(),password=String(body.password||'');if(username.length>64||password.length>128)fail('账号或密码不正确。',401);const key=hashToken(ip+'|'+username),globalKey=hashToken('ip|'+ip),now=Date.now();db.prepare('DELETE FROM login_attempts WHERE until_at<?').run(now);for(const k of [key,globalKey]){const a=db.prepare('SELECT * FROM login_attempts WHERE key=?').get(k);if(a&&a.failures>=(k===key?8:40))fail('尝试次数过多，请 15 分钟后再试。',429);}
- const account=db.prepare('SELECT * FROM local_accounts WHERE username=?').get(username),member=memberFor(account);
+function recordAuthEvent(username,account,member,event,ip,options={},reason=''){
+ if(options.recordHistory===false)return;
+ const authenticated=event!=='login_failure',address=String(ip||'').replace(/^::ffff:/,'');
+ saveRecords([{id:'auth_event_'+randomUUID(),kind:'auth_event',event,action:{login_success:'登录成功',login_failure:'登录失败',logout:'退出登录'}[event],username:/^[a-z][a-z0-9._-]{2,31}$/.test(username)?username:'',accountId:account?.id||'',targetId:member?.id||'',actorId:authenticated?member?.id||'':'',actor:authenticated?member?.name||'':'未认证访问者',ip:isIP(address)?address:'',source:options.supplierOnly?'供应商入口':options.employeeOnly?'员工 HTTPS 入口':'内网入口',reason,createdAt:new Date().toISOString()}]);
+}
+export function authHistory(query){
+ const username=String(query.get('username')||'').trim().toLowerCase(),limit=Number(query.get('limit')||50),before=query.get('before');
+ if(username&&!/^[a-z][a-z0-9._-]{2,31}$/.test(username)||!Number.isInteger(limit)||limit<1||limit>200||before!==null&&(!/^\d+$/.test(before)||!Number.isSafeInteger(Number(before))||Number(before)<1))fail('登录历史查询条件无效。');
+ const clauses=["kind='auth_event'"],args=[];
+ if(username){clauses.push("json_extract(data,'$.username')=?");args.push(username);}
+ if(before!==null){clauses.push('rowid<?');args.push(Number(before));}
+ const rows=db.prepare('SELECT rowid,data FROM records WHERE '+clauses.join(' AND ')+' ORDER BY rowid DESC LIMIT ?').all(...args,limit+1),more=rows.length>limit;
+ const events=rows.slice(0,limit).map(row=>{const v=JSON.parse(row.data);return {id:v.id,event:v.event,action:v.action,username:v.username,actor:v.actor,ip:v.ip,source:v.source,reason:v.reason,createdAt:v.createdAt};});
+ return {events,nextBefore:more?String(rows[limit-1].rowid):null};
+}
+export async function login(body,ip,secure,options={}){const username=String(body.username||'').trim().toLowerCase(),password=String(body.password||'');if(username.length>64||password.length>128){recordAuthEvent(username,null,null,'login_failure',ip,options,'invalid_input');fail('账号或密码不正确。',401);}const key=hashToken(ip+'|'+username),globalKey=hashToken('ip|'+ip),now=Date.now();db.prepare('DELETE FROM login_attempts WHERE until_at<?').run(now);for(const k of [key,globalKey]){const a=db.prepare('SELECT * FROM login_attempts WHERE key=?').get(k);if(a&&a.failures>=(k===key?8:40)){const account=db.prepare('SELECT id,member_id FROM local_accounts WHERE username=?').get(username);recordAuthEvent(username,account,memberFor(account),'login_failure',ip,options,'rate_limited');fail('尝试次数过多，请 15 分钟后再试。',429);}}
+ const account=db.prepare('SELECT * FROM local_accounts WHERE username=?').get(username);
  const dummy='scrypt-v1$00000000000000000000000000000000$'+'0'.repeat(128);
  const valid=await verify(password,account?.password_hash||dummy);
- if(!valid||!member?.active||!activeSupplier(member)||(options.supplierOnly&&member.role!=='supplier')||(options.employeeOnly&&member.role==='supplier')){for(const k of [key,globalKey])db.prepare('INSERT INTO login_attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET failures=failures+1').run(k,now+15*60000);fail('账号或密码不正确，或账号已停用。',401);}
- db.prepare('DELETE FROM login_attempts WHERE key=?').run(key);return {cookie:issue(account,secure,options),user:publicSession({account,member})};
+ // Password verification yields; recheck resets and disabled accounts before issuing a session.
+ const current=db.prepare('SELECT * FROM local_accounts WHERE username=?').get(username),currentMember=memberFor(current);
+ if(!valid||!current||current.password_hash!==account?.password_hash||!currentMember?.active||!activeSupplier(currentMember)||(options.supplierOnly&&currentMember.role!=='supplier')||(options.employeeOnly&&currentMember.role==='supplier')){transaction(()=>{for(const k of [key,globalKey])db.prepare('INSERT INTO login_attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET failures=failures+1').run(k,now+15*60000);recordAuthEvent(username,current,currentMember,'login_failure',ip,options,'invalid_credentials');});fail('账号或密码不正确，或账号已停用。',401);}
+ let signedCookie;transaction(()=>{db.prepare('DELETE FROM login_attempts WHERE key=?').run(key);signedCookie=issue(current,secure,options);recordAuthEvent(username,current,currentMember,'login_success',ip,options);});return {cookie:signedCookie,user:publicSession({account:current,member:currentMember})};
 }
-export function logout(s,secure,options={}){if(s)db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(s.digest);return cookie('',secure,true,options);}
+export function logout(s,secure,options={}){if(s)transaction(()=>{db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(s.digest);recordAuthEvent(s.account.username,s.account,s.member,'logout',options.ip,options);});return cookie('',secure,true,options);}
 export async function changePassword(s,body,secure,options={}){validatePassword(body.password);if(body.password===body.currentPassword)fail('新密码不能与原密码相同。');if(typeof body.currentPassword!=='string'||body.currentPassword.length>128||!await verify(body.currentPassword,s.account.password_hash))fail('原密码不正确。',401);const hash=await passwordHash(body.password);transaction(()=>{const current=db.prepare('SELECT password_hash FROM local_accounts WHERE id=?').get(s.account.id);if(current.password_hash!==s.account.password_hash)fail('密码刚被重置，请重新登录。',409);db.prepare('UPDATE local_accounts SET password_hash=?,must_change=0 WHERE id=?').run(hash,s.account.id);db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(s.account.id);saveRecords([auditLocal(s.member,'修改本人密码',s.member.id)]);});return issue(s.account,secure,options);}
 export async function createAccount(input,actor,{owner=false,existingMember}={}){
  const username=String(input.username||'').trim().toLowerCase(),name=String(input.name||'').trim();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))fail('账号需为 3 至 32 位字母、数字、点、短横线或下划线，以字母开头。');if(!name||name.length>100)fail('请填写姓名。');

@@ -38,10 +38,10 @@ if(reviewMode){
  }
  runtime.env.BUCKET.put=async()=>{throw Object.assign(new Error(reviewMessage),{status:403});};
 }
-const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName}=await import('./auth.mjs');
+const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
 const localTLS=!supplierOnly&&!!(process.env.DOON_TLS_CERT&&process.env.DOON_TLS_KEY),secure=supplierOnly||!!employeeGateway||localTLS,protocol=localTLS?'https':'http';
-const authOptions=supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{};
+const authOptions={recordHistory:!reviewMode,...(supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{})};
 const supplierAuth=new Set(['session','login','logout','password']);
 const supplierActions=new Set(['data','file','accept','progress','promise','exception','shipment','rework-confirm','attachment'].map(a=>'finished-supplier-'+a));
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
@@ -61,7 +61,7 @@ async function handle(req,res){
   const url=new URL(req.url,endpoint.origin);if(url.origin!==endpoint.origin)fail('访问地址未获授权。',403);if(!['GET','POST','HEAD'].includes(req.method))fail('不支持的请求方法。',405);
   if(req.method==='POST'&&req.headers.origin!==url.origin)fail('不允许跨站提交，请刷新登录页面。',403);
   if(reviewMode&&req.method==='POST'&&!['/api/auth/login','/api/auth/logout','/api/workspace/enroll'].includes(url.pathname))fail(reviewMessage,403);
-  if(reviewMode&&url.pathname.startsWith('/api/auth/')&&!['/api/auth/session','/api/auth/login','/api/auth/logout','/api/auth/maintenance','/api/auth/accounts'].includes(url.pathname))fail(reviewMessage,403);
+  if(reviewMode&&url.pathname.startsWith('/api/auth/')&&!['/api/auth/session','/api/auth/login','/api/auth/logout','/api/auth/maintenance','/api/auth/accounts','/api/auth/history'].includes(url.pathname))fail(reviewMessage,403);
   if(supplierOnly){
    const authAction=url.pathname.startsWith('/api/auth/')?url.pathname.slice('/api/auth/'.length):null,workspaceAction=url.pathname.startsWith('/api/workspace/')?url.pathname.slice('/api/workspace/'.length):null;
    const allowed=authAction!==null?supplierAuth.has(authAction):workspaceAction!==null?supplierActions.has(workspaceAction):['/','/login','/supplier-portal','/index.html','/health','/api/review-mode'].includes(url.pathname)||/^\/(assets|brand)\//.test(url.pathname);
@@ -86,7 +86,7 @@ async function handle(req,res){
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
     if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current)});
     else if(action==='login'&&req.method==='POST'){const result=await login(await request.json(),endpoint.ip,secure,authOptions);response=reply({user:result.user},200,{'Set-Cookie':result.cookie});}
-    else if(action==='logout'&&req.method==='POST')response=reply({ok:true},200,{'Set-Cookie':logout(current,secure,authOptions)});
+    else if(action==='logout'&&req.method==='POST')response=reply({ok:true},200,{'Set-Cookie':logout(current,secure,{...authOptions,ip:endpoint.ip})});
     else {
      if(!current)fail('请先登录。',401);
      if(action==='password'&&req.method==='POST')response=reply({ok:true},200,{'Set-Cookie':await changePassword(current,await request.json(),secure,authOptions)});
@@ -99,6 +99,7 @@ async function handle(req,res){
       }else {
       if(current.member.role!=='admin')fail('需要管理员权限。',403);
       if(action==='accounts'&&req.method==='GET')response=reply({accounts:db.prepare('SELECT id,username,member_id,must_change,created_at FROM local_accounts').all()});
+      else if(action==='history'&&req.method==='GET')response=reply(authHistory(url.searchParams));
       else if(action==='accounts'&&req.method==='POST')response=reply(await createAccount(await request.json(),current.member));
       else if(action==='reset'&&req.method==='POST'){await resetPassword(current,await request.json());response=reply({ok:true});}
       else if(action==='backup'&&req.method==='POST')response=reply(await makeBackup());
