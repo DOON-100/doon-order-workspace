@@ -1,0 +1,1908 @@
+{
+  "documentId": "syn-procurement-preparation-v04",
+  "title": "合成采购闭环场景规格（准备阶段，未执行）",
+  "schemaVersion": 1,
+  "status": "static_synthetic_specification_not_implementation_or_test_result",
+  "designVersion": "v0.4",
+  "codeBaseline": "199624df",
+  "clock": {
+    "timeZone": "Asia/Shanghai",
+    "nowLocal": "2026-10-15T10:00:00+08:00",
+    "nowUtc": "2026-10-15T02:00:00Z",
+    "useSystemClock": false
+  },
+  "composition": {
+    "input": "Each case input is deepMerge(clone(base), case.overrides); cases never inherit another case or its outcome.",
+    "expected": "Each case expectation is deepMerge(clone(expectedBase), case.expectedOverrides).",
+    "objects": "Recursively merge plain JSON objects by property name; absent properties inherit from that case's base only.",
+    "arrays": "Replace the entire array; never merge by index, concatenate, or infer omitted entries.",
+    "null": "Explicit unknown or unavailable, never deletion, zero, false, or an instruction to inherit.",
+    "primitives": "Replace with the exact JSON value. false and 0 are known values only where their validity guards permit.",
+    "sourceProjection": "Read-only partial projection of existing source fields; this file is not a full Purchase or production DTO schema.",
+    "plan": "All obligations, allocations, cases, commitments, control states and authorizations here are proposed synthetic plan records, not implemented production fields.",
+    "assertionSemantics": "Expected null means the decision must explicitly remain unknown; expected [] means no matching result/action/transition. Quantities are compared after the declared unit conversion and four-decimal normalization, never by unrounded binary floating-point equality.",
+    "scenarioOperation": "plan.evaluationAction describes the one synthetic evaluation or controlled state operation under review; it is not executable code.",
+    "declaredAllocationBaseQuantity": "The sum claimed by supplied allocation evidence in the base unit; not accepted usable allocation. allocationValid=false rejects it, null means unverified. Per-order allocatedBaseQuantity is null when that order allocation cannot be accepted."
+  },
+  "universalExpected": {
+    "realBusinessWrites": 0,
+    "realExternalSends": 0,
+    "realTaskDispatches": 0,
+    "realModelRequests": 0,
+    "connectionsTo8787": 0,
+    "sourceProjectionMutated": false,
+    "originalEvidenceOverwritten": false,
+    "formalPurchaseDateAutoUpdated": false,
+    "quantitiesDerivedFromOrderDemandAsPurchaseObligation": false,
+    "historicalActionIdOrIdempotencyKeyRegeneratedForRetry": false
+  },
+  "base": {
+    "sourceProjection": {
+      "purchase": {
+        "id": "syn-purchase-p",
+        "kind": "purchase",
+        "version": 1,
+        "sourceVersion": 1,
+        "po": "SYNTHETIC-PO-P",
+        "supplier": "合成供应商 S",
+        "buyer": "合成采购员",
+        "itemCode": "SYNTHETIC-M",
+        "itemName": "合成物料 M",
+        "unit": "件",
+        "quantity": 160,
+        "dueDate": "2026-10-14",
+        "promisedDate": "2026-10-14",
+        "expectedDate": "2026-10-14",
+        "balanceKnown": true,
+        "received": 100,
+        "returnPending": 0,
+        "lifecycle": "active",
+        "auditStatus": "已审核",
+        "closeStatus": "未关闭",
+        "sourceAsOf": "2026-10-15"
+      },
+      "orders": [
+        {
+          "id": "syn-order-a",
+          "version": 1,
+          "orderNo": "SYNTHETIC-ORDER-A",
+          "customer": "合成客户 A"
+        },
+        {
+          "id": "syn-order-b",
+          "version": 1,
+          "orderNo": "SYNTHETIC-ORDER-B",
+          "customer": "合成客户 B"
+        }
+      ]
+    },
+    "plan": {
+      "synthetic": true,
+      "mode": "shadow",
+      "evaluationAction": "classify",
+      "actors": [
+        {
+          "id": "syn-member-pmc",
+          "name": "合成PMC责任人",
+          "role": "synthetic_pmc",
+          "active": true
+        },
+        {
+          "id": "syn-member-buyer",
+          "name": "合成采购责任人",
+          "role": "synthetic_buyer",
+          "active": true
+        }
+      ],
+      "material": {
+        "id": "syn-material-m",
+        "name": "合成物料 M",
+        "lotId": "syn-lot-p",
+        "baseUnit": "件"
+      },
+      "scope": {
+        "id": "syn-scope-p-whole",
+        "purchaseId": "syn-purchase-p",
+        "materialId": "syn-material-m",
+        "lotId": "syn-lot-p",
+        "definition": "synthetic_confirmed_whole_line_scope",
+        "version": 1
+      },
+      "procurementObligation": {
+        "id": "syn-obligation-p",
+        "purchaseId": "syn-purchase-p",
+        "scopeId": "syn-scope-p-whole",
+        "quantity": 160,
+        "unit": "件",
+        "dueAt": "2026-10-14T02:00:00Z",
+        "basisId": "syn-confirmed-procurement-obligation",
+        "confirmed": true,
+        "version": 1,
+        "fulfillmentBasis": "qualified_accepted_net",
+        "sourceDueDateAloneIsAuthority": false
+      },
+      "factBatch": {
+        "id": "syn-fact-batch-01",
+        "asOf": "2026-10-15T01:50:00Z",
+        "observedAt": "2026-10-15T02:00:00Z",
+        "complete": true,
+        "withinApprovedFreshness": true,
+        "relationVersion": 1,
+        "sourceVersions": {
+          "syn-purchase-p": 1,
+          "syn-order-a": 1,
+          "syn-order-b": 1
+        }
+      },
+      "sourceAdmission": {
+        "reviewed": true,
+        "active": true,
+        "formalCloseEffective": false
+      },
+      "quantityPolicy": {
+        "receivedMeaning": "already_net_qualified_cumulative",
+        "remainingMeaning": "max(0,quantity-received)_only_when_balanceKnown",
+        "returnPendingAlreadyIncludedInRemaining": true,
+        "unknownZeroMustNotBecomeFact": true,
+        "decimalPlaces": 4,
+        "roundingRuleStatus": "match_existing_roundQty_after_mapping_confirmation",
+        "priorConsumptionOrAllocationOutsideTheseOrdersKnownAbsent": true
+      },
+      "demands": [
+        {
+          "id": "syn-demand-a",
+          "orderId": "syn-order-a",
+          "materialId": "syn-material-m",
+          "quantity": 80,
+          "unit": "件",
+          "version": 1,
+          "confirmed": true
+        },
+        {
+          "id": "syn-demand-b",
+          "orderId": "syn-order-b",
+          "materialId": "syn-material-m",
+          "quantity": 80,
+          "unit": "件",
+          "version": 1,
+          "confirmed": true
+        }
+      ],
+      "allocations": [
+        {
+          "id": "syn-allocation-a",
+          "orderId": "syn-order-a",
+          "materialId": "syn-material-m",
+          "purchaseId": "syn-purchase-p",
+          "quantity": 80,
+          "unit": "件",
+          "version": 1,
+          "confirmed": true
+        },
+        {
+          "id": "syn-allocation-b",
+          "orderId": "syn-order-b",
+          "materialId": "syn-material-m",
+          "purchaseId": "syn-purchase-p",
+          "quantity": 20,
+          "unit": "件",
+          "version": 1,
+          "confirmed": true
+        }
+      ],
+      "unitConversion": {
+        "id": "syn-unit-conversion-piece",
+        "materialId": "syn-material-m",
+        "fromUnit": "件",
+        "toUnit": "件",
+        "factor": 1,
+        "version": 1,
+        "confirmed": true
+      },
+      "orderRiskCases": [
+        {
+          "id": "syn-case-order-a",
+          "orderId": "syn-order-a",
+          "businessStatus": "待核查",
+          "caseVersion": 1
+        },
+        {
+          "id": "syn-case-order-b",
+          "orderId": "syn-order-b",
+          "businessStatus": "待核查",
+          "caseVersion": 1
+        }
+      ],
+      "orderClosureChecks": [
+        {
+          "orderId": "syn-order-a",
+          "requiredMaterialsComplete": null,
+          "otherMaterialConditionsConfirmed": null,
+          "pmcChecked": false,
+          "unresolvedRequiredTasks": null
+        },
+        {
+          "orderId": "syn-order-b",
+          "requiredMaterialsComplete": null,
+          "otherMaterialConditionsConfirmed": null,
+          "pmcChecked": false,
+          "unresolvedRequiredTasks": null
+        }
+      ],
+      "existingPurchaseCases": [],
+      "commitments": [],
+      "priorUnresolvedActions": [],
+      "authorization": {
+        "mode": "onBehalfOf",
+        "initiatorId": "syn-member-pmc",
+        "assigneeId": "syn-member-buyer",
+        "grantId": "syn-delegation-purchase",
+        "observedGrantVersion": 1,
+        "currentGrantVersion": 1,
+        "grantActive": true,
+        "actorActive": true,
+        "allowedPurchaseIds": [
+          "syn-purchase-p"
+        ],
+        "allowedOrderIds": [
+          "syn-order-a",
+          "syn-order-b"
+        ]
+      },
+      "control": {
+        "autoFollowupState": "运行",
+        "controlEpoch": 1,
+        "pendingActionsFrozen": false,
+        "inflightActions": []
+      },
+      "fulfillmentCauseEvidence": {
+        "status": "not_confirmed",
+        "physicalReceiptEvidenceComplete": false,
+        "inspectionCauseVerified": false
+      }
+    }
+  },
+  "expectedBase": {
+    "calculationAllowed": true,
+    "facts": {
+      "purchaseQuantity": 160,
+      "sourceUnit": "件",
+      "netQualifiedSourceQuantity": 100,
+      "remainingSourceQuantity": 60,
+      "returnPendingSourceQuantity": 0,
+      "baseUnit": "件",
+      "netQualifiedBaseQuantity": 100,
+      "obligationGapBaseQuantity": 60,
+      "supplierUndeliveredBaseQuantity": null,
+      "allocationValid": true,
+      "returnPendingAddedAgain": false,
+      "returnDeductedAgain": false,
+      "declaredAllocationBaseQuantity": 100
+    },
+    "purchaseDecision": {
+      "kind": "confirmed_qualified_shortage",
+      "cause": "qualified_shortage_cause_unverified",
+      "currentObligationSatisfied": false,
+      "supplierChaseCandidate": false,
+      "requiresInternalVerification": true
+    },
+    "orders": [
+      {
+        "orderId": "syn-order-a",
+        "demandBaseQuantity": 80,
+        "allocatedBaseQuantity": 80,
+        "knownMaterialShortage": 0,
+        "thisMaterialSatisfied": true,
+        "wholeOrderMaterialReady": null
+      },
+      {
+        "orderId": "syn-order-b",
+        "demandBaseQuantity": 80,
+        "allocatedBaseQuantity": 20,
+        "knownMaterialShortage": 60,
+        "thisMaterialSatisfied": false,
+        "wholeOrderMaterialReady": null
+      }
+    ],
+    "ledger": {
+      "purchaseCaseId": "syn-case-purchase-current",
+      "purchaseCaseDisposition": "create_one_if_none",
+      "newPurchaseCaseCount": 1,
+      "maxNonterminalCasesForBusinessKey": 1,
+      "previousCaseId": null,
+      "impactOrderCaseIds": [
+        "syn-case-order-a",
+        "syn-case-order-b"
+      ],
+      "caseTransitions": [
+        {
+          "caseId": "syn-case-purchase-current",
+          "from": null,
+          "to": "待核查"
+        }
+      ],
+      "appendedEventTypes": [
+        "purchase_shortage_detected"
+      ],
+      "oldApprovalReusable": false
+    },
+    "commitment": {
+      "effectiveIds": [],
+      "pendingIds": [],
+      "nextCheckAt": null,
+      "checkpoints": [],
+      "dueCheckRequired": false,
+      "formalDateUnchanged": true,
+      "oldBreachRetained": false,
+      "caseVersionAfter": 1
+    },
+    "control": {
+      "autoFollowupState": "运行",
+      "controlEpoch": 1,
+      "newAutomaticPermitAllowed": false,
+      "newAutomaticPermitCount": 0,
+      "oldWorkerCommitAllowed": null,
+      "resumeDecision": "not_requested",
+      "receiptQueryRequired": false
+    },
+    "authorization": {
+      "contextAllowed": true,
+      "restrictedCacheReadable": true,
+      "nextModelRequestAllowed": true,
+      "alternateAuthorizationFallbackAllowed": false
+    }
+  },
+  "assumptions": [
+    "All identities, titles and business references are synthetic; role names in plan are conceptual and are not a claim that production role enums or permissions have already been extended.",
+    "Purchase quantity, received, returnPending, balanceKnown and lifecycle are existing source projections. Demand, allocation, obligation confirmation, due-time authority, agent records and control logic are proposed plan-layer fixtures.",
+    "Purchase.dueDate is the source expected-delivery date. Even when its text equals a synthetic confirmed due date, the independent procurementObligation.basisId is required for a supplier due-obligation conclusion.",
+    "This specification deliberately uses qualified accepted net quantity as the synthetic obligation's fulfillment criterion. Production arrival-versus-acceptance and supplier responsibility rules still require business confirmation.",
+    "supplierChaseCandidate only describes a rule-backed candidate after fact checks. It never grants a send permit; shadow mode and universalExpected retain zero real side effects.",
+    "Base A/B order risk records are already present synthetic references. A single-material result never closes them without the explicit closure checks and current evidence required by the evaluation operation.",
+    "The fixture clock stays at 2026-10-15 10:00 Asia/Shanghai. Historical and future evidence dates are absolute ISO timestamps; cases do not advance a shared clock or mutate one another.",
+    "No automatic model, network, database, service, migration or test execution is provided by this JSON.",
+    "A known qualified-fulfillment quantity gap does not establish non-delivery or supplier fault. The base cause evidence is unconfirmed, so supplierChaseCandidate=false and internal verification is required. A supplier-chase-positive scenario requires separately verified receipt/inspection/cause evidence and is outside this minimum set."
+  ],
+  "coverageGaps": [
+    {
+      "ruleIds": [
+        "R01"
+      ],
+      "topic": "ambiguous_duplicate_purchase_matching_and_stable_id_mapping",
+      "status": "not_specified_in_this_minimum_set"
+    },
+    {
+      "ruleIds": [
+        "R02"
+      ],
+      "topic": "full_pagination_over_50_rows_stale_data_and_permission_change_between_pages",
+      "status": "requires_additional_independent_cases"
+    },
+    {
+      "ruleIds": [
+        "R04",
+        "R07"
+      ],
+      "topic": "return_invalidates_existing_allocation_and_prior_consumption_cannot_be_reallocated",
+      "status": "case_07_uses_explicitly_reconfirmed_allocation_not_full_lifecycle"
+    },
+    {
+      "ruleIds": [
+        "R05"
+      ],
+      "topic": "four_decimal_rounding_halfway_boundaries_invalid_precision_and_incompatible_materials",
+      "status": "normal_conversion_only_here"
+    },
+    {
+      "ruleIds": [
+        "R08",
+        "R09"
+      ],
+      "topic": "internal_expected_date_elapsed_without_confirmed_supplier_due_date_and_source_review_closed_archived_admission",
+      "status": "requires_additional_independent_cases"
+    },
+    {
+      "ruleIds": [
+        "R11",
+        "R13"
+      ],
+      "topic": "cancelled_case_suppression_duplicate_inbox_same_key_different_payload_and_full_commitment_replacement",
+      "status": "requires_additional_independent_cases"
+    },
+    {
+      "ruleIds": [
+        "R12"
+      ],
+      "topic": "policyAuthorizedRoleTask_multi_source_summary_projection_and_cross_customer_matrix",
+      "status": "onBehalfOf_revocation_only_here"
+    },
+    {
+      "ruleIds": [
+        "R14"
+      ],
+      "topic": "committed_pending_definitely_not_executed_recovery_and_shadow_takeover_batch_limits",
+      "status": "unknown_inflight_and_pause_race_only_here"
+    },
+    {
+      "ruleIds": [
+        "R14"
+      ],
+      "topic": "scheduler_watermark_atomicity_crash_injection_backup_restore_capacity_and_real_channel_receipts",
+      "status": "outside_static_preparation_specification"
+    },
+    {
+      "ruleIds": [
+        "R04",
+        "R06",
+        "R10"
+      ],
+      "topic": "supplier_chase_positive_after_independent_receipt_inspection_and_cause_evidence_verified",
+      "status": "base_quantity_gap_only_requires_internal_verification"
+    }
+  ],
+  "cases": [
+    {
+      "id": "syn-case-spec-01",
+      "title": "合成：已确认采购义务到期但净合格收货不足",
+      "ruleIds": [
+        "R01",
+        "R02",
+        "R04",
+        "R06",
+        "R07",
+        "R14"
+      ],
+      "overrides": {},
+      "expectedOverrides": {},
+      "notes": [
+        "采购应交160件及到期来自独立合成义务凭证；不是从两个订单各需80件推算。",
+        "A的本物料已经满足，B缺60；本例仍未完成PMC与其他齐料条件核查，不据此关闭整单风险。",
+        "影子模式只提议一个采购事项，并引用既有两个订单风险事项；不真实派单或催供应商。",
+        "采购当前sourceAsOf是来源日期；本批精确截至与观察时点仅由plan.factBatch提供，不假称源日期含秒级精度。",
+        "本例确认的是已到期采购义务的净合格履约缺口；交付/验收原因未核清，只形成内部履约核查候选，不自动形成供应商催交候选。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-02",
+      "title": "合成：采购已履行但订单分配仍缺60件",
+      "ruleIds": [
+        "R06",
+        "R07",
+        "R10",
+        "R14"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "quantity": 100
+          }
+        },
+        "plan": {
+          "procurementObligation": {
+            "quantity": 100
+          }
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "purchaseQuantity": 100,
+          "remainingSourceQuantity": 0,
+          "obligationGapBaseQuantity": 0
+        },
+        "purchaseDecision": {
+          "kind": "fulfilled",
+          "cause": "confirmed_obligation_fulfilled",
+          "currentObligationSatisfied": true,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": false
+        },
+        "ledger": {
+          "purchaseCaseDisposition": "none",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "impactOrderCaseIds": [],
+          "appendedEventTypes": [],
+          "purchaseCaseId": null
+        },
+        "commitment": {
+          "caseVersionAfter": null
+        }
+      },
+      "notes": [
+        "B缺60只构成订单侧需求或分配问题，不能补造采购义务、供应商欠交或催交动作。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-03",
+      "title": "合成：采购缺口已知但共享物料没有确认分配",
+      "ruleIds": [
+        "R06",
+        "R07"
+      ],
+      "overrides": {
+        "plan": {
+          "allocations": null
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "allocationValid": null,
+          "declaredAllocationBaseQuantity": null
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "appendedEventTypes": [
+            "allocation_verification_required"
+          ]
+        }
+      },
+      "notes": [
+        "采购义务缺口仍为60；各订单的分配缺口未知。模型不得自行选择哪个订单先拿80件。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-04",
+      "title": "合成：同100件净收货被重复分配为80加80",
+      "ruleIds": [
+        "R07",
+        "R10"
+      ],
+      "overrides": {
+        "plan": {
+          "allocations": [
+            {
+              "id": "syn-allocation-a",
+              "orderId": "syn-order-a",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            },
+            {
+              "id": "syn-allocation-b",
+              "orderId": "syn-order-b",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            }
+          ]
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "allocationValid": false,
+          "declaredAllocationBaseQuantity": 160
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "appendedEventTypes": [
+            "allocation_overcommitted"
+          ]
+        }
+      },
+      "notes": [
+        "拒绝160大于100的分配依据，不静默截断、不把两订单都判齐料；不改变独立成立的采购缺口60。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-05",
+      "title": "合成：未知收货的零占位不是真实零",
+      "ruleIds": [
+        "R03",
+        "R04",
+        "R10"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "balanceKnown": false,
+            "received": 0,
+            "returnPending": 0
+          }
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "netQualifiedSourceQuantity": null,
+          "remainingSourceQuantity": null,
+          "netQualifiedBaseQuantity": null,
+          "obligationGapBaseQuantity": null,
+          "returnPendingSourceQuantity": null,
+          "allocationValid": null
+        },
+        "purchaseDecision": {
+          "kind": "verification_required",
+          "cause": "receipt_balance_unknown",
+          "currentObligationSatisfied": null,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": true
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "purchaseCaseDisposition": "propose_verification",
+          "appendedEventTypes": [
+            "receipt_balance_verification_required"
+          ]
+        }
+      },
+      "notes": [
+        "0仅是当前字段的未知占位。不能输出供应商欠交160，也不能输出已收0或退货待补0的事实结论。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-06",
+      "title": "合成：到货160但60件尚待验收",
+      "ruleIds": [
+        "R03",
+        "R04",
+        "R10"
+      ],
+      "overrides": {
+        "plan": {
+          "physicalDelivery": {
+            "id": "syn-delivery-p",
+            "quantity": 160,
+            "unit": "件",
+            "acceptedQuantity": 100,
+            "pendingInspectionQuantity": 60,
+            "rejectedQuantity": 0,
+            "version": 1
+          },
+          "fulfillmentCauseEvidence": {
+            "status": "inspection_pending_confirmed",
+            "physicalReceiptEvidenceComplete": true,
+            "inspectionCauseVerified": true
+          }
+        }
+      },
+      "expectedOverrides": {
+        "purchaseDecision": {
+          "kind": "verification_required",
+          "cause": "inspection_pending",
+          "currentObligationSatisfied": false,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": true
+        },
+        "ledger": {
+          "purchaseCaseDisposition": "propose_verification",
+          "appendedEventTypes": [
+            "inspection_verification_required"
+          ]
+        }
+      },
+      "notes": [
+        "received仍为已确认净合格100，remaining为60；到货原始量160不计入合格量。",
+        "合格履约尚不足60不等于供应商尚未送达60；supplierUndeliveredBaseQuantity必须保持null，先内部验收核查。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-07",
+      "title": "合成：净收90与退货待补10不能重复扣加",
+      "ruleIds": [
+        "R04",
+        "R06",
+        "R07"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "received": 90,
+            "returnPending": 10
+          }
+        },
+        "plan": {
+          "allocations": [
+            {
+              "id": "syn-allocation-a",
+              "orderId": "syn-order-a",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            },
+            {
+              "id": "syn-allocation-b",
+              "orderId": "syn-order-b",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 10,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            }
+          ],
+          "returnEvidence": {
+            "id": "syn-return-p-10",
+            "quantity": 10,
+            "unit": "件",
+            "confirmed": true,
+            "alreadyIncludedInReceived": true,
+            "alreadyIncludedInRemaining": true,
+            "version": 1
+          },
+          "duplicateObservedReturnIds": [
+            "syn-return-p-10",
+            "syn-return-p-10"
+          ]
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "netQualifiedSourceQuantity": 90,
+          "remainingSourceQuantity": 70,
+          "netQualifiedBaseQuantity": 90,
+          "obligationGapBaseQuantity": 70,
+          "returnPendingSourceQuantity": 10,
+          "declaredAllocationBaseQuantity": 90
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 80,
+            "knownMaterialShortage": 0,
+            "thisMaterialSatisfied": true,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 10,
+            "knownMaterialShortage": 70,
+            "thisMaterialSatisfied": false,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "appendedEventTypes": [
+            "net_receipt_basis_verified"
+          ]
+        }
+      },
+      "notes": [
+        "160−90=70，不是80；不得再把pending10加到remaining，也不得从received90再扣10。",
+        "重复观察同一退货凭证不再次扣减。分配80/10是退货后独立确认的新凭证，不由Agent从旧80/20自动改写。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-08",
+      "title": "合成：有版本的箱件换算",
+      "ruleIds": [
+        "R05",
+        "R06",
+        "R07"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "unit": "箱",
+            "quantity": 3.2,
+            "received": 2
+          }
+        },
+        "plan": {
+          "unitConversion": {
+            "id": "syn-unit-conversion-box-piece",
+            "materialId": "syn-material-m",
+            "fromUnit": "箱",
+            "toUnit": "件",
+            "factor": 50,
+            "version": 1,
+            "confirmed": true
+          }
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "purchaseQuantity": 3.2,
+          "sourceUnit": "箱",
+          "netQualifiedSourceQuantity": 2,
+          "remainingSourceQuantity": 1.2
+        }
+      },
+      "notes": [
+        "独立义务为160件；2箱按已确认50件/箱换算为100件。剩余1.2箱对应60件，保留源单位与基础单位。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-09",
+      "title": "合成：箱件转换依据缺失",
+      "ruleIds": [
+        "R05",
+        "R10"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "unit": "箱",
+            "quantity": 3.2,
+            "received": 2
+          }
+        },
+        "plan": {
+          "unitConversion": null
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "purchaseQuantity": 3.2,
+          "sourceUnit": "箱",
+          "netQualifiedSourceQuantity": 2,
+          "remainingSourceQuantity": 1.2,
+          "netQualifiedBaseQuantity": null,
+          "obligationGapBaseQuantity": null,
+          "allocationValid": null
+        },
+        "purchaseDecision": {
+          "kind": "verification_required",
+          "cause": "unit_conversion_unknown",
+          "currentObligationSatisfied": null,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": true
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": null,
+            "knownMaterialShortage": null,
+            "thisMaterialSatisfied": null,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "purchaseCaseDisposition": "propose_verification",
+          "appendedEventTypes": [
+            "unit_conversion_verification_required"
+          ]
+        }
+      },
+      "notes": [
+        "允许显示同单位源账面差1.2箱，但不能将其自动解释为60件，更不能直接与件制订单需求相减。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-10",
+      "title": "合成：采购来源版本与事实批次不一致",
+      "ruleIds": [
+        "R02"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "version": 2,
+            "sourceVersion": 2
+          }
+        },
+        "plan": {
+          "factBatch": {
+            "sourceVersions": {
+              "syn-purchase-p": 1,
+              "syn-order-a": 1,
+              "syn-order-b": 1
+            }
+          }
+        }
+      },
+      "expectedOverrides": {
+        "calculationAllowed": false,
+        "facts": null,
+        "purchaseDecision": {
+          "kind": "blocked",
+          "cause": "fact_batch_version_mismatch",
+          "currentObligationSatisfied": null,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": true
+        },
+        "orders": [],
+        "ledger": {
+          "purchaseCaseDisposition": "none",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "impactOrderCaseIds": [],
+          "appendedEventTypes": [],
+          "purchaseCaseId": null
+        },
+        "commitment": {
+          "caseVersionAfter": null
+        }
+      },
+      "notes": [
+        "不得把旧关联/分配与新来源拼成完整批次；重取一致批次后再判定，不提交半批有效结果。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-11",
+      "title": "合成：已确认零实收与未知零占位的反例",
+      "ruleIds": [
+        "R03",
+        "R04",
+        "R06",
+        "R07"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "balanceKnown": true,
+            "received": 0,
+            "returnPending": 0
+          }
+        },
+        "plan": {
+          "allocations": [
+            {
+              "id": "syn-allocation-a",
+              "orderId": "syn-order-a",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 0,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            },
+            {
+              "id": "syn-allocation-b",
+              "orderId": "syn-order-b",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 0,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            }
+          ],
+          "receiptBalanceEvidence": {
+            "id": "syn-receipt-balance-zero",
+            "confirmed": true,
+            "netQualifiedQuantity": 0,
+            "unit": "件",
+            "version": 1
+          }
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "netQualifiedSourceQuantity": 0,
+          "remainingSourceQuantity": 160,
+          "netQualifiedBaseQuantity": 0,
+          "obligationGapBaseQuantity": 160,
+          "declaredAllocationBaseQuantity": 0
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 0,
+            "knownMaterialShortage": 80,
+            "thisMaterialSatisfied": false,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 0,
+            "knownMaterialShortage": 80,
+            "thisMaterialSatisfied": false,
+            "wholeOrderMaterialReady": null
+          }
+        ]
+      },
+      "notes": [
+        "balanceKnown=true且独立合成证据确认0，故160−0=160为已知净合格履约缺口；不同于case05的未知null。",
+        "两订单各缺80，本结论仍以独立采购义务160为依据，不因需求合计碰巧相同而省略义务凭证。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-12",
+      "title": "合成：未确认的新回复不推迟已到期承诺",
+      "ruleIds": [
+        "R08",
+        "R13"
+      ],
+      "overrides": {
+        "plan": {
+          "evaluationAction": "select_commitments",
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "等待履约",
+              "caseVersion": 3,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            }
+          ],
+          "commitments": [
+            {
+              "id": "syn-commitment-old",
+              "purchaseId": "syn-purchase-p",
+              "scopeId": "syn-scope-p-whole",
+              "quantityBasis": "remaining_to_deliver",
+              "quantity": 60,
+              "unit": "件",
+              "dueAt": "2026-10-15T01:00:00Z",
+              "verification": "confirmed",
+              "confirmedBy": "syn-member-buyer",
+              "version": 1,
+              "remainingEffectiveQuantity": 60
+            },
+            {
+              "id": "syn-commitment-candidate",
+              "purchaseId": "syn-purchase-p",
+              "scopeId": "syn-scope-p-whole",
+              "quantityBasis": "remaining_to_deliver",
+              "quantity": 60,
+              "unit": "件",
+              "dueAt": "2026-10-16T02:00:00Z",
+              "verification": "pending",
+              "confirmedBy": null,
+              "version": 1,
+              "replacesId": "syn-commitment-old",
+              "rawText": "合成回复：明天交60件"
+            }
+          ]
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "unconfirmed_commitment_received"
+          ]
+        },
+        "commitment": {
+          "effectiveIds": [
+            "syn-commitment-old"
+          ],
+          "pendingIds": [
+            "syn-commitment-candidate"
+          ],
+          "nextCheckAt": "2026-10-15T01:00:00Z",
+          "checkpoints": [
+            {
+              "commitmentId": "syn-commitment-old",
+              "quantity": 60,
+              "unit": "件",
+              "checkAt": "2026-10-15T01:00:00Z"
+            }
+          ],
+          "dueCheckRequired": true,
+          "oldBreachRetained": true,
+          "caseVersionAfter": 3
+        }
+      },
+      "notes": [
+        "固定当前10点，旧承诺9点已到期且对应净收没有增加；待核查的新回复不延后旧核查，不抹去旧失约。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-13",
+      "title": "合成：确认部分替代承诺只影响30件",
+      "ruleIds": [
+        "R08",
+        "R13"
+      ],
+      "overrides": {
+        "plan": {
+          "evaluationAction": "confirm_commitment",
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "等待履约",
+              "caseVersion": 3,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            }
+          ],
+          "commitments": [
+            {
+              "id": "syn-commitment-old",
+              "purchaseId": "syn-purchase-p",
+              "scopeId": "syn-scope-p-whole",
+              "quantityBasis": "remaining_to_deliver",
+              "quantity": 60,
+              "unit": "件",
+              "dueAt": "2026-10-15T01:00:00Z",
+              "verification": "confirmed",
+              "confirmedBy": "syn-member-buyer",
+              "version": 1,
+              "remainingEffectiveQuantity": 60
+            }
+          ],
+          "incomingCommitment": {
+            "id": "syn-commitment-replacement",
+            "purchaseId": "syn-purchase-p",
+            "scopeId": "syn-scope-p-whole",
+            "quantityBasis": "remaining_to_deliver",
+            "quantity": 30,
+            "unit": "件",
+            "dueAt": "2026-10-16T02:00:00Z",
+            "verification": "pending",
+            "confirmedBy": null,
+            "version": 1,
+            "replacesId": "syn-commitment-old",
+            "replacedQuantity": 30,
+            "replacementScopeConfirmed": true,
+            "remainingEffectiveQuantity": 30
+          },
+          "commitmentConfirmationRequest": {
+            "commitmentId": "syn-commitment-replacement",
+            "actorId": "syn-member-buyer",
+            "authorized": true,
+            "replacesId": "syn-commitment-old",
+            "replacedQuantity": 30,
+            "replacementScopeConfirmed": true
+          }
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "partial_commitment_confirmed"
+          ]
+        },
+        "commitment": {
+          "effectiveIds": [
+            "syn-commitment-old",
+            "syn-commitment-replacement"
+          ],
+          "pendingIds": [],
+          "nextCheckAt": "2026-10-15T01:00:00Z",
+          "checkpoints": [
+            {
+              "commitmentId": "syn-commitment-old",
+              "quantity": 30,
+              "unit": "件",
+              "checkAt": "2026-10-15T01:00:00Z"
+            },
+            {
+              "commitmentId": "syn-commitment-replacement",
+              "quantity": 30,
+              "unit": "件",
+              "checkAt": "2026-10-16T02:00:00Z"
+            }
+          ],
+          "dueCheckRequired": true,
+          "oldBreachRetained": true,
+          "caseVersionAfter": 4,
+          "confirmationApplied": true
+        }
+      },
+      "notes": [
+        "已确认新承诺只改变对应30件的下一核查点；其余30件仍到期。采购义务、正式复期、received均不自动改变。",
+        "输入保留旧承诺60件及待确认新承诺；本次明确授权的确认操作成功后，才形成旧30＋新30及caseVersion递增。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-14",
+      "title": "合成：关闭后新退货及到期补交义务再次形成异常",
+      "ruleIds": [
+        "R04",
+        "R11",
+        "R13"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "version": 3,
+            "sourceVersion": 3,
+            "received": 150,
+            "returnPending": 10
+          }
+        },
+        "plan": {
+          "factBatch": {
+            "sourceVersions": {
+              "syn-purchase-p": 3,
+              "syn-order-a": 1,
+              "syn-order-b": 1
+            }
+          },
+          "procurementObligation": {
+            "dueAt": "2026-10-15T01:00:00Z",
+            "basisId": "syn-obligation-confirmed-return-replacement",
+            "version": 3
+          },
+          "allocations": [
+            {
+              "id": "syn-allocation-a",
+              "orderId": "syn-order-a",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            },
+            {
+              "id": "syn-allocation-b",
+              "orderId": "syn-order-b",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 70,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            }
+          ],
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-previous",
+              "businessStatus": "已关闭",
+              "caseVersion": 7,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1,
+              "closedAt": "2026-10-14T10:00:00Z",
+              "closingEvidence": {
+                "sourceVersion": 2,
+                "netQualifiedQuantity": 160,
+                "unit": "件"
+              }
+            }
+          ],
+          "newAbnormalEvidence": {
+            "id": "syn-new-return-evidence",
+            "occurredAt": "2026-10-15T00:00:00Z",
+            "qualifiedReturnQuantity": 10,
+            "replacementRequired": true,
+            "replacementDueAt": "2026-10-15T01:00:00Z",
+            "currentScopeConfirmed": true
+          },
+          "priorUnresolvedActions": []
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "netQualifiedSourceQuantity": 150,
+          "remainingSourceQuantity": 10,
+          "netQualifiedBaseQuantity": 150,
+          "obligationGapBaseQuantity": 10,
+          "returnPendingSourceQuantity": 10,
+          "declaredAllocationBaseQuantity": 150
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 80,
+            "knownMaterialShortage": 0,
+            "thisMaterialSatisfied": true,
+            "wholeOrderMaterialReady": null
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 70,
+            "knownMaterialShortage": 10,
+            "thisMaterialSatisfied": false,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "purchaseCaseDisposition": "create_new_recurrence",
+          "previousCaseId": "syn-case-purchase-previous",
+          "oldCasesUnchanged": true,
+          "oldApprovalReusable": false,
+          "appendedEventTypes": [
+            "new_occurrence_detected"
+          ]
+        }
+      },
+      "notes": [
+        "原采购已按净合格160关闭。后续新退货10并存在已确认、已到期的补交义务；新case从待核查开始，不能重开旧case或沿用旧批准。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-15",
+      "title": "合成：旧事项晚到的完成回复只追加证据",
+      "ruleIds": [
+        "R11",
+        "R13"
+      ],
+      "overrides": {
+        "plan": {
+          "evaluationAction": "consume_inbox_event",
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-previous",
+              "businessStatus": "已关闭",
+              "caseVersion": 7,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            },
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "待核查",
+              "caseVersion": 2,
+              "previousCaseId": "syn-case-purchase-previous",
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            }
+          ],
+          "incomingEvent": {
+            "id": "syn-inbox-late-complete",
+            "channel": "synthetic_local_adapter",
+            "channelAccountId": "syn-channel-account",
+            "messageId": "syn-message-old-complete",
+            "caseId": "syn-case-purchase-previous",
+            "taskId": "syn-task-previous",
+            "boundCaseVersion": 6,
+            "occurredAt": "2026-10-14T09:00:00Z",
+            "receivedAt": "2026-10-15T02:00:00Z",
+            "text": "合成旧回复：已完成"
+          }
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "late_closed_case_evidence"
+          ],
+          "eventAttachedCaseId": "syn-case-purchase-previous",
+          "currentCaseVersionAfter": 2,
+          "oldCasesUnchanged": true,
+          "previousCaseId": "syn-case-purchase-previous"
+        },
+        "commitment": {
+          "caseVersionAfter": 2
+        }
+      },
+      "notes": [
+        "旧事项可追加证据，但保持已关闭；当前事项及任务不推进，不从旧回复生成新承诺或发送。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-16",
+      "title": "合成：整行和批次覆盖同一数量不重复建案",
+      "ruleIds": [
+        "R01",
+        "R11"
+      ],
+      "overrides": {
+        "plan": {
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "处理中",
+              "caseVersion": 3,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            }
+          ],
+          "candidateScope": {
+            "id": "syn-scope-p-batch-overlap",
+            "purchaseId": "syn-purchase-p",
+            "materialId": "syn-material-m",
+            "lotId": "syn-lot-p",
+            "coverageBaseQuantity": 160,
+            "containedByScopeId": "syn-scope-p-whole",
+            "overlapConfirmed": true
+          }
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "overlapping_scope_reused"
+          ]
+        },
+        "commitment": {
+          "caseVersionAfter": 3
+        }
+      },
+      "notes": [
+        "不能仅因规范范围字符串不同而建立第二个自动催办事项；现存整体范围覆盖本批次。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-17",
+      "title": "合成：暂停事务先于出站许可",
+      "ruleIds": [
+        "R12",
+        "R14"
+      ],
+      "overrides": {
+        "plan": {
+          "mode": "internal_synthetic",
+          "evaluationAction": "request_pause",
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "等待履约",
+              "caseVersion": 3,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 3
+            }
+          ],
+          "control": {
+            "autoFollowupState": "运行",
+            "controlEpoch": 3,
+            "pauseAuthorized": true,
+            "pauseReason": "合成暂停：等待人工核查",
+            "pendingActionsFrozen": true,
+            "inflightActions": [],
+            "pauseTransactionOrder": 1,
+            "permitTransactionOrder": 2,
+            "attemptedPermitEpoch": 3
+          },
+          "action": {
+            "id": "syn-action-followup",
+            "idempotencyKey": "syn-idempotency-followup",
+            "attempt": 1,
+            "boundCaseVersion": 3,
+            "status": "staged",
+            "payloadHash": "synthetic-payload-hash-v1"
+          }
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "auto_followup_pausing"
+          ],
+          "currentCaseVersionAfter": 4
+        },
+        "control": {
+          "autoFollowupState": "暂停中",
+          "controlEpoch": 4,
+          "newAutomaticPermitAllowed": false,
+          "newAutomaticPermitCount": 0,
+          "oldWorkerCommitAllowed": false,
+          "businessStatusAfter": "等待履约",
+          "pauseMayFinalize": true,
+          "originalActionId": "syn-action-followup",
+          "originalIdempotencyKey": "syn-idempotency-followup"
+        },
+        "commitment": {
+          "caseVersionAfter": 4
+        }
+      },
+      "notes": [
+        "拒绝旧epoch3申请；暂停不把等待履约改为关闭。收件与证据入口仍开放。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-18",
+      "title": "合成：许可先提交且结果不明时恢复不能换键重发",
+      "ruleIds": [
+        "R12",
+        "R14"
+      ],
+      "overrides": {
+        "plan": {
+          "mode": "internal_synthetic",
+          "evaluationAction": "attempt_resume",
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "等待履约",
+              "caseVersion": 4,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "暂停",
+              "controlEpoch": 5
+            }
+          ],
+          "control": {
+            "autoFollowupState": "暂停",
+            "controlEpoch": 5,
+            "pendingActionsFrozen": true,
+            "inflightActions": [
+              {
+                "actionId": "syn-action-followup",
+                "attempt": 1,
+                "permitEpoch": 4,
+                "authorityResult": "unknown",
+                "verificationOwnerId": "syn-member-buyer"
+              }
+            ],
+            "pauseTransactionOrder": 2,
+            "permitTransactionOrder": 1,
+            "resumeRequested": true,
+            "resumeAuthorized": true
+          },
+          "action": {
+            "id": "syn-action-followup",
+            "idempotencyKey": "syn-idempotency-followup",
+            "attempt": 1,
+            "boundCaseVersion": 3,
+            "status": "unknown",
+            "payloadHash": "synthetic-payload-hash-v1"
+          }
+        }
+      },
+      "expectedOverrides": {
+        "ledger": {
+          "purchaseCaseDisposition": "reuse_existing",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "appendedEventTypes": [
+            "resume_held_for_authority_result"
+          ],
+          "currentCaseVersionAfter": 4
+        },
+        "control": {
+          "autoFollowupState": "暂停",
+          "controlEpoch": 5,
+          "newAutomaticPermitAllowed": false,
+          "newAutomaticPermitCount": 0,
+          "oldWorkerCommitAllowed": false,
+          "businessStatusAfter": "等待履约",
+          "resumeDecision": "hold_unknown_original_action",
+          "originalActionId": "syn-action-followup",
+          "originalIdempotencyKey": "syn-idempotency-followup",
+          "newAttemptCount": 0,
+          "mayMarkCancelled": false,
+          "mayMarkCommitted": false,
+          "receiptQueryRequired": true
+        },
+        "commitment": {
+          "caseVersionAfter": 4
+        }
+      },
+      "notes": [
+        "暂停已完成冻结且在途核查责任明确，因此可保持暂停状态；unknown仍单独显示。",
+        "本例不允许重新发出原动作或替代动作；确定未执行后的重新授权是另外需要补测的分支。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-19",
+      "title": "合成：工具读取后委派授权撤销",
+      "ruleIds": [
+        "R12",
+        "R14"
+      ],
+      "overrides": {
+        "plan": {
+          "evaluationAction": "before_model_continuation",
+          "authorization": {
+            "mode": "onBehalfOf",
+            "initiatorId": "syn-member-pmc",
+            "assigneeId": "syn-member-buyer",
+            "grantId": "syn-delegation-purchase",
+            "observedGrantVersion": 1,
+            "currentGrantVersion": 2,
+            "grantActive": false,
+            "actorActive": true,
+            "allowedPurchaseIds": [],
+            "allowedOrderIds": [],
+            "revocationPoint": "after_tool_read_before_model_request"
+          }
+        }
+      },
+      "expectedOverrides": {
+        "calculationAllowed": false,
+        "facts": null,
+        "purchaseDecision": {
+          "kind": "blocked",
+          "cause": "authorization_revoked",
+          "currentObligationSatisfied": null,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": false
+        },
+        "orders": [],
+        "ledger": {
+          "purchaseCaseDisposition": "none",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [],
+          "impactOrderCaseIds": [],
+          "appendedEventTypes": [],
+          "purchaseCaseId": null
+        },
+        "authorization": {
+          "contextAllowed": false,
+          "restrictedCacheReadable": false,
+          "nextModelRequestAllowed": false,
+          "alternateAuthorizationFallbackAllowed": false
+        },
+        "control": {
+          "newAutomaticPermitAllowed": false,
+          "newAutomaticPermitCount": 0
+        },
+        "commitment": {
+          "caseVersionAfter": null
+        }
+      },
+      "notes": [
+        "旧来源正文、摘要、标题、缓存及搜索结果不再向该主体返回；后续模型出站和建议提交均为0。",
+        "不得自行切换policyAuthorizedRoleTask或借服务账号继续；以前已外发的内容不宣称可追回。"
+      ]
+    },
+    {
+      "id": "syn-case-spec-20",
+      "title": "合成：采购关闭与订单齐料及PMC核对分别验收",
+      "ruleIds": [
+        "R04",
+        "R06",
+        "R07",
+        "R10"
+      ],
+      "overrides": {
+        "sourceProjection": {
+          "purchase": {
+            "version": 2,
+            "sourceVersion": 2,
+            "received": 160
+          }
+        },
+        "plan": {
+          "mode": "internal_synthetic",
+          "evaluationAction": "verify_closure",
+          "factBatch": {
+            "sourceVersions": {
+              "syn-purchase-p": 2,
+              "syn-order-a": 1,
+              "syn-order-b": 1
+            }
+          },
+          "allocations": [
+            {
+              "id": "syn-allocation-a",
+              "orderId": "syn-order-a",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            },
+            {
+              "id": "syn-allocation-b",
+              "orderId": "syn-order-b",
+              "materialId": "syn-material-m",
+              "purchaseId": "syn-purchase-p",
+              "quantity": 80,
+              "unit": "件",
+              "version": 1,
+              "confirmed": true
+            }
+          ],
+          "existingPurchaseCases": [
+            {
+              "id": "syn-case-purchase-current",
+              "businessStatus": "待验证",
+              "caseVersion": 4,
+              "previousCaseId": null,
+              "key": {
+                "purchaseId": "syn-purchase-p",
+                "exceptionType": "procurement_qualified_shortage",
+                "scopeId": "syn-scope-p-whole"
+              },
+              "autoFollowupState": "运行",
+              "controlEpoch": 1
+            }
+          ],
+          "orderRiskCases": [
+            {
+              "id": "syn-case-order-a",
+              "orderId": "syn-order-a",
+              "businessStatus": "待验证",
+              "caseVersion": 2
+            },
+            {
+              "id": "syn-case-order-b",
+              "orderId": "syn-order-b",
+              "businessStatus": "待核查",
+              "caseVersion": 2
+            }
+          ],
+          "orderClosureChecks": [
+            {
+              "orderId": "syn-order-a",
+              "requiredMaterialsComplete": true,
+              "otherMaterialConditionsConfirmed": true,
+              "pmcChecked": true,
+              "unresolvedRequiredTasks": 0
+            },
+            {
+              "orderId": "syn-order-b",
+              "requiredMaterialsComplete": false,
+              "otherMaterialConditionsConfirmed": null,
+              "pmcChecked": true,
+              "unresolvedRequiredTasks": 0
+            }
+          ],
+          "purchaseClosureChecks": {
+            "obligationEvidenceCurrent": true,
+            "qualifiedFulfillmentVerified": true,
+            "requiredTasksAccepted": true,
+            "unresolvedActions": 0
+          }
+        }
+      },
+      "expectedOverrides": {
+        "facts": {
+          "netQualifiedSourceQuantity": 160,
+          "remainingSourceQuantity": 0,
+          "netQualifiedBaseQuantity": 160,
+          "obligationGapBaseQuantity": 0,
+          "declaredAllocationBaseQuantity": 160
+        },
+        "purchaseDecision": {
+          "kind": "fulfilled",
+          "cause": "confirmed_obligation_fulfilled",
+          "currentObligationSatisfied": true,
+          "supplierChaseCandidate": false,
+          "requiresInternalVerification": false
+        },
+        "orders": [
+          {
+            "orderId": "syn-order-a",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 80,
+            "knownMaterialShortage": 0,
+            "thisMaterialSatisfied": true,
+            "wholeOrderMaterialReady": true
+          },
+          {
+            "orderId": "syn-order-b",
+            "demandBaseQuantity": 80,
+            "allocatedBaseQuantity": 80,
+            "knownMaterialShortage": 0,
+            "thisMaterialSatisfied": true,
+            "wholeOrderMaterialReady": null
+          }
+        ],
+        "ledger": {
+          "purchaseCaseDisposition": "close_existing_after_verification",
+          "newPurchaseCaseCount": 0,
+          "caseTransitions": [
+            {
+              "caseId": "syn-case-purchase-current",
+              "from": "待验证",
+              "to": "已关闭"
+            },
+            {
+              "caseId": "syn-case-order-a",
+              "from": "待验证",
+              "to": "已关闭"
+            }
+          ],
+          "appendedEventTypes": [
+            "purchase_closure_verified",
+            "order_a_material_risk_closed",
+            "order_b_other_material_verification_required"
+          ],
+          "currentCaseVersionAfter": 5
+        },
+        "commitment": {
+          "caseVersionAfter": 5
+        }
+      },
+      "notes": [
+        "B的本物料虽足量且PMC已核对，其他必需物料资料仍不完整，因此B整单齐料未知、风险不关闭。",
+        "采购事项可按其独立证据关闭；不把Agent事项关闭写成正式订单完成或采购源记录结单。"
+      ]
+    }
+  ],
+  "sourceFieldEvidence": {
+    "purchaseProjection": "lib/purchases.ts:5",
+    "remainingGuard": "lib/purchases.ts:8",
+    "orderCustomerField": "lib/domain.ts:14",
+    "sourceDateMapping": "lib/purchase-import.ts (sourceAsOf is a source date; precise observation times stay in plan.factBatch)"
+  }
+}
