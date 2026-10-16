@@ -24,9 +24,9 @@
 
 PSI `some` 是至少部分任务因该资源等待的时间比例，和 CPU idle 不是同一指标，两者可以同时出现。`total` 是累计等待微秒；用户提供的非零 memory/IO total 不证明当前存在故障，也不足以求本窗口增量。系统级 CPU `full` 没有定义，兼容性输出的零值不作为“无 CPU 压力”的证据。以上依据 [Linux 内核 PSI 文档](https://docs.kernel.org/accounting/psi.html)。
 
-**结论：当前没有证据支持仅因空闲资源不足就升级实例；可以继续准备并发 1 的隔离合成试点，但不能据此宣布同机部署不会影响正式服务。** 仍缺业务高峰／备份窗口、云端实际数据库确认、OOM／重启增量、服务资源归属与限制、监听状态及 Agent 自身 Linux 资源峰值。与本文件前述“代表性窗口”门槛相比，本次仅通过已采到的空闲资源子集，没有通过完整容量验收。
+**结论：当前没有证据支持仅因空闲资源不足就升级实例；可以继续准备并发 1 的隔离合成试点，但不能据此宣布同机部署不会影响正式服务。** 后续已收到下述服务资源快照，仍缺业务高峰／备份窗口、云端实际数据库确认、OOM／重启增量、父级有效资源限制、监听进程归属及 Agent 自身 Linux 资源峰值。与本文件后述“代表性窗口”门槛相比，本次仅通过已采到的空闲资源子集，没有通过完整容量验收。
 
-后续优先由用户提供已确认服务的白名单资源属性和监听进程归属，并在真实业务较忙时重复相同只读采样；无需为补证据而读取业务库或开放认证给助手。若尚无业务高峰，记录该限制，保持隔离测试阶段。并发 1 是试点起点，不是实测最大并发；本轮不启动同机负载、不新增数据库或修改任何正式服务。
+后续优先补充监听进程归属，并在真实业务较忙时重复相同只读采样；无需为补证据而读取业务库或开放认证给助手。若尚无业务高峰，记录该限制，保持隔离测试阶段。并发 1 是试点起点，不是实测最大并发；本轮不启动同机负载、不新增数据库或修改任何正式服务。
 
 ## 后续补充：运行服务与 SQLite 判断
 
@@ -36,7 +36,25 @@ PSI `some` 是至少部分任务因该资源等待的时间比例，和 CPU idle
 
 初期合成试点可沿用已验证的独立 SQLite/libSQL 存储方式：Agent 状态、会话和建议账本只能写入新建实验目录，不能指向现有业务数据库、复用其目录或执行迁移。当前阶段没有新增 PostgreSQL 服务的必要前提；未来若选择 PostgreSQL，再独立验收其部署、迁移、事务和容量。源码采用 SQLite 并不证明云端 SQLite/libSQL 原生依赖、锁竞争、持久化及备份恢复已通过。
 
-下一组只读核查仅需已确认项目服务和 Nginx 的 `Id/LoadState/ActiveState/SubState/MainPID/NRestarts/MemoryCurrent/MemoryPeak/MemoryHigh/MemoryMax/EffectiveMemoryMax/CPUQuotaPerSecUSec/TasksCurrent`，以及内核中 8787 监听套接字的 PID／进程名摘要；不输出 IP、`ExecStart`、`Environment`、完整 unit 或应用日志。`systemctl show --property` 用于选择属性，见 [systemctl 手册](https://man7.org/linux/man-pages/man1/systemctl.1.html)；`ss -lntp` 读取监听信息，不发起到该端口的连接，见 [ss 手册](https://man7.org/linux/man-pages/man8/ss.8.html)。缺失属性、`[not set]`、权限不足或未显示的进程归属均按未知处理，不能当作零占用；单次重启计数不是观察窗口的增量。`MemoryMax=infinity` 不能排除父级 cgroup 限制；`MainPID` 也可能是包装进程，监听子进程 PID 不相同本身不能否定归属。监听摘要仅提取 `users:(...)` 和匹配行数，不取可能包含地址的末列；命令报错必须保留，不能把失败解释为零监听。
+### 服务资源快照
+
+用户进一步提供了两项服务的单次 `systemctl show` 结果，未附该次查询时间，不与前述 23:28:49 起始采样视为同一瞬间。原始服务名及 PID 不入公开记录。
+
+| 属性 | 项目服务 | Nginx |
+| --- | --- | --- |
+| LoadState / ActiveState / SubState | loaded / active / running | loaded / active / running |
+| MemoryCurrent | 59,424,768 bytes，约 56.7 MiB | 7,008,256 bytes，约 6.7 MiB |
+| MemoryPeak | 69,742,592 bytes，约 66.5 MiB | 10,670,080 bytes，约 10.2 MiB |
+| TasksCurrent | 11 | 3 |
+| NRestarts | 0 | 0 |
+| CPUQuotaPerSecUSec / MemoryHigh / MemoryMax | 均为 infinity | 均为 infinity |
+| EffectiveMemoryMax | 未提供，按未知处理 | 未提供，按未知处理 |
+
+换算使用 1 MiB = 1,048,576 bytes。当前服务内存占用较低；`MemoryCurrent/MemoryPeak` 是服务 cgroup 的核算值，不能与前述单进程 RSS 直接比较或据此推断内存下降。峰值的统计周期未确认，不作为代表性业务高峰证据，也不把两服务各自峰值相加当作同时峰值。`TasksCurrent` 包含线程，不代表业务并发数。`NRestarts=0` 仅记录本次采样的自动重启计数，不能证明从未手动重启、没有历史故障，或代替窗口内计数增量。
+
+三项 `infinity` 表示这些服务级属性没有显式配额／内存阈值，不能证明整机资源无限或父级 cgroup 没有限制。有效限制仍待确认，见 [systemd 资源控制文档](https://github.com/systemd/systemd/blob/main/man/systemd.resource-control.xml)。本轮不修改现有服务限制；未来如执行获准的隔离实验，只为新实验进程制定资源预算。
+
+`MainPID` 已提供，但尚未收到 8787 监听摘要，无法确认它与项目服务的对应关系。下一项只读补证据仅需内核中该监听套接字的 PID／进程名摘要；不输出 IP、`ExecStart`、`Environment`、完整 unit 或应用日志。`systemctl show --property` 用于选择属性，见 [systemctl 手册](https://man7.org/linux/man-pages/man1/systemctl.1.html)；`ss -lntp` 读取监听信息，不发起到该端口的连接，见 [ss 手册](https://man7.org/linux/man-pages/man8/ss.8.html)。缺失属性、`[not set]`、权限不足或未显示的进程归属均按未知处理，不能当作零占用。`MainPID` 也可能是包装进程，监听子进程 PID 不相同本身不能否定归属。监听摘要仅提取 `users:(...)` 和匹配行数，不取可能包含地址的末列；命令报错必须保留，不能把失败解释为零监听。
 
 ## 采样范围与使用
 
@@ -91,6 +109,6 @@ bash cloud-capacity-probe.sh --service example-app.service --service nginx.servi
 
 ## 本轮可交付与验收状态
 
-本轮交付采样脚本、使用说明、本机连接工具，以及 Bash 语法／帮助入口和 12 项离线模拟场景验证。离线场景包括参数拒绝、IPv4／IPv6 脱敏、默认不查询服务、显式服务白名单、缺少 vmstat 和非 Linux 拒绝；它们不计作 Linux 实机或 ECS 性能证据。另已取得并分析用户提供的短时空闲 ECS 采样及运行服务清单；真实并发容量、与正式服务同机的影响、数据库运行开销、实际网络延迟和模型吞吐仍未实测。容量状态为 **空闲基线与服务清单已记录；等待服务资源归属／限制、代表性高峰及隔离负载证据**。用户继续提供手动采样即可推进判断，不以助手取得云凭据为前提。
+本轮交付采样脚本、使用说明、本机连接工具，以及 Bash 语法／帮助入口和 12 项离线模拟场景验证。离线场景包括参数拒绝、IPv4／IPv6 脱敏、默认不查询服务、显式服务白名单、缺少 vmstat 和非 Linux 拒绝；它们不计作 Linux 实机或 ECS 性能证据。另已取得并分析用户提供的短时空闲 ECS 采样、运行服务清单及两项服务资源快照；真实并发容量、与正式服务同机的影响、数据库运行开销、实际网络延迟和模型吞吐仍未实测。容量状态为 **空闲资源初筛通过，服务资源快照已记录；等待监听归属、父级有效限制、代表性高峰及隔离负载证据**。用户继续提供手动采样即可推进判断，不以助手取得云凭据为前提。本次补录仅修改验收文档并核对差异，没有重跑离线测试或新增模型调用。
 
 本地检查使用 Windows 上的 Git Bash：`bash -n` 和 `--help` 通过；12 项离线场景通过，包含合成 OS 指标、IPv4/IPv6 地址隐藏与端口范围、默认不查询服务、显式服务属性白名单、8 类无效参数拒绝、缺失 `vmstat` 返回不完整、非 Linux 提前拒绝。离线场景用 shell 函数替换系统命令，不读取真实业务数据，也没有真实运行 Linux 的 10 秒采样；这不能替代 Ubuntu 上的执行验证。
