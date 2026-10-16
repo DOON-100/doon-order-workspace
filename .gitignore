@@ -68,3 +68,6 @@ __pycache__/
 /encrypted-backups/**/*.tar
 /encrypted-backups/**/*.tar.gz
 /backup-keys/
+
+# Private import jobs, customer configuration, source files, and generated reports.
+/private-data-tools/
