@@ -92,6 +92,7 @@ body:has(.customer-quote-panel) .heading .actions{display:none!important}
  .cq-english{margin-top:2px}
  .cq-internal-document{margin-top:12px;padding:8px;font-size:10px;line-height:1.4}
  .cq-document-footer{margin-top:10px;padding-top:6px;flex-direction:row;font-size:8px;line-height:1.4;break-inside:avoid}
+ .cq-document-footer>span:last-child{margin-left:auto}
  .cq-document *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 .cq-quote-number-link{border:0;padding:3px 0;background:transparent;color:var(--cq-green);text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}.cq-quote-number-link:hover{color:#27735a}.cq-quote-number-link:focus-visible{outline:2px solid #50816b;outline-offset:4px;border-radius:2px}.cq-original-document{margin:20px 0 24px;min-width:0}.cq-original-document>h4{margin:0 0 13px;font-size:14px;font-weight:700;color:var(--cq-green)}.cq-version-archive:focus{outline:none}.cq-version-archive:focus-visible{outline:2px solid #50816b;outline-offset:4px}
