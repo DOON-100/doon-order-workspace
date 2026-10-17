@@ -16,11 +16,14 @@ function quoteFor(s:State,id:string){const q=all(s,'customer_quote').find(v=>v.i
 function editable(s:State,m:Member,q:CustomerQuote){if(!mayChangeQuoteCustomer(s,m,q))throw new AppError('只能修改客户责任清单中自己跟进客户的报价；未关联客户的报价须由管理员核对。',403);if(q.status!=='draft')throw new AppError('已确认报价不可覆盖，请先创建修订草稿。',409);}
 function current(q:CustomerQuote,version:number){if(q.version!==version)throw new AppError('报价已由其他同事更新，你的输入未覆盖新版本；请刷新核对后再保存。',409);}
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const result=schema.safeParse(value);if(!result.success)throw new AppError(result.error.issues.map(v=>`${v.path.join('.')}: ${v.message}`).slice(0,4).join('；'));return result.data;}
-async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]){
+export function buildCustomerQuotePersistenceRecords(m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]):Entity[]{
  // The current pointer may advance, but each snapshot has a new ID and is never overwritten.
  const revision:CustomerQuoteRevision={id:newId('customer_quote_revision'),kind:'customer_quote_revision',quoteId:q.id,version:q.version,action,updatedAt:q.updatedAt,updatedBy:m.name,snapshot:structuredClone(q)};
  const withoutStorageKey=(value:CustomerQuote|null)=>{if(!value)return null;const {sourceFileKey,templateFileKey,templateMapping,...safe}=value;return safe;};
- const records:Entity[]=[q,revision,audit(m,q,withoutStorageKey(before),action,'客户报价工作台',withoutStorageKey(q)),...additionalRecords];
+ return [q,revision,audit(m,q,withoutStorageKey(before),action,'客户报价工作台',withoutStorageKey(q)),...additionalRecords];
+}
+async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|null,action:string,additionalRecords:Entity[]=[]){
+ const records=buildCustomerQuotePersistenceRecords(m,q,before,action,additionalRecords);
  await commit(s.revision,records);
  return json({ok:true,quote:publicCustomerQuote({...s,records:[...s.records.filter(v=>v.id!==q.id),...records]},m,q)});
 }
