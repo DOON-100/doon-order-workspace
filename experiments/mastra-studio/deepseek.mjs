@@ -24,6 +24,14 @@ export async function readDeepSeekKey(env=process.env){
  if(key&&(/[\r\n\x00-\x20\x7f]/.test(key)||key.length>512))throw new Error('invalid key configuration');
  return key;
 }
+// Mastra's provider discovery and model picker read the standard process variable.
+// Hydrate it in server memory from Docker's mounted secret; never serialize it.
+export async function loadDeepSeekFileKey(env=process.env){
+ if(!env.DEEPSEEK_API_KEY_FILE)return;
+ const key=await readDeepSeekKey(env);
+ if(key)env.DEEPSEEK_API_KEY=key;
+ else delete env.DEEPSEEK_API_KEY;
+}
 export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.now,timeoutMs=8000}={}){
  let cached=null,cachedKey=null,expires=0,inflight=null,inflightKey=null,lastModelCall=null;
  const requested=env.DOON_STUDIO_MODEL||'offline';

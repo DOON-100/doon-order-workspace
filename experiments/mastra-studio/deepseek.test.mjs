@@ -1,9 +1,22 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {createDeepSeekStatus,explainError} from './deepseek.mjs';
+import {createDeepSeekStatus,explainError,loadDeepSeekFileKey} from './deepseek.mjs';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 const key='synthetic-only-not-a-real-secret';
 const balance={is_available:true,balance_infos:[{currency:'CNY',total_balance:'12.3400',granted_balance:'2.3400',topped_up_balance:'10.0000'},{currency:'USD',total_balance:'1.20',granted_balance:'0.00',topped_up_balance:'1.20'}]};
+test('文件密钥同步到服务端标准变量；空文件不沿用旧密钥，无文件配置保持原变量',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'deepseek-file-key-')),file=path.join(dir,'key');
+ try{
+  const env={DEEPSEEK_API_KEY_FILE:file,DEEPSEEK_API_KEY:'synthetic-old'};
+  await fs.writeFile(file,key+'\n');await loadDeepSeekFileKey(env);assert.equal(env.DEEPSEEK_API_KEY,key);
+  await fs.writeFile(file,'\n');await loadDeepSeekFileKey(env);assert.equal(env.DEEPSEEK_API_KEY,undefined);
+  await fs.writeFile(file,'invalid key');await assert.rejects(()=>loadDeepSeekFileKey(env),/invalid key configuration/);
+  const direct={DEEPSEEK_API_KEY:key};await loadDeepSeekFileKey(direct);assert.equal(direct.DEEPSEEK_API_KEY,key);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});
 test('缺少密钥不发请求；真实模型配置必须有服务端密钥',async()=>{
  let calls=0;const service=createDeepSeekStatus({env:{},fetchImpl:async()=>{calls++;}});
  assert.equal((await service.get()).status,'unconfigured');assert.equal(calls,0);

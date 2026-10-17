@@ -5,13 +5,14 @@ import {Hono} from 'hono';
 import {MastraServer} from '@mastra/hono';
 import {createAgents} from './agents.mjs';
 import {brandStudioScript} from './branding.mjs';
-import {createDeepSeekStatus} from './deepseek.mjs';
+import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 export async function createStudio({dataDir,deepseekOptions,storage,cloud=false}){
  await fs.mkdir(dataDir,{recursive:true});
+ await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
  const deepseek=createDeepSeekStatus(deepseekOptions),liveModel=await deepseek.model();
  const lab=createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});

@@ -16,6 +16,33 @@ const directory=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(d
 const dist=path.resolve(root,process.env.DOON_BUILD_DIR||'test-output/mastra-studio-build');
 const freePort=()=>new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>resolve(port));});});
 
+test('挂载文件配置被官方 Provider 接口识别，页面和 Agent 元数据不泄露密钥',async()=>{
+ const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-provider-discovery-'));
+ const file=path.join(dataDir,'synthetic-key'),secret='synthetic-provider-test-not-a-real-key';
+ const names=['DEEPSEEK_API_KEY_FILE','DEEPSEEK_API_KEY','DOON_STUDIO_MODEL'];
+ const before=Object.fromEntries(names.map(name=>[name,process.env[name]]));let studio;
+ try{
+  await fs.writeFile(file,secret+'\n');process.env.DEEPSEEK_API_KEY_FILE=file;delete process.env.DEEPSEEK_API_KEY;process.env.DOON_STUDIO_MODEL='offline';
+  studio=await createStudio({dataDir});
+  const origin='http://127.0.0.1:19897';
+  const providerResponse=await studio.handle(new Request(origin+'/studio/api/agents/providers'));
+  assert.equal(providerResponse.status,200);const body=await providerResponse.text();
+  const provider=JSON.parse(body).providers.find(row=>row.id==='deepseek');assert(provider);assert.equal(provider.connected,true);
+  assert(!body.includes(secret));
+  for(const route of ['/studio/','/studio/api/agents','/studio/api/agents/procurement']){
+   const response=await studio.handle(new Request(origin+route));assert.equal(response.status,200);assert(!(await response.text()).includes(secret));
+  }
+  await studio.close();studio=null;
+  await fs.writeFile(file,'');studio=await createStudio({dataDir});
+  const absent=await(await studio.handle(new Request(origin+'/studio/api/agents/providers'))).json();
+  assert.equal(absent.providers.find(row=>row.id==='deepseek').connected,false,'缺少配置时仍应如实提示');
+ }finally{
+  if(studio)await studio.close();
+  for(const name of names){if(before[name]===undefined)delete process.env[name];else process.env[name]=before[name];}
+  await fs.rm(dataDir,{recursive:true,force:true,maxRetries:5,retryDelay:100}).catch(error=>{if(error.code!=='EBUSY')throw error;});
+ }
+});
+
 test('官方 Studio 启动逻辑在 HTTPS 默认端口和本地端口均连接当前站点',async()=>{
  const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-studio-origin-'));
  const studio=await createStudio({dataDir,deepseekOptions:{env:{}}});

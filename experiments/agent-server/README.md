@@ -44,6 +44,8 @@ PUBLIC_ORIGIN=https://<existing-platform-host>
 
 `secrets/deepseek_api_key` 为 DeepSeek Key，`secrets/pg_studio_password` 为独立数据库用户密码；均不进入镜像、源码、CLI 参数或日志。Compose 会以文件挂载，真实模型为 `deepseek-flash`。余额与错误说明沿用 [Studio 接入说明](../mastra-studio/README.md)。
 
+Studio 启动时将挂载文件中的 DeepSeek Key 读入服务端进程内的标准 `DEEPSEEK_API_KEY` 变量，使官方 Provider 发现接口及模型选择器能识别文件配置。Docker 配置仍只指定文件路径，浏览器只收到 `connected` 布尔状态，不返回密钥。该状态表示已配置；实际认证或余额错误仍由调用结果与侧栏状态说明。替换密钥文件后重建 Agent 容器以同步此启动配置。
+
 Agent 内存限制 768MiB、CPU 0.75 核，非 root、只读根目录、64MiB 临时目录、无额外 capabilities；日志限制 3×10MiB。仅向宿主机 `127.0.0.1:8799` 发布，公网仍只使用原 HTTPS 入口。模型生成端点默认最多 2 个并发，请求正文最多 512KiB。健康检查表示进程完成初始化并能响应，不替代数据库监控、真实用户登录验收或模型可用性监控。
 
 检查新库初始化与备份后启动：
