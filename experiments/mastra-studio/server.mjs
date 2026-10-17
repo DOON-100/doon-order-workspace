@@ -10,10 +10,10 @@ import {createDeepSeekStatus} from './deepseek.mjs';
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
-export async function createStudio({dataDir,deepseekOptions}){
+export async function createStudio({dataDir,deepseekOptions,storage,cloud=false}){
  await fs.mkdir(dataDir,{recursive:true});
  const deepseek=createDeepSeekStatus(deepseekOptions),liveModel=await deepseek.model();
- const lab=createAgents(dataDir,{liveModel}),app=new Hono();
+ const lab=createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});
  await server.init();
  return{
@@ -51,7 +51,7 @@ export async function createStudio({dataDir,deepseekOptions}){
    if(relative==='index.html'){
     const values={MASTRA_STUDIO_BASE_PATH:'/studio',MASTRA_API_PREFIX:'/studio/api',MASTRA_SERVER_HOST:url.hostname,MASTRA_SERVER_PORT:url.port,MASTRA_SERVER_PROTOCOL:url.protocol.slice(0,-1),MASTRA_TELEMETRY_DISABLED:'true',MASTRA_HIDE_CLOUD_CTA:'true',MASTRA_EXPERIMENTAL_FEATURES:'false',MASTRA_TEMPLATES:'false',MASTRA_EXPERIMENTAL_UI:'false',MASTRA_THEME_TOGGLE:'true'};
     const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<title>Mastra Studio</title>','<title>Agent Studio</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
-    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div style="height:36px;display:flex;align-items:center;gap:20px;padding:0 16px;background:#123b31;color:white;font:13px sans-serif"><a href="/personal-tasks" style="color:white">← 返回数据台</a><span>本地 Studio · ${liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root" style="height:calc(100dvh - 36px)"></div><script type="module" src="/studio/provider-status.js"></script>`));
+    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div style="height:36px;display:flex;align-items:center;gap:20px;padding:0 16px;background:#123b31;color:white;font:13px sans-serif"><a href="/personal-tasks" style="color:white">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root" style="height:calc(100dvh - 36px)"></div><script type="module" src="/studio/provider-status.js"></script>`));
    }else if(relative.endsWith('.js'))bytes=Buffer.from(brandStudioScript(bytes.toString()));
    return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Content-Security-Policy':csp}});
   },

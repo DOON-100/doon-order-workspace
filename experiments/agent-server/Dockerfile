@@ -1,0 +1,14 @@
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5
+FROM ${NODE_IMAGE} AS dependencies
+WORKDIR /opt/agent/mastra-studio
+COPY mastra-studio/package.json mastra-studio/package-lock.json ./
+RUN npm ci --omit=dev --no-audit --no-fund
+FROM ${NODE_IMAGE}
+ENV NODE_ENV=production NODE_OPTIONS=--max-old-space-size=512 DOON_AGENT_SYNTHETIC_ONLY=1
+WORKDIR /opt/agent
+COPY --from=dependencies --chown=node:node /opt/agent/mastra-studio/node_modules ./mastra-studio/node_modules
+COPY --chown=node:node mastra-studio/*.mjs mastra-studio/brand.css mastra-studio/provider-status.js ./mastra-studio/
+COPY --chown=node:node mastra-studio/assets/ ./mastra-studio/assets/
+COPY --chown=node:node agent-server/server.mjs agent-server/http-server.mjs agent-server/session.mjs agent-server/entry.js ./agent-server/
+USER node
+CMD ["node","agent-server/server.mjs"]

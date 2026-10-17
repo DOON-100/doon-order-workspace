@@ -14,8 +14,8 @@ export const syntheticOrders=Object.freeze([
  {orderId:'SYN-STUDIO-002',material:'合成镜框',quantity:80,missing:0,supplier:'合成供应商乙',promisedDate:'2026-10-25',received:80,version:1},
 ]);
 const asOf='2026-10-17';
-export function createAgents(dataDir,{liveModel}={}){
- const storage=new LibSQLStore({id:'doon-studio-synthetic',url:`file:${dataDir.replaceAll('\\','/')}/mastra.sqlite`});
+export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceName='doon-studio-synthetic'}={}){
+ const storage=providedStorage||new LibSQLStore({id:'doon-studio-synthetic',url:`file:${dataDir.replaceAll('\\','/')}/mastra.sqlite`});
  const listOverdue=createTool({id:'inspect-overdue',description:'读取固定合成采购场景，检查欠料与供应商复期；不访问数据台订单。',
   inputSchema:z.object({}).strict(),outputSchema:z.object({syntheticOnly:z.literal(true),asOf:z.string(),orders:z.array(z.object({orderId:z.string(),material:z.string(),missing:z.number(),supplier:z.string(),promisedDate:z.string(),version:z.number()}))}),
   execute:async()=>({syntheticOnly:true,asOf,orders:syntheticOrders.filter(row=>row.missing>0&&row.promisedDate<asOf).map(({orderId,material,missing,supplier,promisedDate,version})=>({orderId,material,missing,supplier,promisedDate,version}))})});
@@ -44,7 +44,7 @@ export function createAgents(dataDir,{liveModel}={}){
  const scan=createStep({id:'scan-overdue',description:'检查固定合成欠料与复期',inputSchema:z.object({}).strict(),outputSchema:listOverdue.outputSchema,execute:async()=>listOverdue.execute({})});
  const draft=createStep({id:'prepare-draft',description:'生成合成催交草稿，不执行发送',inputSchema:listOverdue.outputSchema,outputSchema:z.object({syntheticOnly:z.literal(true),sent:z.literal(false),drafts:z.array(z.any())}),execute:async({inputData})=>({syntheticOnly:true,sent:false,drafts:await Promise.all(inputData.orders.map(row=>draftFollowup.execute({orderId:row.orderId})))})});
  const followup=createWorkflow({id:'synthetic-procurement-followup',description:'离线合成采购欠料巡检 → 催交草稿；只使用测试夹具',inputSchema:z.object({}).strict(),outputSchema:draft.outputSchema}).then(scan).then(draft).commit();
- const observability=new Observability({configs:{local:{serviceName:'doon-studio-synthetic',exporters:[new MastraStorageExporter({maxBatchWaitMs:200})]}}});
+ const observability=new Observability({configs:{local:{serviceName,exporters:[new MastraStorageExporter({maxBatchWaitMs:200})]}}});
  const mastra=new Mastra({agents,workflows:{followup},storage,logger:false,observability});
  return{mastra,storage,agents,observability,tools:{inspectOverdue:listOverdue,draftFollowup,delegateProcurement},async close(){await observability.shutdown();await mastra.shutdown();await storage.close();}};
 }

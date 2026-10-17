@@ -1,0 +1,36 @@
+name: doon-agent-studio
+services:
+  agent:
+    image: doon-agent-studio:${AGENT_VERSION:?Set an immutable deployment version}
+    restart: unless-stopped
+    stop_grace_period: 75s
+    ports: ["127.0.0.1:8799:8799"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    networks: [agent_backend]
+    environment:
+      DOON_AGENT_PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the existing platform HTTPS origin}
+      DOON_STUDIO_MODEL: deepseek-flash
+      DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
+      PG_PASSWORD_FILE: /run/secrets/pg_studio_password
+      PGHOST: postgres
+    secrets: [deepseek_api_key, pg_studio_password]
+    read_only: true
+    tmpfs: ["/tmp:size=64m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    cpus: 0.75
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8799/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: {driver: local, options: {max-size: 10m, max-file: "3"}}
+networks:
+  agent_backend:
+    external: true
+    name: doon-agent-validation_default
+secrets:
+  deepseek_api_key: {file: ./secrets/deepseek_api_key}
+  pg_studio_password: {file: ./secrets/pg_studio_password}
