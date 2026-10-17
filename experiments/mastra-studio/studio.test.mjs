@@ -8,12 +8,41 @@ import {spawn,execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
+import vm from 'node:vm';
 import {createStudio} from './server.mjs';
 import {studioConfig} from '../../standalone/studio.mjs';
 
 const directory=path.dirname(fileURLToPath(import.meta.url)),root=path.resolve(directory,'../..');
 const dist=path.resolve(root,process.env.DOON_BUILD_DIR||'test-output/mastra-studio-build');
 const freePort=()=>new Promise((resolve,reject)=>{const s=net.createServer();s.once('error',reject);s.listen(0,'127.0.0.1',()=>{const port=s.address().port;s.close(()=>resolve(port));});});
+
+test('官方 Studio 启动逻辑在 HTTPS 默认端口和本地端口均连接当前站点',async()=>{
+ const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-studio-origin-'));
+ const studio=await createStudio({dataDir,deepseekOptions:{env:{}}});
+ try{
+  const assets=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist/studio/assets');
+  let bootstrap;
+  for(const file of await fs.readdir(assets)){
+   if(!file.endsWith('.js'))continue;
+   const source=await fs.readFile(path.join(assets,file),'utf8');
+   bootstrap=source.match(/function [\w$]+\(\)\{const e=window\.MASTRA_SERVER_PROTOCOL[\s\S]*?(?=function )/)?.[0];
+   if(bootstrap)break;
+  }
+  assert(bootstrap,'需要核对当前官方 Studio 的启动逻辑');
+  const components=Object.fromEntries([...bootstrap.matchAll(/a\.jsx\(([\w$]+)/g)].map(([,name])=>[name,name]));
+  for(const origin of ['https://studio.example','http://studio.example','http://127.0.0.1:8797','https://studio.example:8443']){
+   const html=await (await studio.handle(new Request(origin+'/studio/'))).text();
+   const window={location:{origin}};
+   for(const [,key,value] of html.matchAll(/window\.(MASTRA_\w+) = '([^']*)';/g))window[key]=value;
+   const result=vm.runInNewContext(`(${bootstrap})()`,{window,...components,a:{jsx:(type,props)=>({type,...props})}});
+   assert.equal(result.children.endpoint,origin,'不能回退到 4111 或拼出其他 Origin');
+   assert.equal(result.children.defaultApiPrefix,'/studio/api');
+   const capabilities=await studio.handle(new Request(origin+'/studio/api/auth/capabilities'));
+   assert.equal(capabilities.status,200,'官方 Studio 必须能完成启动握手');
+   assert.equal(typeof (await capabilities.json()).enabled,'boolean');
+  }
+ }finally{await studio.close();await fs.rm(dataDir,{recursive:true,force:true,maxRetries:5,retryDelay:100}).catch(error=>{if(error.code!=='EBUSY')throw error;});}
+});
 
 test('真实 Studio、工具委派、工作流、memory 与 trace 均使用独立合成库',async()=>{
  const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-studio-sdk-'));
