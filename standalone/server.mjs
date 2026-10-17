@@ -7,6 +7,9 @@ import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
 import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
+import {studioConfig,createStudioGateway,isStudioPath,canUseStudio} from './studio.mjs';
+import {Readable} from 'node:stream';
+import {pipeline} from 'node:stream/promises';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
@@ -14,6 +17,7 @@ const supplierOnly=process.env.DOON_SERVER_MODE==='supplier',gateway=supplierOnl
 const employeeGateway=employeeGatewayConfig();
 const port=gateway?.port||employeeGateway?.port||Number(process.env.DOON_PORT||8787),host=gateway?.host||employeeGateway?.host||process.env.DOON_HOST||'0.0.0.0';
 const reviewMessage='验收副本只读，不与正式系统同步；此操作不会保存。';
+const studioSettings=await studioConfig({host,port,supplierOnly,reviewMode,employeeGateway}),studio=createStudioGateway(studioSettings);
 let reviewAsOf=null;
 if(reviewMode){
  if(supplierOnly||!['127.0.0.1','::1','localhost'].includes(host)||!Number.isInteger(port)||port<1||port>65535||port===8787)throw new Error('只读验收模式必须使用本机回环地址和非 8787 的独立端口。');
@@ -58,7 +62,7 @@ async function handle(req,res){
   if(supplierOnly)endpoint=supplierEndpoint(gateway,req.socket.remoteAddress,req.headers);
   else if(employeeGateway)endpoint=employeeEndpoint(employeeGateway,req.socket.remoteAddress,req.headers);
   else{const ip=(req.socket.remoteAddress||'').replace(/^::ffff:/,'');if(reviewMode&&ip!=='::1'&&!/^127\./.test(ip))fail('验收副本仅允许本机访问。',403);if(!localIP(ip))fail('此站点仅供公司内网访问。',403);const hostHeader=String(req.headers.host||'').toLowerCase();if(!hosts.has(hostHeader))fail('访问地址未获授权，请使用主机显示的内网地址。',403);endpoint={origin:protocol+'://'+hostHeader,ip:req.socket.remoteAddress};}
-  const url=new URL(req.url,endpoint.origin);if(url.origin!==endpoint.origin)fail('访问地址未获授权。',403);if(!['GET','POST','HEAD'].includes(req.method))fail('不支持的请求方法。',405);
+  const url=new URL(req.url,endpoint.origin);if(url.origin!==endpoint.origin)fail('访问地址未获授权。',403);const studioRequest=isStudioPath(url.pathname);if(!(studioRequest?['GET','POST','HEAD','PUT','PATCH','DELETE']:['GET','POST','HEAD']).includes(req.method))fail('不支持的请求方法。',405);
   if(req.method==='POST'&&req.headers.origin!==url.origin)fail('不允许跨站提交，请刷新登录页面。',403);
   if(reviewMode&&req.method==='POST'&&!['/api/auth/login','/api/auth/logout','/api/workspace/enroll'].includes(url.pathname))fail(reviewMessage,403);
   if(reviewMode&&url.pathname.startsWith('/api/auth/')&&!['/api/auth/session','/api/auth/login','/api/auth/logout','/api/auth/maintenance','/api/auth/accounts','/api/auth/history'].includes(url.pathname))fail(reviewMessage,403);
@@ -73,18 +77,25 @@ async function handle(req,res){
    const customerWorkflowUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-workflow-file-upload';
    const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:customerWorkflowUpload?21:11)*1024*1024;
    const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':customerWorkflowUpload?'客户原始附件不能超过 20 MiB。':'文件不能超过 10 MB。',413);parts.push(part);}
-  const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
+  const request=new Request(url,{method:req.method,headers:req.headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(parts)});
+  if(studioRequest){
+   const response=await studio.handle(request,session(request,authOptions)),outgoing=new Headers(security);
+   for(const [name,value] of response.headers)outgoing.set(name,value);
+   res.writeHead(response.status,Object.fromEntries(outgoing));
+   if(req.method==='HEAD'||!response.body)res.end();else await pipeline(Readable.fromWeb(response.body),res);
+   return;
+  }
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});
   else if(url.pathname==='/health')response=reply({ok:true,service:reviewMode?'度昂订单协作中台·只读验收副本':supplierOnly?'度昂供应商协作门户':'度昂订单协作中台·内网版'});
-  else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{})});
+  else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{}),...(studioSettings?{studioSandbox:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
    if(url.pathname.startsWith('/api/auth/')){
     throttle(endpoint.ip);
     const action=url.pathname.slice('/api/auth/'.length);
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
-    if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current)});
+    if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current),studioAvailable:!!studioSettings&&canUseStudio(current)});
     else if(action==='login'&&req.method==='POST'){const result=await login(await request.json(),endpoint.ip,secure,authOptions);response=reply({user:result.user},200,{'Set-Cookie':result.cookie});}
     else if(action==='logout'&&req.method==='POST')response=reply({ok:true},200,{'Set-Cookie':logout(current,secure,{...authOptions,ip:endpoint.ip})});
     else {
@@ -128,7 +139,7 @@ async function handle(req,res){
   }
   const outgoing=new Headers(security);for(const [name,value] of response.headers)outgoing.set(name,value);
   res.writeHead(response.status,Object.fromEntries(outgoing));res.end(Buffer.from(await response.arrayBuffer()));
- }catch(e){const status=e.status||500;if(status===500)console.error('请求失败',e.message);res.writeHead(status,{...security,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:status===500?'服务暂不可用，请稍后重试。':e.message}));}
+ }catch(e){if(res.headersSent||res.destroyed){if(!res.destroyed)res.destroy();return;}const status=e.status||500;if(status===500)console.error('请求失败',e.message);res.writeHead(status,{...security,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:status===500?'服务暂不可用，请稍后重试。':e.message}));}
 }
 const server=localTLS?https.createServer({cert:await fs.readFile(process.env.DOON_TLS_CERT),key:await fs.readFile(process.env.DOON_TLS_KEY)},handle):http.createServer(handle);
 server.requestTimeout=30000;server.headersTimeout=15000;server.maxHeadersCount=60;
@@ -139,4 +150,4 @@ server.listen(port,host,async()=>{
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
 if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>{db.close();process.exit(0);}));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{await studio.close();db.close();process.exit(0);}));

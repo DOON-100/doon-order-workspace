@@ -104,3 +104,7 @@ node standalone/test-service-host.mjs
 在独立测试环境运行上述命令，业务测试使用合成采购表及内存数据库，HTTP 测试使用临时数据库和 18787 端口。正式启动参见 `standalone/内网版使用说明.md`。真实原表验收需设置 `DOON_TEST_ORIGINALS=1` 和 `DOON_TEST_ORIGINALS_MANIFEST`，后者指向不提交的 JSON 清单，每项为 `[文件路径, active或archived, 预期行数, 预期数量]`。
 
 后续改动按 `AGENTS.md` 完成检查后提交并推送到 `origin/main`；GitHub 同步不自动部署或重启正式服务。
+
+## Mastra Studio 本地测试入口
+
+测试分支 `codex/mastra-local-validation` 已接入官方 Mastra Studio。按 [本地启动说明](experiments/mastra-studio/README.md) 启动后，在 `http://127.0.0.1:8797` 登录专用测试账号，点击左上角公司图标即可在新标签页进入 Studio。原业务 UI 保持原布局；Studio 复用登录校验，仅供管理员、程序员使用。本次全部 Agent、工具、memory 和 trace 使用独立合成测试库；默认服务关闭此功能，不自动部署到 ECS。

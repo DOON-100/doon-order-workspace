@@ -1,0 +1,6 @@
+node_modules/
+.mastra/
+test-output/
+.npm-cache/
+*.sqlite*
+*.log
