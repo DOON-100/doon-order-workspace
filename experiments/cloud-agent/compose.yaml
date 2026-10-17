@@ -1,0 +1,49 @@
+name: doon-agent-validation
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-public.ecr.aws/docker/library/postgres@sha256:0ea6700a3b4f0ae6ce746519073558aed4d88a79d8d07622a9a644946c7319c4}
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/pg_admin_password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    secrets: [pg_admin_password, pg_agent_password]
+    volumes:
+      - pg_validation:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    command: [postgres, -c, shared_buffers=128MB, -c, max_connections=30, -c, work_mem=4MB]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d doon_agent_validation"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    mem_limit: 512m
+    cpus: 0.50
+    pids_limit: 128
+    shm_size: 128m
+    logging: {driver: local, options: {max-size: 10m, max-file: "3"}}
+  agent:
+    image: doon-agent-validation:${AGENT_VERSION:-p1}
+    restart: unless-stopped
+    depends_on:
+      postgres: {condition: service_healthy}
+    ports: ["127.0.0.1:8798:8798"]
+    secrets: [pg_agent_password, api_token]
+    read_only: true
+    tmpfs: ["/tmp:size=32m,mode=1777"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 640m
+    cpus: 0.75
+    pids_limit: 128
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:8798/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    logging: {driver: local, options: {max-size: 10m, max-file: "3"}}
+volumes:
+  pg_validation:
+secrets:
+  pg_admin_password: {file: ./secrets/pg_admin_password}
+  pg_agent_password: {file: ./secrets/pg_agent_password}
+  api_token: {file: ./secrets/api_token}

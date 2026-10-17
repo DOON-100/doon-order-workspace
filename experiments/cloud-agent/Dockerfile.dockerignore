@@ -1,0 +1,7 @@
+**
+!cloud-agent/
+!cloud-agent/package.json
+!cloud-agent/package-lock.json
+!cloud-agent/*.mjs
+!mastra-studio/
+!mastra-studio/offline-model.mjs

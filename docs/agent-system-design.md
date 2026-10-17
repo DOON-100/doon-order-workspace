@@ -1429,3 +1429,9 @@ C1/C2 均先只写独立合成 Agent 账本。B2 的真实影子试点与后续�
 - [企业微信开发文档](https://developer.work.weixin.qq.com/)：外部群与会话能力须结合实际企业配置重新核实；本轮部分具体页面未能访问。
 - [SQLite WAL](https://www.sqlite.org/wal.html) 与 [事务隔离](https://www.sqlite.org/isolation.html)：单写入者、快照读取和 checkpoint 边界；模型及网络等待不得放入数据库事务。
 - [Transactional Outbox](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/transactional-outbox.html)：事务消息模式参考；不能代替本项目的 Inbox 消费事务、目标服务幂等及多库恢复设计。
+
+## 25. 云端基础验证实施记录（2026-10-17）
+
+在现有 ECS 上新增独立 Docker 测试项目，运行合成 Agent 和 PostgreSQL；中台仍使用原生服务与原 SQLite。测试实现位于 `experiments/cloud-agent/`，不接入正式业务数据、真实模型或企微。Docker 中的 Agent 通过单独服务凭据保护的回环 API 接受测试调用，尚未实现本文规划的中台用户与任务级内部 API 授权。
+
+本轮以实际云端执行为依据验证 Agent 委派、PostgreSQL 记忆与工作流持久化、VNext Traces/Metrics，以及更换容器后的暂停恢复；环境、验收结果和未覆盖范围统一记录在 [云端基础验收记录](cloud-agent-validation.md)。该记录不表示完整业务 Agent 系统已经上线，也不表示现有本地 Studio 已连接云端 PostgreSQL。
