@@ -7,9 +7,10 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test studio.test.mjs"
+    "test": "node --test studio.test.mjs deepseek.test.mjs"
   },
   "dependencies": {
+    "@ai-sdk/deepseek": "1.0.63",
     "@mastra/core": "1.77.0",
     "@mastra/hono": "1.7.20",
     "@mastra/libsql": "1.26.1",

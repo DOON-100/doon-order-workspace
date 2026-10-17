@@ -14,7 +14,7 @@ export const syntheticOrders=Object.freeze([
  {orderId:'SYN-STUDIO-002',material:'合成镜框',quantity:80,missing:0,supplier:'合成供应商乙',promisedDate:'2026-10-25',received:80,version:1},
 ]);
 const asOf='2026-10-17';
-export function createAgents(dataDir){
+export function createAgents(dataDir,{liveModel}={}){
  const storage=new LibSQLStore({id:'doon-studio-synthetic',url:`file:${dataDir.replaceAll('\\','/')}/mastra.sqlite`});
  const listOverdue=createTool({id:'inspect-overdue',description:'读取固定合成采购场景，检查欠料与供应商复期；不访问数据台订单。',
   inputSchema:z.object({}).strict(),outputSchema:z.object({syntheticOnly:z.literal(true),asOf:z.string(),orders:z.array(z.object({orderId:z.string(),material:z.string(),missing:z.number(),supplier:z.string(),promisedDate:z.string(),version:z.number()}))}),
@@ -31,7 +31,7 @@ export function createAgents(dataDir){
   return[{type:'text',text:`【离线合成演练 · ${role}】\n检查基准日：${asOf}。SYN-STUDIO-001 尚欠合成镜腿 30，供应商原复期 2026-10-14，已逾期。\n${delegate?'已委派采购 Agent 核对合成供应商复期并生成催交草稿。':'已核对合成供应商复期并生成催交草稿。'}\n未发送企业微信、未修改正式订单。此模型按固定脚本演示工具调用，不代表真实模型的理解与决策能力。`}];
  });
  const memory=()=>new Memory({storage,options:{lastMessages:12,generateTitle:false,semanticRecall:false,workingMemory:{enabled:false}}});
- const create=(id,name,tools,delegate=false)=>new Agent({id,name,instructions:`你是 ${name}。仅演示合成场景。数据基准日 ${asOf}。所有输出明确注明离线合成测试。不得声称已真实催单或已发送消息。`,model:model(name,delegate),tools,memory:memory(),defaultOptions:{maxSteps:5}});
+ const create=(id,name,tools,delegate=false)=>new Agent({id,name:liveModel?name.replace('离线合成','合成数据'):name,instructions:`你是 ${liveModel?name.replace('离线合成','合成数据'):name}。仅使用合成场景。数据基准日 ${asOf}。所有输出注明合成测试，不能声称已真实催单或发送消息。${liveModel?'先调用 inspectOverdue 获取证据；'+(delegate?'发现逾期后调用 delegateProcurement 委派采购。':'发现逾期后调用 draftFollowup 生成草稿。'):'所有输出明确注明离线合成测试。'}`,model:liveModel||model(name,delegate),tools,memory:memory(),defaultOptions:{maxSteps:5,...(liveModel?{modelSettings:{maxOutputTokens:768,maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}:{})}});
  const procurement=create('procurement','采购 Agent（离线合成）',{inspectOverdue:listOverdue,draftFollowup});
  const delegateProcurement=createTool({id:'delegate-procurement',description:'在合成场景内委派采购 Agent 核对供应商复期并返回草稿。',inputSchema:z.object({orderId:z.literal('SYN-STUDIO-001')}).strict(),
   execute:async({orderId})=>({syntheticOnly:true,assignee:'procurement',result:(await procurement.generate(`核对 ${orderId} 逾期欠料，生成催交草稿。`)).text})});

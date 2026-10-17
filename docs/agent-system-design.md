@@ -1435,3 +1435,9 @@ C1/C2 均先只写独立合成 Agent 账本。B2 的真实影子试点与后续�
 在现有 ECS 上新增独立 Docker 测试项目，运行合成 Agent 和 PostgreSQL；中台仍使用原生服务与原 SQLite。测试实现位于 `experiments/cloud-agent/`，不接入正式业务数据、真实模型或企微。Docker 中的 Agent 通过单独服务凭据保护的回环 API 接受测试调用，尚未实现本文规划的中台用户与任务级内部 API 授权。
 
 本轮以实际云端执行为依据验证 Agent 委派、PostgreSQL 记忆与工作流持久化、VNext Traces/Metrics，以及更换容器后的暂停恢复；环境、验收结果和未覆盖范围统一记录在 [云端基础验收记录](cloud-agent-validation.md)。该记录不表示完整业务 Agent 系统已经上线，也不表示现有本地 Studio 已连接云端 PostgreSQL。
+
+## 26. 本地 DeepSeek 模型与余额验证（2026-10-17）
+
+在独立本地 Studio 增加 DeepSeek 模型配置、服务端余额查询和错误类型解释。左侧栏底部展示官方图标、后端真实配置的模型号、余额、状态，展开后显示明细、查询时间、刷新和官方错误文档；不在顶部或原数据台增加此组件。使用临时 Key 完成 `deepseek-flash` 合成工具场景调用和账户余额查询，具体实现与限制见 [Studio 说明](../experiments/mastra-studio/README.md) 和 [验收记录](../experiments/mastra-studio/ACCEPTANCE.md)。
+
+此进展仅适用于本地测试 Studio；云端 Docker Agent 尚沿用上一轮的合成脚本配置。没有把 Key 写入仓库，没有因此开放业务 API、云端 Studio 或企微发送。余额可用与模型 HTTP 成功分别呈现，不能代替完整业务效果、预算及权限验收。

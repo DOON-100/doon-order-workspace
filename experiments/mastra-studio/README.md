@@ -30,7 +30,32 @@ Studio 左上角使用原公司 Logo，名称及浏览器标题为 **Agent Studi
 - **Memory**：会话写入独立 `studio/mastra.sqlite`；重开或重启可继续查看。每次取最近 12 条消息，关闭自动标题、向量召回与工作记忆，不产生额外模型调用。测试环境供获授权技术账号共享调试，不代表已完成正式业务的用户/任务记忆隔离。
 - **Traces**：展示 Agent、模型、工具、委派和工作流的运行轨迹；仅写本地存储导出器，无云端导出器。用量是固定脚本计数，不能用于估算真实模型费用。
 
-当前无付费模型调用，不读取正式订单、附件或供应商配置，不连接企业微信。真实模型和业务闭环仍按 [Agent 设计规划](../../docs/agent-system-design.md) 的后续阶段实现。
+默认 `offline` 模式不调用真实模型；选择 DeepSeek 后会产生真实模型用量。两种模式均只使用合成数据，不读取正式订单、附件或供应商配置，不连接企业微信。业务闭环仍按 [Agent 设计规划](../../docs/agent-system-design.md) 的后续阶段实现。
+
+## DeepSeek 模型、余额与状态
+
+左侧栏底部固定显示 DeepSeek 官方图标、后端实际配置的模型号、账户余额和状态。窄窗口中展开导航可见；侧栏缩到图标模式时保留图标和可访问说明。点击可展开充值/赠金明细、查询时间、最近模型 HTTP 请求结果、刷新按钮及官方文档链接。不在顶部增加余额组件，不修改原数据台 UI。
+
+密钥仅从服务端 `DEEPSEEK_API_KEY` 或 `DEEPSEEK_API_KEY_FILE` 读取，文件配置优先；不接受浏览器上传 Key，不返回 Key，不自动读取 `.env`。启用真实模型时，在已有密钥环境中启动：
+
+```powershell
+$env:DOON_STUDIO_MODEL='deepseek-flash'
+npm start --prefix experiments/mastra-studio
+```
+
+支持 `offline`（默认）、`deepseek-flash`、`deepseek-v4-pro`。Key 单独存在不会切换原有合成模型，但可以查询账户余额；明确选择 DeepSeek 模型时，缺少 Key 会拒绝创建 Studio，不静默回退。所有 Agent 使用同一后端模型配置。模型号是请求使用的官方 API ID，可能是厂商滚动别名，不冒充更具体的底层权重版本。
+
+适配器固定 `@ai-sdk/deepseek@1.0.63`，与当前 Mastra 的 AI SDK v2 协议兼容。合成场景默认关闭 thinking，每次生成输出最多 768 tokens，最多 5 个步骤；不代表所有调用的总 token 上限或完整预算机制。真实模型仅在明确生成请求时调用，查询余额不触发生成。
+
+余额通过服务端请求官方 `GET https://api.deepseek.com/user/balance`，账户不同币种分别展示，保留接口原始精度；不把无余额或查询失败显示成 `0`。余额成功缓存 60 秒、失败缓存 30 秒，合并并发请求；手动刷新最短间隔 10 秒。页面可见时每 15 秒读取一次本地状态，外部余额查询仍受缓存控制，后台标签页不轮询。
+
+按官方通用错误文档解释 400、401、402、422、429、500、503，展示 HTTP 状态、可安全展示的 `error.code` / `error.type`、原因及处理建议。网络失败、超时、非法响应和未列出的状态单独标记为本系统诊断或未归类，不伪造官方定义。余额错误与最近模型 HTTP 错误分别记录；不透传上游原始错误消息或请求内容，模型失败响应也转换为安全说明。此状态不替代流式最终结果和运行轨迹。
+
+状态、图标和脚本全部经过原 Studio 登录及管理员/程序员角色校验；刷新 POST 继续校验同源 Origin；响应 `no-store`，服务端状态仅驻留进程内存。余额查询正常只代表该接口成功，不等于每次模型推理成功。重启后最近模型 HTTP 状态重新开始记录，页面会明确提示尚未验证。
+
+图标原件来自 [DeepSeek 官方文档 favicon](https://api-docs.deepseek.com/img/favicon.svg)，存放在 `assets/deepseek.svg`，页面不向第三方加载图片。依据：[余额接口](https://api-docs.deepseek.com/zh-cn/api/get-user-balance/)、[错误码](https://api-docs.deepseek.com/zh-cn/quick_start/error_codes/)、[当前模型 ID](https://api-docs.deepseek.com/zh-cn/)。
+
+本功能在本地测试分支提供；云端 Docker 验证程序和正式中台未因此切换模型或部署 Studio。
 
 ## 接入与权限
 
@@ -60,6 +85,7 @@ $env:DOON_BUILD_DIR='test-output/mastra-studio-check-build'
 node standalone/build.mjs
 node standalone/test.mjs
 node --test experiments/mastra-studio/studio.test.mjs
+node --test experiments/mastra-studio/deepseek.test.mjs
 ```
 
 新增集成测试覆盖官方页面与资源、工具和委派、流式回复、工作流、memory 重启保留、trace 入库、禁用配置、未登录、首次改密、非技术角色、跨站修改、退出后失效，以及取消资源请求后服务继续运行。测试使用临时数据库与随机本地端口。

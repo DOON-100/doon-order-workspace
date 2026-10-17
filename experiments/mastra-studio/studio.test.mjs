@@ -17,7 +17,7 @@ const freePort=()=>new Promise((resolve,reject)=>{const s=net.createServer();s.o
 
 test('真实 Studio、工具委派、工作流、memory 与 trace 均使用独立合成库',async()=>{
  const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-studio-sdk-'));
- let studio=await createStudio({dataDir});
+ let studio=await createStudio({dataDir,deepseekOptions:{env:{}}});
  const origin='http://127.0.0.1:19897';
  try{
   const html=await (await studio.handle(new Request(origin+'/studio/'))).text();
@@ -25,6 +25,8 @@ test('真实 Studio、工具委派、工作流、memory 与 trace 均使用独�
   const asset=html.match(/src="\.\/(assets\/[^\"]+\.js)"/)[1];assert.equal((await studio.handle(new Request(origin+'/studio/'+asset))).status,200);
   assert.equal((await studio.handle(new Request(origin+'/studio/%5cpackage.json'))).status,404);
   const list=await (await studio.handle(new Request(origin+'/studio/api/agents'))).json();assert.equal(Object.keys(list).length,4);assert.equal(list.supervisor.tools.delegateProcurement.id,'delegate-procurement');
+  const provider=await (await studio.handle(new Request(origin+'/studio/integrations/deepseek/status?agent=procurement'))).json();assert.equal(provider.model.id,'scripted-studio-v1');assert.equal(provider.model.live,false);
+  assert.equal((await studio.handle(new Request(origin+'/studio/integrations/deepseek/status?agent=unknown'))).status,404);
   const memory={thread:'synthetic-thread-'+randomUUID(),resource:'synthetic-reviewer'};
   const first=await studio.agents.supervisor.generate('检查逾期欠料',{memory});
   assert.match(first.text,/已委派采购 Agent/);assert.equal(first.steps.length,3);
@@ -36,7 +38,7 @@ test('真实 Studio、工具委派、工作流、memory 与 trace 均使用独�
   const check=new DatabaseSync(path.join(dataDir,'mastra.sqlite'),{readOnly:true});
   try{assert(check.prepare('SELECT COUNT(*) n FROM mastra_ai_spans').get().n>0,'trace 应落到测试库');}finally{check.close();}
   await studio.close();
-  studio=await createStudio({dataDir});
+  studio=await createStudio({dataDir,deepseekOptions:{env:{}}});
   const mem=await studio.agents.supervisor.getMemory(),thread=await mem.getThreadById({threadId:memory.thread});assert.equal(thread.resourceId,memory.resource);
   const saved=await mem.recall({threadId:memory.thread,resourceId:memory.resource});assert(saved.messages.length>0,'重启后会话必须保留');
   assert.equal((await studio.tools.inspectOverdue.execute({})).orders.length,1);
@@ -55,7 +57,7 @@ test('默认关闭；显式开启仍拒绝正式端口和非本机监听',async(
 
 test('HTTP 入口、静态资源与 API 均校验现有会话、角色、改密和 Origin',async()=>{
  const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-studio-http-')),port=await freePort(),origin=`http://127.0.0.1:${port}`;
- const env={...process.env,DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_STUDIO_ENABLED:'1',DOON_SYNTHETIC_ONLY:'1',DOON_STUDIO_DIR:directory,DOON_NO_AUTO_BACKUP:'1'};
+ const env={...process.env,DEEPSEEK_API_KEY:'',DEEPSEEK_API_KEY_FILE:'',DOON_STUDIO_MODEL:'offline',DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_STUDIO_ENABLED:'1',DOON_SYNTHETIC_ONLY:'1',DOON_STUDIO_DIR:directory,DOON_NO_AUTO_BACKUP:'1'};
  await fs.writeFile(path.join(dataDir,'studio-sandbox.json'),JSON.stringify({kind:'doon-synthetic-studio-v1'}));
  execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
  const initial=(await fs.readFile(path.join(dataDir,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\r\n]+)/)[1];
@@ -74,15 +76,20 @@ test('HTTP 入口、静态资源与 API 均校验现有会话、角色、改密�
   const cancelled=await request('/studio/'+asset,undefined,cookie);await cancelled.body.cancel();
   assert.equal((await request('/health')).status,200,'浏览器取消流式资源请求不能令服务退出');
   assert.equal((await request('/studio/api/agents',undefined,cookie)).status,200);
+  assert.equal((await (await request('/studio/integrations/deepseek/status',undefined,cookie)).json()).status,'unconfigured');
+  assert.equal((await request('/studio/integrations/deepseek/refresh',{},cookie,'https://example.invalid')).status,403);
+  assert.equal((await request('/studio/deepseek.svg',undefined,cookie)).status,200);
   assert.equal((await request('/studio/api/agents',{},cookie,'https://example.invalid')).status,403);
   assert.equal((await request('/studio/api/agents',{},cookie,'https://example.invalid','DELETE')).status,403);
   res=await request('/api/auth/accounts',{username:'studio_sales',name:'合成销售',password:'Synthetic-Sales-Initial-2026!',role:'sales',customers:[]},cookie);assert.equal(res.status,200);
   res=await request('/api/auth/login',{username:'studio_sales',password:'Synthetic-Sales-Initial-2026!'});let salesCookie=cookieOf(res);
   res=await request('/api/auth/password',{currentPassword:'Synthetic-Sales-Initial-2026!',password:'Synthetic-Sales-Personal-2026!'},salesCookie);salesCookie=cookieOf(res);
   assert.equal((await request('/studio/api/agents',undefined,salesCookie)).status,403);
+  assert.equal((await request('/studio/integrations/deepseek/status',undefined,salesCookie)).status,403);
   assert.equal((await (await request('/api/auth/session',undefined,salesCookie)).json()).studioAvailable,false);
   await request('/api/auth/logout',{},cookie);
   assert.equal((await request('/studio/api/agents',undefined,cookie)).status,401);
+  assert.equal((await request('/studio/integrations/deepseek/status',undefined,cookie)).status,401);
   assert.equal((await request('/studio/assets/example.js',undefined,cookie)).status,401);
  }finally{
   child.kill();await new Promise(resolve=>{if(child.exitCode!==null)resolve();else child.once('exit',resolve);});
