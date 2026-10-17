@@ -72,7 +72,7 @@ npm start --prefix experiments/mastra-studio
 
 默认关闭。显式启用仍须同时满足 `DOON_STUDIO_ENABLED=1`、`DOON_SYNTHETIC_ONLY=1`、127.0.0.1、非正式端口、专用目录标识；供应商入口、员工公网网关和只读验收模式拒绝启用。校验发生在业务 runtime 打开数据库之前。正式开放及权限映射另行设计，不能把本地测试开关当生产部署方案。
 
-依赖独立锁定在本目录：core 1.77.0、CLI/Studio 1.34.2、Hono 适配器 1.7.20、memory 1.21.1、libsql 1.26.1、observability 1.20.1。根项目依赖保持不变。Studio 复用官方静态包与运行配置替换机制：[官方自托管说明](https://mastra.ai/docs/studio/deployment)。
+依赖独立锁定在本目录：core 1.78.0、CLI/Studio 1.34.2、Hono 适配器 1.7.20、memory 1.21.1、libsql 1.26.1、observability 1.20.1。根项目依赖保持不变。Studio 复用官方静态包与运行配置替换机制：[官方自托管说明](https://mastra.ai/docs/studio/deployment)。
 
 ## 验证
 
@@ -89,5 +89,7 @@ node --test experiments/mastra-studio/deepseek.test.mjs
 ```
 
 新增集成测试覆盖官方页面与资源、工具和委派、流式回复、工作流、memory 重启保留、trace 入库、禁用配置、未登录、首次改密、非技术角色、跨站修改、退出后失效，以及取消资源请求后服务继续运行。测试使用临时数据库与随机本地端口。
+
+云端 PostgreSQL 的 Traces 查询还需运行 `node --test experiments/mastra-studio/observability.test.mjs`。该测试模拟非空 PostgreSQL 查询响应，经实际 Hono 路由验证游标与页码两种分页，以及输出/错误预览字段；空列表或仅验证轨迹入库不足以覆盖响应格式兼容性。当前 `@mastra/core` 与 `@mastra/server` 对齐到 1.78.0；升级 Mastra 依赖时须一起核对响应契约，不能仅依赖宽泛的 peerDependencies 范围。
 
 浏览器验收需实际通过公司图标进入 Studio，执行总管 Agent，查看 Traces 和 Workflows；不以单纯出现 Studio 首页作为完整运行证据。
