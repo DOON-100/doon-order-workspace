@@ -11,12 +11,13 @@ import {guardBusinessRequest} from './business-request.mjs';
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
-export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts}){
+export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime}){
  await fs.mkdir(dataDir,{recursive:true});
  await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
  const deepseek=createDeepSeekStatus(deepseekOptions),liveModel=await deepseek.model();
  if(businessFacts&&cloud)throw new Error('真实快照模式仅供本机隔离验证');
- const lab=businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
+ if(createRuntime&&cloud)throw new Error('闭环验证运行时仅供本机隔离环境');
+ const lab=createRuntime?await createRuntime({dataDir,liveModel}):businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});
  await server.init();
  return{
