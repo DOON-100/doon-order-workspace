@@ -37,6 +37,7 @@ import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from 
 import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
+import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -45,6 +46,7 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('ar_')||v.kind.startsWith('payment_term'))))return false;
  // Engineering has an independent, scoped history endpoint. Never expose its
  // source emails or snapshots through the broad production audit feed.
@@ -112,6 +114,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
@@ -123,6 +126,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;

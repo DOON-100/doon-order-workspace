@@ -1,0 +1,96 @@
+// Synthetic fixtures only. No production runtime, filesystem database or credentials.
+import {build} from 'esbuild';
+import {DatabaseSync} from 'node:sqlite';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {fileURLToPath,pathToFileURL} from 'node:url';
+import path from 'node:path';
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import * as XLSX from 'xlsx';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..'),out=path.join(root,'test-output/fixed-data-tools');
+await fs.mkdir(out,{recursive:true});
+const db=new DatabaseSync(':memory:');
+for(const name of (await fs.readdir(path.join(root,'drizzle'))).filter(n=>n.endsWith('.sql')).sort())db.exec(await fs.readFile(path.join(root,'drizzle',name),'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:db.prepare(this.sql).all(...this.args)};}async run(){return db.prepare(this.sql).run(...this.args);}}
+const identity=new AsyncLocalStorage(),files=new Map();
+globalThis.__fixedToolsIdentity=identity;
+globalThis.__fixedToolsEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{for(const s of statements)db.prepare(s.sql).run(...s.args);db.exec('COMMIT');return [];}catch(error){db.exec('ROLLBACK');throw error;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key)}:null}};
+await build({entryPoints:[path.join(root,'app/api/workspace/[action]/route.ts')],outfile:path.join(out,'api.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':root},plugins:[{name:'fixed-tools-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'fixed-test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'fixed-test'}));b.onLoad({filter:/.*/,namespace:'fixed-test'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return globalThis.__fixedToolsIdentity.getStore()||null}':'export const env=globalThis.__fixedToolsEnv;'}));}}]});
+const api=await import(pathToFileURL(path.join(out,'api.mjs')).href);
+const owner={userId:'fixed_owner',email:'owner@fixed.test.invalid',displayName:'合成所有者'},staff={userId:'fixed_staff',email:'staff@fixed.test.invalid',displayName:'合成员工'},admin={userId:'fixed_admin',email:'admin@fixed.test.invalid',displayName:'合成管理员'};
+async function call(action,body,user=owner,extraHeaders={}){const method=body===undefined?'GET':'POST';return identity.run(user,()=>api[method](new Request('https://fixed.test/api/workspace/'+action,{method,headers:{...(body instanceof FormData?{}:{'Content-Type':'application/json'}),...extraHeaders},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)}),{params:Promise.resolve({action:action.split('?')[0]})}));}
+async function ok(action,body,user=owner){const response=await call(action,body,user),json=await response.json();assert.equal(response.status,200,JSON.stringify(json));return json;}
+const records=()=>db.prepare('SELECT data FROM records ORDER BY id').all().map(row=>JSON.parse(row.data));
+function put(record){db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(record.id,record.kind,JSON.stringify(record));}
+const checks=[];function pass(name){checks.push(name);console.log('PASS '+name);}
+assert.equal((await call('fixed-data-tools',undefined,null)).status,401);
+await ok('enroll',{});
+const ownerMember=records().find(row=>row.kind==='member');
+put({id:'fixed_staff_member',kind:'member',userId:staff.userId,email:staff.email,name:staff.displayName,role:'sales',customers:[],active:true});
+put({id:'fixed_admin_member',kind:'member',userId:admin.userId,email:admin.email,name:admin.displayName,role:'admin',customers:[],active:true});
+put({id:'fixed_customer_a',kind:'customer_account',customer:'合成客户甲',customerCode:'SYN-A',active:true,version:1,salesMemberIds:['fixed_staff_member'],serviceMemberIds:[],salesName:'合成销售',serviceName:'',pmcName:'',notes:'PRIVATE-NOTES-MUST-NOT-EXPORT'});
+put({id:'fixed_customer_b',kind:'customer_account',customer:'合成客户乙',customerCode:'SYN-B',active:true,version:2,salesMemberIds:[],serviceMemberIds:[],salesName:'',serviceName:'',pmcName:''});
+put({id:'fixed_customer_unknown',kind:'customer_account',customer:'合成旧客户',customerCode:'SYN-U',active:true,version:1,salesName:'不可猜测归属',serviceName:'',pmcName:''});
+const baseline=JSON.stringify(records());
+for(const user of [staff,admin])assert.equal((await call('fixed-data-tools',undefined,user)).status,403);
+assert.equal((await call('fixed-tool-ownership',{requestKey:'spoofed_actor',customerIds:['fixed_customer_a'],actorId:ownerMember.id})).status,400);
+assert.equal((await call('fixed-tool-ownership',{requestKey:'cross_origin',customerIds:['fixed_customer_a']},owner,{origin:'https://evil.test'})).status,403);
+pass('real session, owner role, strict actor rejection and same-origin guard');
+const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['款号','金额'],['SYN-A',10],['SYN-B',20]]),'合成表');
+const bytes=XLSX.write(book,{type:'buffer',bookType:'xlsx'}),sourceHash=createHash('sha256').update(bytes).digest('hex');
+function upload(key='workbook_inspect_1',operation='inspect'){const form=new FormData();form.set('file',new File([bytes],'合成原件.xlsx'));form.set('operation',operation);form.set('requestKey',key);if(operation==='rows'){form.set('sheet','合成表');form.set('range','A1:B3');form.set('headerRow','1');}return form;}
+let inspected=(await ok('fixed-tool-workbook',upload())).job;
+assert.equal(inspected.sourceHash,sourceHash);assert.equal(inspected.hasSource,true);assert.equal(inspected.hasResult,true);assert.equal(inspected.receipt.verified,true);
+assert(!JSON.stringify(inspected).includes('FileKey'));assert.equal((await ok('fixed-tool-workbook',upload())).job.id,inspected.id);
+const source=await call(`fixed-tool-file?id=${inspected.id}&artifact=source`);assert.equal(source.status,200);assert.deepEqual(Buffer.from(await source.arrayBuffer()),bytes);
+let result=await call(`fixed-tool-file?id=${inspected.id}&artifact=result`);assert.equal(result.status,200);assert.equal(createHash('sha256').update(Buffer.from(await result.arrayBuffer())).digest('hex'),inspected.resultHash);
+assert.equal((await ok('fixed-tool-job?requestKey=workbook_inspect_1')).job.id,inspected.id);
+assert.equal((await call('fixed-tool-workbook',upload('workbook_inspect_1','rows'))).status,409);
+assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=source`,undefined,staff)).status,403);
+assert.equal((await call(`file?id=${inspected.id}`)).status,404);
+pass('uploaded bytes preserved, hashed immutable artifacts, idempotent results and private download');
+const extracted=(await ok('fixed-tool-workbook',upload('workbook_rows_1','rows'))).job;
+assert.equal(extracted.operation,'workbook-rows');assert.equal(extracted.receipt.verified,true);
+const oversized=upload('malformed_workbook');oversized.set('path','C:/private/file.xlsx');assert.equal((await call('fixed-tool-workbook',oversized)).status,400);
+const duplicate=upload('duplicate_parameter');duplicate.append('operation','rows');assert.equal((await call('fixed-tool-workbook',duplicate)).status,400);
+const wrongRange=upload('invalid_range_1','rows');wrongRange.set('range','A1:XFD1048576');assert.equal((await call('fixed-tool-workbook',wrongRange)).status,400);
+pass('bounded rows and strict rejection of paths, duplicate parameters and excessive ranges');
+const exportInput={requestKey:'ownership_export_1',customerIds:['fixed_customer_a','fixed_customer_b'],memberIds:['fixed_staff_member']};
+const ownership=(await ok('fixed-tool-ownership',exportInput)).job;
+assert.equal(ownership.preview.customerCount,1);assert.equal(ownership.preview.customers[0].id,'fixed_customer_a');
+assert.equal(ownership.preview.source.customers.length,2);assert(!JSON.stringify(ownership).includes('PRIVATE-NOTES'));
+assert(!JSON.stringify(ownership).includes('@fixed.test'));assert.equal((await ok('fixed-tool-ownership',exportInput)).job.id,ownership.id);
+assert.equal((await call('fixed-tool-ownership',{...exportInput,customerIds:['fixed_customer_b']})).status,409);
+assert.equal((await call('fixed-tool-ownership',{requestKey:'empty_customers',customerIds:[],memberIds:['fixed_staff_member']})).status,400);
+assert.equal((await call('fixed-tool-ownership',{requestKey:'unknown_customer',customerIds:['not_exists']})).status,403);
+const unknown=(await ok('fixed-tool-ownership',{requestKey:'unknown_responsibility',customerIds:['fixed_customer_unknown']})).job;
+assert.equal(unknown.preview.customersWithoutExplicitOwnership,1);assert.deepEqual(unknown.preview.customers[0].salesMembers,[]);
+const unknownAccount=records().find(r=>r.id==='fixed_customer_unknown');put({...unknownAccount,salesMemberIds:['fixed_staff_member']});
+const partial=(await ok('fixed-tool-ownership',{requestKey:'partial_responsibility',customerIds:['fixed_customer_unknown']})).job;
+assert.equal(partial.preview.customers[0].salesStatus,'explicit');assert.equal(partial.preview.customers[0].serviceStatus,'unconfirmed');assert.equal(partial.preview.customersWithoutExplicitOwnership,1);put(unknownAccount);
+pass('explicit customer scope, intersecting member filter, field projection and unknown responsibility');
+put({...records().find(r=>r.id==='fixed_customer_a'),active:false});
+assert.equal((await call(`fixed-tool-file?id=${ownership.id}&artifact=result`)).status,403);
+assert.equal((await call(`fixed-tool-job?id=${ownership.id}`)).status,403);
+put({...records().find(r=>r.id==='fixed_customer_a'),active:true});
+put({...ownerMember,owner:false});assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,403);put(ownerMember);
+const privateJob=records().find(r=>r.id===inspected.id),originalResult=files.get(privateJob.resultFileKey);files.set(privateJob.resultFileKey,new TextEncoder().encode('corruption'));
+assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,409);
+assert.equal((await call('fixed-tool-workbook',upload())).status,409);
+assert.equal((await call('fixed-tool-job?requestKey=workbook_inspect_1')).status,409);files.set(privateJob.resultFileKey,originalResult);
+pass('current permission rechecked for history and download, corrupted artifacts blocked');
+const parallelInput={requestKey:'parallel_ownership',customerIds:['fixed_customer_b']};
+const responses=await Promise.all([call('fixed-tool-ownership',parallelInput),call('fixed-tool-ownership',parallelInput)]);
+assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);assert.equal(records().filter(r=>r.kind==='fixed_tool_job'&&r.requestKey===parallelInput.requestKey).length,1);
+assert.equal((await ok('fixed-tool-ownership',parallelInput)).alreadyPresent,true);
+assert.equal((await ok('fixed-tool-job?requestKey=parallel_ownership')).job.status,'completed');
+pass('concurrent task creation commits once; original request query recovers a lost response');
+const oldCwd=process.cwd(),relocated=await fs.mkdtemp(path.join(out,'迁移 空目录-'));
+try{process.chdir(relocated);await ok('fixed-tool-workbook',upload('relocated_workbook'));await ok('fixed-tool-ownership',{requestKey:'relocated_ownership',customerIds:['fixed_customer_b']});assert.deepEqual(await fs.readdir(relocated),[]);}finally{process.chdir(oldCwd);}
+assert.equal(JSON.stringify(records().filter(r=>!['fixed_tool_job','audit'].includes(r.kind))),JSON.stringify(JSON.parse(baseline).filter(r=>r.kind!=='audit')));
+const data=await ok('data');assert(!data.audits.some(r=>r.after?.kind==='fixed_tool_job'));
+assert(!JSON.stringify(records().filter(r=>r.kind==='fixed_tool_job')).includes('D:\\'));
+pass('different working directory, no local file paths, original business records unchanged and private audit');
+await fs.writeFile(path.join(out,'result.json'),JSON.stringify({checks,passed:checks.length,at:new Date().toISOString()},null,2));
+db.close();console.log(`Fixed data tools: ${checks.length} checks passed.`);

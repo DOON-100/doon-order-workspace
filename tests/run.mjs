@@ -126,4 +126,7 @@ await import('./ar-workspace-cases.mjs');
 await import('./ar-record-guards.mjs');
 await import('./planning-control.mjs');
 await import('./customer-quote-write-grants.mjs');
+await import('./fixed-tool-workbook.mjs');
+await import('./fixed-tool-fees.mjs');
+await import('./fixed-data-tools.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

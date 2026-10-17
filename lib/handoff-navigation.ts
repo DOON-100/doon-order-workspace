@@ -55,6 +55,7 @@ export const workspaceNavigation=[
 ];
 /** Keep finished clerks' daily entry points above the long shared workspace list. */
 export function memberWorkspaceNavigation(member?:Member){
+ if(member?.active&&member.role==='admin'&&member.owner)return [...workspaceNavigation,{id:'business-tools',label:'业务工具',group:'规则与管理',icon:'sliders'} as const];
  if(!member?.active||member.role!=='clerk'||!member.departments?.includes('finished'))return workspaceNavigation;
  const priority=['finished-outsourcing','department'];
  return [workspaceNavigation[0],...priority.flatMap(id=>workspaceNavigation.filter(item=>item.id===id)),...workspaceNavigation.slice(1).filter(item=>!priority.includes(item.id))];

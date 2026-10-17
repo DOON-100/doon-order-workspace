@@ -4,6 +4,8 @@ Agent 的目标能力、Mastra 前期验证、架构、触发、上下文、Memo
 
 第一阶段按“固定程序优先、LLM 按需辅助、人工确认关键判断”推进，职责、脚本使用场景、任务顺序与验收门槛见 [第一阶段实施清单](docs/phase-one-implementation-checklist.md)。固定业务保持主线，Agent 功能使用测试分支；文档与代码提交不触发 8787 正式服务部署。
 
+T01 已完成 [19 项脚本操作登记及首批封装范围](docs/data-tools-operation-register.md)。首批三个固定功能已实现：业务工具页中的 XLSX 检查/提取、指定客户归属导出、单张草稿费用预览与人工确认；访问范围、任务回执及阿里云迁移注意事项见 [首批固定程序工具](docs/fixed-data-tools.md)。代码交付不代表正式服务已部署。
+
 本轮整理的可复用 Excel 与数据维护工具统一放在 [scripts/data-tools](scripts/data-tools/README.md)，按需运行，不接入网站启动流程。客户原表、图片、任务配置与结果保存在私有目录，和代码分开管理。
 
 ## 客户报价（双语草稿与确认归档）
@@ -106,7 +108,3 @@ node standalone/test-service-host.mjs
 在独立测试环境运行上述命令，业务测试使用合成采购表及内存数据库，HTTP 测试使用临时数据库和 18787 端口。正式启动参见 `standalone/内网版使用说明.md`。真实原表验收需设置 `DOON_TEST_ORIGINALS=1` 和 `DOON_TEST_ORIGINALS_MANIFEST`，后者指向不提交的 JSON 清单，每项为 `[文件路径, active或archived, 预期行数, 预期数量]`。
 
 后续改动按 `AGENTS.md` 完成检查后提交并推送到 `origin/main`；GitHub 同步不自动部署或重启正式服务。
-
-## Mastra Studio 本地测试入口
-
-测试分支 `codex/mastra-local-validation` 已接入官方 Mastra Studio。按 [本地启动说明](experiments/mastra-studio/README.md) 启动后，在 `http://127.0.0.1:8797` 登录专用测试账号，点击左上角公司图标即可在新标签页进入 Studio。原业务 UI 保持原布局；Studio 复用登录校验，仅供管理员、程序员使用。本次全部 Agent、工具、memory 和 trace 使用独立合成测试库；默认服务关闭此功能，不自动部署到 ECS。
