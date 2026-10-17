@@ -31,7 +31,17 @@ export function createStudioGateway(config){
    if(!canUseStudio(current))return Response.json({error:'Studio 测试需要已完成改密的管理员或程序员账号。'},{status:403});
    if(!['GET','HEAD'].includes(request.method)&&request.headers.get('origin')!==url.origin)return Response.json({error:'不允许跨站提交。'},{status:403});
    if(!instance){
-    instance=import(pathToFileURL(path.join(config.directory,'server.mjs')).href).then(module=>module.createStudio({dataDir:config.dataDir}));
+    instance=(async()=>{
+     let businessFacts;
+     if(process.env.DOON_STUDIO_DATA_MODE==='real-snapshot'){
+      const {loadBusinessFacts}=await import(pathToFileURL(path.join(config.directory,'business-facts.mjs')).href);
+      if(!process.env.DOON_STUDIO_SNAPSHOT_DIR||!process.env.DOON_STUDIO_MEMBER_ID)throw new Error('真实快照需要显式快照目录和已授权成员');
+      businessFacts=await loadBusinessFacts({snapshotDir:process.env.DOON_STUDIO_SNAPSHOT_DIR,memberId:process.env.DOON_STUDIO_MEMBER_ID});
+     }else if(process.env.DOON_STUDIO_DATA_MODE&&process.env.DOON_STUDIO_DATA_MODE!=='synthetic')throw new Error('未知 Studio 数据模式');
+     const module=await import(pathToFileURL(path.join(config.directory,'server.mjs')).href);
+     // Real snapshot memories/traces never mix with previous synthetic sessions.
+     return module.createStudio({dataDir:businessFacts?path.join(config.dataDir,'real-snapshot',businessFacts.coverage().snapshotId,process.env.DOON_STUDIO_MEMBER_ID.replace(/[^a-zA-Z0-9_-]/g,'_')):config.dataDir,businessFacts});
+    })();
     instance.catch(()=>{instance=undefined;});
    }
    return (await instance).handle(request);

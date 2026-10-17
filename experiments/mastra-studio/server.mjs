@@ -6,15 +6,17 @@ import {MastraServer} from '@mastra/hono';
 import {createAgents} from './agents.mjs';
 import {brandStudioScript} from './branding.mjs';
 import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
+import {guardBusinessRequest} from './business-request.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
-export async function createStudio({dataDir,deepseekOptions,storage,cloud=false}){
+export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts}){
  await fs.mkdir(dataDir,{recursive:true});
  await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
  const deepseek=createDeepSeekStatus(deepseekOptions),liveModel=await deepseek.model();
- const lab=createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
+ if(businessFacts&&cloud)throw new Error('真实快照模式仅供本机隔离验证');
+ const lab=businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});
  await server.init();
  return{
@@ -33,7 +35,12 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false}
     const model={provider:provider.startsWith('deepseek')?'DeepSeek':provider.includes('offline')?'合成脚本':provider,id:actual.modelId,live:!provider.includes('offline')};
     return Response.json({...await deepseek.get({refresh}),model},{headers:{'Cache-Control':'no-store'}});
    }
-   if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/'))return app.fetch(request);
+   if(url.pathname==='/studio/business/profiles')return Response.json({mode:businessFacts?'real-snapshot':'synthetic',...(businessFacts?{coverage:businessFacts.coverage()}:{}),profiles:(await import('./profiles.mjs')).profiles},{headers:{'Cache-Control':'no-store'}});
+   if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/')){
+    // Studio is a debug UI, not a policy editor. Real-data model/tool overrides are forbidden.
+    if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
+    return app.fetch(request);
+   }
    if(url.pathname==='/studio/provider-status.js')return new Response(request.method==='HEAD'?null:await fs.readFile(new URL('./provider-status.js',import.meta.url)),{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});
    if(url.pathname==='/studio/deepseek.svg')return new Response(request.method==='HEAD'?null:await fs.readFile(new URL('./assets/deepseek.svg',import.meta.url)),{headers:{'Content-Type':'image/svg+xml'}});
    if(url.pathname==='/studio/brand.css')return new Response(request.method==='HEAD'?null:await fs.readFile(brandStyles),{headers:{'Content-Type':'text/css; charset=utf-8'}});
@@ -52,7 +59,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false}
    if(relative==='index.html'){
     const values={MASTRA_STUDIO_BASE_PATH:'/studio',MASTRA_API_PREFIX:'/studio/api',MASTRA_SERVER_HOST:url.hostname,MASTRA_SERVER_PORT:url.port,MASTRA_SERVER_PROTOCOL:url.protocol.slice(0,-1),MASTRA_AUTO_DETECT_URL:'true',MASTRA_TELEMETRY_DISABLED:'true',MASTRA_HIDE_CLOUD_CTA:'true',MASTRA_EXPERIMENTAL_FEATURES:'false',MASTRA_TEMPLATES:'false',MASTRA_EXPERIMENTAL_UI:'false',MASTRA_THEME_TOGGLE:'true'};
     const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<title>Mastra Studio</title>','<title>Agent Studio</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
-    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div style="height:36px;display:flex;align-items:center;gap:20px;padding:0 16px;background:#123b31;color:white;font:13px sans-serif"><a href="/personal-tasks" style="color:white">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root" style="height:calc(100dvh - 36px)"></div><script type="module" src="/studio/provider-status.js"></script>`));
+    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div style="height:36px;display:flex;align-items:center;gap:20px;padding:0 16px;background:#123b31;color:white;font:13px sans-serif"><a href="/personal-tasks" style="color:white">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root" style="height:calc(100dvh - 36px)"></div><script type="module" src="/studio/provider-status.js"></script>`));
    }else if(relative.endsWith('.js'))bytes=Buffer.from(brandStudioScript(bytes.toString()));
    return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Content-Security-Policy':csp}});
   },

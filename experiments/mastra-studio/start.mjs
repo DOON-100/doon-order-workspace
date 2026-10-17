@@ -17,5 +17,5 @@ if(exists){const marker=JSON.parse(await fs.readFile(path.join(dataDir,'studio-s
 else{await fs.mkdir(dataDir,{recursive:true});await fs.writeFile(path.join(dataDir,'studio-sandbox.json'),JSON.stringify({kind:'doon-synthetic-studio-v1',createdAt:new Date().toISOString()}),{flag:'wx'});}
 await run(process.execPath,['standalone/build.mjs']);
 try{await fs.access(path.join(dataDir,'workspace.sqlite'));}catch(error){if(error.code!=='ENOENT')throw error;await run(process.execPath,[path.join(directory,'seed.mjs')]);}
-console.log(`本地测试入口：http://127.0.0.1:${port}\n测试凭据文件：${path.join(dataDir,'本地测试登录.txt')}\n登录后点击公司图标 → Studio；全部 Agent 仅使用合成数据。模型：${process.env.DOON_STUDIO_MODEL||'offline'}。`);
+console.log(`本地测试入口：http://127.0.0.1:${port}\n测试凭据文件：${path.join(dataDir,'本地测试登录.txt')}\n登录后点击公司图标 → Studio；数据模式：${process.env.DOON_STUDIO_DATA_MODE||'synthetic'}。模型：${process.env.DOON_STUDIO_MODEL||'offline'}。`);
 await run(process.execPath,[path.join(dist,'server.mjs')]);

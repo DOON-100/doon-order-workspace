@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs"
+    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",
