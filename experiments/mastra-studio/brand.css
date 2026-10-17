@@ -1,0 +1,23 @@
+/* Brand only the Studio sidebar; reuse the approved company artwork unchanged. */
+[data-slot="sidebar-command-header"] { height: 88px; }
+[data-slot="sidebar-brand"] { flex-direction: column; align-items: flex-start; gap: 4px; }
+[data-slot="sidebar-brand"] > * { display: none; }
+[data-slot="sidebar-brand"]::before {
+  content: "" / "DOON Eyewear Manufacturing";
+  display: block;
+  width: 112px;
+  height: 44.8px;
+  background: white url("/brand/doon-eyewear-manufacturing.jpg") center / contain no-repeat;
+  border-radius: 3px;
+  overflow: hidden;
+}
+a[href="https://mastra.ai/cloud"],
+a[href^="https://mastra.ai/contact"] { display: none; }
+/* This local Studio has no editor extension; omit the package-install promotion. */
+div:has(> code):has(> a[href="https://mastra.ai/docs/editor/overview"]) { display: none; }
+[data-slot="sidebar-brand"]::after {
+  content: "Agent Studio";
+  color: var(--color-foreground, inherit);
+  font: 500 14px/20px sans-serif;
+  white-space: nowrap;
+}
