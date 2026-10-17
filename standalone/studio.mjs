@@ -22,7 +22,7 @@ export function createStudioGateway(config){
  let instance;
  return {
   async handle(request,current){
-   if(!config)return Response.json({error:'本实例未启用 Mastra Studio。'},{status:404});
+   if(!config)return Response.json({error:'本实例未启用 Agent Studio。'},{status:404});
    const url=new URL(request.url);
    if(!current){
     if(request.method==='GET'&&['/studio','/studio/'].includes(url.pathname))return new Response(null,{status:302,headers:{Location:'/login'}});
