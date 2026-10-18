@@ -10,13 +10,14 @@ export class HumanPlatform{
  recordReceipt(id,{received,expectedVersion}){
   return this.store.transaction(()=>{const row=this.store.get('source',id);if(!row||row.version!==expectedVersion)throw problem('来源版本已变化');if(!Number.isFinite(received)||received<0||received>row.quantity)throw problem('收货数量无效',400);return this.store.put('source',{...row,received,balanceKnown:true,version:row.version+1,updatedAt:new Date(this.now()).toISOString()});});
  }
- requestReview({taskId,caseId,recipient,sourceId,reason,proposal,deadline}){
+ requestReview({taskId,caseId,recipient,sourceId,reason,proposal,deadline,taskRevision=0,category='purchase-followup',targetTaskId,targetRole,targetRevision,goal}){
   return this.store.transaction(()=>{
    const source=this.source(sourceId),evidence=Object.fromEntries(['quantity','received','balanceKnown','remaining','unit','promisedDate','sourceAsOf'].map(key=>[key,source[key]??null]));
-   const payload={action:'internal-followup-plan',sourceId,sourceVersion:source.version,sourceFingerprint:source.fingerprint,evidence,reason,proposal};
+   const payload={action:category==='coordination'?'resume-role-task':'internal-followup-plan',sourceId,sourceVersion:source.version,sourceFingerprint:source.fingerprint,evidence,reason,proposal,taskRevision,...(category==='coordination'?{targetTaskId,targetRole,targetRevision,goal}:{})};
+   if(category==='coordination'&&targetRevision>=3){payload.manualOnly=true;payload.action='manual-handoff';}
    const payloadHash=fingerprint(payload),existing=this.store.list('human').find(row=>row.taskId===taskId&&row.status==='pending');
    if(existing?.payloadHash===payloadHash)return existing;
-   const record={id:existing?.id||randomUUID(),taskId,caseId,recipient,sourceId,payload,payloadHash,version:(existing?.version||0)+1,status:'pending',createdAt:existing?.createdAt||this.now(),deadline,escalatedAt:existing?.escalatedAt||null,decision:null,history:[...(existing?.history||[]),{action:existing?'revised':'created',at:this.now(),payloadHash}]};
+   const record={id:existing?.id||randomUUID(),taskId,caseId,recipient,sourceId,category,originRole:category==='coordination'?'supervisor':'procurement',payload,payloadHash,version:(existing?.version||0)+1,status:'pending',createdAt:existing?.createdAt||this.now(),deadline,validUntil:this.now()+1800000,escalatedAt:existing?.escalatedAt||null,decision:null,history:[...(existing?.history||[]),{action:existing?'revised':'created',at:this.now(),payloadHash}]};
    this.store.put('human',record);return record;
   });
  }

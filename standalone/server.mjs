@@ -10,6 +10,8 @@ import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
 import {studioConfig,createStudioGateway,isStudioPath,canUseStudio} from './studio.mjs';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
+import {agentPlatformConfig,createAgentPlatform} from './agent-platform.mjs';
+import {readAgentPurchase} from './agent-policy.mjs';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
@@ -44,8 +46,12 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
+const agentConfig=await agentPlatformConfig();
+if(agentConfig&&(supplierOnly||employeeGateway||reviewMode))throw Error('当前入口不允许启用后台协作接口');
+const agentPlatform=agentConfig?createAgentPlatform({db,records:runtime.records,transaction:runtime.transaction,readPurchase:readAgentPurchase,config:agentConfig}):null;
+agentPlatform?.start();
 const localTLS=!supplierOnly&&!!(process.env.DOON_TLS_CERT&&process.env.DOON_TLS_KEY),secure=supplierOnly||!!employeeGateway||localTLS,protocol=localTLS?'https':'http';
-const authOptions={recordHistory:!reviewMode,...(supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{})};
+const authOptions={recordHistory:!reviewMode,...(agentConfig&&process.env.DOON_SYNTHETIC_ONLY==='1'?{cookieName:'doon_agent_validation_session'}:{}),...(supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{})};
 const supplierAuth=new Set(['session','login','logout','password']);
 const supplierActions=new Set(['data','file','accept','progress','promise','exception','shipment','rework-confirm','attachment'].map(a=>'finished-supplier-'+a));
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
@@ -91,7 +97,10 @@ async function handle(req,res){
   else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{}),...(studioSettings?{studioSandbox:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
-   if(url.pathname.startsWith('/api/auth/')){
+   if(url.pathname.startsWith('/api/agent-platform/')){
+    if(!agentPlatform)fail('协作接口尚未启用。',404);
+    response=await agentPlatform.handle(request,current);
+   }else if(url.pathname.startsWith('/api/auth/')){
     throttle(endpoint.ip);
     const action=url.pathname.slice('/api/auth/'.length);
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
@@ -129,13 +138,14 @@ async function handle(req,res){
      response=reply({ok:true,readOnly:true});
     }else response=await context.run(current,()=>api[req.method==='POST'?'POST':'GET'](request,{params:Promise.resolve({action})}));
     if(!reviewMode&&req.method==='POST'&&response.ok&&['admin','pmc'].includes(current.member.role))revokeInactiveSessions();
+    if(agentPlatform&&req.method==='POST'&&response.ok){try{agentPlatform.scan();}catch{ /* Periodic observation recovers a post-commit interruption. */ }}
    }else fail('接口不存在。',404);
   }else{
    let relative=decodeURIComponent(url.pathname).replace(/^\//,'');
    if(!relative||!path.extname(relative))relative='index.html';
    const target=path.resolve(root,relative);if(!target.startsWith(root+path.sep)||relative.split(/[\\/]/).some(p=>p.startsWith('.')))fail('文件不存在。',404);
    const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
-   try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
+   try{let bytes=req.method==='HEAD'?null:await fs.readFile(target);if(bytes&&agentPlatform&&mime.startsWith('text/html'))bytes=Buffer.from(bytes.toString().replace('</body>','<script type="module" src="/agent-workbench-inbox.js?platform=native"></script></body>'));response=new Response(bytes,{headers:{'Content-Type':mime}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
   }
   const outgoing=new Headers(security);for(const [name,value] of response.headers)outgoing.set(name,value);
   res.writeHead(response.status,Object.fromEntries(outgoing));res.end(Buffer.from(await response.arrayBuffer()));
@@ -150,4 +160,4 @@ server.listen(port,host,async()=>{
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
 if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{await studio.close();db.close();process.exit(0);}));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{agentPlatform?.close();await studio.close();db.close();process.exit(0);}));

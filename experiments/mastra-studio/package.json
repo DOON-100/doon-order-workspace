@@ -8,8 +8,9 @@
   "scripts": {
     "start": "node start.mjs",
     "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs",
-    "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs",
-    "start:autonomy": "node autonomy/start.mjs"
+    "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs autonomy/chain.test.mjs",
+    "start:autonomy": "node autonomy/start.mjs",
+    "start:chain": "node autonomy/start-chain.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",

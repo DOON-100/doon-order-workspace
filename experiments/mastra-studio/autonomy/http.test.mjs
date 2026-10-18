@@ -59,7 +59,7 @@ test('实际工作台鉴权、后台唤醒、跨进程待办保留、人工回�
   await stop();await launch();
   const retained=(await inbox()).items[0];assert.equal(retained.id,human.id);assert.equal(retained.status,'pending');
   await ok('/api/agent-validation/advance-clock',{seconds:120});
-  await until(async()=>{const data=await state();return data.tasks.some(row=>row.role==='supervisor'&&row.state==='completed');});
+  await until(async()=>{const data=await state();return data.tasks.some(row=>row.role==='supervisor'&&row.state==='waiting_human');});
   assert.equal((await inbox()).items[0].status,'pending');
   assert.equal((await state()).tasks.filter(row=>row.trigger==='human-overdue').length,1);
   const approved=await ok('/api/agent-inbox/decide',input,'buyer');assert.equal(approved.executedBusinessWrite,false);
@@ -69,6 +69,6 @@ test('实际工作台鉴权、后台唤醒、跨进程待办保留、人工回�
   await ok('/api/agent-validation/receipt',{received:160,expectedVersion:data.source.version});
   await until(async()=>{const data=await state();return data.cases[0].state==='completed';});
   data=await state();assert(data.tasks.some(row=>row.role==='procurement'&&row.result?.fulfilled));assert(data.tasks.some(row=>row.role==='pmc'&&row.state==='completed'));
-  assert.equal((await inbox()).items.filter(row=>row.status==='pending').length,0);assert.equal(baseline(),before,'既有工作台成员记录字节保持不变');
+  const remaining=(await inbox()).items.filter(row=>row.status==='pending');assert(remaining.every(row=>row.category==='coordination'));assert.equal(baseline(),before,'既有工作台成员记录字节保持不变');
  }finally{if(child)await stop();await fs.rm(directory,{recursive:true,force:true,maxRetries:5,retryDelay:100}).catch(error=>{if(error.code!=='EBUSY')throw error;});}
 });

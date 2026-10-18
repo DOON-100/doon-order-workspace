@@ -15,7 +15,7 @@ export class Store{
 }
 
 export const defaultRoles=[
- {id:'supervisor',name:'总管 Agent',capabilities:['coordinate'],routes:['pmc','procurement','service'],tools:['readTaskFacts','completeTask']},
+ {id:'supervisor',name:'总管 Agent',capabilities:['coordinate'],routes:['pmc','procurement','service'],tools:['readTaskFacts','requestCoordination','resumeTask','holdCoordination']},
  {id:'pmc',name:'PMC Agent',capabilities:['material-risk'],routes:['procurement','supervisor'],tools:['readTaskFacts','submitTask','completeTask','escalateTask']},
  {id:'procurement',name:'采购 Agent',capabilities:['purchase-check'],routes:['supervisor'],tools:['readTaskFacts','requestHumanReview','waitForTime','completeTask','escalateTask']},
  {id:'service',name:'客服 Agent',capabilities:['customer-impact'],routes:['pmc','supervisor'],tools:['readTaskFacts','submitTask','completeTask','escalateTask']},

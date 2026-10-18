@@ -73,8 +73,35 @@ test('过期执行被新租约接管，旧执行不能提交；PMC必须复核�
  platform.recordReceipt(source.id,{received:100,expectedVersion:2});const pmc=engine.claim();assert.equal(pmc.id,root.id);assert.throws(()=>engine.complete(pmc.id,pmc.runId,{conclusion:'引用旧的齐货回执'}),/当前来源/);
 }));
 
+test('协调方案绑定目标轮次，原拒绝不能被覆盖；批准只恢复原任务并要求新的采购审核',async()=>fixture(async({engine,platform})=>{
+ const {task}=started(engine);request(engine,task);const first=platform.inbox(employee)[0];decision(platform,first,'reject');engine.ingestDecision(platform.pendingEvents()[0]);let procurement=engine.claim();engine.escalate(procurement.id,procurement.runId,{reason:'合成员工拒绝'});
+ let supervisor=engine.claim();engine.coordinate(supervisor.id,supervisor.runId,{targetRole:'procurement',goal:'补充依据后重新核查',reason:'原方案被拒绝',proposal:'请协调人确认重新核查目标'});const coordination=platform.inbox(employee).find(row=>row.taskId===supervisor.id);assert.equal(coordination.payload.targetRevision,0);
+ decision(platform,coordination,'approve','coordination-approved');engine.ingestDecision(platform.pendingEvents().find(row=>row.taskId===supervisor.id));supervisor=engine.claim();
+ const target=engine.task(task.id);engine.store.put('task',{...target,revision:1});assert.throws(()=>engine.resumeCoordinated(supervisor.id,supervisor.runId),/目标已变化/);engine.store.put('task',target);
+ const resumed=engine.resumeCoordinated(supervisor.id,supervisor.runId);assert.equal(engine.resumeCoordinated(supervisor.id,supervisor.runId).resumedTaskId,resumed.resumedTaskId);assert.equal(engine.task(task.id).revision,1);assert.equal(engine.task(task.id).decision,null);assert.equal(platform.inbox(employee).find(row=>row.id===first.id).status,'rejected');
+ procurement=engine.claim();request(engine,procurement);const fresh=platform.inbox(employee).find(row=>row.status==='pending');assert.notEqual(fresh.id,first.id);assert.equal(fresh.payload.taskRevision,1);assert.equal(platform.source(source.id).received,100);
+  assert.equal(engine.nextAction(procurement.id),'requestHumanReview');
+  // The canonical API committed a new-round review, but the worker lost the
+  // ledger update. Its old rejected humanId must not block the fresh callback.
+  engine.store.put('task',{...engine.task(procurement.id),humanId:first.id});decision(platform,fresh,'approve','fresh-review');engine.ingestDecision(platform.pendingEvents().find(row=>row.humanId===fresh.id));assert.equal(engine.task(procurement.id).humanId,fresh.id);assert.equal(engine.task(procurement.id).decision.action,'approve');
+}));
+
+test('采购旧完成回执遇到新缺口时重新核查，不重复等待已经结束的子任务',async()=>fixture(async({engine,platform})=>{
+ const {task,root}=started(engine);request(engine,task);decision(platform,platform.inbox(employee)[0]);engine.ingestDecision(platform.pendingEvents()[0]);platform.recordReceipt(source.id,{received:160,expectedVersion:1});let current=engine.claim();engine.complete(current.id,current.runId,{conclusion:'合成齐货'});
+ platform.recordReceipt(source.id,{received:100,expectedVersion:2});current=engine.claim();assert.equal(current.id,root.id);assert.equal(engine.nextAction(current.id),'submitTask');const next=engine.submit(current.id,current.runId,{targetRole:'procurement',capability:'purchase-check',goal:'复核新缺口'});assert.notEqual(next.taskId,task.id);assert.equal(engine.task(next.taskId).state,'queued');
+}));
+
+test('协调上限生成持久人工接管待办，确认后不再自动恢复岗位',async()=>fixture(async({engine,platform})=>{
+ const {task}=started(engine);engine.store.put('task',{...task,revision:3});request(engine,task);decision(platform,platform.inbox(employee)[0],'reject');engine.ingestDecision(platform.pendingEvents()[0]);let current=engine.claim();engine.escalate(current.id,current.runId,{reason:'反复受阻'});let supervisor=engine.claim();assert.equal(engine.nextAction(supervisor.id),'requestCoordination');engine.coordinate(supervisor.id,supervisor.runId,{targetRole:'procurement',goal:'请人工接管',reason:'已达协调上限',proposal:'请核查原因并人工处理'});const human=platform.inbox(employee).find(row=>row.taskId===supervisor.id);assert.equal(human.status,'pending');assert.equal(human.payload.manualOnly,true);
+ decision(platform,human,'approve','manual-handoff');engine.ingestDecision(platform.pendingEvents().find(row=>row.taskId===supervisor.id));supervisor=engine.claim();assert.equal(engine.nextAction(supervisor.id),'holdCoordination');assert.throws(()=>engine.resumeCoordinated(supervisor.id,supervisor.runId),/无效/);engine.holdCoordination(supervisor.id,supervisor.runId);assert.equal(engine.task(task.id).revision,3);assert.equal(engine.task(supervisor.id).state,'waiting_manual');assert.equal(engine.case(task.caseId).state,'open');
+}));
+
+test('超时升级后员工先处理，协调不能覆盖已经继续执行的岗位任务',async()=>fixture(async({engine,platform,advance})=>{
+ const {task}=started(engine);request(engine,task);advance(101);engine.timers();decision(platform,platform.inbox(employee)[0]);engine.ingestDecision(platform.pendingEvents()[0]);const procurement=engine.claim();assert.equal(procurement.id,task.id);engine.wait(procurement.id,procurement.runId);const supervisor=engine.claim();assert.equal(supervisor.role,'supervisor');assert.equal(engine.nextAction(supervisor.id),'holdCoordination');engine.holdCoordination(supervisor.id,supervisor.runId);assert.equal(engine.task(task.id).state,'waiting_time');assert.equal(platform.inbox(employee).length,1);
+}));
+
 test('Mastra 实际工具循环由后台定时驱动，离开聊天后仍完成PMC采购人工闭环',async()=>{
- const dir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-autonomy-sdk-'));const runtime=await createAutonomyRuntime({dataDir:dir,engineOptions:{followupMs:100,humanTimeoutMs:60000}});runtime.platform.seedSource(source);
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-autonomy-sdk-'));const runtime=await createAutonomyRuntime({dataDir:dir,engineOptions:{followupMs:60000,humanTimeoutMs:60000}});runtime.platform.seedSource(source);
  const until=async check=>{for(let i=0;i<150;i++){if(check())return;await new Promise(resolve=>setTimeout(resolve,50));}throw Error('background condition timed out');};
  try{
   const item=runtime.engine.startCase({sourceId:source.id,recipient:employee.identity.id,requestId:'native-sdk'});runtime.engine.start(30);
