@@ -38,6 +38,7 @@ import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
+import {workflowSourceGet,workflowSourcePost} from '@/lib/workflow-source-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -112,20 +113,25 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  if(action==='backup'){requireAdmin(m);const data={format:'doon-workspace-snapshot-v1',createdAt:now(),revision:s.revision,records:s.records,note:'结构化数据快照。原始工作表和附件保存在文件存储，需分别保留；恢复前需校验文件与账号映射。'};return fileResponse(JSON.stringify(data,null,2),'订单中台数据快照.json','application/json');}
  throw new AppError('接口不存在。',404);
 }catch(e){return failure(e);}}
-export async function GET(req:Request,ctx:Context){try{
- const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+export async function readWorkflowView(action:string,req:Request,s:State,m:Member):Promise<Response>{
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
- const response=await workspaceGet(req,ctx,s,m);
+ const response=await workspaceGet(req,{params:Promise.resolve({action})},s,m);
  return await scopeBusinessTeamResponse(action,req,s,m,response);
+}
+export async function GET(req:Request,ctx:Context){try{
+ const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const workflow=await workflowSourceGet(action,req,s,m,readWorkflowView);if(workflow)return workflow;
+ return await readWorkflowView(action,req,s,m);
 }catch(e){return failure(e);}}
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const workflow=await workflowSourcePost(action,req,s,m,readWorkflowView);if(workflow)return workflow;
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;

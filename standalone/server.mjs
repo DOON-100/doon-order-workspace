@@ -46,6 +46,16 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
+function workflowAccessFor(current,origin){
+ const call=async(action,body,query={})=>{const url=new URL('/api/workspace/'+action,origin);for(const [k,v] of Object.entries(query))if(v)url.searchParams.set(k,v);const request=new Request(url,{method:body===undefined?'GET':'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const response=await context.run(current,()=>api[body===undefined?'GET':'POST'](request,{params:Promise.resolve({action})}));const result=await response.json();if(!response.ok)throw Object.assign(new Error(result.error||'授权数据视图不可用'),{status:response.status});return result;};
+ return{syntheticOnly:!!studioSettings&&process.env.DOON_SYNTHETIC_ONLY==='1',catalog:(source,scope={})=>call('workflow-field-catalog',undefined,{...(source?{source}:{}),...scope}),poll:(trigger,cursor)=>call('workflow-trigger-events',{trigger,cursor}),schedule:trigger=>call('workflow-trigger-schedule',{trigger}),verify:async event=>(await call('workflow-trigger-verify',{trigger:event.triggerConfig,event})).valid};
+}
+const workflowTimer=studioSettings&&process.env.DOON_WORKFLOW_EVENTS_ENABLED==='1'?setInterval(()=>{studio.processTriggers(async ownerId=>{
+ const member=runtime.records().find(r=>r.kind==='member'&&r.userId===ownerId&&r.active&&['admin','programmer'].includes(r.role)),account=member&&db.prepare('SELECT id,must_change FROM local_accounts WHERE member_id=?').get(member.id);if(!account||account.must_change)return null;
+ const current={member,account,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}};
+ return workflowAccessFor(current,'http://127.0.0.1:'+port);
+ }).catch(()=>{});},3000):null;
+workflowTimer?.unref();
 const agentConfig=await agentPlatformConfig();
 if(agentConfig&&(supplierOnly||employeeGateway||reviewMode))throw Error('当前入口不允许启用后台协作接口');
 const agentPlatform=agentConfig?createAgentPlatform({db,records:runtime.records,transaction:runtime.transaction,readPurchase:readAgentPurchase,config:agentConfig}):null;
@@ -85,7 +95,7 @@ async function handle(req,res){
    const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':customerWorkflowUpload?'客户原始附件不能超过 20 MiB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:['GET','HEAD'].includes(req.method)?undefined:Buffer.concat(parts)});
   if(studioRequest){
-   const response=await studio.handle(request,session(request,authOptions)),outgoing=new Headers(security);
+   const current=session(request,authOptions),response=await studio.handle(request,current,current?workflowAccessFor(current,url.origin):undefined),outgoing=new Headers(security);
    for(const [name,value] of response.headers)outgoing.set(name,value);
    res.writeHead(response.status,Object.fromEntries(outgoing));
    if(req.method==='HEAD'||!response.body)res.end();else await pipeline(Readable.fromWeb(response.body),res);
@@ -160,4 +170,4 @@ server.listen(port,host,async()=>{
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
 if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{agentPlatform?.close();await studio.close();db.close();process.exit(0);}));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(async()=>{if(workflowTimer)clearInterval(workflowTimer);agentPlatform?.close();await studio.close();db.close();process.exit(0);}));

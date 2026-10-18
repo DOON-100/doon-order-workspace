@@ -24,12 +24,12 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
  await server.init();
  return{
   ...lab,
-  async handle(request,{actor}={}){
+  async handle(request,{actor,workflowAccess}={}){
    const url=new URL(request.url);
    if(url.pathname==='/studio')return new Response(null,{status:302,headers:{Location:'/studio/'}});
    if(url.pathname==='/studio/manage')return new Response(null,{status:302,headers:{Location:'/studio/manage/'}});
    if(url.pathname==='/studio/workflow-manager')return new Response(null,{status:302,headers:{Location:'/studio/workflow-manager/'}});
-   if(url.pathname.startsWith('/studio/workflow-manager/api/'))return lab.workflowManager?lab.workflowManager.handle(request,{actor}):Response.json({error:'此环境不开放可视化工作流管理。'},{status:403});
+   if(url.pathname.startsWith('/studio/workflow-manager/api/'))return lab.workflowManager?lab.workflowManager.handle(request,{actor,workflowAccess}):Response.json({error:'此环境不开放可视化工作流管理。'},{status:403});
    const workflowFiles={'/studio/workflow-manager/':['workflow-manager.html','text/html; charset=utf-8'],'/studio/workflow-manager/app.js':['workflow-manager.js','text/javascript; charset=utf-8'],'/studio/workflow-manager/style.css':['workflow-manager.css','text/css; charset=utf-8']};
    if(Object.hasOwn(workflowFiles,url.pathname)){
     if(!lab.workflowManager)return new Response(null,{status:404});if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});

@@ -21,7 +21,7 @@ export async function studioConfig({host,port,supplierOnly,reviewMode,employeeGa
 export function createStudioGateway(config){
  let instance;
  return {
-  async handle(request,current){
+  async handle(request,current,workflowAccess){
    if(!config)return Response.json({error:'本实例未启用 Agent Studio。'},{status:404});
    const url=new URL(request.url);
    if(!current){
@@ -45,8 +45,9 @@ export function createStudioGateway(config){
     instance.catch(()=>{instance=undefined;});
    }
    const actorId=current.member.userId||current.member.id;
-   return (await instance).handle(request,{actor:actorId?{id:String(actorId),name:current.member.name,role:current.member.role}:undefined});
+   return (await instance).handle(request,{actor:actorId?{id:String(actorId),name:current.member.name,role:current.member.role}:undefined,workflowAccess});
   },
+  async processTriggers(accessForOwner){return instance?(await instance).workflowManager?.processTriggers(accessForOwner):[];},
   async close(){if(instance)await (await instance).close();},
  };
 }

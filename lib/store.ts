@@ -2,6 +2,7 @@ import {env} from 'cloudflare:workers';
 import {getChatGPTUser} from '@/app/chatgpt-auth';
 import type {Entity,State,Member} from './domain';
 import {newId,now,email,all} from './domain';
+import {workflowEventsEnabled,ensureWorkflowOutbox,workflowOutboxStatements} from './workflow-events';
 export class AppError extends Error{constructor(message:string,public status=400){super(message);}}
 export function database(){if(!env.DB)throw new AppError('共享数据库暂不可用，请稍后重试。',503);return env.DB;}
 export function bucket(){if(!env.BUCKET)throw new AppError('文件存储暂不可用，请稍后重试。',503);return env.BUCKET;}
@@ -17,7 +18,9 @@ export async function snapshot():Promise<State>{
 }
 export async function commit(revision:number,records:Entity[]){
  const db=database(),guard=newId('txn');
+ const capture=workflowEventsEnabled(env);if(capture)await ensureWorkflowOutbox(db);
  const statements=[db.prepare("INSERT INTO transaction_guards (id,valid) VALUES (?,CASE WHEN (SELECT revision FROM workspace_revision WHERE id='main')=? THEN 1 ELSE 0 END)").bind(guard,revision),
+ ...(capture?workflowOutboxStatements(records,revision,newId('workflow_event'),now()).map(({sql,args})=>db.prepare(sql).bind(...args)):[]),
  ...records.map(r=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').bind(r.id,r.kind,JSON.stringify(r))),
  db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'"),db.prepare('DELETE FROM transaction_guards WHERE id=?').bind(guard)];
  try{await db.batch(statements);}catch(e){if(String(e).includes('revision_must_match'))throw new AppError('数据刚被其他成员更新，本次未写入。请刷新并重新核对。',409);throw e;}
