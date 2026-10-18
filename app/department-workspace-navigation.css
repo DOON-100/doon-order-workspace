@@ -1,0 +1,28 @@
+.handoff-shell .department-workspace-navigation{flex:1;min-height:0;padding-bottom:8px}
+.department-navigation-intro{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:0 9px 12px;font-size:12px;color:#c7d8d0}
+.department-navigation-intro small{font-size:10px;color:#9fbaac}
+.handoff-shell .rail .department-workspace-navigation>.department-navigation-groups{gap:5px}
+.department-navigation-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:43px;padding:10px 9px;border:0;border-radius:6px;background:transparent;text-align:left;color:#dce9e1;font-size:13px;font-weight:600;cursor:pointer}
+.department-navigation-toggle>span{flex:1;min-width:0}
+.department-navigation-toggle>small{font-size:10px;font-weight:400;color:#a5bdae}
+.department-navigation-toggle>svg{flex-shrink:0}
+.department-navigation-toggle>svg:last-child{transition:transform .15s ease}
+.department-navigation-toggle[aria-expanded=false]>svg:last-child{transform:rotate(-90deg)}
+.department-navigation-toggle:hover{background:#245144;color:white}
+.department-navigation-toggle[data-active=true]{background:#264f40;color:#dbf4bf}
+.department-navigation-toggle:focus-visible,.handoff-shell .department-workspace-navigation .nav-item:focus-visible{outline:2px solid #c5e995;outline-offset:-2px}
+.handoff-shell .department-navigation-children[hidden]{display:none}
+.handoff-shell .department-navigation-children{padding:3px 0 8px}
+.handoff-shell .rail .department-navigation-children .nav-child{margin-left:16px;padding-left:5px;border-left:1px solid #456754}
+.handoff-shell .rail .department-navigation-children .nav-item{height:auto;min-height:38px;padding:8px 7px;gap:7px;white-space:normal;font-size:12px;line-height:1.5}
+.handoff-shell .rail .department-navigation-children .nav-item>span{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+@media(max-width:540px){
+ .handoff-shell .rail nav.department-workspace-navigation{max-height:55vh;overflow:auto;overscroll-behavior:contain}
+ .handoff-shell .rail .department-workspace-navigation>.department-navigation-groups{display:flex;flex-direction:column;gap:3px}
+ .department-navigation-intro{padding-top:2px;padding-bottom:8px}
+ .department-navigation-toggle{min-height:44px;font-size:14px;padding:10px 9px}
+ .handoff-shell .rail .department-navigation-children [data-slot=sidebar-menu]{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+ .handoff-shell .rail .department-navigation-children .nav-child{margin-left:5px;padding-left:4px;border-left:1px solid #456754}
+ .handoff-shell .rail .department-navigation-children .nav-item{min-height:44px;font-size:12px}
+}
+@media(prefers-reduced-motion:reduce){.department-navigation-toggle>svg:last-child{transition:none}}

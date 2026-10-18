@@ -1,3 +1,4 @@
+import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
 import {assertHandoffProductionGate,requiresProductionGate} from '@/lib/handoff-production-gate';
 import {commitImport} from '@/lib/import-commit';
 import {drawingCorrectionPost} from '@/lib/drawing-correction-api';
@@ -46,6 +47,8 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ // Process snapshots are available only through their responsibility-scoped history.
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('ar_')||v.kind.startsWith('payment_term'))))return false;
  // Engineering has an independent, scoped history endpoint. Never expose its
@@ -114,6 +117,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
@@ -126,6 +130,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;

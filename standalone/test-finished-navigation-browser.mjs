@@ -40,13 +40,19 @@ async function signedPage(session,viewport){
  await current.goto(origin+'/workbench');await current.locator('.rail .account b').filter({hasText:session.name}).waitFor();
  return {context,page:current};
 }
-async function assertInFirstScreen(current,id){
- const button=current.locator(`[data-nav-id="${id}"]`);await button.waitFor();
+async function expandDepartment(current,department){
+ const toggle=current.locator(`[data-department-id="${department}"] .department-navigation-toggle`);await toggle.waitFor();
+ if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+ assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+}
+async function assertEntryReachable(current,department,id){
+ await expandDepartment(current,department);
+ const button=current.locator(`[data-department-id="${department}"] [data-nav-id="${id}"]`);await button.waitFor();await button.scrollIntoViewIfNeeded();
  const geometry=await button.evaluate(element=>{
   const r=element.getBoundingClientRect(),n=element.closest('nav').getBoundingClientRect();
   return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,navTop:n.top,navBottom:n.bottom,width:innerWidth,height:innerHeight};
  });
- assert(geometry.top>=Math.max(0,geometry.navTop)&&geometry.bottom<=Math.min(geometry.height,geometry.navBottom)+1&&geometry.left>=0&&geometry.right<=geometry.width,`${id} must be visible before menu scrolling: ${JSON.stringify(geometry)}`);
+ assert(geometry.top>=Math.max(0,geometry.navTop)-1&&geometry.bottom<=Math.min(geometry.height,geometry.navBottom)+1&&geometry.left>=0&&geometry.right<=geometry.width,`${department}/${id} must be reachable after expanding its department: ${JSON.stringify(geometry)}`);
 }
 
 try{
@@ -70,18 +76,20 @@ try{
  for(const username of ['synthetic_sales','synthetic_other_clerk']){
   const signed=await signedPage(sessions[username],{width:1536,height:900});page=signed.page;
   const ids=await page.locator('[data-nav-id]').evaluateAll(elements=>elements.map(element=>element.dataset.navId));
-  const ordinaryPrefix=['workbench',...(ids.includes('personal-tasks')?['personal-tasks']:[]),'customer-projects','sales','service-workspace'];
-  assert.deepEqual(ids.slice(0,ordinaryPrefix.length),ordinaryPrefix,'Other roles retain their original leading menu order.');
-  assert(ids.indexOf('finished-outsourcing')>ids.indexOf('pmc'),'Other roles retain the existing production menu order.');
+  const departments=await page.locator('[data-department-id]').evaluateAll(elements=>elements.map(element=>element.dataset.departmentId));
+  assert.deepEqual(departments,['overview','sales','service','engineering','planning','purchasing','warehouse','production','quality','finance','aftersales','management'],'Internal roles use the same department and process order.');
+  assert.equal(await page.locator('[data-department-id="purchasing"] [data-nav-id="finished-outsourcing"]').count(),1);
+  assert.equal(await page.locator('[data-department-id="production"] [data-nav-id="department"]').count(),1);
+  assert(ids.indexOf('customer-projects')<ids.indexOf('sales'));assert(ids.indexOf('pmc')<ids.indexOf('finished-outsourcing'));
   assert(ids.includes('department'));await signed.context.close();
  }
- pass('Sales and other-department clerks retain the original menu order.');
+ pass('Sales and other-department clerks share the department hierarchy, with every original manufacturing entry retained.');
  for(const viewport of [{width:1536,height:900},{width:1280,height:600}]){
   const signed=await signedPage(sessions.synthetic_finished,viewport);page=signed.page;
   const ids=await page.locator('[data-nav-id]').evaluateAll(elements=>elements.map(element=>element.dataset.navId));
-  assert.deepEqual(ids.slice(0,4),['workbench','finished-outsourcing','department',ids.includes('personal-tasks')?'personal-tasks':'customer-projects']);
+  assert.deepEqual(ids.slice(0,3),['workbench','business-process','personal-tasks']);
   assert.equal(ids.filter(id=>id==='finished-outsourcing').length,1);assert.equal(ids.filter(id=>id==='department').length,1);
-  await assertInFirstScreen(page,'finished-outsourcing');await assertInFirstScreen(page,'department');
+  await assertEntryReachable(page,'purchasing','finished-outsourcing');await assertEntryReachable(page,'production','department');
   await page.screenshot({path:path.join(root,`finished-entry-${viewport.width}x${viewport.height}.png`)});
   await page.locator('[data-nav-id="department"]').click();
   const finishedTab=page.getByRole('button',{name:'成品文员',exact:true});await finishedTab.waitFor();await finishedTab.click();
@@ -92,7 +100,7 @@ try{
   for(const label of ['BF 包装入仓数量','BG 包装入仓日期','BI 成品备注'])assert(await departmentDialog.getByRole('textbox',{name:label,exact:true}).isEnabled());
   await page.screenshot({path:path.join(root,`department-finished-${viewport.width}x${viewport.height}.png`)});
   await page.keyboard.press('Escape');await departmentDialog.waitFor({state:'hidden'});
-  await page.locator('[data-nav-id="finished-outsourcing"]').click();
+  await assertEntryReachable(page,'purchasing','finished-outsourcing');await page.locator('[data-nav-id="finished-outsourcing"]').click();
   const row=page.locator('.pmc-sheet tr[data-line-id]').filter({hasText:'SYNTHETIC-FINISHED-NAV-001'});await row.waitFor();
   assert.equal(new URL(page.url()).pathname,'/finished-outsourcing');
   assert(await row.getByRole('button',{name:/^原表4行 PMC排期/}).isDisabled());
@@ -118,7 +126,7 @@ try{
    await api('workspace/pmc-save',{changes:[{id:updated.id,version:updated.version,col:'U',value:date}]},sessions.synthetic_finished,403);
    pass('Finished clerk saves BF/BG/BI; PMC fields remain disabled and the PMC mutation API denies access.');
   }
-  pass(`Finished entry and department entry are visible without scrolling at ${viewport.width}×${viewport.height}; 成品文员 internal form and external table form both open.`);
+  pass(`Finished and department entries are reachable in their department groups at ${viewport.width}×${viewport.height}; 成品文员 internal form and external table form both open.`);
   await signed.context.close();
  }
  assert.deepEqual(errors,[],'No browser runtime errors.');
