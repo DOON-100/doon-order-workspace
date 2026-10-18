@@ -9,6 +9,10 @@
 !mastra-studio/agent-manager.js
 !mastra-studio/agent-manager-entry.js
 !mastra-studio/agent-manager.css
+!mastra-studio/workflow-manager.mjs
+!mastra-studio/workflow-manager.html
+!mastra-studio/workflow-manager.js
+!mastra-studio/workflow-manager.css
 !mastra-studio/profiles.mjs
 !mastra-studio/company-context.mjs
 !mastra-studio/business-request.mjs

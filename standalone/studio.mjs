@@ -44,7 +44,8 @@ export function createStudioGateway(config){
     })();
     instance.catch(()=>{instance=undefined;});
    }
-   return (await instance).handle(request);
+   const actorId=current.member.userId||current.member.id;
+   return (await instance).handle(request,{actor:actorId?{id:String(actorId),name:current.member.name,role:current.member.role}:undefined});
   },
   async close(){if(instance)await (await instance).close();},
  };

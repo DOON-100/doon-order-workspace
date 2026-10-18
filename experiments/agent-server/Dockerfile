@@ -9,6 +9,7 @@ WORKDIR /opt/agent
 COPY --from=dependencies --chown=node:node /opt/agent/mastra-studio/node_modules ./mastra-studio/node_modules
 COPY --chown=node:node mastra-studio/*.mjs mastra-studio/brand.css mastra-studio/provider-status.js ./mastra-studio/
 COPY --chown=node:node mastra-studio/agent-manager.html mastra-studio/agent-manager.js mastra-studio/agent-manager-entry.js mastra-studio/agent-manager.css ./mastra-studio/
+COPY --chown=node:node mastra-studio/workflow-manager.html mastra-studio/workflow-manager.js mastra-studio/workflow-manager.css ./mastra-studio/
 COPY --chown=node:node mastra-studio/assets/ ./mastra-studio/assets/
 COPY --chown=node:node agent-server/server.mjs agent-server/http-server.mjs agent-server/session.mjs agent-server/entry.js ./agent-server/
 USER node

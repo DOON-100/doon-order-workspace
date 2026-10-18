@@ -24,10 +24,17 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
  await server.init();
  return{
   ...lab,
-  async handle(request){
+  async handle(request,{actor}={}){
    const url=new URL(request.url);
    if(url.pathname==='/studio')return new Response(null,{status:302,headers:{Location:'/studio/'}});
    if(url.pathname==='/studio/manage')return new Response(null,{status:302,headers:{Location:'/studio/manage/'}});
+   if(url.pathname==='/studio/workflow-manager')return new Response(null,{status:302,headers:{Location:'/studio/workflow-manager/'}});
+   if(url.pathname.startsWith('/studio/workflow-manager/api/'))return lab.workflowManager?lab.workflowManager.handle(request,{actor}):Response.json({error:'此环境不开放可视化工作流管理。'},{status:403});
+   const workflowFiles={'/studio/workflow-manager/':['workflow-manager.html','text/html; charset=utf-8'],'/studio/workflow-manager/app.js':['workflow-manager.js','text/javascript; charset=utf-8'],'/studio/workflow-manager/style.css':['workflow-manager.css','text/css; charset=utf-8']};
+   if(Object.hasOwn(workflowFiles,url.pathname)){
+    if(!lab.workflowManager)return new Response(null,{status:404});if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
+    const [file,type]=workflowFiles[url.pathname];return new Response(request.method==='HEAD'?null:await fs.readFile(new URL('./'+file,import.meta.url)),{headers:{'Content-Type':type,'Content-Security-Policy':csp,'Cache-Control':'no-store'}});
+   }
    if(url.pathname.startsWith('/studio/manage/api/'))return lab.manager?lab.manager.handle(request):Response.json({error:'此环境暂不开放 Agent 配置管理。'},{status:403});
    const managerFiles={'/studio/manage/':['agent-manager.html','text/html; charset=utf-8'],'/studio/manage/app.js':['agent-manager.js','text/javascript; charset=utf-8'],'/studio/manage/style.css':['agent-manager.css','text/css; charset=utf-8'],'/studio/agent-manager-entry.js':['agent-manager-entry.js','text/javascript; charset=utf-8']};
    if(Object.hasOwn(managerFiles,url.pathname)){
@@ -49,6 +56,10 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    }
    if(url.pathname==='/studio/business/profiles')return Response.json({mode:businessFacts?'real-snapshot':'synthetic',...(businessFacts?{coverage:businessFacts.coverage()}:{}),profiles:(await import('./profiles.mjs')).profiles},{headers:{'Cache-Control':'no-store'}});
    if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/')){
+    if(lab.workflowManager&&!['GET','HEAD'].includes(request.method)){
+     const managed=url.pathname.match(/^\/studio\/api\/workflows\/([\w-]+)(?:\/|$)/);
+     if(managed&&await lab.workflowManager.has(managed[1])&&(/\/(resume[^/]*|restart[^/]*|time-travel[^/]*)(\/|$)/.test(url.pathname)||url.pathname.endsWith('/steps/execute')||request.method==='DELETE'))return Response.json({error:'请通过工作流管理中的人工审核与运行入口操作；不允许跳过审核或删除运行历史。'},{status:403});
+    }
     // Studio is a debug UI, not a policy editor. Real-data model/tool overrides are forbidden.
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
     else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents,lab.storage);if(guarded instanceof Response)return guarded;request=guarded;}

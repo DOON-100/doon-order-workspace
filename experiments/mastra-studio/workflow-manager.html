@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>工作流 · Agent Studio</title><link rel="stylesheet" href="/studio/brand.css"><link rel="stylesheet" href="/studio/workflow-manager/style.css"></head>
+<body class="wm-page">
+ <div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>Agent Studio · 合成演练</span></div>
+ <div class="wm-shell">
+  <aside class="wm-sidebar"><div data-slot="sidebar-brand"></div><p>Primitives</p><nav>
+   <a href="/studio/agents"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.7 6.3 3 3M3 21l7-7M14 4l6 6M4 4l16 16M3 7l4-4 4 4-4 4zM14 17l3-3 4 4-3 3z"/></svg>Agents</a>
+   <a href="/studio/prompts"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a3 3 0 0 1-3 3H7l-4 4V6a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3z"/></svg>Prompts</a>
+   <a href="/studio/workflows" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/><path d="M6 9v6a3 3 0 0 0 3 3h6M9 6h6a3 3 0 0 1 3 3v6"/></svg>Workflows</a>
+   <a href="/studio/scorers"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v7L5 19a1 1 0 0 0 1 2h12a1 1 0 0 0 1-2l-5-9V3M8 15h8"/></svg>Scorers</a>
+   <a href="/studio/datasets"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></svg>Datasets</a>
+  </nav><footer data-slot="sidebar-footer">
+   <a href="/studio/settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 3 1 3h4l1-3 3 2-1 3 2 3 3 1-1 4-3 1-2 3-3-1-3 1-2-3-3-1-1-4 3-1 2-3-1-3z"/><circle cx="12" cy="12" r="3"/></svg>Settings</a>
+   <a href="/studio/resources"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>Resources</a>
+  </footer></aside>
+  <main class="wm-main">
+   <header class="wm-breadcrumb"><div><a href="/studio/workflows">Workflows</a><span> / </span><strong>编辑与管理</strong></div><a class="wm-button" href="/studio/workflows/schedules">Schedules</a></header>
+   <div class="wm-topbar"><div class="wm-tabs" role="tablist" aria-label="工作流视图"><button role="tab" aria-selected="true" data-view="design">设计流程</button><button role="tab" aria-selected="false" data-view="reviews" id="reviews-tab">人工审核</button><button role="tab" aria-selected="false" data-view="results">试运行结果</button></div><span id="actor-status"></span></div>
+   <div id="page-status" role="status" aria-live="polite">正在读取工作流…</div>
+   <section id="design-view" class="wm-design">
+    <aside class="wm-library"><header><h2>工作流</h2><button id="new-workflow" class="wm-icon" aria-label="新建工作流">＋</button></header><label class="wm-search">查找工作流<input type="search" id="workflow-search" placeholder="搜索名称"></label><div id="workflow-list"></div></aside>
+    <section class="wm-editor">
+     <header class="wm-editor-heading"><div><h1 id="workflow-title">选择工作流</h1><p id="version-status"></p></div><div class="wm-actions"><button id="reload-workflow">重新载入</button><button id="test-workflow">试运行草稿</button><button id="save-workflow">保存草稿</button><button class="wm-primary" id="publish-workflow">保存并发布</button></div></header>
+     <div class="wm-canvas-tools"><span>添加节点</span><div id="node-palette"></div><button id="auto-layout">自动排版</button></div>
+     <div class="wm-canvas-scroll" id="canvas-scroll"><div id="workflow-canvas" class="wm-canvas" aria-label="工作流画布"><svg id="workflow-edges" aria-hidden="true"></svg><div id="workflow-nodes"></div></div></div>
+     <footer class="wm-canvas-footer"><span>拖动节点调整位置 · 点击节点配置内容和出口 · 条件分支按依赖顺序执行</span><a id="open-native" href="/studio/workflows">查看已发布运行记录 ↗</a></footer>
+    </section>
+    <aside class="wm-inspector"><header><h2>流程配置</h2></header><div class="wm-inspector-body"><label>工作流名称<input id="workflow-name" maxlength="80"></label><label>说明<textarea id="workflow-description" rows="2" maxlength="500"></textarea></label><section><h3>历史版本</h3><select id="history-version" aria-label="历史版本"></select><button id="restore-version">恢复为新草稿</button></section><section id="node-inspector"><p>点击画布中的节点，配置参数和连线。</p></section></div></aside>
+   </section>
+   <section id="reviews-view" class="wm-panel" hidden><header><div><h1>人工审核</h1><p>流程在审核节点暂停。通过或拒绝后走对应分支，暂缓继续等待。</p></div><button id="refresh-reviews">刷新审核</button></header><div id="review-list"></div></section>
+   <section id="results-view" class="wm-panel" hidden><header><div><h1>试运行结果</h1><p id="run-status">尚未试运行。试运行使用保存后的草稿和合成工具。</p></div><button id="show-review-results">查看人工审核</button></header><pre id="run-result"></pre></section>
+  </main>
+ </div>
+ <dialog id="new-dialog"><form id="new-form"><header><h2>新建工作流</h2><button type="button" data-close="new-dialog" aria-label="关闭新建">×</button></header><label>工作流名称<input name="name" required maxlength="80" placeholder="例如：采购核查与人工审核"></label><label>初始流程<select name="template"><option value="reviewed">采购核查 → 人工审核 → 内部草稿</option><option value="blank">空白流程</option></select></label><p>先创建草稿，配置并发布后才进入已发布工作流列表。</p><p id="new-status" role="status"></p><footer><button type="submit" class="wm-primary">创建草稿</button></footer></form></dialog>
+ <dialog id="review-dialog"><header><h2 id="review-title">审核任务</h2><button data-close="review-dialog" aria-label="关闭审核">×</button></header><div class="wm-review-body"><p id="review-context"></p><p id="review-instructions"></p><section id="review-evidence" aria-label="本次待审内容"></section><details><summary>原始输入（调试）</summary><pre id="review-payload"></pre></details><h3>审核记录</h3><div id="review-audit"></div><label>审核意见<textarea id="review-comment" rows="3" maxlength="1000" placeholder="说明核对依据、通过或拒绝原因，或暂缓所缺的信息。"></textarea></label><p id="review-status" role="status" aria-live="polite"></p></div><footer><button id="retry-review" hidden>核对并恢复后续运行</button><button id="defer-review">暂缓</button><button id="reject-review">拒绝并继续拒绝分支</button><button class="wm-primary" id="approve-review">通过并继续</button></footer></dialog>
+ <script type="module" src="/studio/provider-status.js"></script><script type="module" src="/studio/workflow-manager/app.js"></script>
+</body></html>

@@ -33,7 +33,8 @@ export function createAgentServer({publicOrigin,studio,authenticate,health=async
    let body;
    if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'Studio 请求超过大小限制。'});body=Buffer.concat(chunks);}
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
-   const response=await studio.handle(new Request(url,{method:req.method,headers,body,signal:controller.signal}));
+   const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
+   const response=await studio.handle(new Request(url,{method:req.method,headers,body,signal:controller.signal}),{actor});
    const outgoing=Object.fromEntries(response.headers);outgoing['Cache-Control']='no-store';outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
    delete outgoing['set-cookie'];res.writeHead(response.status,outgoing);
    if(req.method==='HEAD'||!response.body)return res.end();

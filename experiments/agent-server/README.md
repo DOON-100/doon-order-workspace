@@ -59,7 +59,7 @@ docker compose up -d --wait
 
 ## 发布与回退
 
-项目自建 Agent 管理界面通过 `/studio/manage/*` 提供，复用既有 Studio 鉴权，镜像须同时包含 `agent-manager.mjs`、HTML、JS、CSS。名称、提示词和工具选择保存在原独立 Agent 配置及版本表，发布前同样需要完整备份与核验；不创建或挂载业务库。下述 `20261018-editor-candidate` 仅包含当时的 Editor 接入，不包含后来新增的管理入口及视口修复，不能作为当前功能的发布镜像，正式更新需重新构建和独立授权。
+项目自建 Agent 管理界面通过 `/studio/manage/*` 提供，复用既有 Studio 鉴权，镜像须同时包含 `agent-manager.mjs`、HTML、JS、CSS。名称、提示词和工具选择保存在原独立 Agent 配置及版本表，发布前同样需要完整备份与核验；不创建或挂载业务库。工作流管理通过 `/studio/workflow-manager/*` 提供，镜像还须包含 `workflow-manager.mjs`、HTML、JS、CSS；定义与人工审核日志保存在同一 Agent 数据库的独立记录类型中，审核人通过认证上下文传递，不依赖客户端身份头。下述 `20261018-editor-candidate` 仅包含当时的 Editor 接入，不包含后来新增的管理入口、工作流与视口修复，不能作为当前功能的发布镜像，正式更新需重新构建和独立授权。
 
 免费 Editor 的部署准备已包含在镜像白名单中（`editor.mjs` 与岗位配置依赖），不启用 EE Builder。编辑内容写入 `doon_agent_studio` 的 Agent 配置与版本表，沿用所有 `/studio/*` 的原会话和 Origin 校验；数据库及卷必须保留。更新前须对既有 memory、traces、Agent 配置及全部历史做逻辑备份和摘要核验。源代码与当前云镜像存在岗位定义差异时，先核对并保留原云端岗位配置，不因接入 Editor 顺带替换其他实验功能；首次增量登记以本次实际获准发布的岗位代码为基线。云端更新记录须与本地接入验收分开记录。
 

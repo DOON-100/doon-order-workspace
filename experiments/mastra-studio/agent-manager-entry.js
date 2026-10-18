@@ -2,7 +2,7 @@
 // Observe SPA renders rather than patching the packaged upstream Studio bundle.
 let pending=false;
 function mountList(){
- const existing=document.querySelector('.doon-agent-actions');
+ const existing=document.querySelector('.doon-agent-actions:not(.doon-workflow-actions)');
  const views=/^\/studio\/agents\/?$/.test(location.pathname)?document.querySelector('#root [aria-label="Agents view"]'):null;
  if(!views){existing?.remove();return;}
  if(existing?.parentElement===views.parentElement&&existing.nextElementSibling===views)return;
@@ -24,7 +24,13 @@ function mountPrompt(){
  const link=document.createElement('a');link.className='doon-prompt-edit';link.href=href;link.textContent='修改提示词';
  title.after(link);
 }
-function mount(){pending=false;mountList();mountPrompt();}
+function mountWorkflow(){
+ const existing=document.querySelector('.doon-workflow-actions'),schedules=location.pathname==='/studio/workflows'?document.querySelector('#root a[href="/studio/workflows/schedules"]'):null;
+ if(!schedules){existing?.remove();return;}if(existing?.nextElementSibling===schedules)return;existing?.remove();
+ const actions=document.createElement('nav');actions.className='doon-agent-actions doon-workflow-actions';actions.setAttribute('aria-label','工作流管理');
+ const link=document.createElement('a');link.className=schedules.className;link.href='/studio/workflow-manager/';link.textContent='编辑与管理';actions.append(link);schedules.before(actions);
+}
+function mount(){pending=false;mountList();mountPrompt();mountWorkflow();}
 const schedule=()=>{if(!pending){pending=true;requestAnimationFrame(mount);}};
 new MutationObserver(schedule).observe(document.querySelector('#root'),{childList:true,subtree:true});
 schedule();

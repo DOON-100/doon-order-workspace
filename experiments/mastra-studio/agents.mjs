@@ -1,7 +1,8 @@
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
 import {Mastra} from '@mastra/core';
 import {createEditor,editorPermissions,prepareEditor} from './editor.mjs';
 import {createAgentManager} from './agent-manager.mjs';
+import {createWorkflowManager} from './workflow-manager.mjs';
 import {Agent} from '@mastra/core/agent';
 import {createTool} from '@mastra/core/tools';
 import {createStep,createWorkflow} from '@mastra/core/workflows';
@@ -56,6 +57,9 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
   const scripted=builtin&&selected.inspectOverdue&&(snapshot.id==='supervisor'?selected.delegateProcurement:selected.draftFollowup);
   return new Agent({id:snapshot.id,name:snapshot.name,description:snapshot.description||'',instructions:snapshot.instructions,tools:selected,model:liveModel||(scripted?model(snapshot.name,snapshot.id==='supervisor'):diagnostic),editor:editorPermissions,memory:memory(),defaultOptions:{maxSteps:5,...(liveModel?{modelSettings:{maxOutputTokens:768,maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}:{})}});
  };
- lab.editorReady=prepareEditor(mastra,storage,agents).then(async()=>{lab.manager=await createAgentManager({mastra,storage,agents,tools,buildAgent});});
+ lab.editorReady=prepareEditor(mastra,storage,agents).then(async()=>{
+  lab.manager=await createAgentManager({mastra,storage,agents,tools,buildAgent});
+  lab.workflowManager=await createWorkflowManager({mastra,storage,tools,sourceFingerprint:()=>createHash('sha256').update(JSON.stringify(syntheticOrders)).digest('hex')});
+ });
  return lab;
 }

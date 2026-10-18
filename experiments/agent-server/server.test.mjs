@@ -16,7 +16,7 @@ test('HTTPS origin、会话筛选和角色策略拒绝不明确的授权',()=>{
 });
 test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不转发 Cookie',async()=>{
  let revoked=false,unavailable=false,calls=0;
- const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async cookie=>{calls++;if(unavailable)throw new Error('private auth detail');if(revoked||!cookie)return null;return{username:'synthetic',role:cookie==='sales'?'sales':'admin',mustChange:cookie==='initial'};},studio:{handle:async request=>Response.json({ok:true,cookie:request.headers.get('cookie'),authorization:request.headers.get('authorization')})}});
+ const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async cookie=>{calls++;if(unavailable)throw new Error('private auth detail');if(revoked||!cookie)return null;return{username:'synthetic',identity:{id:'SYN-REAL-ID',name:'合成登录用户'},role:cookie==='sales'?'sales':'admin',mustChange:cookie==='initial'};},studio:{handle:async(request,context)=>Response.json({ok:true,cookie:request.headers.get('cookie'),authorization:request.headers.get('authorization'),actor:context?.actor})}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const request=(path,{cookie,method='GET',origin='https://example.test',host='example.test'}={})=>client(port,path,{method,headers:{Host:host,...(cookie?{Cookie:cookie}:{}),...(method==='GET'?{}:{Origin:origin}),'X-Role':'admin',Authorization:'untrusted'}});
  try{
@@ -36,6 +36,11 @@ test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不
   assert.equal((await request(managerRoute,{cookie:'sales',method:'POST'})).status,403);
   assert.equal((await request(managerRoute,{cookie:'valid',method:'POST',origin:'https://evil.test'})).status,403);
   assert.equal((await request(managerRoute,{cookie:'valid',method:'POST'})).status,200);
+  const reviewRoute='/studio/workflow-manager/api/reviews/synthetic-review/decision';
+  assert.equal((await request('/studio/workflow-manager/')).status,401);
+  assert.equal((await request(reviewRoute,{cookie:'sales',method:'POST'})).status,403);
+  assert.equal((await request(reviewRoute,{cookie:'valid',method:'POST',origin:'https://evil.test'})).status,403);
+  const reviewActor=await(await request(reviewRoute,{cookie:'valid',method:'POST'})).json();assert.deepEqual(reviewActor.actor,{id:'SYN-REAL-ID',name:'合成登录用户',role:'admin'},'审核身份由认证会话提供，不采用客户端角色头');
   assert.equal((await request('/studio/api/agents',{cookie:'valid',host:'evil.test'})).status,403);
   const result=await (await request('/studio/api/agents',{cookie:'valid'})).json();assert.equal(result.ok,true);assert.equal(result.cookie,null);assert.equal(result.authorization,null);
   const prior=calls;assert.equal((await request('/studio/api/agents',{cookie:'valid'})).status,200);assert.equal(calls,prior+1);
