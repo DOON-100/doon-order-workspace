@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {Mastra} from '@mastra/core';
+import {createEditor,editorPermissions,prepareEditor} from './editor.mjs';
 import {Agent} from '@mastra/core/agent';
 import {createTool} from '@mastra/core/tools';
 import {createStep,createWorkflow} from '@mastra/core/workflows';
@@ -32,10 +33,10 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
   return[{type:'text',text:`【离线合成演练 · ${role}】\n检查基准日：${asOf}。SYN-STUDIO-001 尚欠合成镜腿 30，供应商原复期 2026-10-14，已逾期。\n${delegate?'已委派采购 Agent 核对合成供应商复期并生成催交草稿。':'已核对合成供应商复期并生成催交草稿。'}\n未发送企业微信、未修改正式订单。此模型按固定脚本演示工具调用，不代表真实模型的理解与决策能力。`}];
  });
  const memory=()=>new Memory({storage,options:{lastMessages:12,generateTitle:false,semanticRecall:false,workingMemory:{enabled:false}}});
- const create=(id,name,tools,delegate=false)=>new Agent({id,name:profiles[id].name,instructions:instructionsFor(id,{asOf})+`\n本模式保留固定合成采购工具演练，与真实快照工具不同。所有输出明确注明合成测试。${liveModel?'先调用 inspectOverdue；'+(delegate?'再调用 delegateProcurement 演练查询。':'再调用 draftFollowup 演练草稿。'):''}`,model:liveModel||model(name,delegate),tools,memory:memory(),defaultOptions:{maxSteps:5,...(liveModel?{modelSettings:{maxOutputTokens:768,maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}:{})}});
+ const create=(id,name,tools,delegate=false)=>new Agent({id,name:profiles[id].name,editor:editorPermissions,instructions:instructionsFor(id,{asOf})+`\n本模式保留固定合成采购工具演练，与真实快照工具不同。所有输出明确注明合成测试。${liveModel?'先调用 inspectOverdue；'+(delegate?'再调用 delegateProcurement 演练查询。':'再调用 draftFollowup 演练草稿。'):''}`,model:liveModel||model(name,delegate),tools,memory:memory(),defaultOptions:{maxSteps:5,...(liveModel?{modelSettings:{maxOutputTokens:768,maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}:{})}});
  const procurement=create('procurement','采购 Agent（离线合成）',{inspectOverdue:listOverdue,draftFollowup});
  const delegateProcurement=createTool({id:'delegate-procurement',description:'在合成场景内委派采购 Agent 核对供应商复期并返回草稿。',inputSchema:z.object({orderId:z.literal('SYN-STUDIO-001')}).strict(),
-  execute:async({orderId})=>({syntheticOnly:true,assignee:'procurement',result:(await procurement.generate(`核对 ${orderId} 逾期欠料，生成催交草稿。`)).text})});
+  execute:async({orderId})=>({syntheticOnly:true,assignee:'procurement',result:(await (await mastra.getAgentById('procurement',{status:'published'})).generate(`核对 ${orderId} 逾期欠料，生成催交草稿。`)).text})});
  const agents={
   supervisor:create('supervisor','总管 Agent（离线合成）',{inspectOverdue:listOverdue,delegateProcurement},true),
   pmc:create('pmc','PMC Agent（离线合成）',{inspectOverdue:listOverdue,draftFollowup}),
@@ -46,6 +47,6 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
  const draft=createStep({id:'prepare-draft',description:'生成合成催交草稿，不执行发送',inputSchema:listOverdue.outputSchema,outputSchema:z.object({syntheticOnly:z.literal(true),sent:z.literal(false),drafts:z.array(z.any())}),execute:async({inputData})=>({syntheticOnly:true,sent:false,drafts:await Promise.all(inputData.orders.map(row=>draftFollowup.execute({orderId:row.orderId})))})});
  const followup=createWorkflow({id:'synthetic-procurement-followup',description:'离线合成采购欠料巡检 → 催交草稿；只使用测试夹具',inputSchema:z.object({}).strict(),outputSchema:draft.outputSchema}).then(scan).then(draft).commit();
  const observability=new Observability({configs:{local:{serviceName,exporters:[new MastraStorageExporter({maxBatchWaitMs:200})]}}});
- const mastra=new Mastra({agents,workflows:{followup},storage,logger:false,observability});
- return{mastra,storage,agents,observability,tools:{inspectOverdue:listOverdue,draftFollowup,delegateProcurement},async close(){await observability.shutdown();await mastra.shutdown();await storage.close();}};
+ const mastra=new Mastra({agents,workflows:{followup},storage,logger:false,observability,editor:createEditor()});
+ return{mastra,storage,agents,observability,editorReady:prepareEditor(mastra,storage,agents),tools:{inspectOverdue:listOverdue,draftFollowup,delegateProcurement},async close(){await observability.shutdown();await mastra.shutdown();await storage.close();}};
 }

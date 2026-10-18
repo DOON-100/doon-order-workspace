@@ -3,6 +3,10 @@
 !mastra-studio/package.json
 !mastra-studio/package-lock.json
 !mastra-studio/agents.mjs
+!mastra-studio/editor.mjs
+!mastra-studio/profiles.mjs
+!mastra-studio/company-context.mjs
+!mastra-studio/business-request.mjs
 !mastra-studio/server.mjs
 !mastra-studio/branding.mjs
 !mastra-studio/deepseek.mjs

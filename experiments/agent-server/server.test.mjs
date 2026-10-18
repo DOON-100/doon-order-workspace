@@ -25,6 +25,11 @@ test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不
   assert.equal((await request('/studio/')).status,302);assert.equal((await request('/studio/api/agents')).status,401);assert.equal((await request('/studio/assets/test.js')).status,401);
   assert.equal((await request('/studio/',{cookie:'sales'})).status,403);assert.equal((await request('/studio/',{cookie:'initial'})).status,403);
   assert.equal((await request('/studio/api/agents',{cookie:'valid',method:'POST',origin:'https://evil.test'})).status,403);
+  const editorRoute='/studio/api/stored/agents/procurement';
+  assert.equal((await request(editorRoute,{method:'PATCH'})).status,401,'Editor 保存同样需要现有会话');
+  assert.equal((await request(editorRoute,{cookie:'sales',method:'PATCH'})).status,403,'普通员工不能编辑岗位');
+  assert.equal((await request(editorRoute,{cookie:'valid',method:'PATCH',origin:'https://evil.test'})).status,403,'Editor 保存拒绝跨站请求');
+  assert.equal((await request(editorRoute,{cookie:'valid',method:'PATCH'})).status,200);
   assert.equal((await request('/studio/api/agents',{cookie:'valid',host:'evil.test'})).status,403);
   const result=await (await request('/studio/api/agents',{cookie:'valid'})).json();assert.equal(result.ok,true);assert.equal(result.cookie,null);assert.equal(result.authorization,null);
   const prior=calls;assert.equal((await request('/studio/api/agents',{cookie:'valid'})).status,200);assert.equal(calls,prior+1);

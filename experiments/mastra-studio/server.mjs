@@ -7,6 +7,7 @@ import {createAgents} from './agents.mjs';
 import {brandStudioScript} from './branding.mjs';
 import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
 import {guardBusinessRequest} from './business-request.mjs';
+import {guardEditorRequest} from './editor.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
@@ -19,6 +20,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
  if(createRuntime&&cloud)throw new Error('闭环验证运行时仅供本机隔离环境');
  const lab=createRuntime?await createRuntime({dataDir,liveModel}):businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});
+ await lab.editorReady;
  await server.init();
  return{
   ...lab,
@@ -40,6 +42,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/')){
     // Studio is a debug UI, not a policy editor. Real-data model/tool overrides are forbidden.
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
+    else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents);if(guarded instanceof Response)return guarded;request=guarded;}
     return app.fetch(request);
    }
    if(url.pathname==='/studio/provider-status.js')return new Response(request.method==='HEAD'?null:await fs.readFile(new URL('./provider-status.js',import.meta.url)),{headers:{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'}});

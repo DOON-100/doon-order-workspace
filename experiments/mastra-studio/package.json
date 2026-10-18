@@ -7,7 +7,8 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs",
+    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs",
+    "test:editor": "node --test editor.test.mjs",
     "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs autonomy/chain.test.mjs autonomy/multi-user.test.mjs",
     "start:autonomy": "node autonomy/start.mjs",
     "start:chain": "node autonomy/start-chain.mjs"
@@ -15,6 +16,7 @@
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",
     "@mastra/core": "1.78.0",
+    "@mastra/editor": "0.16.3",
     "@mastra/hono": "1.7.20",
     "@mastra/libsql": "1.26.1",
     "@mastra/memory": "1.21.1",
