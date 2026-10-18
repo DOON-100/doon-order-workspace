@@ -61,7 +61,7 @@ test('拒绝/退回不批准，失败最多重试一次；新增岗位沿用统�
 test('人工接口已提交、任务账本未关联时崩溃，回执仍能恢复而不重复建待办',async()=>fixture(async({engine,platform})=>{
  const {item,task}=started(engine);
  const human=platform.requestReview({taskId:task.id,caseId:item.id,recipient:employee.identity.id,sourceId:source.id,reason:'合成崩溃窗口',proposal:'已提交人工API但未写回任务账本',deadline:Date.now()+60000});
- assert.equal(engine.task(task.id).humanId,null);decision(platform,human);engine.ingestDecision(platform.pendingEvents()[0]);
+ assert.equal(engine.task(task.id).humanId,null);decision(platform,human);const nativeEvent={...platform.pendingEvents()[0],id:'synthetic-native-outbox-event'};engine.ingestDecision(nativeEvent);engine.ingestDecision(nativeEvent);
  const restored=engine.claim();assert.equal(restored.id,task.id);assert.equal(restored.humanId,human.id);assert.equal(restored.decision.action,'approve');assert.equal(platform.store.list('human').length,1);
  assert.throws(()=>engine.wait(task.id,task.runId),/租约/);
 }));

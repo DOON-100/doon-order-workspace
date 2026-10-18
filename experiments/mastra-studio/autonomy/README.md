@@ -46,12 +46,16 @@ worker 消费变化事件、人工决策、审核过期事件和到期时间，�
 ## 检查
 
 ```powershell
-node --test experiments/mastra-studio/autonomy/engine.test.mjs experiments/mastra-studio/autonomy/http.test.mjs experiments/mastra-studio/autonomy/chain.test.mjs
+node --test experiments/mastra-studio/autonomy/engine.test.mjs experiments/mastra-studio/autonomy/http.test.mjs experiments/mastra-studio/autonomy/chain.test.mjs experiments/mastra-studio/autonomy/multi-user.test.mjs
 node node_modules/typescript/bin/tsc --noEmit
 $env:DOON_BUILD_DIR = Join-Path (Get-Location) 'test-output/agent-chain-build'
 node standalone/test.mjs
 ```
 
 测试使用临时数据库和测试端口。原生链路测试覆盖自动事件、员工拒绝、协调审批、进程重启、原任务恢复、新审核、既有收货 API、权限撤回、有效期、幂等和数量异常。离线脚本只证明程序链路；实际 DeepSeek、页面和本机数据的验证结果单独保存在忽略目录，必须明确区分合成人工处理和真实员工操作。
+
+`multi-user.test.mjs` 在原生中台建立六张合成订单、八条采购风险及三个负责员工，含同人多订单、同订单多物料、同名员工、相同采购单号与不同账号。逐项核对收件人主键、关联订单/物料、任务和事项；并发发出40个跨账号处理请求及19个有效/重复/冲突处理请求，核对持久决策、回执和后续任务状态。使用独立会话模拟同一员工的两个浏览器窗口，冲突决定只能一个成功；只登记一条采购收货时，其余七条事项不得结束。负责人取自管理员已核对的采购行映射，不根据模型或业务员姓名自动推断。当前覆盖单中台、单worker队列及多员工并发HTTP请求，未证明多worker横向扩展或大规模吞吐。
+
+默认使用离线模型回归上述确定性边界。设置 `DOON_MULTI_USER_LIVE=1` 可用实际DeepSeek复验相同场景，结果仅写入忽略目录；`DOON_MULTI_USER_UI_GATE=1` 会在初始投递后暂停至测试目录出现 `continue-validation` 文件，最多等待四分钟，供浏览器核对各员工页面。所有账号与记录由专用合成夹具新建，拒绝覆盖已有库。失败和实际模型现场保留。工作台同时显示客户订单号、采购单号、物料编码及来源记录ID；采购日期明确是供应商日期，不代表客户承诺交期。
 
 原生接口的配置与发布边界见 [中台接口说明](../../../standalone/README-agent-platform.md)。本地测试不启用 8787 调度，不部署、不创建真实员工任务、不修改真实来源。本机数据缺少生产订单和 BOM，当前只能验证采购证据与风险路由。正式开放仍须审核对象与人员映射、服务授权范围、进程守护和故障告警，以及中台/worker 独立发布与回退。

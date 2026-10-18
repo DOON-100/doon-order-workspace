@@ -113,7 +113,7 @@ export class TaskEngine{
    // authoritative outbox and human record, never model-supplied identifiers.
    const human=this.platform.store.get('human',event.humanId),item=this.case(task.caseId);
    const recipient=human?.category==='coordination'?(item.coordinator||item.recipient):item.recipient;
-   if(!human||human.taskId!==task.id||human.caseId!==item.id||human.recipient!==recipient||human.sourceId!==item.sourceId||human.decision?.id!==event.id||(human.payload.taskRevision||0)!==(task.revision||0)||task.decision&&task.humanId)throw problem('审核回执不属于当前任务');
+   if(!human||human.taskId!==task.id||human.caseId!==item.id||human.recipient!==recipient||human.sourceId!==item.sourceId||human.decision?.id!==event.decision?.id||(human.payload.taskRevision||0)!==(task.revision||0)||task.decision&&task.humanId)throw problem('审核回执不属于当前任务');
    task.humanId=human.id;
   }
   task.decision=event.decision;task.state='queued';task.trigger='human-result';task.runId=null;task.attempts=0;this.store.put('task',task);this.store.put('inbox',{id:event.id});this.event('human_result_received',{caseId:task.caseId,taskId:task.id,action:event.decision.action});

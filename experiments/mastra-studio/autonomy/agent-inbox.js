@@ -5,6 +5,7 @@ let current=null,items=[],selected=null,dialog=null,busy=false,polling=false,las
 const seen=new Set();
 const originLabel=row=>row.originRole==='supervisor'?'总管助手':'采购助手';
 const taskTitle=row=>row.payload.manualOnly?'人工接管确认':row.category==='coordination'?'协作安排确认':'采购跟进确认';
+const sourceLabel=row=>{const facts=row.payload.evidence;return[facts?.customerOrder?'订单 '+facts.customerOrder:null,facts?.po?'采购单 '+facts.po:null,facts?.itemCode?'物料 '+facts.itemCode:null,'记录 '+row.sourceId].filter(Boolean).join(' · ');};
 const el=(tag,text,className)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(className)node.className=className;return node;};
 async function api(route,body){if(nativePlatform)route=route.replace('/api/agent-inbox','/api/agent-platform/inbox').replace('/inbox/decide','/decide');const response=await fetch(route,{method:body?'POST':'GET',credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,cache:'no-store'});const data=await response.json();if(!response.ok)throw Object.assign(Error(data.error||'请求失败'),{status:response.status});return data;}
 function clear(){if(current)window.dispatchEvent(new CustomEvent('doon:personal-tasks:update',{detail:{actorId:current.identity,tasks:[]}}));document.querySelectorAll('[data-agent-inbox]').forEach(node=>node.remove());dialog?.remove();dialog=null;selected=null;current=null;items=[];}
@@ -13,9 +14,9 @@ function open(row){
  const title=el('h2',taskTitle(row));const reason=el('p',row.payload.reason);const proposal=el('pre',row.payload.proposal,'ai-proposal');
  title.tabIndex=-1;title.setAttribute('autofocus','');
  const origin=el('span','★ '+originLabel(row),'ai-origin');origin.title='由'+originLabel(row)+'发起，需要你确认后继续处理';
- const source=el('p',`对象 ${row.sourceId} · 来源版本 ${row.payload.sourceVersion} · 方案版本 ${row.version}`,'ai-muted');
+ const source=el('p',`${sourceLabel(row)} · 来源版本 ${row.payload.sourceVersion} · 方案版本 ${row.version}`,'ai-muted');
  const notice=el('p',row.payload.manualOnly?'已达到自动协调上限。确认仅记录由人工接管，不会自动恢复岗位任务或关闭业务事项。':row.category==='coordination'?'确认后恢复岗位核查，原采购方案仍需负责人审核；不会修改采购单或发送外部消息。':'审核仅确认内部跟进方案，不修改采购源单；实际齐货仍需后续收货证据。','ai-muted');
- const facts=row.payload.evidence;const evidence=el('p',facts?`服务端来源：订购 ${facts.quantity??'未知'} ${facts.unit||''}，已收 ${facts.received??'未知'}，未交 ${facts.balanceKnown?(facts.remaining??'未知'):'待核对'}（已包含退货缺口，其中退货待补 ${facts.returnPending??'未知'}）；承诺日 ${facts.promisedDate||'未记录'}；来源截至 ${facts.sourceAsOf||'未知'}`:'请按对象和来源版本回到业务记录核验。','ai-proposal');
+ const facts=row.payload.evidence;const evidence=el('p',facts?`服务端来源：订购 ${facts.quantity??'未知'} ${facts.unit||''}，已收 ${facts.received??'未知'}，未交 ${facts.balanceKnown?(facts.remaining??'未知'):'待核对'}（已包含退货缺口，其中退货待补 ${facts.returnPending??'未知'}）；供应商承诺日 ${facts.promisedDate||'未记录'}；来源截至 ${facts.sourceAsOf||'未知'}`:'请按对象和来源版本回到业务记录核验。','ai-proposal');
  const label=el('label','处理说明');const comment=el('textarea');comment.setAttribute('aria-label','人工处理说明');comment.rows=3;
  const draftKey=`agent-draft:${current.identity}:${row.id}:${row.payloadHash}`;comment.value=sessionStorage.getItem(draftKey)||'';comment.oninput=()=>sessionStorage.setItem(draftKey,comment.value);
  if(row.status!=='pending'){comment.value=row.decision?.comment||'';comment.readOnly=true;}
@@ -38,7 +39,7 @@ function updateAdminStatus(card){const status=card.querySelector('[data-agent-st
 function render(){
  if(!current)return;const header=document.querySelector('.topbar');if(header&&!header.querySelector('[data-agent-inbox]')){const button=el('button','待处理事项','ai-bell');button.dataset.agentInbox='bell';button.onclick=()=>{const row=items.find(item=>item.status==='pending');if(row)open(row);else{history.pushState({},'','/personal-tasks');location.reload();}};header.append(button);}
  const pending=items.filter(row=>row.status==='pending'),bell=document.querySelector('[data-agent-inbox="bell"]');if(bell)bell.textContent=`待处理事项 ${pending.length}`;
- window.dispatchEvent(new CustomEvent('doon:personal-tasks:update',{detail:{actorId:current.identity,tasks:items.map(row=>({id:row.id,title:taskTitle(row),originLabel:originLabel(row),sourceLabel:`采购核查 · ${row.sourceId}`,description:row.status==='pending'?(row.escalatedAt?'等待本人处理 · 已超时升级，事项继续保留':row.category==='coordination'?'请确认岗位重新核查安排，原事项继续保留。':'请核验跟进方案，关闭提醒不会完成事项。'):(row.decision?.comment||'已保存处理结果'),status:row.status==='pending'?'pending':'done',statusLabel:row.status==='pending'?'待处理':row.status==='approved'?'已确认':row.status==='returned'?'已退回':'已拒绝'}))}}));
+ window.dispatchEvent(new CustomEvent('doon:personal-tasks:update',{detail:{actorId:current.identity,tasks:items.map(row=>({id:row.id,title:taskTitle(row),originLabel:originLabel(row),sourceLabel:sourceLabel(row),description:row.status==='pending'?(row.escalatedAt?'等待本人处理 · 已超时升级，事项继续保留':row.category==='coordination'?'请确认岗位重新核查安排，原事项继续保留。':'请核验跟进方案，关闭提醒不会完成事项。'):(row.decision?.comment||'已保存处理结果'),status:row.status==='pending'?'pending':'done',statusLabel:row.status==='pending'?'待处理':row.status==='approved'?'已确认':row.status==='returned'?'已退回':'已拒绝'}))}}));
  const content=document.querySelector('main.content');if(!content||!location.pathname.includes('personal-tasks'))return;
  if(nativePlatform||current.role!=='admin'){content.querySelector('[data-agent-inbox="admin"]')?.remove();return;}
  let panel=content.querySelector('[data-agent-inbox="admin"]');
