@@ -42,7 +42,7 @@ async function history(){
  if(!editing)return;const result=await api('/'+editing.id+'/versions'),select=$('#history-version');select.replaceChildren(node('option','选择历史版本'));select.firstChild.value='';
  for(const version of result.versions){const o=node('option',`v${version.versionNumber} · ${new Date(version.createdAt).toLocaleString('zh-CN')}`);o.value=version.id;select.append(o);}
 }
-async function openForm(agent){creationKey=agent?null:crypto.randomUUID();fill(agent);dialog.showModal();try{await history();}catch(error){status(error.message,true,'#form-status');}}
+async function openForm(agent,{focusPrompt=false}={}){creationKey=agent?null:crypto.randomUUID();fill(agent);dialog.showModal();try{await history();if(focusPrompt){const input=form.elements.namedItem('instructions');input.focus({preventScroll:true});input.scrollIntoView({block:'center'});}}catch(error){status(error.message,true,'#form-status');}}
 function values(){return{name:form.elements.namedItem('name').value,description:form.elements.namedItem('description').value,instructions:form.elements.namedItem('instructions').value,toolKeys:Array.from(form.querySelectorAll('input[name=tools]:checked'),input=>input.value)};}
 async function save(publish){
  if(busy||!form.reportValidity())return;setBusy(true);
@@ -62,4 +62,8 @@ $('#restore-version').addEventListener('click',async()=>{
  if(busy||!editing||!$('#history-version').value)return;setBusy(true);
  try{const result=await api('/'+editing.id+'/restore','POST',{versionId:$('#history-version').value,expectedVersionId:editing.versionId});fill(result);await history();await load();status('历史配置已恢复为新草稿，确认后再发布。',false,'#form-status');}catch(error){status(error.message,true,'#form-status');}finally{setBusy(false);}
 });
-try{await load();if(new URL(location.href).searchParams.get('new')==='1')openForm(null);}catch(error){status(error.message,true);}
+try{
+ await load();const params=new URL(location.href).searchParams,editId=params.get('edit');
+ if(editId){const agent=data.agents.find(agent=>agent.id===editId);if(!agent)throw new Error('没有找到该 Agent，请从列表重新选择。');await openForm(agent,{focusPrompt:true});}
+ else if(params.get('new')==='1')await openForm(null);
+}catch(error){status(error.message,true);}
