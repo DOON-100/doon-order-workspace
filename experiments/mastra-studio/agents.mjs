@@ -1,6 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {Mastra} from '@mastra/core';
 import {createEditor,editorPermissions,prepareEditor} from './editor.mjs';
+import {createAgentManager} from './agent-manager.mjs';
 import {Agent} from '@mastra/core/agent';
 import {createTool} from '@mastra/core/tools';
 import {createStep,createWorkflow} from '@mastra/core/workflows';
@@ -48,5 +49,13 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
  const followup=createWorkflow({id:'synthetic-procurement-followup',description:'离线合成采购欠料巡检 → 催交草稿；只使用测试夹具',inputSchema:z.object({}).strict(),outputSchema:draft.outputSchema}).then(scan).then(draft).commit();
  const observability=new Observability({configs:{local:{serviceName,exporters:[new MastraStorageExporter({maxBatchWaitMs:200})]}}});
  const mastra=new Mastra({agents,workflows:{followup},storage,logger:false,observability,editor:createEditor()});
- return{mastra,storage,agents,observability,editorReady:prepareEditor(mastra,storage,agents),tools:{inspectOverdue:listOverdue,draftFollowup,delegateProcurement},async close(){await observability.shutdown();await mastra.shutdown();await storage.close();}};
+ const tools={inspectOverdue:listOverdue,draftFollowup,delegateProcurement};
+ const lab={mastra,storage,agents,observability,tools,async close(){await observability.shutdown();await mastra.shutdown();await storage.close();}};
+ const diagnostic=localModel(async()=>[{type:'text',text:'当前为离线配置验证，尚未启用真实语言模型。Agent 配置已读取；本次没有理解或执行你的业务请求，也没有修改业务数据或发送消息。'}]);
+ const buildAgent=(snapshot,selected,{builtin})=>{
+  const scripted=builtin&&selected.inspectOverdue&&(snapshot.id==='supervisor'?selected.delegateProcurement:selected.draftFollowup);
+  return new Agent({id:snapshot.id,name:snapshot.name,description:snapshot.description||'',instructions:snapshot.instructions,tools:selected,model:liveModel||(scripted?model(snapshot.name,snapshot.id==='supervisor'):diagnostic),editor:editorPermissions,memory:memory(),defaultOptions:{maxSteps:5,...(liveModel?{modelSettings:{maxOutputTokens:768,maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}:{})}});
+ };
+ lab.editorReady=prepareEditor(mastra,storage,agents).then(async()=>{lab.manager=await createAgentManager({mastra,storage,agents,tools,buildAgent});});
+ return lab;
 }

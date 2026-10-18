@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent 管理 · DOON</title><link rel="stylesheet" href="/studio/brand.css"><link rel="stylesheet" href="/studio/manage/style.css"></head>
+<body class="agent-manager-page">
+ <div class="doon-studio-banner"><a href="/studio/agents">← 返回 Agent Studio</a><span>岗位配置</span></div>
+ <main class="am-main">
+  <header class="am-heading"><div><p class="am-eyebrow">DOON · AGENT STUDIO</p><h1>Agent 管理</h1><p>配置岗位、职责和工具，让每个 Agent 做好自己的工作。</p></div><button class="am-primary" id="new-agent">＋ 新建 Agent</button></header>
+  <section class="am-toolbar"><label for="agent-search">查找 Agent</label><input id="agent-search" type="search" placeholder="搜索名称或职责"><span id="model-status"></span></section>
+  <p id="page-status" role="status" aria-live="polite">正在读取配置…</p>
+  <section id="agent-list" class="am-grid" aria-label="Agent 列表"></section>
+ </main>
+ <dialog id="agent-dialog" aria-labelledby="dialog-title">
+  <form id="agent-form">
+   <header class="am-dialog-header"><div><p class="am-eyebrow">岗位配置</p><h2 id="dialog-title">新建 Agent</h2></div><button type="button" id="close-dialog" class="am-quiet" aria-label="关闭配置">关闭</button></header>
+   <div class="am-dialog-body">
+    <label class="am-field">Agent 名称<input name="name" maxlength="80" required placeholder="例如：工程图纸助手"></label>
+    <label class="am-field">职责简介<input name="description" maxlength="500" placeholder="用一句话说明这个岗位负责什么"></label>
+    <label class="am-field">职责与回答要求<textarea name="instructions" maxlength="32000" rows="10" required placeholder="说明职责、处理步骤、回答要求，以及遇到不确定信息时应该怎么做。"></textarea></label>
+    <fieldset><legend>可使用的工具</legend><p class="am-muted">只开放已经接入的工具。模型、账号权限和业务写入边界仍由后台控制。</p><div id="tool-options" class="am-tools"></div></fieldset>
+    <section id="history-section" hidden><label class="am-field">历史版本<select id="history-version"><option value="">选择历史版本</option></select></label><button type="button" id="restore-version" class="am-quiet">恢复为新草稿</button></section>
+    <p id="form-status" role="status" aria-live="polite"></p>
+   </div>
+   <footer class="am-dialog-footer"><a id="open-editor" href="#" hidden>进入 Studio Editor</a><span id="draft-state"></span><button type="submit" id="save-draft">保存草稿</button><button type="button" id="publish-agent" class="am-primary">保存并发布</button></footer>
+  </form>
+ </dialog>
+ <script type="module" src="/studio/manage/app.js"></script>
+</body></html>

@@ -30,6 +30,12 @@ test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不
   assert.equal((await request(editorRoute,{cookie:'sales',method:'PATCH'})).status,403,'普通员工不能编辑岗位');
   assert.equal((await request(editorRoute,{cookie:'valid',method:'PATCH',origin:'https://evil.test'})).status,403,'Editor 保存拒绝跨站请求');
   assert.equal((await request(editorRoute,{cookie:'valid',method:'PATCH'})).status,200);
+  const managerRoute='/studio/manage/api/agents';
+  assert.equal((await request('/studio/manage/')).status,401,'管理界面同样必须登录');
+  assert.equal((await request(managerRoute,{method:'POST'})).status,401);
+  assert.equal((await request(managerRoute,{cookie:'sales',method:'POST'})).status,403);
+  assert.equal((await request(managerRoute,{cookie:'valid',method:'POST',origin:'https://evil.test'})).status,403);
+  assert.equal((await request(managerRoute,{cookie:'valid',method:'POST'})).status,200);
   assert.equal((await request('/studio/api/agents',{cookie:'valid',host:'evil.test'})).status,403);
   const result=await (await request('/studio/api/agents',{cookie:'valid'})).json();assert.equal(result.ok,true);assert.equal(result.cookie,null);assert.equal(result.authorization,null);
   const prior=calls;assert.equal((await request('/studio/api/agents',{cookie:'valid'})).status,200);assert.equal(calls,prior+1);

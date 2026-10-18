@@ -59,6 +59,8 @@ docker compose up -d --wait
 
 ## 发布与回退
 
+项目自建 Agent 管理界面通过 `/studio/manage/*` 提供，复用既有 Studio 鉴权，镜像须同时包含 `agent-manager.mjs`、HTML、JS、CSS。名称、提示词和工具选择保存在原独立 Agent 配置及版本表，发布前同样需要完整备份与核验；不创建或挂载业务库。下述 `20261018-editor-candidate` 仅包含当时的 Editor 接入，不包含后来新增的管理入口及视口修复，不能作为当前功能的发布镜像，正式更新需重新构建和独立授权。
+
 免费 Editor 的部署准备已包含在镜像白名单中（`editor.mjs` 与岗位配置依赖），不启用 EE Builder。编辑内容写入 `doon_agent_studio` 的 Agent 配置与版本表，沿用所有 `/studio/*` 的原会话和 Origin 校验；数据库及卷必须保留。更新前须对既有 memory、traces、Agent 配置及全部历史做逻辑备份和摘要核验。源代码与当前云镜像存在岗位定义差异时，先核对并保留原云端岗位配置，不因接入 Editor 顺带替换其他实验功能；首次增量登记以本次实际获准发布的岗位代码为基线。云端更新记录须与本地接入验收分开记录。
 
 2026-10-18 已构建未发布候选 `doon-agent-studio:20261018-editor-candidate`，镜像 ID 为 `sha256:0a250d7a5c7ccdda03e3774a66cf0e5c5dde58e3c1272fe2287f7bf879d9402f`。岗位与服务代码以 `d7b690e` 为基线，先与现有云容器相应文件的 SHA-256 核对一致，再仅附加 Editor 接入；依赖使用本次锁定文件。独立内部 Docker 网络、无公开端口的临时 PostgreSQL 16 和无生产挂载的候选容器已验证四岗读取、草稿与发布隔离、显式发布、重建运行时后保留配置及两条原合成消息；Builder 关闭，外部模型调用为零。临时数据库容器和网络已清理，现有云端容器未切换。候选源码归档与哈希清单仅保存在本机忽略的 `test-output/editor-cloud-candidate-20261018*` 及服务器独立候选目录，不能将该记录描述为已上线。

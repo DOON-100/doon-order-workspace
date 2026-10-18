@@ -1,4 +1,17 @@
-/* Brand only the Studio sidebar; reuse the approved company artwork unchanged. */
+/* Studio viewport and branding; reuse the approved company artwork unchanged. */
+html,body { height:100%; margin:0; overflow:hidden; }
+body { display:flex; flex-direction:column; height:100dvh; min-height:0; }
+.doon-studio-banner { display:flex; flex:none; align-items:center; flex-wrap:wrap; gap:8px 20px; min-height:36px; box-sizing:border-box; padding:7px 16px; background:#123b31; color:white; font:13px/20px system-ui,sans-serif; }
+.doon-studio-banner a { color:white; text-decoration:none; }
+.doon-agent-actions { display:flex; align-items:center; gap:8px; font:13px/20px system-ui,sans-serif; white-space:nowrap; }
+.doon-agent-actions a { display:inline-flex; align-items:center; justify-content:center; height:30px; padding:0 12px; border-radius:999px; text-decoration:none; }
+.doon-agent-manage { color:var(--color-muted-foreground,inherit); }
+.doon-agent-new { background:#123b31; color:white; }
+.doon-agent-new:hover { background:#205745; }
+.doon-agent-actions a:focus-visible { outline:2px solid #579b83; outline-offset:2px; }
+#root { flex:1; min-height:0; min-width:0; }
+/* Upstream h-screen must fit the space BELOW the banner, not another viewport. */
+#root > .h-screen { height:100%; max-height:100%; min-height:0; }
 [data-slot="sidebar-command-header"] { height: 88px; }
 [data-slot="sidebar-brand"] { flex-direction: column; align-items: flex-start; gap: 4px; }
 [data-slot="sidebar-brand"] > * { display: none; }
@@ -13,7 +26,7 @@
 }
 a[href="https://mastra.ai/cloud"],
 a[href^="https://mastra.ai/contact"] { display: none; }
-/* This local Studio has no editor extension; omit the package-install promotion. */
+/* Omit the package-install promotion in this application-managed Studio. */
 div:has(> code):has(> a[href="https://mastra.ai/docs/editor/overview"]) { display: none; }
 [data-slot="sidebar-brand"]::after {
   content: "Agent Studio";

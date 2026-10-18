@@ -42,6 +42,11 @@ test('免费 Editor 草稿、发布、历史还原、重启持久化和岗位边
   const preview=await studio.mastra.getAgentById('procurement',{status:'draft'});
   assert.equal((await preview.listTools()).inspectOverdue.description,'合成工具说明编辑验证');
   assert.deepEqual(Object.keys(await preview.listTools()),Object.keys(toolsBefore));
+  const managerUrl='http://127.0.0.1:19897/studio/manage/api/agents/procurement';
+  const managed=await(await studio.handle(new Request(managerUrl))).json();
+  const managerSave=await studio.handle(new Request(managerUrl,{method:'PATCH',headers:{Origin:'http://127.0.0.1:19897','Content-Type':'application/json'},body:JSON.stringify({name:managed.name,description:managed.description,instructions:managed.instructions,toolKeys:managed.toolKeys,expectedVersionId:managed.versionId})}));
+  assert.equal(managerSave.status,200);
+  assert.equal((await(await studio.mastra.getAgentById('procurement',{status:'draft'})).listTools()).inspectOverdue.description,'合成工具说明编辑验证','管理表单保存保留 Editor 中已编辑的工具说明');
   assert.equal((await call('stored/agents/procurement','PATCH',{tools:{shell:{description:'不应新增'}}})).status,403);
   for(const [route,method,body] of [
    ['stored/agents','POST',{id:'unregistered',name:'不应创建',instructions:'test'}],
