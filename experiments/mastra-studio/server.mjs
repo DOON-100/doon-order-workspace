@@ -51,7 +51,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/')){
     // Studio is a debug UI, not a policy editor. Real-data model/tool overrides are forbidden.
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
-    else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents);if(guarded instanceof Response)return guarded;request=guarded;}
+    else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents,lab.storage);if(guarded instanceof Response)return guarded;request=guarded;}
     const fetch=async()=>{
      const response=await app.fetch(request);
      const edited=url.pathname.match(/^\/studio\/api\/stored\/agents\/([\w-]+)(?:\/versions\/[^/]+\/(?:activate|restore))?$/);

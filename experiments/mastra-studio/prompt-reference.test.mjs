@@ -1,0 +1,60 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import {createStudio} from './server.mjs';
+
+test('公共 Prompt：原生创建发布、真实引用、草稿隔离、顺序和条件保全、重启及历史保留',async()=>{
+ const dataDir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-prompt-reference-'));
+ let studio=await createStudio({dataDir,deepseekOptions:{env:{}}});
+ const origin='http://127.0.0.1:19897';
+ const call=async(route,method='GET',body,requestOrigin=origin)=>{
+  const response=await studio.handle(new Request(origin+'/studio/'+route,{method,headers:{Origin:requestOrigin,'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)}));
+  return{status:response.status,body:await response.json()};
+ };
+ const promptBase='api/stored/prompt-blocks',manager='manage/api/agents';
+ const nativePublish=async id=>{const versions=await call(promptBase+'/'+id+'/versions');assert.equal(versions.status,200);const latest=versions.body.versions.reduce((a,b)=>a.versionNumber>b.versionNumber?a:b);const result=await call(promptBase+'/'+id+'/versions/'+latest.id+'/activate','POST',{});assert.equal(result.status,200,JSON.stringify(result.body));return latest;};
+ const publish=async agent=>{const result=await call(manager+'/'+agent.id+'/publish','POST',{versionId:agent.versionId,expectedVersionId:agent.versionId});assert.equal(result.status,200,JSON.stringify(result.body));return result.body;};
+ try{
+  const initial=(await call(manager)).body.agents,prior=new Map(initial.map(a=>[a.id,a.versionId]));
+  const config={name:'合成公共规范',description:'只用于测试',content:'SYN_PUBLIC_V1：回答必须引用合成记录。'};
+  assert.equal((await call(promptBase,'POST',config,'https://untrusted.example')).status,403);
+  assert.equal((await call(promptBase,'POST',{...config,tools:{shell:{}}})).status,403);
+  const created=await call(promptBase,'POST',config);assert.equal(created.status,200,JSON.stringify(created.body));const promptId=created.body.id;assert.match(promptId,/^prompt-/);
+  assert.deepEqual((await call(manager)).body.prompts,[],'未发布的 Prompt 不进入引用选择器');
+  const instructions=[{type:'prompt_block_ref',id:promptId},{type:'text',content:'SYN_ROLE：只核对已有合成证据。'}];
+  const agentConfig={name:'合成引用助手',description:'合成引用测试',instructions,toolKeys:[]};
+  assert.equal((await call(manager,'POST',agentConfig)).status,409,'不能引用未发布的 Prompt');
+  const firstVersion=await nativePublish(promptId);
+  assert.equal((await call(manager)).body.prompts[0].content,config.content);
+  const custom=await call(manager,'POST',agentConfig);assert.equal(custom.status,201,JSON.stringify(custom.body));let agent=await publish(custom.body);
+  const runtime=await studio.mastra.getAgentById(agent.id,{status:'published'});
+  assert.equal(await runtime.getInstructions(),config.content+'\n\n'+instructions[1].content);
+  assert.equal((await call(promptBase+'/'+promptId,'PATCH',{content:'SYN_PUBLIC_V2：明确说明未知项。'})).status,200);
+  assert.equal(await runtime.getInstructions(),config.content+'\n\n'+instructions[1].content,'公共草稿不影响已经引用的发布配置');
+  assert.equal((await call(manager)).body.prompts[0].content,config.content,'选择器展示发布内容');
+  await nativePublish(promptId);
+  assert.match(await runtime.getInstructions(),/^SYN_PUBLIC_V2/,'公共 Prompt 发布后，已有 Agent 引用读取新内容');
+  assert.deepEqual((await call(manager+'/'+agent.id)).body.instructions,instructions,'引用没有被复制成文字');
+  const rules={operator:'AND',conditions:[{field:'region',operator:'equals',value:'CN'}]};
+  const reordered=[instructions[1],{...instructions[0],rules},{type:'prompt_block',content:'SYN_INLINE',rules}];
+  let saved=await call(manager+'/'+agent.id,'PATCH',{...agentConfig,instructions:reordered,expectedVersionId:agent.versionId});assert.equal(saved.status,200,JSON.stringify(saved.body));agent=saved.body;
+  assert.deepEqual(agent.instructions,reordered,'顺序、独立模块和条件原样保留');
+  saved=await call(manager+'/'+agent.id,'PATCH',{...agentConfig,name:'合成引用助手改名',instructions:agent.instructions,expectedVersionId:agent.versionId});assert.equal(saved.status,200);agent=await publish(saved.body);
+  assert.deepEqual((await call(manager+'/'+agent.id)).body.instructions,reordered,'普通配置保存不展开或丢弃引用');
+  assert.equal((await call('api/stored/agents/'+agent.id,'PATCH',{instructions:[{type:'prompt_block_ref',id:'missing'}]})).status,403);
+  const oldCount=(await call(promptBase+'/'+promptId+'/versions')).body.total;
+  const restore=await call(promptBase+'/'+promptId+'/versions/'+firstVersion.id+'/restore','POST',{});assert.equal(restore.status,200);
+  assert.equal((await call(promptBase+'/'+promptId+'/versions')).body.total,oldCount+1,'恢复新增草稿');
+  assert.equal((await call(manager)).body.prompts[0].content,'SYN_PUBLIC_V2：明确说明未知项。','恢复不自动发布');
+  for(let i=0;i<51;i++)assert.equal((await call(promptBase+'/'+promptId,'PATCH',{content:'SYN_HISTORY_'+i})).status,200);
+  const versions=(await call(promptBase+'/'+promptId+'/versions?perPage=100')).body;assert(versions.total>50);assert(versions.versions.some(v=>v.id===firstVersion.id));
+  for(const route of [promptBase+'/'+promptId,promptBase+'/'+promptId+'/versions/'+firstVersion.id])assert.equal((await call(route,'DELETE',{})).status,403);
+  await studio.close();studio=await createStudio({dataDir,deepseekOptions:{env:{}}});
+  assert.deepEqual((await call(manager+'/'+agent.id)).body.instructions,reordered);
+  assert.equal((await call(manager)).body.prompts[0].content,'SYN_PUBLIC_V2：明确说明未知项。');
+  for(const [id,versionId] of prior)assert.equal((await call(manager+'/'+id)).body.versionId,versionId,'原岗位配置与历史不变');
+  assert.equal(studio.mastra.getEditor().hasEnabledBuilderConfig(),false);
+ }finally{await studio.close();assert(dataDir.startsWith(path.join(os.tmpdir(),'doon-prompt-reference-')));await fs.rm(dataDir,{recursive:true,force:true,maxRetries:5,retryDelay:100}).catch(e=>{if(e.code!=='EBUSY')throw e;});}
+});

@@ -1,9 +1,11 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {z} from 'zod';
+import {resolveInstructionBlocks} from '@mastra/editor';
+import {instructionSchema,validInstructions} from './editor.mjs';
 
 const kind='doon-visual-agent-v1';
 const idPattern=/^[\w-]{1,160}$/;
-const fields={name:z.string().trim().min(1).max(80),description:z.string().trim().max(500).default(''),instructions:z.string().trim().min(1).max(32000),toolKeys:z.array(z.string().regex(idPattern)).max(20).refine(keys=>new Set(keys).size===keys.length)};
+const fields={name:z.string().trim().min(1).max(80),description:z.string().trim().max(500).default(''),instructions:instructionSchema,toolKeys:z.array(z.string().regex(idPattern)).max(20).refine(keys=>new Set(keys).size===keys.length)};
 const createSchema=z.object({...fields,requestId:z.string().uuid().optional()}).strict();
 const saveSchema=z.object({...fields,expectedVersionId:z.string().regex(idPattern)}).strict();
 const versionSchema=z.object({versionId:z.string().regex(idPattern),expectedVersionId:z.string().regex(idPattern)}).strict();
@@ -16,6 +18,7 @@ const snapshotOf=value=>Object.fromEntries(snapshotKeys.filter(key=>value[key]!=
 // Neither EE Builder nor third-party plugin/code installation is enabled.
 export async function createAgentManager({mastra,storage,agents,tools,buildAgent}){
  const store=await storage.getStore('agents');
+ const prompts=await storage.getStore('promptBlocks');
  const builtins=new Set(Object.keys(agents)),limits=new Map();
  for(const [id,agent] of Object.entries(agents))limits.set(id,Object.keys(await agent.listTools()));
  const catalog=Object.entries(tools).map(([key,tool])=>({key,description:tool.description}));
@@ -38,7 +41,8 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
   if(installed.get(id)===selected.id)return;
   const keys=validateSnapshot(id,selected);
   const chosen=Object.fromEntries(keys.map(key=>[key,tools[key]]));
-  const agent=buildAgent({id,...snapshotOf(selected)},chosen,{builtin:builtins.has(id)});
+  const instructions=typeof selected.instructions==='string'?selected.instructions:({requestContext})=>resolveInstructionBlocks(selected.instructions,requestContext?.toJSON()||{},{promptBlocksStorage:prompts});
+  const agent=buildAgent({id,...snapshotOf(selected),instructions},chosen,{builtin:builtins.has(id)});
   // Runtime replacement does not delete storage, memory, messages or versions.
   mastra.removeAgent(id);mastra.addAgent(agent,id);agents[id]=agent;
   mastra.getEditor().agent.clearCache(id);installed.set(id,selected.id);
@@ -51,16 +55,17 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
    if(!(result.hasMore??((page+1)*100<result.total)))break;page++;
   }
  }
- const plainInstructions=async instructions=>typeof instructions==='string'?instructions:mastra.getEditor().prompt.preview(instructions,{});
  async function detail(id){
   const row=await requireRow(id),latest=await store.getLatestVersion(id);
   if(!latest)throw fail('Agent 版本不完整。',409);
-  return{id,name:latest.name,description:latest.description||'',instructions:await plainInstructions(latest.instructions),toolKeys:validateSnapshot(id,latest),allowedToolKeys:allowedFor(id),builtin:builtins.has(id),versionId:latest.id,versionNumber:latest.versionNumber,publishedVersionId:row.activeVersionId||null,hasDraft:latest.id!==row.activeVersionId};
+  return{id,name:latest.name,description:latest.description||'',instructions:latest.instructions,toolKeys:validateSnapshot(id,latest),allowedToolKeys:allowedFor(id),builtin:builtins.has(id),versionId:latest.id,versionNumber:latest.versionNumber,publishedVersionId:row.activeVersionId||null,hasDraft:latest.id!==row.activeVersionId};
  }
  async function list(){
   const result=[];let page=0;
   while(true){const rows=await store.list({page,perPage:100});for(const row of rows.agents)if(isManaged(row))result.push(await detail(row.id));if(!(rows.hasMore??((page+1)*100<rows.total)))break;page++;}
-  return{agents:result,tools:catalog,model:{id:model.modelId,live:!String(model.provider).includes('offline')}};
+  const promptBlocks=[];page=0;
+  while(true){const rows=await prompts.list({page,perPage:100});for(const row of rows.promptBlocks)if(row.activeVersionId&&row.status==='published'){const v=await prompts.getVersion(row.activeVersionId);if(v)promptBlocks.push({id:row.id,name:v.name,description:v.description||'',content:v.content,versionNumber:v.versionNumber,rules:v.rules,requestContextSchema:v.requestContextSchema});}if(!(rows.hasMore??((page+1)*100<rows.total)))break;page++;}
+  return{agents:result,tools:catalog,prompts:promptBlocks,model:{id:model.modelId,live:!String(model.provider).includes('offline')}};
  }
  async function readBody(request,schema){
   let body;try{const text=await request.text();if(text.length>65536)throw new Error();body=JSON.parse(text);}catch{throw fail('请求内容无效或过长。');}
@@ -95,6 +100,7 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
    return await run(async()=>{
     if(!id&&request.method==='POST'){
      const body=await readBody(request,createSchema),createdId='visual-'+(body.requestId||randomUUID());validateTools(createdId,body.toolKeys);
+     if(!await validInstructions(body.instructions,storage))throw fail('引用的公共 Prompt 尚未发布或不存在。',409);
      const createHashValue=createHash('sha256').update(JSON.stringify({name:body.name,description:body.description,instructions:body.instructions,toolKeys:[...body.toolKeys].sort()})).digest('hex');
      const existing=await store.getById(createdId);
      if(existing){if(!isManaged(existing)||existing.metadata?.createHash!==createHashValue)throw fail('此新建请求已使用，且内容不同。请重新载入配置。',409);return json(await detail(createdId));}
@@ -103,6 +109,7 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
     }
     if(id&&!action&&request.method==='PATCH'){
      const body=await readBody(request,saveSchema),previous=await currentVersion(id,body.expectedVersionId);validateTools(id,body.toolKeys);
+     if(!await validInstructions(body.instructions,storage))throw fail('引用的公共 Prompt 尚未发布或不存在。',409);
      const result=await append(id,previous,config(body,previous),'可视化管理：保存草稿');
      // An unpublished new agent can be listed/previewed, but not used as published.
      if(!result.publishedVersionId)await refresh(id);return json(result);
@@ -110,6 +117,7 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
     if(id&&request.method==='POST'&&['publish','restore'].includes(action)){
      const body=await readBody(request,versionSchema),previous=await currentVersion(id,body.expectedVersionId),version=await store.getVersion(body.versionId);
      if(!version||version.agentId!==id)throw fail('没有找到该岗位的版本。',404);validateSnapshot(id,version);
+     if(!await validInstructions(version.instructions,storage))throw fail('引用的公共 Prompt 尚未发布或不存在。',409);
      if(action==='restore')return json(await append(id,previous,snapshotOf(version),'可视化管理：从历史版本恢复草稿'));
      if(version.id!==previous.id)throw fail('请先将历史版本恢复为新草稿，再发布。',409);
      await store.update({id,activeVersionId:version.id,status:'published'});await refresh(id);return json(await detail(id));

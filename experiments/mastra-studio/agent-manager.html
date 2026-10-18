@@ -15,7 +15,14 @@
    <div class="am-dialog-body">
     <label class="am-field">Agent 名称<input name="name" maxlength="80" required placeholder="例如：工程图纸助手"></label>
     <label class="am-field">职责简介<input name="description" maxlength="500" placeholder="用一句话说明这个岗位负责什么"></label>
-    <label class="am-field">职责与回答要求<textarea name="instructions" maxlength="32000" rows="10" required placeholder="说明职责、处理步骤、回答要求，以及遇到不确定信息时应该怎么做。"></textarea></label>
+    <section class="am-instructions" aria-label="System Prompt 配置">
+     <h3>System Prompt · 职责与回答要求</h3>
+     <p class="am-muted">按从上到下的顺序组合岗位文字和公共 Prompt。引用保留关联，公共 Prompt 发布更新后，使用它的 Agent 会读取新的发布内容。</p>
+     <div class="am-prompt-picker"><label for="prompt-picker">引用公共 Prompt</label><select id="prompt-picker"><option value="">选择已发布的 Prompt</option></select><button type="button" id="add-prompt">添加引用</button></div>
+     <div class="am-prompt-links"><a href="/studio/prompts" target="_blank" rel="noopener">管理提示词库 ↗</a><button type="button" id="refresh-prompts">刷新列表</button><button type="button" id="add-instruction">添加岗位文字</button></div>
+     <p class="am-muted" id="prompt-options-status"></p>
+     <div id="instruction-blocks"></div>
+    </section>
     <fieldset><legend>可使用的工具</legend><p class="am-muted">只开放已经接入的工具。模型、账号权限和业务写入边界仍由后台控制。</p><div id="tool-options" class="am-tools"></div></fieldset>
     <section id="history-section" hidden><label class="am-field">历史版本<select id="history-version"><option value="">选择历史版本</option></select></label><button type="button" id="restore-version" class="am-quiet">恢复为新草稿</button></section>
     <p id="form-status" role="status" aria-live="polite"></p>
