@@ -19,7 +19,7 @@ const pass=message=>{checks.push(message);console.log('PASS '+message);};
 const destination=item=>item.view+'?'+(item.context?.tab||'');
 const roles=['admin','pmc','production','clerk','sales','finance','programmer','viewer'];
 
-assert.deepEqual(nav.departmentWorkspaceGroups.map(group=>group.label),['工作总览','业务部','客服与单证','工程部','PMC 计划','采购与外协','仓储物流','生产车间','品质部','财务部','售后与复盘','系统管理']);
+assert.deepEqual(nav.departmentWorkspaceGroups.map(group=>group.label),['工作总览','业务部','客服与单证','工程部','PMC 计划','采购与外协','仓储物流','生产车间','品质部','财务部','系统管理']);
 for(const role of roles){
  const user=member(role,{departments:role==='clerk'?['finished','outsourcing']:[]}),items=nav.memberWorkspaceNavigation(user),before=JSON.stringify(items),groups=nav.departmentWorkspaceNavigation(items,user),result=leaves(groups);
  const legacy=flatten(nav.supplierWorkspaceNavigation(nav.productionPlanningNavigation(items,user),user));
@@ -79,7 +79,7 @@ for(const item of result){
  const html=markup(item.view,item.context),match=nav.matchDepartmentWorkspaceNavigation(groups,item.view,item.context),domIds=[...html.matchAll(/\sid="([^"]+)"/g)].map(entry=>entry[1]);
  assert.equal(new Set(domIds).size,domIds.length,'No duplicate DOM IDs');
  const toggles=[...html.matchAll(/<button\b[^>]*class="department-navigation-toggle"[^>]*>/g)].map(entry=>entry[0]);
- assert.equal(toggles.length,12);
+ assert.equal(toggles.length,11);
  for(const toggle of toggles){const control=/aria-controls="([^"]+)"/.exec(toggle)?.[1];assert(domIds.includes(control),'Every toggle controls an existing child container');assert(toggle.includes('type="button"'));}
  assert(toggles.find(toggle=>toggle.includes(`aria-label="收起${match.department.label}"`))?.includes('aria-expanded="true"'),'Current department opens on direct entry');
  assert.equal((html.match(/aria-current="page"/g)||[]).length,1,'Exactly one page is active');

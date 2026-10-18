@@ -13,7 +13,7 @@ export type DepartmentNavigationMatch={department:DepartmentNavigationGroup;item
 export const departmentWorkspaceGroups=[
  {id:'overview',label:'工作总览',icon:'home',phase:'全流程与个人事项'},
  {id:'sales',label:'业务部',icon:'business',phase:'客户开发 → 需求与报价'},
- {id:'service',label:'客服与单证',icon:'support',phase:'订单评审 → 制单与交接'},
+ {id:'service',label:'客服与单证',icon:'support',phase:'订单评审 → 制单交接 → 售后复盘'},
  {id:'engineering',label:'工程部',icon:'engineering',phase:'图纸 → 样品与资料确认'},
  {id:'planning',label:'PMC 计划',icon:'production',phase:'订单接收 → 齐套与排程'},
  {id:'purchasing',label:'采购与外协',icon:'truck',phase:'采购 → 催料与外发'},
@@ -21,7 +21,6 @@ export const departmentWorkspaceGroups=[
  {id:'production',label:'生产车间',icon:'factory',phase:'工序流转 → 报工与损耗'},
  {id:'quality',label:'品质部',icon:'document',phase:'来料 → 过程与出货放行'},
  {id:'finance',label:'财务部',icon:'finance',phase:'对账 → 应收与回款'},
- {id:'aftersales',label:'售后与复盘',icon:'messages',phase:'客诉 → 闭环与历史档案'},
  {id:'management',label:'系统管理',icon:'settings',phase:'规则 → 账号与系统维护'},
 ] as const;
 export type WorkspaceDepartmentId=typeof departmentWorkspaceGroups[number]['id'];
@@ -29,7 +28,7 @@ export type WorkspaceDepartmentId=typeof departmentWorkspaceGroups[number]['id']
 const departmentRouteOrder:Record<WorkspaceDepartmentId,readonly string[]>={
  overview:['workbench','business-process','personal-tasks','dashboard','reports'],
  sales:['customers','customer-projects','process-rfq','sales','customer-quotes','customer-price-archive','mail','whatsapp','communications'],
- service:['service','service-workspace','service-followups','order-confirmations','factory-orders','production-orders','documents'],
+ service:['service','service-workspace','service-followups','order-confirmations','factory-orders','production-orders','documents','process-complaint','completed'],
  engineering:['engineering-materials','engineering-drawings','process-sample','process-engineering-change'],
  planning:['production-planning','pmc-handoff','process-material-kit','pmc','planning-control','orders','mine'],
  purchasing:['supplier-workspace','supplier-pending','supplier-followup','supplier-samples','supplier-kit','supplier-outsourcing','finished-outsourcing','supplier-risk'],
@@ -37,7 +36,6 @@ const departmentRouteOrder:Record<WorkspaceDepartmentId,readonly string[]>={
  production:['department','mes','losses'],
  quality:['process-iqc','process-first-article','process-process-quality','process-outsourcing-quality','process-oqc','process-shipment-release'],
  finance:['payment-terms','supplier-reconciliation','process-supplier-reconciliation','ar-workspace','service-receivables','project-finance','finance-documents'],
- aftersales:['process-complaint','completed'],
  management:['business-rules','imports','settings','members','maintenance','business-tools'],
 };
 

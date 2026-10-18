@@ -77,7 +77,7 @@ try{
   const signed=await signedPage(sessions[username],{width:1536,height:900});page=signed.page;
   const ids=await page.locator('[data-nav-id]').evaluateAll(elements=>elements.map(element=>element.dataset.navId));
   const departments=await page.locator('[data-department-id]').evaluateAll(elements=>elements.map(element=>element.dataset.departmentId));
-  assert.deepEqual(departments,['overview','sales','service','engineering','planning','purchasing','warehouse','production','quality','finance','aftersales','management'],'Internal roles use the same department and process order.');
+  assert.deepEqual(departments,['overview','sales','service','engineering','planning','purchasing','warehouse','production','quality','finance','management'],'Internal roles use the same department and process order.');
   assert.equal(await page.locator('[data-department-id="purchasing"] [data-nav-id="finished-outsourcing"]').count(),1);
   assert.equal(await page.locator('[data-department-id="production"] [data-nav-id="department"]').count(),1);
   assert(ids.indexOf('customer-projects')<ids.indexOf('sales'));assert(ids.indexOf('pmc')<ids.indexOf('finished-outsourcing'));
