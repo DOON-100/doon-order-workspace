@@ -1,6 +1,6 @@
 # 云端工作流自动调度（Agent 测试分支）
 
-2026-10-19：本分支增加云端真实只读模式的后台调度实现。本次源码改动和合成验收不代表云端已部署、已配置密钥或已启用任何现有工作流。既有云端部署状态继续以 [部署记录](cloud-agent-studio-deployment.md) 为准。
+2026-10-19：本分支的云端真实只读日历调度已部署，原生只读接口已从 main 独立发布，后台轮询正常。现有工作流不会自动启用，需本人发布并在「定时任务」中核对后启用。具体版本、备份与数据完整性验收见 [部署记录](cloud-agent-studio-deployment.md)。
 
 ## 使用和结果入口
 
@@ -26,9 +26,9 @@
 
 业务变更事件消费仍未在云端真实模式启用。本次只接通日历调度和内部只读结果，不新增消息发送、业务写单或自动审批。
 
-## 后续部署配置
+## 部署配置
 
-本次不更改 8787、云端容器、原生服务环境或现有任务状态。后续上线须分别部署原生只读桥和 Agent 镜像；原生中台最终仍跟随经检查的 main，不能为启用调度把正式服务切换到 Agent 测试分支。
+原生只读桥与 Agent 镜像分别发布；此次已按用户授权配置服务并短暂重启中台，现有任务的启用状态保留。原生中台使用经检查的 main 接口实现，正式服务没有切换到 Agent 测试分支。
 
 原生服务需要显式设置 `DOON_STUDIO_SCHEDULES_ENABLED=1`，并通过 `DOON_STUDIO_SCHEDULES_KEY_FILE` 指向私有密钥文件。Agent 通过 `DOON_AGENT_SCHEDULES_ENABLED=1` 和 `DOON_AGENT_SCHEDULES_KEY_FILE` 读取同一独立密钥；示例覆盖文件为 [compose.schedules.yaml](../experiments/agent-server/compose.schedules.yaml)。密钥文件只在私有部署目录保存，不写入仓库、命令行、URL、镜像或日志；不要复用模型、数据库或原有协作服务密钥。
 
@@ -47,4 +47,4 @@ npm test --prefix experiments/mastra-studio
 node --test experiments/agent-server/server.test.mjs experiments/agent-server/business-api.test.mjs experiments/agent-server/live-studio.test.mjs experiments/agent-server/schedule-worker.test.mjs
 ```
 
-使用独立 `DOON_BUILD_DIR=test-output/agent-schedule-build` 构建 `standalone/build.mjs` 后，在同一构建目录配置下运行 `standalone/test.mjs`、`node --test standalone/agent-schedules.test.mjs standalone/workflow-trigger.test.mjs`。原生 HTTP 测试验证原登录授权、独立服务身份、退出与重启后保留、停用即时拒绝、只读源单哈希不变；工作流测试通过实际 Mastra 执行引擎和持久库验证到点执行、审核暂停与恢复、结果回读及防重。实际云端 PostgreSQL、代理配置和真实账号仍须后续单独验收。
+使用独立 `DOON_BUILD_DIR=test-output/agent-schedule-build` 构建 `standalone/build.mjs` 后，在同一构建目录配置下运行 `standalone/test.mjs`、`node --test standalone/agent-schedules.test.mjs standalone/workflow-trigger.test.mjs`。原生 HTTP 测试验证原登录授权、独立服务身份、退出与重启后保留、停用即时拒绝、只读源单哈希不变；工作流测试通过实际 Mastra 执行引擎和持久库验证到点执行、审核暂停与恢复、结果回读及防重。实际云端 PostgreSQL 原记录完整性、HTTPS 代理鉴权与调度循环已单独核验；真实账号的任务启用及执行仍需本人操作，不能以基础服务验收代替具体任务结果。
