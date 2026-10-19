@@ -17,7 +17,7 @@ export const workflowDraftSchema=configSchema.extend({requestId:z.string().uuid(
 const saveSchema=configSchema.extend({expectedVersionId:id}).strict();
 const catalog=[['scan','采购风险检查','读取已接入的合成采购条目'],['filter','筛选条目','按欠数与供应商筛选'],['branch','条件分支','按条目数或欠数判断'],['review','人工审核','暂停，等待真实登录审核人决定'],['draft','内部草稿','为当前条目生成内部草稿'],['agent','调用 Agent','调用所选岗位的已发布配置'],['summary','汇总结果','固定程序整理本次结果']].map(([type,label,description])=>({type,label,description}));
 const initialState=()=>({syntheticOnly:true,sent:false,orders:[],drafts:[],messages:[],nodeStates:{}});
-const stateSchema=z.object({syntheticOnly:z.literal(true),sent:z.literal(false),orders:z.array(z.any()),drafts:z.array(z.any()),messages:z.array(z.any()),nodeStates:z.record(z.any()),trigger:z.any().optional(),records:z.array(z.any()).optional()});
+const stateSchema=z.object({syntheticOnly:z.boolean(),sent:z.literal(false),orders:z.array(z.any()),drafts:z.array(z.any()),messages:z.array(z.any()),nodeStates:z.record(z.any()),trigger:z.any().optional(),records:z.array(z.any()).optional()});
 catalog.unshift({type:'record',label:'读取触发记录',description:'读取触发器已经授权、匹配的当前业务记录'});
 
 export function workflowTemplate(reviewed=false){
@@ -53,7 +53,8 @@ export function validateWorkflow(config){
 // Archived records keep the project ledger out of Mastra's native graph loader.
 // Every configuration, review decision and execution receipt is a new record.
 // Only the archival status of newly-created project records is ever updated.
-export async function createWorkflowManager({mastra,storage,tools,sourceFingerprint,now=()=>Date.now()}){
+export async function createWorkflowManager({mastra,storage,tools,sourceFingerprint,realData=false,now=()=>Date.now()}){
+ const availableCatalog=realData?catalog.filter(node=>!['scan','filter','draft'].includes(node.type)):catalog;
  const store=await storage.getStore('workflowDefinitions');
  let queue=Promise.resolve(),activeTests=0,activeAgentCalls=0,processingTriggers=false;const resuming=new Map();
  const serial=operation=>{const next=queue.then(operation);queue=next.catch(()=>{});return next;};
@@ -76,7 +77,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   const sample=syntheticSource(source);return{source,scope,datasets:projectedDatasets(sample),mode:'synthetic',eventsEnabled:false,revision:0,sample:sample.records[0]};
  }
  async function checkedTrigger(config,access){const trigger=config.nodes.find(n=>n.type==='start')?.params.trigger;if(!trigger||trigger.mode==='manual')return;const source=await sourceCatalog(access,trigger.source,trigger.scope),dataset=source.datasets.find(d=>d.path===trigger.dataset);if(!dataset)throw fail('数据对象不存在或不在当前可见范围内。',403);if(dataset.triggerable===false)throw fail('明细缺少唯一稳定 ID，请选择上层记录或页面概览中的字段。');try{validateTrigger(trigger,dataset);}catch(error){throw fail(error.message,403);}return source;}
- async function checked(config){const validated=validateWorkflow(config);for(const n of config.nodes)if(n.type==='agent'){try{await mastra.getAgentById(n.params.agentId,{status:'published'});}catch{throw fail('调用 Agent 节点必须选择已发布的岗位。',409);}}return validated;}
+ async function checked(config){const validated=validateWorkflow(config);if(realData&&config.nodes.some(node=>['scan','filter','draft'].includes(node.type)))throw fail('合成采购节点不能用于真实业务；请使用读取触发记录、人工审核或只读 Agent 节点。');for(const n of config.nodes)if(n.type==='agent'){try{await mastra.getAgentById(n.params.agentId,{status:'published'});}catch{throw fail('调用 Agent 节点必须选择已发布的岗位。',409);}}return validated;}
  async function saveNewDraft(body,{actor,workflowAccess,proposalId}={}){
   const {requestId,...config}=workflowDraftSchema.parse(body);await checked(config);await checkedTrigger(config,workflowAccess);
   const key='visual-wf-'+requestId,existing=await latest('config',key);
@@ -125,20 +126,20 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   let workflow=createWorkflow({mastra,id:engineId,description:row.payload.config.description||row.payload.config.name,metadata:{name:row.payload.config.name,doonVersionId:row.versionId},inputSchema:z.object({}).strict(),outputSchema:stateSchema});
   for(const node of ordered){
    const step=createStep({id:node.id,description:node.label,inputSchema:node.type==='start'?z.object({}).strict():stateSchema,outputSchema:stateSchema,resumeSchema:z.object({}).passthrough(),suspendSchema:z.any(),execute:async({inputData,runId,suspend})=>{
-    if(node.type==='start'){const state=initialState();if(triggerEvent){state.trigger=structuredClone(triggerEvent);state.records=[structuredClone(triggerEvent.after)];}state.nodeStates[node.id]={status:'completed',label:node.label};return state;}
+    if(node.type==='start'){const state=initialState();state.syntheticOnly=!realData||triggerEvent?.syntheticOnly===true;if(triggerEvent){state.trigger=structuredClone(triggerEvent);state.records=[structuredClone(triggerEvent.after)];}state.nodeStates[node.id]={status:'completed',label:node.label};return state;}
     const state=structuredClone(inputData),eligible=incoming.get(node.id).some(e=>state.nodeStates[e.from]?.status==='completed'&&(e.port==='next'||state.nodeStates[e.from].port===e.port));
     if(!eligible){state.nodeStates[node.id]={status:'skipped',label:node.label};return state;}
     let port='next';
     if(node.type==='record'){if(!state.trigger)state.messages.push({nodeId:node.id,text:'当前是手动试运行，没有触发记录。请使用触发条件测试。'});}
     if(node.type==='scan'){if(state.trigger)throw new Error('采购合成巡检节点不消费业务事件，请使用“读取触发记录”节点。');const result=await tools.inspectOverdue.execute({});if(result.syntheticOnly!==true)throw new Error('Synthetic source required');state.orders=result.orders;}
     if(node.type==='filter')state.orders=state.orders.filter(r=>r.missing>=node.params.minMissing&&String(r.supplier).includes(node.params.supplier));
-    if(node.type==='branch'){const value=node.params.metric==='count'?state.orders.length:state.orders.reduce((sum,r)=>sum+r.missing,0),t=node.params.threshold;port=({gte:value>=t,gt:value>t,eq:value===t,lte:value<=t,lt:value<t})[node.params.operator]?'yes':'no';}
+    if(node.type==='branch'){if(realData&&node.params.metric==='missing')throw new Error('真实记录未接入统一欠数口径，请使用触发条件筛选。');const value=node.params.metric==='count'?(state.records?.length||state.orders.length):state.orders.reduce((sum,r)=>sum+r.missing,0),t=node.params.threshold;port=({gte:value>=t,gt:value>t,eq:value===t,lte:value<=t,lt:value<t})[node.params.operator]?'yes':'no';}
     if(node.type==='draft')for(const order of state.orders){const result=await tools.draftFollowup.execute({orderId:order.orderId});if(result.sent!==false||result.syntheticOnly!==true)throw new Error('Internal draft required');state.drafts.push({...result,text:node.params.prefix+result.text});}
     if(node.type==='agent'){
      if(activeAgentCalls>=2)throw new Error('工作流 Agent 调用并发已满，请稍后重新试运行。');activeAgentCalls++;
-     try{const agent=await mastra.getAgentById(node.params.agentId,{status:'published'}),result=await agent.generate(node.params.prompt+'\n\n本次合成流程证据：\n'+JSON.stringify({orders:state.orders,records:state.records,trigger:state.trigger,drafts:state.drafts,messages:state.messages}));state.messages.push({nodeId:node.id,agentId:node.params.agentId,text:result.text});}finally{activeAgentCalls--;}
+     try{const agent=await mastra.getAgentById(node.params.agentId,{status:'published'}),result=await agent.generate(node.params.prompt+(state.syntheticOnly?'\n\n本次合成流程证据：\n':'\n\n本次只读流程证据（需核对实时来源）：\n')+JSON.stringify({orders:state.orders,records:state.records,trigger:state.trigger,drafts:state.drafts,messages:state.messages}));state.messages.push({nodeId:node.id,agentId:node.params.agentId,text:result.text});}finally{activeAgentCalls--;}
     }
-    if(node.type==='summary')state.messages.push({nodeId:node.id,text:`${node.params.title}：本次 ${state.records?.length||state.orders.length} 个合成条目，${state.drafts.length} 份内部草稿。未发送消息、未修改业务数据。`});
+    if(node.type==='summary')state.messages.push({nodeId:node.id,text:`${node.params.title}：本次 ${state.records?.length||state.orders.length} 个${state.syntheticOnly?'合成':'只读业务'}条目，${state.drafts.length} 份内部草稿。未发送消息、未修改业务数据。`});
     if(node.type==='review'){
      const task=await ensureReview({row,node,runId,engineId,preview,inputData:state}),value=task.payload;
      if(!['approved','rejected'].includes(value.status))return suspend({reviewTaskId:value.taskId,title:value.title,payloadHash:value.payloadHash,validUntil:value.validUntil});
@@ -197,7 +198,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     const proposal=route.match(/^proposals\/(proposal-[\w-]+)$/);if(proposal)return json(proposalDetail(await requireProposal(proposal[1],actor)));
     if(route==='sources')return json({...await sourceCatalog(workflowAccess,url.searchParams.get('source')||undefined,Object.fromEntries([...url.searchParams].filter(([k])=>['customerId','projectId','id','teamId'].includes(k)))),operators:triggerOperators,defaults:defaultTrigger()});
     if(route==='deliveries')return json({deliveries:(await records('delivery')).filter(r=>r.payload.ownerId===actor?.id).map(r=>({id:r.entityId,workflowId:r.payload.workflowId,eventId:r.payload.eventId,recordId:r.payload.recordId,runId:r.payload.execution?.runId||r.payload.runId,status:r.payload.execution?.status||r.payload.status})).slice(-100).reverse()});
-    if(route==='workflows'){const all=await records('config'),map=new Map();for(const row of all)map.set(row.entityId,row);return json({workflows:[...map.values()].filter(r=>canReadConfig(r,actor)).map(r=>{const {nodes,edges,...summary}=detail(r);return summary;}),catalog,agents:Object.entries(mastra.listAgents()).map(([id,agent])=>({id,name:agent.name})),actor:actor?{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true}:null});}
+    if(route==='workflows'){const all=await records('config'),map=new Map();for(const row of all)map.set(row.entityId,row);return json({workflows:[...map.values()].filter(r=>canReadConfig(r,actor)).map(r=>{const {nodes,edges,...summary}=detail(r);return summary;}),catalog:availableCatalog,agents:Object.entries(mastra.listAgents()).map(([id,agent])=>({id,name:agent.name})),actor:actor?{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true}:null});}
     if(route==='reviews'){const all=await records('review'),map=new Map();for(const row of all)map.set(row.entityId,row);const visible=[];for(const r of map.values()){const event=r.payload.payload.trigger;if(event&&(event.simulation?r.payload.ownerId!==actor?.id:!workflowAccess?.verify||!await workflowAccess.verify(event)))continue;visible.push({...r.payload,versionId:r.versionId,createdAt:r.createdAt,expired:new Date(r.payload.validUntil).getTime()<=now()});}return json({reviews:visible});}
     const match=route.match(/^workflows\/([\w-]+)(?:\/(versions))?$/);if(match){const row=await requireConfig(match[1]);if(!canReadConfig(row,actor))throw fail('该触发规则属于其他配置人。',403);return json(match[2]?{versions:(await records('config',match[1])).reverse().map(r=>({id:r.versionId,versionNumber:r.revision,createdAt:r.createdAt,message:r.payload.message}))}:detail(row));}
     throw fail('未找到入口。',404);
@@ -280,7 +281,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   }catch(error){return json({error:error.status?error.message:'工作流服务暂时不可用，请刷新后重试。'},error.status||503);}
  }
  const all=await store.list();for(const row of all.definitions)if(row.metadata?.recordType===kind&&row.status!=='archived')await store.upsert({id:row.id,status:'archived'});
- if(!await latest('config','followup'))await append('config','followup',{config:{name:'采购欠料巡检与内部草稿',description:'检查固定合成采购条目，生成内部草稿。',...workflowTemplate()},runtimeId:'synthetic-procurement-followup',message:'登记原流程基线'},null,true);
+ if(!realData&&!await latest('config','followup'))await append('config','followup',{config:{name:'采购欠料巡检与内部草稿',description:'检查固定合成采购条目，生成内部草稿。',...workflowTemplate()},runtimeId:'synthetic-procurement-followup',message:'登记原流程基线'},null,true);
  const configs=await records('config'),map=new Map();for(const row of configs)map.set(row.entityId,row);for(const row of map.values())if(row.payload.publishedVersionId)await install(row);
  const has=async key=>(await records('config')).some(row=>row.entityId===key||row.payload.runtimeId===key);
  async function processTriggers(accessForOwner){

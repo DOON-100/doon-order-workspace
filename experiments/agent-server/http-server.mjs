@@ -4,13 +4,13 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {parsePublicOrigin,canEnterStudio} from './session.mjs';
 
-export function createAgentServer({publicOrigin,studio,authenticate,health=async()=>true,maxActive=2}){
+export function createAgentServer({publicOrigin,studio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,maxActive=2}){
  const origin=parsePublicOrigin(publicOrigin);let active=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
-  let counted=false;
+  let counted=false,lease;
   try{
-   if(req.url==='/health'&&req.method==='GET'){const ok=await health();return json(res,ok?200:503,{ok,syntheticOnly:true});}
+   if(req.url==='/health'&&req.method==='GET'){const ok=await health();return json(res,ok?200:503,{ok,syntheticOnly});}
    if(req.headers.host!==origin.host)return json(res,403,{error:'访问地址未获授权。'});
    const url=new URL(req.url,origin.origin);
    if(url.origin!==origin.origin)return json(res,403,{error:'访问地址未获授权。'});
@@ -27,14 +27,16 @@ export function createAgentServer({publicOrigin,studio,authenticate,health=async
     return json(res,401,{error:'请先登录数据台。'});
    }
    if(!canEnterStudio(user))return json(res,403,{error:'Agent Studio 仅限已完成改密的管理员或程序员。'});
-   const generation=/\/agents\/[^/]+\/(stream|generate|stream-network|network)(\/|$)/.test(url.pathname);
+   const generation=/\/agents\/[^/]+\/(stream|generate|send-message|stream-network|network)(\/|$)/.test(url.pathname);
    if(generation){if(active>=maxActive)return json(res,429,{error:'当前模型验证并发已满，请稍后重试。'});active++;counted=true;}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(value!==undefined&&!['cookie','authorization','host','connection','content-length'].includes(key))headers.set(key,Array.isArray(value)?value.join(','):value);
    let body;
    if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'Studio 请求超过大小限制。'});body=Buffer.concat(chunks);}
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
-   const response=await studio.handle(new Request(url,{method:req.method,headers,body,signal:controller.signal}),{actor});
+   const access=businessAccess?.({cookie:req.headers.cookie||'',user});
+   lease=acquireRuntime?await acquireRuntime(user):null;
+   const response=await withAccess(access,()=>(lease?.studio||studio).handle(new Request(url,{method:req.method,headers,body,signal:controller.signal}),{actor,...(access?{workflowAccess:access}:{})}));
    const outgoing=Object.fromEntries(response.headers);outgoing['Cache-Control']='no-store';outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
    delete outgoing['set-cookie'];res.writeHead(response.status,outgoing);
    if(req.method==='HEAD'||!response.body)return res.end();
@@ -42,8 +44,8 @@ export function createAgentServer({publicOrigin,studio,authenticate,health=async
   }catch(error){
    if(res.destroyed||res.headersSent){res.destroy();return;}
    // Do not serialize upstream responses, cookies, user objects or error stacks.
-   json(res,503,{error:'Agent Studio 暂时不可用，请稍后重试。'});
-  }finally{if(counted)active--;}
+   json(res,error.status===429?429:503,{error:error.status===429?'Studio 当前使用人数已满，请稍后重试。':'Agent Studio 暂时不可用，请稍后重试。'});
+  }finally{lease?.release();if(counted)active--;}
  });
  server.requestTimeout=120000;server.headersTimeout=10000;server.keepAliveTimeout=5000;return server;
 }

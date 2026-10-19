@@ -2,11 +2,18 @@ import {createStudio} from '../mastra-studio/server.mjs';
 import {createCloudStorage} from '../mastra-studio/postgres.mjs';
 import {createSessionChecker} from './session.mjs';
 import {createAgentServer} from './http-server.mjs';
+import {createBusinessReader,createBusinessAccess,withBusinessAccess} from './business-api.mjs';
+import {createRuntimePool} from './runtime-pool.mjs';
 
 const publicOrigin=process.env.DOON_AGENT_PUBLIC_ORIGIN;
 const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'});
-const storage=await createCloudStorage();
-const studio=await createStudio({dataDir:'/tmp/agent-studio',storage,cloud:true});
-const server=createAgentServer({publicOrigin,studio,authenticate});
-server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:true,model:process.env.DOON_STUDIO_MODEL||'offline'})));
-for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>server.close(async()=>{await studio.close();process.exit(0);}));
+const live=process.env.DOON_AGENT_DATA_MODE==='live-readonly';
+const pool=live?createRuntimePool({create:async(user,schema)=>{
+ const storage=await createCloudStorage(process.env,{schemaName:schema});
+ try{return await createStudio({dataDir:'/tmp/agent-studio/'+schema,storage,cloud:true,liveReadOnly:true,scopeId:schema});}catch(error){await storage.close();throw error;}
+}}):null;
+const studio=live?null:await createStudio({dataDir:'/tmp/agent-studio',storage:await createCloudStorage(),cloud:true});
+const read=live?createBusinessReader({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
+const server=createAgentServer({publicOrigin,studio,authenticate,syntheticOnly:!live,...(live?{acquireRuntime:user=>pool.acquire(user),businessAccess:({cookie,user})=>createBusinessAccess({cookie,user,authenticate,read}),withAccess:withBusinessAccess}:{} )});
+server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:!live,model:process.env.DOON_STUDIO_MODEL||'offline'})));
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>server.close(async()=>{await(pool||studio).close();process.exit(0);}));

@@ -12,6 +12,16 @@
 !mastra-studio/workflow-manager.mjs
 !mastra-studio/workflow-triggers.mjs
 !mastra-studio/workflow-sources.mjs
+!mastra-studio/workflow-tools.mjs
+!mastra-studio/workflow-preview.html
+!mastra-studio/workflow-preview.js
+!mastra-studio/workflow-preview.css
+!mastra-studio/workflow-schedule.mjs
+!mastra-studio/workflow-schedule-form.js
+!mastra-studio/workflow-schedules.html
+!mastra-studio/workflow-schedules.js
+!mastra-studio/workflow-schedules.css
+!mastra-studio/live-agents.mjs
 !mastra-studio/workflow-manager.html
 !mastra-studio/workflow-manager.js
 !mastra-studio/workflow-manager.css
@@ -32,3 +42,5 @@
 !agent-server/http-server.mjs
 !agent-server/session.mjs
 !agent-server/entry.js
+!agent-server/business-api.mjs
+!agent-server/runtime-pool.mjs

@@ -9,10 +9,10 @@ function textOnly(value){
 }
 // SDK 1.78 uses send-message + threads/subscribe. Keep only local chat operations;
 // discard its browser-supplied streamOptions so server role contracts stay fixed.
-export async function guardBusinessRequest(request){
+export async function guardBusinessRequest(request,{agents=profiles}={}){
  if(['GET','HEAD'].includes(request.method))return request;
  const match=new URL(request.url).pathname.match(/^\/studio\/api\/agents\/([^/]+)\/(generate|stream|send-message|threads\/subscribe|threads\/abort)$/);
- if(request.method!=='POST'||!match||!Object.hasOwn(profiles,match[1]))return deny('真实快照模式仅开放只读 Agent 查询，禁止资源编辑或工作流执行。',403);
+ if(request.method!=='POST'||!match||!Object.hasOwn(agents,match[1]))return deny('真实数据对话仅开放只读 Agent 查询；配置和工作流请使用各自管理入口。',403);
  let body;try{body=await request.clone().json();}catch{return deny('请求格式无效');}
  if(!body||typeof body!=='object'||Array.isArray(body))return deny('请求格式无效');
  const action=match[2];let sanitized;

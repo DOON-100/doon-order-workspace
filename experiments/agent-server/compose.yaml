@@ -9,6 +9,7 @@ services:
     networks: [agent_backend]
     environment:
       DOON_AGENT_PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the existing platform HTTPS origin}
+      DOON_AGENT_DATA_MODE: ${AGENT_DATA_MODE:-synthetic}
       DOON_STUDIO_MODEL: deepseek-flash
       DEEPSEEK_API_KEY_FILE: /run/secrets/deepseek_api_key
       PG_PASSWORD_FILE: /run/secrets/pg_studio_password
