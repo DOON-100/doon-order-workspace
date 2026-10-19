@@ -36,6 +36,7 @@ import {collaborationAssignments} from '@/lib/collaboration-api';
 import {canUseCustomerQuotes,canReadCustomerQuote,type CustomerQuote} from '@/lib/customer-quotes';
 import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from '@/lib/business-team-scope';
 import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
+import {arInvoiceLedgerGet,arInvoiceLedgerPost} from '@/lib/ar-invoice-ledger-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
@@ -127,6 +128,7 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
+ const invoiceLedger=await arInvoiceLedgerGet(action,req,s,m);if(invoiceLedger)return invoiceLedger;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
  const response=await workspaceGet(req,ctx,s,m);
@@ -140,6 +142,7 @@ export async function POST(req:Request,ctx:Context){try{
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
+ const invoiceLedger=await arInvoiceLedgerPost(action,req,s,m);if(invoiceLedger)return invoiceLedger;
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
