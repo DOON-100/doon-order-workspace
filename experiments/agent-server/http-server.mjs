@@ -4,7 +4,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {parsePublicOrigin,canEnterStudio} from './session.mjs';
 
-export function createAgentServer({publicOrigin,studio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=2}){
+export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=2}){
  const origin=parsePublicOrigin(publicOrigin);let active=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
@@ -35,9 +35,14 @@ export function createAgentServer({publicOrigin,studio,authenticate,acquireRunti
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
    const access=businessAccess?.({cookie:req.headers.cookie||'',user});
-   lease=acquireRuntime?await acquireRuntime(user):null;
-   const response=await withAccess(access,()=>(lease?.studio||studio).handle(new Request(url,{method:req.method,headers,body,signal:controller.signal}),{actor,...(access?{workflowAccess:access}:{})}));
-   const outgoing=Object.fromEntries(response.headers);outgoing['Cache-Control']='no-store';outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
+   const request=new Request(url,{method:req.method,headers,body,signal:controller.signal});
+   let response=await staticStudio?.handle(request);
+   const isStatic=!!response;
+   if(!response){
+    lease=acquireRuntime?await acquireRuntime(user):null;
+    response=await withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{})}));
+   }
+   const outgoing=Object.fromEntries(response.headers);if(!isStatic){delete outgoing['cache-control'];outgoing['Cache-Control']='no-store';}outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
    delete outgoing['set-cookie'];res.writeHead(response.status,outgoing);
    if(req.method==='HEAD'||!response.body)return res.end();
    await pipeline(Readable.fromWeb(response.body),res);

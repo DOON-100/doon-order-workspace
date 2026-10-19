@@ -1,5 +1,7 @@
 # 云端 Agent Studio 容器
 
+界面资源在逐次鉴权后独立返回，不等待个人 Agent 运行时或 PostgreSQL 初始化；API、会话与工作流继续使用原有隔离运行时。云端就绪前完成主脚本中文化和压缩预热。静态资源支持 gzip 和私有 ETag 条件缓存，304 同样先验证现有会话，动态 API 不缓存；字体支持 TTF / WOFF / WOFF2。回归：`node --test experiments/agent-server/loading.test.mjs`，覆盖大脚本压缩还原、缓存撤权、冷运行时期间加载界面及字体读取。本说明描述源码能力，不表示线上已更新。
+
 ## 真实业务只读模式（2026-10-19）
 
 设置 `AGENT_DATA_MODE=live-readonly` 后，容器通过原 HTTPS `/api/auth/session` 和固定 `/api/workspace/{source}` GET 视图读取业务，不挂载业务 SQLite 或附件目录。业务请求每次重新验证当前会话、成员与权限，字段目录来自相同的授权响应；模型只获取选定数据集的必要字段，每页最多 20 条、48KiB。账号、集成和凭据字段额外排除。会话 Cookie 只存在于服务器读取闭包，不能由模型指定或写入配置、轨迹及数据库。
