@@ -1,0 +1,10 @@
+# Optional overlay, only after the platform's read-only grant bridge is deployed.
+# Supply the same independent random key file on both services. No login cookies.
+services:
+  agent:
+    environment:
+      DOON_AGENT_SCHEDULES_ENABLED: "1"
+      DOON_AGENT_SCHEDULES_KEY_FILE: /run/secrets/studio_schedule_key
+    secrets: [studio_schedule_key]
+secrets:
+  studio_schedule_key: {file: ./secrets/studio_schedule_key}

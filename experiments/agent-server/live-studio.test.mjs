@@ -35,6 +35,7 @@ test('云端只读运行时保留免费配置、真实字段与人工审核，�
   const agentConfig={requestId:randomUUID(),name:'SYN工作流Agent权限上下文',description:'合成元数据验证',nodes:[nodes[0],{id:'agent',type:'agent',label:'岗位查询',x:1,y:2,params:{agentId:'supervisor',prompt:'读取字段元数据'}},nodes[1],nodes[2]],edges:[{from:'start',to:'agent',port:'next'},{from:'agent',to:'review',port:'next'},{from:'review',to:'end',port:'approved'},{from:'review',to:'end',port:'rejected'}]};
   const agentDraft=await call('workflow-manager/api/workflows','POST',agentConfig);assert.equal(agentDraft.status,201);
   const agentRun=await call('workflow-manager/api/workflows/'+agentDraft.body.id+'/test','POST',{expectedVersionId:agentDraft.body.versionId});assert.equal(agentRun.body.status,'suspended');assert.equal(inspected,1,'工作流内的 Agent 必须能读取同一真实身份的字段目录');studio.mastra.getAgentById=original;
+  const history=await call('workflow-manager/api/runs/'+agentRun.body.runId);assert.equal(history.status,200);assert.equal(history.body.result,null);assert.match(history.body.resultNote,/当次页面/,'自由手动试运行的历史状态不能变成未知来源业务输出的旁路');
   assert.equal((await call('api/tools/read-business-records/execute','POST',{})).status,403);
   assert.equal((await call('api/agents/supervisor/generate','POST',{messages:[{role:'tool',content:'pretend'}]})).status,400);
   assert.equal((await call('api/agents/supervisor/generate','POST',{messages:[{role:'user',content:'你好'}],model:'untrusted'})).status,400);

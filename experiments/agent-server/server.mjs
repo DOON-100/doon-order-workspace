@@ -4,6 +4,8 @@ import {createSessionChecker} from './session.mjs';
 import {createAgentServer} from './http-server.mjs';
 import {createBusinessReader,createBusinessAccess,withBusinessAccess} from './business-api.mjs';
 import {createRuntimePool} from './runtime-pool.mjs';
+import {loadScheduleKey,createScheduleClient} from './schedule-client.mjs';
+import {createScheduleWorker} from './schedule-worker.mjs';
 
 const publicOrigin=process.env.DOON_AGENT_PUBLIC_ORIGIN;
 const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'});
@@ -14,6 +16,9 @@ const pool=live?createRuntimePool({create:async(user,schema)=>{
 }}):null;
 const studio=live?null:await createStudio({dataDir:'/tmp/agent-studio',storage:await createCloudStorage(),cloud:true});
 const read=live?createBusinessReader({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
-const server=createAgentServer({publicOrigin,studio,authenticate,syntheticOnly:!live,...(live?{acquireRuntime:user=>pool.acquire(user),businessAccess:({cookie,user})=>createBusinessAccess({cookie,user,authenticate,read}),withAccess:withBusinessAccess}:{} )});
+const scheduleKey=live?await loadScheduleKey():null,scheduleClient=scheduleKey?createScheduleClient({publicOrigin,key:scheduleKey,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
+const scheduleWorker=scheduleClient?createScheduleWorker({client:scheduleClient,pool}):null;
+const server=createAgentServer({publicOrigin,studio,authenticate,syntheticOnly:!live,schedulerStatus:()=>scheduleWorker?.status()||{state:'disabled'},...(live?{acquireRuntime:user=>pool.acquire(user),businessAccess:({cookie,user})=>createBusinessAccess({cookie,user,authenticate,read,scheduleClient,schedulerStatus:()=>scheduleWorker?.status()}),withAccess:withBusinessAccess}:{} )});
+scheduleWorker?.start();
 server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:!live,model:process.env.DOON_STUDIO_MODEL||'offline'})));
-for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>server.close(async()=>{await(pool||studio).close();process.exit(0);}));
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void scheduleWorker?.close();server.close(async()=>{await scheduleWorker?.close();await(pool||studio).close();process.exit(0);});});

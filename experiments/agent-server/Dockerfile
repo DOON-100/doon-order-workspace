@@ -15,5 +15,6 @@ COPY --chown=node:node mastra-studio/workflow-schedules.html mastra-studio/workf
 COPY --chown=node:node mastra-studio/assets/ ./mastra-studio/assets/
 COPY --chown=node:node agent-server/server.mjs agent-server/http-server.mjs agent-server/session.mjs agent-server/entry.js ./agent-server/
 COPY --chown=node:node agent-server/business-api.mjs agent-server/runtime-pool.mjs ./agent-server/
+COPY --chown=node:node agent-server/schedule-client.mjs agent-server/schedule-worker.mjs ./agent-server/
 USER node
 CMD ["node","agent-server/server.mjs"]

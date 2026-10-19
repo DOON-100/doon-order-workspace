@@ -4,13 +4,13 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {parsePublicOrigin,canEnterStudio} from './session.mjs';
 
-export function createAgentServer({publicOrigin,studio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,maxActive=2}){
+export function createAgentServer({publicOrigin,studio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=2}){
  const origin=parsePublicOrigin(publicOrigin);let active=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
   let counted=false,lease;
   try{
-   if(req.url==='/health'&&req.method==='GET'){const ok=await health();return json(res,ok?200:503,{ok,syntheticOnly});}
+   if(req.url==='/health'&&req.method==='GET'){const ok=await health();return json(res,ok?200:503,{ok,syntheticOnly,...(schedulerStatus?{scheduler:schedulerStatus()}: {})});}
    if(req.headers.host!==origin.host)return json(res,403,{error:'访问地址未获授权。'});
    const url=new URL(req.url,origin.origin);
    if(url.origin!==origin.origin)return json(res,403,{error:'访问地址未获授权。'});

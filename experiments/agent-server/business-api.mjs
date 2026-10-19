@@ -5,6 +5,9 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import {parsePublicOrigin,sessionCookie,canEnterStudio} from './session.mjs';
 import {workflowSources} from '../mastra-studio/workflow-sources.mjs';
 import {projectedDatasets,valueAt} from '../mastra-studio/workflow-triggers.mjs';
+import {businessProjection,liveDataset,sameLiveEvent,readableLiveHistory,queryForEvent} from '../mastra-studio/workflow-live-data.mjs';
+import {scheduleAuthorization} from './schedule-client.mjs';
+export {businessProjection} from '../mastra-studio/workflow-live-data.mjs';
 
 const context=new AsyncLocalStorage();
 export const withBusinessAccess=(access,operation)=>context.run(access,operation);
@@ -39,13 +42,7 @@ export function createBusinessReader({publicOrigin,connectHost='host.docker.inte
 
 // These fields are transport/account metadata, not business records. The
 // original platform read handler remains authoritative for row/field grants.
-const privateKey=key=>['me','capabilities','integration','businessTeamScope'].includes(key)||/(?:password|passwd|secret|token|cookie|authorization|credential|api.?key|session)/i.test(key);
-export function businessProjection(value){
- if(Array.isArray(value))return value.map(businessProjection);
- if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([key])=>!privateKey(key)&&!['__proto__','prototype','constructor'].includes(key)).map(([key,item])=>[key,businessProjection(item)]));
- return value;
-}
-export function createBusinessAccess({cookie,user,authenticate,read,now=()=>Date.now()}){
+export function createBusinessAccess({cookie,user,authenticate,read,scheduleClient,schedulerStatus,now=()=>Date.now()}){
  const actorId=String(user.identity?.id||user.username);
  async function verifyActor(){
   const current=await authenticate(cookie);
@@ -65,7 +62,7 @@ export function createBusinessAccess({cookie,user,authenticate,read,now=()=>Date
   if(source){const body=await authorized(source,scope);return{source,scope,datasets:projectedDatasets(body),mode:'authorized',eventsEnabled:false,revision:body.revision||0,readAt:new Date(now()).toISOString(),scopeOptions:{customers:(body.customers||body.customerAccounts||[]).filter(row=>typeof row.id==='string').map(row=>({id:row.id,label:row.customer||row.name||row.id}))}};}
   const modules=[],unavailable=[];let index=0;
   await Promise.all(Array.from({length:2},async()=>{while(index<workflowSources.length){const item=workflowSources[index++];try{const body=await authorized(item.id),datasets=projectedDatasets(body);if(datasets.length)modules.push({...item,datasetCount:datasets.length,fieldCount:datasets.reduce((sum,d)=>sum+d.fields.length,0)});}catch(error){if(error.status===401)throw error;if(![400,403,404].includes(error.status))unavailable.push({source:item.id,status:error.status||503});}}}));
-  return{modules:modules.sort((a,b)=>a.id.localeCompare(b.id)),unavailable,mode:'authorized',eventsEnabled:false,readAt:new Date(now()).toISOString(),message:'实时读取当前账号可见的业务 API；unavailable 中的模块本次读取失败，不能当作没有业务数据。后台自动调度尚未启用。'};
+  return{modules:modules.sort((a,b)=>a.id.localeCompare(b.id)),unavailable,mode:'authorized',eventsEnabled:false,readAt:new Date(now()).toISOString(),message:'实时读取当前账号可见的业务 API；unavailable 中的模块本次读取失败，不能当作没有业务数据。'+(scheduleClient?'后台定时任务需在定时任务页单独启用。':'后台自动调度尚未启用。')};
  }
  async function query({source,scope={},dataset,offset=0,limit=10,id,query,fields}){
   await verifyActor();
@@ -79,5 +76,12 @@ export function createBusinessAccess({cookie,user,authenticate,read,now=()=>Date
   if(Buffer.byteLength(JSON.stringify(receipt))>48*1024)throw fail('本页内容过多，请指定必要的 fields 字段或缩小 limit。',413);
   return receipt;
  }
- return{syntheticOnly:false,catalog,query,poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:async()=>false};
+ async function visible(event,verify=false){
+  await verifyActor();if(!event?.triggerConfig||event.simulation||event.syntheticOnly!==false)return false;
+  const trigger=event.triggerConfig,view=liveDataset(await authorized(trigger.source,trigger.scope),trigger);
+  return verify?sameLiveEvent(event,trigger,view.rows):view.rows.some(row=>row.id===event.recordId&&['customerId','customerAccountId','customer','projectId','orderId','lineId','supplierId'].every(k=>row[k]===event.after[k])&&readableLiveHistory(event.after,row));
+ }
+ const access={syntheticOnly:false,catalog,query,...(scheduleClient?scheduleAuthorization(scheduleClient,cookie,schedulerStatus):{scheduleStatus:async()=>({ready:false})}),poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:event=>visible(event,true),visible:event=>visible(event)};
+ access.withEvent=(event,operation)=>withBusinessAccess({...access,query:async input=>query(queryForEvent(input,event))},operation);
+ return access;
 }

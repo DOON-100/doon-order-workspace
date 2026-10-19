@@ -100,20 +100,40 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   return proposalDetail(row);
  });
  async function scheduleList(actor,access){
-  const metadata=await sourceCatalog(access),runtimeReady=metadata.mode==='authorized'&&metadata.eventsEnabled===true&&access?.syntheticOnly===true,configs=new Map();for(const row of await records('config'))configs.set(row.entityId,row);
+  const metadata=access?.scheduleStatus?await access.scheduleStatus():await sourceCatalog(access),runtimeReady=access?.scheduleStatus?metadata.ready===true:metadata.mode==='authorized'&&metadata.eventsEnabled===true&&access?.syntheticOnly===true,configs=new Map();for(const row of await records('config'))configs.set(row.entityId,row);
   const schedules=[];
   for(const saved of configs.values()){
    if(!canReadConfig(saved,actor))continue;
    const published=saved.payload.publishedVersionId?await requireVersion(saved.payload.publishedVersionId):null,activeTrigger=published?.payload.config.nodes.find(n=>n.type==='start')?.params.trigger,draftTrigger=saved.payload.config.nodes.find(n=>n.type==='start')?.params.trigger;
    if(activeTrigger?.mode!=='schedule'&&draftTrigger?.mode!=='schedule')continue;
-   const row=activeTrigger?.mode==='schedule'?published:saved,trigger=activeTrigger?.mode==='schedule'?activeTrigger:draftTrigger,control=await latest('schedule-control',saved.entityId),isPublished=row.versionId===saved.payload.publishedVersionId,enabled=isPublished&&(!control||control.payload.enabled&&control.payload.configVersionId===row.versionId),slot=scheduleSlot(trigger.schedule,now()),receipt=await latest('schedule-slot','schedule-slot-'+hash([row.versionId,slot.day]));
-   let readable=true;if(access)try{await checkedTrigger(row.payload.config,access);}catch{readable=false;}
-   const state=!isPublished?'draft':control&&control.payload.configVersionId!==row.versionId?'version-changed':!enabled?'paused':!runtimeReady?'unavailable':!readable?'blocked':'active';
+   const row=activeTrigger?.mode==='schedule'?published:saved,trigger=activeTrigger?.mode==='schedule'?activeTrigger:draftTrigger,control=await latest('schedule-control',saved.entityId),isPublished=row.versionId===saved.payload.publishedVersionId,expired=!!control?.payload.expiresAt&&control.payload.expiresAt<=now(),enabled=isPublished&&!expired&&(!control?!realData:control.payload.enabled&&control.payload.configVersionId===row.versionId&&(!realData||!!control.payload.grantId)),slot=scheduleSlot(trigger.schedule,now()),receipt=await latest('schedule-slot','schedule-slot-'+hash([row.versionId,slot.day])),attempt=await latest('schedule-attempt',saved.entityId);
+   let readable=true,sourceDetails;if(access)try{sourceDetails=await checkedTrigger(row.payload.config,access);}catch{readable=false;}
+   const state=!isPublished?'draft':control&&control.payload.configVersionId!==row.versionId?'version-changed':expired?'expired':!runtimeReady?'unavailable':!enabled?'paused':!readable?'blocked':'active';
    const runs=nextScheduleRuns(trigger.schedule,now()),activated=Math.max(Date.parse(row.payload.activatedAt||row.createdAt),Date.parse(control?.payload.at||row.createdAt));
    if(state==='active'&&slot.due&&!receipt&&Date.parse(slot.dueAt)>activated)runs.unshift(slot.dueAt);
-   schedules.push({id:saved.entityId,name:row.payload.config.name,versionId:row.versionId,hasDraft:saved.versionId!==row.versionId,schedule:validateSchedule(trigger.schedule),summary:describeSchedule(trigger.schedule),nextRuns:runs.slice(0,3),state,enabled:!!enabled,controlVersionId:control?.versionId||null,canEnable:isPublished&&runtimeReady&&readable&&row.payload.ownerId===actor?.id,lastCheck:receipt?.payload||null,editUrl:'/studio/workflow-manager/?edit='+encodeURIComponent(saved.entityId)});
+   schedules.push({id:saved.entityId,name:row.payload.config.name,versionId:row.versionId,hasDraft:saved.versionId!==row.versionId,requiresGrant:realData,sourceLabel:workflowSources.find(s=>s.id===trigger.source)?.label||trigger.source,datasetLabel:sourceDetails?.datasets.find(d=>d.path===trigger.dataset)?.label||trigger.dataset,schedule:validateSchedule(trigger.schedule),summary:describeSchedule(trigger.schedule),nextRuns:runs.slice(0,3),state,enabled:!!enabled,controlVersionId:control?.versionId||null,canEnable:isPublished&&runtimeReady&&readable&&row.payload.ownerId===actor?.id,expiresAt:control?.payload.expiresAt||null,lastCheck:receipt?.payload||null,lastAttempt:attempt?.payload||null,resultsUrl:'/studio/workflow-manager/?edit='+encodeURIComponent(saved.entityId)+'&view=results',editUrl:'/studio/workflow-manager/?edit='+encodeURIComponent(saved.entityId)});
   }
-  return{schedules,runtimeReady,message:runtimeReady?'后台调度已接通；执行时仍会核对当前权限。':'当前实例未接通自动调度。可设置并保存时间，不能宣称任务已经在运行。'};
+  return{schedules,runtimeReady,worker:metadata.worker||null,message:runtimeReady?(metadata.worker?.state==='blocked'?'后台最近一次检查失败，请核对任务状态与运行记录；已保存的计划仍保留。':'后台调度已接通；执行时仍会核对当前权限。'):'当前实例未接通自动调度。可设置并保存时间，不能宣称任务已经在运行。'};
+ }
+ async function runRecords(actor,access,{workflowId,runId}={}){
+  const rows=new Map();for(const r of [...await records('run'),...await records('delivery')])if(r.payload.ownerId===actor?.id){const p=r.payload,execution=p.execution||{},runId=execution.runId||p.runId;if(runId)rows.set(runId,{...p,...execution,runId,createdAt:r.createdAt});}
+  for(const review of await records('review')){const p=review.payload,run=rows.get(p.runId);if(run&&p.execution)Object.assign(run,p.execution);}
+  const visible=[];for(const row of [...rows.values()].sort((a,b)=>b.createdAt.localeCompare(a.createdAt))){
+   if(workflowId&&row.workflowId!==workflowId||runId&&row.runId!==runId)continue;
+   // A free-form manual Agent can read several sources without a single bound
+   // trigger. Preserve the stored run, but do not expose unproven historical
+   // business output through this new results API after permissions may change.
+   if(realData&&row.preview){row.result=null;if(row.execution)row.execution={...row.execution,result:null};row.resultNote='手动试运行的详细输出在当次页面查看；历史列表保留状态。自动运行的结果按触发来源重新鉴权后展示。';}
+   if(row.triggerEvent&&!row.triggerEvent.simulation){try{if(!(access?.visible?await access.visible(row.triggerEvent):await access?.verify?.(row.triggerEvent)))continue;}catch{continue;}}
+   visible.push(row);
+   if(visible.length>=100)break;
+  }
+  return visible.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+ }
+ async function startPreview(row,actor,workflow,triggerEvent){
+  const run=await workflow.createRun(),receipt=await serial(()=>append('run',run.runId,{workflowId:row.entityId,workflowName:row.payload.config.name,configVersionId:row.versionId,ownerId:actor?.id,runId:run.runId,preview:true,status:'starting',...(triggerEvent?{triggerEvent}:{})},null));
+  try{const result=await run.start({inputData:{}}),execution={status:result.status,runId:run.runId,result:result.result||null};await serial(()=>append('run',run.runId,{...receipt.payload,...execution},receipt));return{...execution,steps:result.steps};}
+  catch(error){await serial(()=>append('run',run.runId,{...receipt.payload,status:'needs-attention'},receipt));throw error;}
  }
  async function ensureReview({row,node,runId,engineId,preview,inputData}){
   return serial(async()=>{
@@ -169,7 +189,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   const currentConfig=await requireConfig(task.workflowId),currentVersion=task.preview?currentConfig.versionId:currentConfig.payload.publishedVersionId;
   if(!applied&&(currentVersion!==task.configVersionId||sourceFingerprint()!==task.sourceFingerprint||new Date(task.validUntil).getTime()<=now()))throw fail('流程版本、来源或审核有效期已变化，不能继续旧审批。请重新预览。',409);
   if(!applied&&task.payload.trigger&&!task.payload.trigger.simulation&&(!access?.verify||!await access.verify(task.payload.trigger)))throw fail('执行前来源或读取权限已变化，不能继续旧审批。',409);
-  const run=applied?null:await workflow.createRun({runId:task.runId}),result=applied?saved:await run.resume({step:task.nodeId,resumeData:{}}),execution={status:result.status,runId:task.runId,result:result.result||null};
+  const run=applied?null:await workflow.createRun({runId:task.runId}),resume=()=>run.resume({step:task.nodeId,resumeData:{}}),result=applied?saved:task.payload.trigger&&!task.payload.trigger.simulation&&access?.withEvent?await access.withEvent(task.payload.trigger,resume):await resume(),execution={status:result.status,runId:task.runId,result:result.result||null};
   await serial(async()=>{const current=await latest('review',task.taskId);if(!current.payload.execution)await append('review',task.taskId,{...current.payload,execution},current);});return execution;
  }
  function resumeTask(record,access){const id=record.entityId;if(resuming.has(id))return resuming.get(id);const promise=performResume(record,access).finally(()=>resuming.delete(id));resuming.set(id,promise);return promise;}
@@ -195,6 +215,8 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   try{
    if(['GET','HEAD'].includes(request.method)){
     if(route==='schedules')return json(await scheduleList(actor,workflowAccess));
+    if(route==='runs'){const rows=await runRecords(actor,workflowAccess,{workflowId:url.searchParams.get('workflowId')});return json({runs:rows.map(({result,triggerEvent,execution,...r})=>r)});}
+    const runDetail=route.match(/^runs\/([\w-]+)$/);if(runDetail){const row=(await runRecords(actor,workflowAccess,{runId:runDetail[1]}))[0];if(!row)throw fail('运行记录不存在或当前不可见。',404);return json(row);}
     const proposal=route.match(/^proposals\/(proposal-[\w-]+)$/);if(proposal)return json(proposalDetail(await requireProposal(proposal[1],actor)));
     if(route==='sources')return json({...await sourceCatalog(workflowAccess,url.searchParams.get('source')||undefined,Object.fromEntries([...url.searchParams].filter(([k])=>['customerId','projectId','id','teamId'].includes(k)))),operators:triggerOperators,defaults:defaultTrigger()});
     if(route==='deliveries')return json({deliveries:(await records('delivery')).filter(r=>r.payload.ownerId===actor?.id).map(r=>({id:r.entityId,workflowId:r.payload.workflowId,eventId:r.payload.eventId,recordId:r.payload.recordId,runId:r.payload.execution?.runId||r.payload.runId,status:r.payload.execution?.status||r.payload.status})).slice(-100).reverse()});
@@ -213,8 +235,9 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     const row=await requireVersion(saved.payload.publishedVersionId),control=await latest('schedule-control',saved.entityId),trigger=row.payload.config.nodes.find(n=>n.type==='start')?.params.trigger;
     if(row.versionId!==body.expectedVersionId||(control?.versionId||null)!==body.expectedControlVersionId)throw fail('定时任务版本或状态已变化，请刷新后重试。',409);
     if(trigger?.mode!=='schedule')throw fail('当前发布版本不是定时工作流。',409);
-    if(body.enabled){const metadata=await checkedTrigger(row.payload.config,workflowAccess);if(!workflowAccess?.syntheticOnly||metadata?.mode!=='authorized'||!metadata.eventsEnabled)throw fail('此实例尚未接通后台调度，暂不能启用。',409);}
-    await append('schedule-control',saved.entityId,{ownerId:actor.id,configVersionId:row.versionId,enabled:body.enabled,at:new Date(now()).toISOString(),actor:{id:actor.id,name:actor.name}},control);
+    let grant={};if(body.enabled){const metadata=await checkedTrigger(row.payload.config,workflowAccess);if(realData){if(!workflowAccess?.authorizeSchedule||!(await workflowAccess.scheduleStatus()).ready)throw fail('此实例尚未接通后台调度，暂不能启用。',409);grant=await workflowAccess.authorizeSchedule({workflowId:saved.entityId,configVersionId:row.versionId,trigger});}else if(!workflowAccess?.syntheticOnly||metadata?.mode!=='authorized'||!metadata.eventsEnabled)throw fail('此实例尚未接通后台调度，暂不能启用。',409);}
+    await append('schedule-control',saved.entityId,{ownerId:actor.id,configVersionId:row.versionId,enabled:body.enabled,...grant,at:new Date(now()).toISOString(),actor:{id:actor.id,name:actor.name}},control);
+    if(!body.enabled&&control?.payload.grantId)await workflowAccess?.revokeSchedule?.({workflowId:saved.entityId,grantId:control.payload.grantId});
     return json({id:saved.entityId,enabled:body.enabled});
    });
    const proposalAction=route.match(/^proposals\/(proposal-[\w-]+)\/(confirm|cancel)$/);
@@ -255,14 +278,14 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     // enables the business event bridge or changes the published rule.
     const temporary={...row,payload:{...row.payload,config:{...row.payload.config,nodes:row.payload.config.nodes.map(n=>n.type==='start'?{...n,params:{trigger}}:n)}}};
     if(activeTests>=2)throw fail('当前试运行较多，请稍后重试。',429);activeTests++;
-    try{const workflow=compile(temporary,{preview:true,engineId:'preview-'+row.versionId,triggerEvent:event}),run=await workflow.createRun(),execution=await run.start({inputData:{}});return json({...result,simulation:true,execution:{status:execution.status,runId:run.runId,result:execution.result||null}});}finally{activeTests--;}
+    try{const workflow=compile(temporary,{preview:true,engineId:'preview-'+row.versionId,triggerEvent:event}),execution=await startPreview(row,actor,workflow,event);return json({...result,simulation:true,execution});}finally{activeTests--;}
    }
    const decision=route.match(/^reviews\/([\w-]+)\/decision$/);if(decision&&request.method==='POST')return await decide(request,decision[1],actor,workflowAccess);
    const match=route.match(/^workflows(?:\/([\w-]+))?(?:\/(publish|restore|test))?$/);if(!match)throw fail('未找到入口。',404);const [,key,action]=match;
    if(key&&action==='test'&&request.method==='POST'){
     const body=await readBody(request,z.object({expectedVersionId:id}).strict()),row=await expected(key,body.expectedVersionId);await checked(row.payload.config);
     if(activeTests>=2)throw fail('当前试运行较多，请稍后重试。',429);activeTests++;
-    try{const workflow=compile(row,{preview:true,engineId:'preview-'+row.versionId}),run=await workflow.createRun(),result=await run.start({inputData:{}});return json({status:result.status,runId:run.runId,result:result.result||null,steps:result.steps});}finally{activeTests--;}
+    try{return json(await startPreview(row,actor,compile(row,{preview:true,engineId:'preview-'+row.versionId})));}finally{activeTests--;}
    }
    return await serial(async()=>{
     if(!key&&request.method==='POST'){
@@ -284,7 +307,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
  if(!realData&&!await latest('config','followup'))await append('config','followup',{config:{name:'采购欠料巡检与内部草稿',description:'检查固定合成采购条目，生成内部草稿。',...workflowTemplate()},runtimeId:'synthetic-procurement-followup',message:'登记原流程基线'},null,true);
  const configs=await records('config'),map=new Map();for(const row of configs)map.set(row.entityId,row);for(const row of map.values())if(row.payload.publishedVersionId)await install(row);
  const has=async key=>(await records('config')).some(row=>row.entityId===key||row.payload.runtimeId===key);
- async function processTriggers(accessForOwner){
+ async function processTriggers(accessForOwner,{runWithAccess=(_,operation)=>operation()}={}){
   if(processingTriggers)return[];processingTriggers=true;const results=[];
   try{
    const latestConfigs=new Map();for(const row of await records('config'))latestConfigs.set(row.entityId,row);
@@ -293,26 +316,34 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     if(!trigger||trigger.mode==='manual'||!row.payload.ownerId||row.payload.triggerMode!=='authorized')continue;
     try{
      const control=trigger.mode==='schedule'?await latest('schedule-control',row.entityId):null,slot=trigger.mode==='schedule'?scheduleSlot(trigger.schedule,now()):null,slotId=slot?'schedule-slot-'+hash([row.versionId,slot.day]):null;
-     if(slot&&(!slot.due||control&&(!control.payload.enabled||control.payload.configVersionId!==row.versionId)||await latest('schedule-slot',slotId)))continue;
-     const access=await accessForOwner(row.payload.ownerId);if(!access?.syntheticOnly)continue;
+     if(slot&&(!slot.due||realData&&(!control?.payload.enabled||!control.payload.grantId||control.payload.expiresAt<=now())||control&&(!control.payload.enabled||control.payload.configVersionId!==row.versionId)||await latest('schedule-slot',slotId)))continue;
+     const access=await accessForOwner(row.payload.ownerId,{row,control,trigger});if(!access?.syntheticOnly&&!(realData&&slot&&access?.scheduledReadOnly===true))continue;
+     await runWithAccess(access,async()=>{
      await checkedTrigger(row.payload.config,access);
-     const cursorId='trigger-cursor-'+hash(row.versionId),cursor=await latest('cursor',cursorId),page=trigger.mode==='schedule'?await access.schedule(trigger):await access.poll(trigger,cursor?.payload.cursor??row.payload.activationCursor);
-     if(!page.enabled)continue;
-     if(slot&&(page.day!==slot.day||Date.parse(slot.dueAt)<=Math.max(Date.parse(row.payload.activatedAt),Date.parse(control?.payload.at||row.payload.activatedAt))))continue;
+     const cursorId='trigger-cursor-'+hash(row.versionId),cursor=await latest('cursor',cursorId),batch=slot?await latest('schedule-batch',slotId):null;
+     if(slot&&Date.parse(slot.dueAt)<=Math.max(Date.parse(row.payload.activatedAt),Date.parse(control?.payload.at||row.payload.activatedAt)))return;
+     const page=batch?.payload.page||(trigger.mode==='schedule'?await access.schedule(trigger):await access.poll(trigger,cursor?.payload.cursor??row.payload.activationCursor));
+     if(!page.enabled)return;
+     if(slot&&page.day!==slot.day)return;
+     if(slot&&!batch)await serial(()=>append('schedule-batch',slotId,{workflowId:row.entityId,ownerId:row.payload.ownerId,page},null));
      let complete=true;for(const candidate of page.events.filter(e=>e.matched)){
       const deliveryId='trigger-delivery-'+hash([row.versionId,candidate.id,candidate.recordId]),previous=await latest('delivery',deliveryId);if(previous?.payload.execution)continue;
-      const event={...candidate,scope:trigger.scope,syntheticOnly:true,triggerConfig:trigger},runId='trigger-'+hash(deliveryId).slice(0,40),workflow=compile(row,{engineId:'trigger-'+row.versionId,triggerEvent:event});
+      const event={...candidate,scope:trigger.scope,syntheticOnly:access.syntheticOnly===true,triggerConfig:validateTrigger(trigger)},runId='trigger-'+hash(deliveryId).slice(0,40),workflow=compile(row,{engineId:'trigger-'+row.versionId,triggerEvent:event});
       if(previous){const known=await workflow.getWorkflowRunById(runId);if(known&&['success','suspended','failed','canceled'].includes(known.status)){await serial(()=>append('delivery',deliveryId,{...previous.payload,execution:{status:known.status,runId,result:known.result||null}},previous));continue;}complete=false;results.push({workflowId:row.entityId,status:'needs-attention',deliveryId});continue;}
       if(!await access.verify(event)){await serial(()=>append('delivery',deliveryId,{workflowId:row.entityId,ownerId:row.payload.ownerId,eventId:candidate.id,recordId:candidate.recordId,execution:{status:'source-changed',runId:null}},null));results.push({workflowId:row.entityId,status:'source-changed',eventId:candidate.id});continue;}
-      const receipt=await serial(()=>append('delivery',deliveryId,{workflowId:row.entityId,configVersionId:row.versionId,ownerId:row.payload.ownerId,eventId:candidate.id,recordId:candidate.recordId,runId,status:'starting'},null));
-      try{const run=await workflow.createRun({runId}),output=await run.start({inputData:{}}),execution={status:output.status,runId,result:output.result||null};await serial(()=>append('delivery',deliveryId,{...receipt.payload,execution},receipt));results.push({workflowId:row.entityId,status:output.status,deliveryId});}catch{complete=false;results.push({workflowId:row.entityId,status:'needs-attention',deliveryId});}
+      const receipt=await serial(async()=>{const current=await requireConfig(row.entityId),currentControl=slot?await latest('schedule-control',row.entityId):null;if(current.payload.publishedVersionId!==row.versionId||slot&&(currentControl?.versionId||null)!==(control?.versionId||null)||await latest('delivery',deliveryId))return null;return append('delivery',deliveryId,{workflowId:row.entityId,workflowName:row.payload.config.name,configVersionId:row.versionId,ownerId:row.payload.ownerId,eventId:candidate.id,recordId:candidate.recordId,triggerEvent:event,runId,preview:false,status:'starting'},null);});
+      if(!receipt){complete=false;break;}
+      try{const run=await workflow.createRun({runId}),output=await runWithAccess(access.forEvent?.(event)||access,()=>run.start({inputData:{}})),execution={status:output.status,runId,result:output.result||null};await serial(()=>append('delivery',deliveryId,{...receipt.payload,execution},receipt));results.push({workflowId:row.entityId,status:output.status,deliveryId});}catch{complete=false;results.push({workflowId:row.entityId,status:'needs-attention',deliveryId});}
      }
      if(complete&&trigger.mode==='change'&&page.cursor>(cursor?.payload.cursor??row.payload.activationCursor))await serial(()=>append('cursor',cursorId,{cursor:page.cursor},cursor));
      if(complete&&slot)await serial(()=>append('schedule-slot',slotId,{ownerId:row.payload.ownerId,workflowId:row.entityId,configVersionId:row.versionId,day:slot.day,dueAt:slot.dueAt,checkedAt:new Date(now()).toISOString(),matched:page.events.filter(e=>e.matched).length},null));
-    }catch{results.push({workflowId:row.entityId,status:'blocked'});}
+     if(slot)await attempt(row,complete?'checked':'needs-attention');
+     });
+    }catch(error){results.push({workflowId:row.entityId,status:'blocked'});if(trigger.mode==='schedule')await attempt(row,'blocked',error.status===413?'limit-exceeded':[401,403].includes(error.status)?'authorization-unavailable':'source-unavailable');}
    }
    return results;
   }finally{processingTriggers=false;}
  }
+ async function attempt(row,status,error=null){await serial(async()=>{const old=await latest('schedule-attempt',row.entityId),day=scheduleSlot(row.payload.config.nodes.find(n=>n.type==='start').params.trigger.schedule,now()).day;if(old?.payload.status===status&&old.payload.error===error&&old.payload.day===day&&old.payload.configVersionId===row.versionId)return;await append('schedule-attempt',row.entityId,{ownerId:row.payload.ownerId,configVersionId:row.versionId,status,error,day,checkedAt:new Date(now()).toISOString()},old);});}
  return{handle,has,compile,records,processTriggers,previewDraft,sourceCatalog,agentCatalog:()=>Object.entries(mastra.listAgents()).map(([id,agent])=>({id,name:agent.name}))};
 }

@@ -46,3 +46,6 @@
 !agent-server/entry.js
 !agent-server/business-api.mjs
 !agent-server/runtime-pool.mjs
+!agent-server/schedule-client.mjs
+!agent-server/schedule-worker.mjs
+!mastra-studio/workflow-live-data.mjs

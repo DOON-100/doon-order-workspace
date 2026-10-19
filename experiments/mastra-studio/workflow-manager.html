@@ -16,7 +16,7 @@
   </footer></aside>
   <main class="wm-main">
    <header class="wm-breadcrumb"><div><a href="/studio/workflows">工作流</a><span> / </span><strong>编辑与管理</strong></div><a class="wm-button" href="/studio/workflow-schedules/">定时任务</a></header>
-   <div class="wm-topbar"><div class="wm-tabs" role="tablist" aria-label="工作流视图"><button role="tab" aria-selected="true" data-view="design">设计流程</button><button role="tab" aria-selected="false" data-view="reviews" id="reviews-tab">人工审核</button><button role="tab" aria-selected="false" data-view="results">试运行结果</button><button role="tab" aria-selected="false" data-view="deliveries">触发记录</button></div><span id="actor-status"></span></div>
+   <div class="wm-topbar"><div class="wm-tabs" role="tablist" aria-label="工作流视图"><button role="tab" aria-selected="true" data-view="design">设计流程</button><button role="tab" aria-selected="false" data-view="reviews" id="reviews-tab">人工审核</button><button role="tab" aria-selected="false" data-view="results">运行结果</button><button role="tab" aria-selected="false" data-view="deliveries">触发记录</button></div><span id="actor-status"></span></div>
    <div id="page-status" role="status" aria-live="polite">正在读取工作流…</div>
    <section id="design-view" class="wm-design">
     <aside class="wm-library"><header><h2>工作流</h2><button id="new-workflow" class="wm-icon" aria-label="新建工作流">＋</button></header><label class="wm-search">查找工作流<input type="search" id="workflow-search" placeholder="搜索名称"></label><div id="workflow-list"></div></aside>
@@ -29,7 +29,7 @@
     <aside class="wm-inspector"><header><h2>节点与流程配置</h2></header><div class="wm-inspector-body"><section id="node-inspector"><p>点击画布中的节点，配置参数和连线。</p></section><section><h3>工作流信息</h3><label>工作流名称<input id="workflow-name" maxlength="80"></label><label>说明<textarea id="workflow-description" rows="2" maxlength="500"></textarea></label></section><section><h3>历史版本</h3><select id="history-version" aria-label="历史版本"></select><button id="restore-version">恢复为新草稿</button></section></div></aside>
    </section>
    <section id="reviews-view" class="wm-panel" hidden><header><div><h1>人工审核</h1><p>流程在审核节点暂停。通过或拒绝后走对应分支，暂缓继续等待。</p></div><button id="refresh-reviews">刷新审核</button></header><div id="review-list"></div></section>
-   <section id="results-view" class="wm-panel" hidden><header><div><h1>试运行结果</h1><p id="run-status">尚未试运行。试运行使用保存后的草稿和合成工具。</p></div><button id="show-review-results">查看人工审核</button></header><pre id="run-result"></pre></section>
+   <section id="results-view" class="wm-panel" hidden><header><div><h1>运行结果</h1><p id="run-status">选择一条运行记录查看结果、状态及运行编号。</p></div><div><button id="refresh-runs">刷新运行记录</button><button id="show-review-results">查看人工审核</button></div></header><div id="run-list"></div><pre id="run-result"></pre></section>
    <section id="deliveries-view" class="wm-panel" hidden><header><div><h1>触发记录</h1><p>只显示本人规则的投递与执行状态。没有记录不等于已经启用监听。</p></div><button id="refresh-deliveries">刷新记录</button></header><div id="delivery-list"></div></section>
   </main>
  </div>

@@ -12,6 +12,7 @@ import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {agentPlatformConfig,createAgentPlatform} from './agent-platform.mjs';
 import {readAgentPurchase} from './agent-policy.mjs';
+import {scheduleBridgeConfig,createScheduleBridge} from './agent-schedules.mjs';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
@@ -46,6 +47,16 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
+const scheduleConfig=await scheduleBridgeConfig();
+if(scheduleConfig&&(supplierOnly||reviewMode))throw Error('此入口不允许启用后台只读调度');
+const scheduleBridge=scheduleConfig?createScheduleBridge({db,config:scheduleConfig,currentForOwner:async ownerId=>{
+ const member=runtime.records().find(r=>r.kind==='member'&&r.userId===ownerId),account=member&&db.prepare('SELECT id,username,must_change FROM local_accounts WHERE member_id=?').get(member.id);
+ return member&&account?{member,account,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}}:null;
+},readView:async(current,action,scope)=>{
+ const url=new URL('/api/workspace/'+action,'http://127.0.0.1:'+port);for(const [key,value] of Object.entries(scope))if(value)url.searchParams.set(key,value);
+ const response=await context.run(current,()=>api.GET(new Request(url),{params:Promise.resolve({action})}));
+ if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw Object.assign(new Error('当前业务视图不可用。'),{status:response.status===403?403:503});return response.json();
+}}):null;
 function workflowAccessFor(current,origin){
  const call=async(action,body,query={})=>{const url=new URL('/api/workspace/'+action,origin);for(const [k,v] of Object.entries(query))if(v)url.searchParams.set(k,v);const request=new Request(url,{method:body===undefined?'GET':'POST',headers:{Origin:url.origin,'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})});const response=await context.run(current,()=>api[body===undefined?'GET':'POST'](request,{params:Promise.resolve({action})}));const result=await response.json();if(!response.ok)throw Object.assign(new Error(result.error||'授权数据视图不可用'),{status:response.status});return result;};
  return{syntheticOnly:!!studioSettings&&process.env.DOON_SYNTHETIC_ONLY==='1',catalog:(source,scope={})=>call('workflow-field-catalog',undefined,{...(source?{source}:{}),...scope}),poll:(trigger,cursor)=>call('workflow-trigger-events',{trigger,cursor}),schedule:trigger=>call('workflow-trigger-schedule',{trigger}),verify:async event=>(await call('workflow-trigger-verify',{trigger:event.triggerConfig,event})).valid};
@@ -107,7 +118,10 @@ async function handle(req,res){
   else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{}),...(studioSettings?{studioSandbox:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
-   if(url.pathname.startsWith('/api/agent-platform/')){
+   if(url.pathname.startsWith('/api/agent-schedules/')){
+    if(!scheduleBridge)fail('后台只读调度尚未启用。',404);
+    response=await scheduleBridge.handle(request,current);
+   }else if(url.pathname.startsWith('/api/agent-platform/')){
     if(!agentPlatform)fail('协作接口尚未启用。',404);
     response=await agentPlatform.handle(request,current);
    }else if(url.pathname.startsWith('/api/auth/')){
