@@ -6,7 +6,7 @@ function update(){
  if(!allowed){if(ours)ours.replaceWith(...ours.childNodes);return;}
  if(ours||container.querySelector('a'))return;
  const image=container.querySelector('img');if(!image)return;
- const link=document.createElement('a');link.href='/studio/';link.target='_blank';link.rel='noopener noreferrer';link.title='打开 Agent Studio';link.setAttribute('aria-label','打开 Agent Studio（新标签页）');link.dataset.agentStudioEntry='1';link.style.cssText='display:inline-flex;line-height:0;max-width:100%;';image.replaceWith(link);link.append(image);
+ const link=document.createElement('a');link.href='/studio/';link.target='_blank';link.rel='noopener noreferrer';link.title='打开 agent 工作台';link.setAttribute('aria-label','打开 agent 工作台（新标签页）');link.dataset.agentStudioEntry='1';link.style.cssText='display:inline-flex;line-height:0;max-width:100%;';image.replaceWith(link);link.append(image);
 }
 async function check(){
  if(checking)return;checking=true;

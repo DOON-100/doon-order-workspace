@@ -4,7 +4,7 @@ import {mountWorkflowPreviews} from '/studio/workflow-preview/app.js';
 let pending=false;
 function mountList(){
  const existing=document.querySelector('.doon-agent-actions:not(.doon-workflow-actions)');
- const views=/^\/studio\/agents\/?$/.test(location.pathname)?document.querySelector('#root [aria-label="Agents view"]'):null;
+ const views=/^\/studio\/agents\/?$/.test(location.pathname)?document.querySelector('#root [aria-label="agent 视图"],#root [aria-label="Agents view"]'):null;
  if(!views){existing?.remove();return;}
  if(existing?.parentElement===views.parentElement&&existing.nextElementSibling===views)return;
  existing?.remove();
@@ -16,7 +16,7 @@ function mountList(){
 }
 function mountPrompt(){
  const agent=location.pathname.match(/^\/studio\/agents\/([\w-]+)(?:\/|$)/)?.[1];
- const title=agent?Array.from(document.querySelectorAll('#root h3')).find(e=>e.textContent==='System Prompt'):null;
+ const title=agent?Array.from(document.querySelectorAll('#root h3')).find(e=>['系统 prompt','System Prompt'].includes(e.textContent)):null;
  const existing=document.querySelector('.doon-prompt-edit');
  if(!title){existing?.remove();return;}
  const href='/studio/manage/?edit='+encodeURIComponent(agent);

@@ -7,13 +7,14 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs",
+    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs",
     "test:workflows": "node --test workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs",
     "test:manager": "node --test agent-manager.test.mjs prompt-reference.test.mjs",
     "test:editor": "node --test editor.test.mjs",
     "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs autonomy/chain.test.mjs autonomy/multi-user.test.mjs",
     "start:autonomy": "node autonomy/start.mjs",
-    "start:chain": "node autonomy/start-chain.mjs"
+    "start:chain": "node autonomy/start-chain.mjs",
+    "test:locale": "node --test localization.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",
@@ -24,6 +25,7 @@
     "@mastra/memory": "1.21.1",
     "@mastra/observability": "1.20.1",
     "@mastra/pg": "1.31.2",
+    "acorn": "8.19.0",
     "hono": "4.13.5",
     "mastra": "1.34.2",
     "zod": "3.25.76"

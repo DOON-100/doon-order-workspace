@@ -30,6 +30,8 @@
 !mastra-studio/business-request.mjs
 !mastra-studio/server.mjs
 !mastra-studio/branding.mjs
+!mastra-studio/locale-zh.mjs
+!mastra-studio/widgets-zh.mjs
 !mastra-studio/deepseek.mjs
 !mastra-studio/offline-model.mjs
 !mastra-studio/postgres.mjs

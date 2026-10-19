@@ -5,6 +5,7 @@ import {Hono} from 'hono';
 import {MastraServer} from '@mastra/hono';
 import {createAgents} from './agents.mjs';
 import {brandStudioScript} from './branding.mjs';
+import {localizeStudioWidgets} from './widgets-zh.mjs';
 import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
 import {guardBusinessRequest} from './business-request.mjs';
 import {guardEditorRequest} from './editor.mjs';
@@ -12,6 +13,7 @@ import {withWorkflowToolContext} from './workflow-tools.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
+const localizedScripts=new Map();
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime,liveReadOnly=false,scopeId}){
  await fs.mkdir(dataDir,{recursive:true});
@@ -41,7 +43,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    if(Object.hasOwn(workflowFiles,url.pathname)){
     if(!lab.workflowManager)return new Response(null,{status:404});if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
     const [file,type]=workflowFiles[url.pathname];let content=request.method==='HEAD'?null:await fs.readFile(new URL('./'+file,import.meta.url));
-    if(liveReadOnly&&file==='workflow-manager.html'&&content)content=Buffer.from(content.toString().replace('Agent Studio · 合成演练','Agent Studio · 真实业务只读').replace('试运行使用保存后的草稿和合成工具。','试运行使用保存后的草稿，只读取当前账号可见的数据。').replace('<option value="reviewed">采购合成巡检 → 人工审核 → 内部草稿</option>',''));
+    if(liveReadOnly&&file==='workflow-manager.html'&&content)content=Buffer.from(content.toString().replace('agent 工作台 · 合成演练','agent 工作台 · 真实业务只读').replace('试运行使用保存后的草稿和合成工具。','试运行使用保存后的草稿，只读取当前账号可见的数据。').replace('<option value="reviewed">采购合成巡检 → 人工审核 → 内部草稿</option>',''));
     return new Response(content,{headers:{'Content-Type':type,'Content-Security-Policy':csp,'Cache-Control':'no-store'}});
    }
    if(url.pathname.startsWith('/studio/manage/api/'))return lab.manager?lab.manager.handle(request):Response.json({error:'此环境暂不开放 Agent 配置管理。'},{status:403});
@@ -103,10 +105,13 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    try{bytes=await fs.readFile(target);}catch(error){if(error.code==='ENOENT')return new Response('Not found',{status:404});throw error;}
    if(relative==='index.html'){
     const values={MASTRA_STUDIO_BASE_PATH:'/studio',MASTRA_API_PREFIX:'/studio/api',MASTRA_SERVER_HOST:url.hostname,MASTRA_SERVER_PORT:url.port,MASTRA_SERVER_PROTOCOL:url.protocol.slice(0,-1),MASTRA_AUTO_DETECT_URL:'true',MASTRA_TELEMETRY_DISABLED:'true',MASTRA_HIDE_CLOUD_CTA:'true',MASTRA_EXPERIMENTAL_FEATURES:'false',MASTRA_TEMPLATES:'false',MASTRA_EXPERIMENTAL_UI:'false',MASTRA_THEME_TOGGLE:'true'};
-    const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<title>Mastra Studio</title>','<title>Agent Studio</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
-    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${liveReadOnly?'真实业务只读 · 按当前账号权限':businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root"></div><script type="module" src="/studio/provider-status.js"></script>${lab.manager?'<link rel="stylesheet" href="/studio/workflow-preview/style.css"><link rel="stylesheet" href="/studio/workflow-schedules/style.css"><script type="module" src="/studio/agent-manager-entry.js"></script>':''}`));
-   }else if(relative.endsWith('.js'))bytes=Buffer.from(brandStudioScript(bytes.toString()));
-   return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Content-Security-Policy':csp}});
+    const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<html lang="en">','<html lang="zh-CN">').replace('<title>Mastra Studio</title>','<title>agent 工作台</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
+    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>${cloud?'云端 agent 工作台':'本地 agent 工作台'} · ${liveReadOnly?'真实业务只读 · 按当前账号权限':businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root"></div><script type="module" src="/studio/provider-status.js"></script>${lab.manager?'<link rel="stylesheet" href="/studio/workflow-preview/style.css"><link rel="stylesheet" href="/studio/workflow-schedules/style.css"><script type="module" src="/studio/agent-manager-entry.js"></script>':''}`));
+   }else if(relative.endsWith('.js')){
+    if(!localizedScripts.has(target))localizedScripts.set(target,Buffer.from(localizeStudioWidgets(brandStudioScript(bytes.toString()))));
+    bytes=localizedScripts.get(target);
+   }
+   return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Content-Security-Policy':csp,'Cache-Control':'no-cache'}});
   },
  };
 }

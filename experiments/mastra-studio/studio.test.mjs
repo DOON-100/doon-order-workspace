@@ -77,7 +77,7 @@ test('真实 Studio、工具委派、工作流、memory 与 trace 均使用独�
  const origin='http://127.0.0.1:19897';
  try{
   const html=await (await studio.handle(new Request(origin+'/studio/'))).text();
-  assert.match(html,/<title>Agent Studio<\/title>/);assert.match(html,/<base href="\/studio\/"/);assert.match(html,/MASTRA_API_PREFIX = '\/studio\/api'/);assert(!html.includes('%%'));
+  assert.match(html,/<title>agent 工作台<\/title>/);assert.match(html,/<base href="\/studio\/"/);assert.match(html,/MASTRA_API_PREFIX = '\/studio\/api'/);assert(!html.includes('%%'));
   const asset=html.match(/src="\.\/(assets\/[^\"]+\.js)"/)[1];assert.equal((await studio.handle(new Request(origin+'/studio/'+asset))).status,200);
   assert.equal((await studio.handle(new Request(origin+'/studio/%5cpackage.json'))).status,404);
   const list=await (await studio.handle(new Request(origin+'/studio/api/agents'))).json();assert.equal(Object.keys(list).length,4);assert.equal(list.supervisor.tools.delegateProcurement.id,'delegate-procurement');

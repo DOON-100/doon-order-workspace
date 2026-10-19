@@ -7,9 +7,9 @@ const time=value=>value?new Date(value).toLocaleString('zh-CN',{hour12:false}):'
 function state(){
  if(!current)return{label:'正在查询',tone:'pending'};
  if(current.sessionExpired)return{label:'登录已失效',tone:'error'};
- if(current.status==='unconfigured')return{label:'未配置 API Key',tone:'pending'};
+ if(current.status==='unconfigured')return{label:'未配置接口密钥',tone:'pending'};
  const error=current.error||current.lastModelCall?.error;
- if(error)return{label:`${error.httpStatus?`HTTP ${error.httpStatus} · `:''}${error.title}`,tone:'error'};
+ if(error)return{label:`${error.httpStatus?`响应码 ${error.httpStatus} · `:''}${error.title}`,tone:'error'};
  return current.balance?.available?{label:'余额接口正常',tone:'ok'}:{label:'余额不可用',tone:'error'};
 }
 function link(label,href){const node=element('a',label);node.href=href;node.target='_blank';node.rel='noreferrer noopener';return node;}
@@ -35,18 +35,18 @@ function renderDetails(){
   for(const row of current.balance.infos){
    const block=element('div',undefined,'ds-balance');block.append(element('strong',`${row.currency} 可用余额 ${row.total}`),element('span',`充值余额 ${row.toppedUp} · 赠金余额 ${row.granted}`));dialog.append(block);
   }
-  dialog.append(element('p','此余额属于 API Key 对应的 DeepSeek 账户；不同币种分别展示。','ds-muted'));
+  dialog.append(element('p','此余额属于接口密钥对应的 DeepSeek 账户；不同币种分别展示。','ds-muted'));
  }
  if(current?.status==='unconfigured')dialog.append(element('p','在服务端配置 DEEPSEEK_API_KEY 或 DEEPSEEK_API_KEY_FILE。页面不会接收或展示密钥。'));
  for(const [name,error] of [['余额接口',current?.error],['最近模型请求',current?.lastModelCall?.error]])if(error){
-  const block=element('section',undefined,'ds-error');block.append(element('h3',`${name}：${error.httpStatus?`HTTP ${error.httpStatus} · `:''}${error.title}`));
-  if(error.providerCode)block.append(element('p',`API error.code：${error.providerCode}`));if(error.providerType)block.append(element('p',`API error.type：${error.providerType}`));
+  const block=element('section',undefined,'ds-error');block.append(element('h3',`${name}：${error.httpStatus?`响应码 ${error.httpStatus} · `:''}${error.title}`));
+  if(error.providerCode)block.append(element('p',`接口错误代码：${error.providerCode}`));if(error.providerType)block.append(element('p',`接口错误类型：${error.providerType}`));
   block.append(element('p',`原因：${error.cause}`),element('p',`处理建议：${error.action}`));
   if(!error.documented)block.append(element('p','此项为本系统诊断或未归类状态，未冒充官方错误码。','ds-muted'));
   if(name==='最近模型请求')block.append(element('p',`发生时间：${time(current.lastModelCall.checkedAt)}`,'ds-muted'));
   block.append(link('DeepSeek 官方错误码说明','https://api-docs.deepseek.com/zh-cn/quick_start/error_codes/'));dialog.append(block);
  }
- if(current?.lastModelCall?.ok)dialog.append(element('p',`最近模型 HTTP 请求成功：${time(current.lastModelCall.checkedAt)}。最终生成结果请查看对应运行轨迹。`,'ds-muted'));
+ if(current?.lastModelCall?.ok)dialog.append(element('p',`最近模型请求成功：${time(current.lastModelCall.checkedAt)}。最终生成结果请查看对应运行轨迹。`,'ds-muted'));
  else if(current?.model?.live&&!current?.lastModelCall)dialog.append(element('p','已配置 DeepSeek 模型；尚无本进程的模型请求结果。余额查询成功不等于模型调用已验证。','ds-muted'));
  const footer=element('div',undefined,'ds-actions'),refresh=element('button',loading?'刷新中…':'刷新余额','ds-refresh');refresh.type='button';refresh.disabled=loading;refresh.addEventListener('click',()=>load(true));
  refresh.dataset.dsAction='refresh';

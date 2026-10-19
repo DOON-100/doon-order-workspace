@@ -26,12 +26,12 @@ export function createAgentServer({publicOrigin,studio,authenticate,acquireRunti
     if(req.method==='GET'&&['/studio','/studio/'].includes(url.pathname)){res.writeHead(302,{Location:'/login','Cache-Control':'no-store'});return res.end();}
     return json(res,401,{error:'请先登录数据台。'});
    }
-   if(!canEnterStudio(user))return json(res,403,{error:'Agent Studio 仅限已完成改密的管理员或程序员。'});
+   if(!canEnterStudio(user))return json(res,403,{error:'agent 工作台仅限已完成改密的管理员或程序员。'});
    const generation=/\/agents\/[^/]+\/(stream|generate|send-message|stream-network|network)(\/|$)/.test(url.pathname);
    if(generation){if(active>=maxActive)return json(res,429,{error:'当前模型验证并发已满，请稍后重试。'});active++;counted=true;}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(value!==undefined&&!['cookie','authorization','host','connection','content-length'].includes(key))headers.set(key,Array.isArray(value)?value.join(','):value);
    let body;
-   if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'Studio 请求超过大小限制。'});body=Buffer.concat(chunks);}
+   if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'工作台请求超过大小限制。'});body=Buffer.concat(chunks);}
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
    const access=businessAccess?.({cookie:req.headers.cookie||'',user});
@@ -44,7 +44,7 @@ export function createAgentServer({publicOrigin,studio,authenticate,acquireRunti
   }catch(error){
    if(res.destroyed||res.headersSent){res.destroy();return;}
    // Do not serialize upstream responses, cookies, user objects or error stacks.
-   json(res,error.status===429?429:503,{error:error.status===429?'Studio 当前使用人数已满，请稍后重试。':'Agent Studio 暂时不可用，请稍后重试。'});
+   json(res,error.status===429?429:503,{error:error.status===429?'工作台当前使用人数已满，请稍后重试。':'agent 工作台暂时不可用，请稍后重试。'});
   }finally{lease?.release();if(counted)active--;}
  });
  server.requestTimeout=120000;server.headersTimeout=10000;server.keepAliveTimeout=5000;return server;

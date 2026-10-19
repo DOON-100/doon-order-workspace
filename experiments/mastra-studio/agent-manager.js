@@ -15,9 +15,9 @@ function render(){
   const card=node('article',undefined,'am-card'),head=node('div',undefined,'am-card-header');
   head.append(node('h2',agent.name),node('span',agent.builtin?'现有岗位':'自建岗位','am-badge'));card.append(head);
   card.append(node('p',agent.description||'尚未填写职责简介','am-description'));
-  card.append(node('p',`${agent.publishedVersionId?'已发布':'未发布'}${agent.hasDraft?' · 有草稿':''} · v${agent.versionNumber}`));
+  card.append(node('p',`${agent.publishedVersionId?'已发布':'未发布'}${agent.hasDraft?' · 有草稿':''} · 版本 ${agent.versionNumber}`));
   card.append(node('p',agent.toolKeys.length?agent.toolKeys.map(key=>labels[key]||key).join(' · '):'未选择工具'));
-  const actions=node('div',undefined,'am-card-actions'),edit=node('button','配置'),open=node('a','进入 Editor');
+  const actions=node('div',undefined,'am-card-actions'),edit=node('button','配置'),open=node('a','进入编辑器');
   edit.type='button';edit.addEventListener('click',()=>openForm(agent));open.href='/studio/agents/'+encodeURIComponent(agent.id)+'/editor';
   actions.append(edit,open);card.append(actions);list.append(card);
  }
@@ -27,7 +27,7 @@ async function load(){data=await api();$('#model-status').textContent=data.model
 function setBusy(value){busy=value;for(const b of form.querySelectorAll('button'))b.disabled=value;$('#new-agent').disabled=value;if(!value)renderInstructions();}
 function renderPromptPicker(){
  const select=$('#prompt-picker'),selected=select.value;select.replaceChildren(node('option','选择已发布的 Prompt'));select.firstChild.value='';
- for(const prompt of data.prompts||[]){const option=node('option',`${prompt.name} · v${prompt.versionNumber}`);option.value=prompt.id;select.append(option);}select.value=selected;
+ for(const prompt of data.prompts||[]){const option=node('option',`${prompt.name} · 版本 ${prompt.versionNumber}`);option.value=prompt.id;select.append(option);}select.value=selected;
  $('#prompt-options-status').textContent=data.prompts?.length?`可选 ${data.prompts.length} 个已发布 Prompt；新建或发布后点击“刷新列表”。`:'暂无已发布的 Prompt，请先在提示词库创建并发布，再刷新列表。';
 }
 function renderInstructions(){
@@ -43,7 +43,7 @@ function renderInstructions(){
   ]){const button=node('button',text);button.type='button';button.disabled=disabled||busy;button.setAttribute('aria-label',label);button.addEventListener('click',()=>{action();renderInstructions();});controls.append(button);}
   head.append(controls);card.append(head);
   if(reference){
-   card.append(node('p',prompt?`已发布 v${prompt.versionNumber} · 跟随公共 Prompt 的后续发布更新`:'此引用尚未发布或不存在，请到提示词库核对。','am-muted'));
+   card.append(node('p',prompt?`已发布 版本 ${prompt.versionNumber} · 跟随公共 Prompt 的后续发布更新`:'此引用尚未发布或不存在，请到提示词库核对。','am-muted'));
    const preview=node('details'),summary=node('summary','查看公共 Prompt 内容');preview.append(summary,node('pre',prompt?.content||'无法读取已发布内容'));card.append(preview);
   }else{
    const label=node('label',undefined,'am-field'),input=node('textarea');label.append(node('span','提示词内容'));input.rows=8;input.maxLength=32000;input.required=true;input.dataset.instructionContent='';input.value=block.content;input.addEventListener('input',()=>{instructionDraft[index].content=input.value;});label.append(input);card.append(label);
@@ -69,7 +69,7 @@ function fill(agent){
 }
 async function history(){
  if(!editing)return;const result=await api('/'+editing.id+'/versions'),select=$('#history-version');select.replaceChildren(node('option','选择历史版本'));select.firstChild.value='';
- for(const version of result.versions){const o=node('option',`v${version.versionNumber} · ${new Date(version.createdAt).toLocaleString('zh-CN')}`);o.value=version.id;select.append(o);}
+ for(const version of result.versions){const o=node('option',`版本 ${version.versionNumber} · ${new Date(version.createdAt).toLocaleString('zh-CN')}`);o.value=version.id;select.append(o);}
 }
 async function openForm(agent,{focusPrompt=false}={}){creationKey=agent?null:crypto.randomUUID();fill(agent);dialog.showModal();try{await history();if(focusPrompt){const input=form.querySelector('[data-instruction-content]')||$('#prompt-picker');input.focus({preventScroll:true});input.scrollIntoView({block:'center'});}}catch(error){status(error.message,true,'#form-status');}}
 function values(){return{name:form.elements.namedItem('name').value,description:form.elements.namedItem('description').value,instructions:plainMode&&instructionDraft.length===1&&instructionDraft[0].type==='text'?instructionDraft[0].content:structuredClone(instructionDraft),toolKeys:Array.from(form.querySelectorAll('input[name=tools]:checked'),input=>input.value)};}
@@ -80,7 +80,7 @@ async function save(publish){
   editing=saved;
   window.history.replaceState(null,'','/studio/manage/?edit='+encodeURIComponent(saved.id));
   const result=publish?await api('/'+saved.id+'/publish','POST',{versionId:saved.versionId,expectedVersionId:saved.versionId}):saved;
-  fill(result);await history();await load();status(publish?'已发布，新的配置现在可以在 Studio 中使用。':'草稿已保存，发布前不会影响已发布的配置。',false,'#form-status');
+  fill(result);await history();await load();status(publish?'已发布，新的配置现在可以在工作台中使用。':'草稿已保存，发布前不会影响已发布的配置。',false,'#form-status');
  }catch(error){status(error.message,true,'#form-status');}
  finally{setBusy(false);}
 }

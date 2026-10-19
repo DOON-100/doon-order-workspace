@@ -1,32 +1,57 @@
-// Adapt known UI copy from the pinned upstream bundle. Never replace identifiers,
-// URLs, package names, API fields, user messages or arbitrary occurrences of Mastra.
-const labels=new Map([
- ['Mastra Studio','Agent Studio'],
- ['Back to Mastra Studio','Back to Agent Studio'],
- ['Mastra Studio Search','Agent Studio Search'],
- ['Mastra Studio failed to start','Agent Studio failed to start'],
- ['Mastra Connection','Agent Connection'],
- ['Mastra instance URL','Agent instance URL'],
- ['Configure the Mastra instance URL, API prefix, and request headers used by the studio.','Configure the Agent instance URL, API prefix, and request headers used by the studio.'],
- ['Mastra APIs','Agent APIs'],
- ['Read the official Mastra documentation for guides, references, and tutorials.','Read the framework documentation for guides, references, and tutorials.'],
- ['Browse the source code, report issues, and contribute to the Mastra project.','Browse the framework source code, report issues, and contribute.'],
- ['Join the Mastra Discord community for help, discussion, and collaboration.','Join the framework developer community for help, discussion, and collaboration.'],
- ['Installed Mastra Packages','Installed Framework Packages'],
- ['View and update installed Mastra packages','View and update installed framework packages'],
- ['Mastra tools are not configured yet. ','Agent tools are not configured yet. '],
- ['Mastra workflows are not configured yet. ','Agent workflows are not configured yet. '],
- ['Add a workspace to your Mastra configuration to ','Add a workspace to your Agent configuration to '],
- ['Mastra configuration to manage files, skills, and enable semantic search.','Agent configuration to manage files, skills, and enable semantic search.'],
- ['Add the authorization header that Studio needs to reach your Mastra server.','Add the authorization header that Studio needs to reach your Agent server.'],
- ['Evaluating traces and saving them as dataset items is available in Mastra Studio (local or deployed).','Evaluating traces and saving them as dataset items is available in Agent Studio (local or deployed).'],
- ['. Its settings are defined in code on the Mastra instance and can\'t be edited here.','. Its settings are defined in code on the Agent instance and can\'t be edited here.'],
- ['Runs as a step of its parent workflow. Add it to the workflows of your Mastra instance to open, run, and inspect it on its own page.','Runs as a step of its parent workflow. Register it on your Agent instance to open, run, and inspect it on its own page.'],
- ['Open PR is available on Mastra-hosted projects with GitHub App support','Open PR requires a hosted project with GitHub App support'],
- ['Disconnecting revokes this authorized account and removes it from Mastra. Agents using this connection will lose access. This can’t be undone.','Disconnecting revokes this authorized account and removes it from Agent Studio. Agents using this connection will lose access. This can’t be undone.'],
-]);
+import {parse} from 'acorn';
+import {translateStudioText} from './locale-zh.mjs';
+
+// Translate static display expressions, never object keys, enum values, URLs,
+// form values, IDs, code examples, stored configuration or API/user content.
+const displayProperties=new Set(['children','label','title','placeholder','aria-label','aria-description','alt','header','tooltip','emptyText','emptyMessage','loadingText','helperText','buttonText','confirmText','cancelText','searchPlaceholder','description','containerAriaLabel']);
+const notificationMethods=new Set(['success','error','warning','info','message']);
+const propertyName=node=>node?.type==='Identifier'?node.name:node?.value;
+// Reviewed display-only helpers/tables in mastra 1.34.2's pinned main bundle.
+// Regression tests fail on an upstream shape change, rather than touching enums.
+const displayHelpers=new Set(['Zcr','Zrt','F4s']);
+const displayTables=new Set(['lXe','OHe','f5r']);
+
+export function studioDisplayLiterals(source){
+ const root=parse(source,{ecmaVersion:'latest',sourceType:'module'}),literals=new Map();
+ const capture=node=>{
+  if(!node)return;
+  if(node.type==='Literal'&&typeof node.value==='string')literals.set(node.start,node);
+  else if(node.type==='ConditionalExpression'){capture(node.consequent);capture(node.alternate);}
+  else if(node.type==='LogicalExpression'){capture(node.left);capture(node.right);}
+  else if(node.type==='ArrayExpression')node.elements.forEach(capture);
+  else if(node.type==='ArrowFunctionExpression')capture(node.body);
+  else if(node.type==='AssignmentPattern')capture(node.right);
+  else if(node.type==='TemplateLiteral'){node.quasis.forEach(part=>{if(part.value.cooked)literals.set(part.start,{...part,value:part.value.cooked});});node.expressions.forEach(capture);}
+ };
+ const walk=(node,inDisplayHelper=false)=>{
+  if(!node||typeof node!=='object')return;
+  if(node.type==='FunctionDeclaration')inDisplayHelper=displayHelpers.has(node.id?.name);
+  const codeCompletion=node.type==='ObjectExpression'&&node.properties.some(p=>propertyName(p.key)==='type'&&p.value?.value==='keyword');
+  if(codeCompletion)return;
+  if(node.type==='Property'&&!node.computed&&(displayProperties.has(propertyName(node.key))||/(?:Label|Title|Text|Message|Placeholder|Description)$/.test(propertyName(node.key)||'')))capture(node.value);
+  if(inDisplayHelper&&node.type==='ReturnStatement')capture(node.argument);
+  if(inDisplayHelper&&node.type==='Property'&&propertyName(node.key)==='value')capture(node.value);
+  if(node.type==='VariableDeclarator'&&displayTables.has(node.id?.name)&&node.init?.type==='ObjectExpression')node.init.properties.forEach(p=>capture(p.value));
+  if(node.type==='VariableDeclarator'&&node.init?.type==='ConditionalExpression'&&['Not started','not sorted','未开始','未排序'].some(text=>source.slice(node.init.start,node.init.end).includes(JSON.stringify(text))))capture(node.init);
+  if(node.type==='VariableDeclarator'&&node.init?.type==='TemplateLiteral'&&node.init.quasis.some(q=>q.value.cooked===' – ')&&node.init.expressions.some(e=>e.type==='ConditionalExpression'&&['Start','开始'].includes(e.alternate?.value)))capture(node.init);
+  // Native navigation entries use name, while route/url remains the stable key.
+  if(node.type==='ObjectExpression'&&node.properties.some(p=>['route','url'].includes(propertyName(p.key))))for(const p of node.properties)if(propertyName(p.key)==='name')capture(p.value);
+  if(node.type==='CallExpression'&&node.callee.type==='MemberExpression'&&node.callee.object.type==='Identifier'&&node.callee.object.name==='Xe'&&!node.callee.computed&&notificationMethods.has(propertyName(node.callee.property)))capture(node.arguments[0]);
+  for(const [key,value] of Object.entries(node)){
+   if(['start','end','loc','range'].includes(key))continue;
+   if(Array.isArray(value))value.forEach(child=>walk(child,inDisplayHelper));else if(value&&typeof value==='object')walk(value,inDisplayHelper);
+  }
+ };
+ walk(root);return [...literals.values()];
+}
 
 export function brandStudioScript(source){
- for(const [original,replacement] of labels)source=source.replaceAll(JSON.stringify(original),JSON.stringify(replacement));
- return source;
+ const edits=studioDisplayLiterals(source).flatMap(node=>{
+  const translated=translateStudioText(node.value);
+  const text=node.type==='TemplateElement'?translated.replace(/\\/g,'\\\\').replace(/`/g,'\\`').replace(/\$\{/g,'\\${'):JSON.stringify(translated);
+  return translated===node.value?[]:[{start:node.start,end:node.end,text}];
+ });
+ const pieces=[];let cursor=0;
+ for(const edit of edits.sort((a,b)=>a.start-b.start)){pieces.push(source.slice(cursor,edit.start),edit.text);cursor=edit.end;}
+ pieces.push(source.slice(cursor));return pieces.join('');
 }
