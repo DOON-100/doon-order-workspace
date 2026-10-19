@@ -7,8 +7,8 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs",
-    "test:workflows": "node --test workflow-manager.test.mjs workflow-triggers.test.mjs",
+    "test": "node --test studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs",
+    "test:workflows": "node --test workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs",
     "test:manager": "node --test agent-manager.test.mjs prompt-reference.test.mjs",
     "test:editor": "node --test editor.test.mjs",
     "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs autonomy/chain.test.mjs autonomy/multi-user.test.mjs",

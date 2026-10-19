@@ -12,6 +12,7 @@ const common={id,label:z.string().trim().min(1).max(80),x:z.number().finite().mi
 const params={start:z.object({trigger:z.any().optional()}),end:z.object({}),record:z.object({}),scan:z.object({}),filter:z.object({minMissing:z.number().min(0).max(1e6),supplier:z.string().max(160)}),branch:z.object({metric:z.enum(['count','missing']),operator:z.enum(['gte','gt','eq','lte','lt']),threshold:z.number().min(0).max(1e6)}),draft:z.object({prefix:z.string().max(500)}),summary:z.object({title:z.string().max(160)}),agent:z.object({agentId:id,prompt:z.string().trim().min(1).max(4000)}),review:z.object({title:z.string().trim().min(1).max(160),role:z.enum(['technical','admin','programmer']),reviewerId:z.string().max(160),instructions:z.string().max(2000),maxAgeMinutes:z.number().int().min(1).max(1440)})};
 const nodeSchema=z.discriminatedUnion('type',Object.entries(params).map(([type,config])=>z.object({...common,type:z.literal(type),params:config.strict()}).strict()));
 const configSchema=z.object({name:z.string().trim().min(1).max(80),description:z.string().max(500),nodes:z.array(nodeSchema).min(2).max(24),edges:z.array(z.object({from:id,to:id,port:z.enum(['next','yes','no','approved','rejected'])}).strict()).max(48)}).strict();
+export const workflowDraftSchema=configSchema.extend({requestId:z.string().uuid()}).strict();
 const saveSchema=configSchema.extend({expectedVersionId:id}).strict();
 const catalog=[['scan','采购风险检查','读取已接入的合成采购条目'],['filter','筛选条目','按欠数与供应商筛选'],['branch','条件分支','按条目数或欠数判断'],['review','人工审核','暂停，等待真实登录审核人决定'],['draft','内部草稿','为当前条目生成内部草稿'],['agent','调用 Agent','调用所选岗位的已发布配置'],['summary','汇总结果','固定程序整理本次结果']].map(([type,label,description])=>({type,label,description}));
 const initialState=()=>({syntheticOnly:true,sent:false,orders:[],drafts:[],messages:[],nodeStates:{}});
@@ -75,6 +76,27 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
  }
  async function checkedTrigger(config,access){const trigger=config.nodes.find(n=>n.type==='start')?.params.trigger;if(!trigger||trigger.mode==='manual')return;const source=await sourceCatalog(access,trigger.source,trigger.scope),dataset=source.datasets.find(d=>d.path===trigger.dataset);if(!dataset)throw fail('数据对象不存在或不在当前可见范围内。',403);if(dataset.triggerable===false)throw fail('明细缺少唯一稳定 ID，请选择上层记录或页面概览中的字段。');try{validateTrigger(trigger,dataset);}catch(error){throw fail(error.message,403);}return source;}
  async function checked(config){const validated=validateWorkflow(config);for(const n of config.nodes)if(n.type==='agent'){try{await mastra.getAgentById(n.params.agentId,{status:'published'});}catch{throw fail('调用 Agent 节点必须选择已发布的岗位。',409);}}return validated;}
+ async function saveNewDraft(body,{actor,workflowAccess,proposalId}={}){
+  const {requestId,...config}=workflowDraftSchema.parse(body);await checked(config);await checkedTrigger(config,workflowAccess);
+  const key='visual-wf-'+requestId,existing=await latest('config',key);
+  if(existing){if(!canReadConfig(existing,actor)||existing.payload.createHash!==hash(config)||hash(existing.payload.config)!==hash(config)||(existing.payload.proposalId||null)!==(proposalId||null))throw fail('同一新建请求已被使用或内容不同。',409);return{workflow:detail(existing),created:false};}
+  const row=await append('config',key,{config,runtimeId:key,publishedVersionId:null,createHash:hash(config),ownerId:actor?.id||null,proposalId:proposalId||null,message:'新建草稿'},null);
+  return{workflow:detail(row),created:true};
+ }
+ const proposalDetail=row=>({id:row.entityId,versionId:row.versionId,...row.payload});
+ async function requireProposal(key,actor){
+  const row=await latest('proposal',key);
+  if(!row||!actor?.id||row.payload.ownerId!==actor.id)throw fail('没有找到本人待确认的流程预览。',404);
+  return row;
+ }
+ const previewDraft=(input,{actor,workflowAccess}={})=>serial(async()=>{
+  if(!actor?.id||!['admin','programmer'].includes(actor.role))throw fail('需要有效的 Studio 管理身份。',403);
+  const {requestId,...config}=workflowDraftSchema.parse(input);await checked(config);const source=await checkedTrigger(config,workflowAccess),trigger=config.nodes.find(n=>n.type==='start')?.params.trigger,dataset=source?.datasets?.find(d=>d.path===trigger.dataset);
+  const key='proposal-'+requestId,existing=await latest('proposal',key);
+  if(existing){if(existing.payload.ownerId!==actor.id||existing.payload.configHash!==hash(config))throw fail('预览请求标识已被使用。',409);return proposalDetail(existing);}
+  const row=await append('proposal',key,{ownerId:actor.id,config,configHash:hash(config),requestId,status:'pending',sourceLabel:workflowSources.find(s=>s.id===trigger?.source)?.label||'',fieldLabels:Object.fromEntries((dataset?.fields||[]).map(f=>[f.path,f.label])),validUntil:new Date(now()+30*60000).toISOString()},null);
+  return proposalDetail(row);
+ });
  async function ensureReview({row,node,runId,engineId,preview,inputData}){
   return serial(async()=>{
    const taskId='review-'+hash([row.versionId,node.id,runId]).slice(0,40),existing=await latest('review',taskId);if(existing)return existing;
@@ -154,6 +176,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   const url=new URL(request.url),base='/studio/workflow-manager/api/',route=url.pathname.slice(base.length);
   try{
    if(['GET','HEAD'].includes(request.method)){
+    const proposal=route.match(/^proposals\/(proposal-[\w-]+)$/);if(proposal)return json(proposalDetail(await requireProposal(proposal[1],actor)));
     if(route==='sources')return json({...await sourceCatalog(workflowAccess,url.searchParams.get('source')||undefined,Object.fromEntries([...url.searchParams].filter(([k])=>['customerId','projectId','id','teamId'].includes(k)))),operators:triggerOperators,defaults:defaultTrigger()});
     if(route==='deliveries')return json({deliveries:(await records('delivery')).filter(r=>r.payload.ownerId===actor?.id).map(r=>({id:r.entityId,workflowId:r.payload.workflowId,eventId:r.payload.eventId,recordId:r.payload.recordId,runId:r.payload.execution?.runId||r.payload.runId,status:r.payload.execution?.status||r.payload.status})).slice(-100).reverse()});
     if(route==='workflows'){const all=await records('config'),map=new Map();for(const row of all)map.set(row.entityId,row);return json({workflows:[...map.values()].filter(r=>canReadConfig(r,actor)).map(r=>{const {nodes,edges,...summary}=detail(r);return summary;}),catalog,agents:Object.entries(mastra.listAgents()).map(([id,agent])=>({id,name:agent.name})),actor:actor?{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true}:null});}
@@ -163,6 +186,19 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
    }
    if(request.headers.get('origin')!==url.origin)throw fail('不允许跨站修改工作流或审核。',403);
    if(!request.headers.get('content-type')?.startsWith('application/json'))throw fail('请求格式不正确。',415);
+   const proposalAction=route.match(/^proposals\/(proposal-[\w-]+)\/(confirm|cancel)$/);
+   if(proposalAction&&request.method==='POST')return await serial(async()=>{
+    if(!actor?.id||!['admin','programmer'].includes(actor.role))throw fail('需要有效的 Studio 管理身份。',403);
+    const body=await readBody(request,z.object({expectedVersionId:id}).strict()),current=await requireProposal(proposalAction[1],actor),p=current.payload;
+    if(p.status==='confirmed'&&proposalAction[2]==='confirm')return json(proposalDetail(current));
+    if(current.versionId!==body.expectedVersionId||p.status!=='pending')throw fail('预览状态已变化，请重新查看。',409);
+    if(new Date(p.validUntil).getTime()<=now())throw fail('流程预览已过期，请让 Agent 重新生成。',409);
+    if(proposalAction[2]==='cancel')return json(proposalDetail(await append('proposal',current.entityId,{...p,status:'cancelled'},current)));
+    // The browser confirms a stored, version-bound proposal, never a new graph
+    // supplied in the confirmation request. Recheck current field permissions.
+    const {workflow}=await saveNewDraft({...p.config,requestId:p.requestId},{actor,workflowAccess,proposalId:current.entityId});
+    return json(proposalDetail(await append('proposal',current.entityId,{...p,status:'confirmed',workflowId:workflow.id,workflowVersionId:workflow.versionId,confirmedAt:new Date(now()).toISOString()},current)));
+   });
    const target=route.match(/^workflows\/([\w-]+)/);if(target&&!canReadConfig(await requireConfig(target[1]),actor))throw fail('该触发规则属于其他配置人。',403);
    const triggerCheck=route.match(/^workflows\/([\w-]+)\/trigger-check$/);
    if(triggerCheck&&request.method==='POST'){
@@ -189,9 +225,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
    }
    return await serial(async()=>{
     if(!key&&request.method==='POST'){
-     const body=await readBody(request,configSchema.extend({requestId:z.string().uuid()}).strict()),{requestId,...config}=body;await checked(config);await checkedTrigger(config,workflowAccess);const key='visual-wf-'+requestId,existing=await latest('config',key);
-     if(existing){if(existing.payload.createHash!==hash(config))throw fail('同一新建请求的内容不同。',409);return json(detail(existing));}
-     const row=await append('config',key,{config,runtimeId:key,publishedVersionId:null,createHash:hash(config),ownerId:actor?.id||null,message:'新建草稿'},null);return json(detail(row),201);
+     const body=await readBody(request,workflowDraftSchema),result=await saveNewDraft(body,{actor,workflowAccess});return json(result.workflow,result.created?201:200);
     }
     if(key&&!action&&request.method==='PATCH'){
      const {expectedVersionId,...config}=await readBody(request,saveSchema),previous=await expected(key,expectedVersionId);await checked(config);await checkedTrigger(config,workflowAccess);return json(detail(await append('config',key,{...previous.payload,config,ownerId:previous.payload.ownerId||actor?.id||null,message:'保存草稿'},previous)));
@@ -236,5 +270,5 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
    return results;
   }finally{processingTriggers=false;}
  }
- return{handle,has,compile,records,processTriggers};
+ return{handle,has,compile,records,processTriggers,previewDraft,sourceCatalog,agentCatalog:()=>Object.entries(mastra.listAgents()).map(([id,agent])=>({id,name:agent.name}))};
 }

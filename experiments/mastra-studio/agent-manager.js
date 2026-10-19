@@ -1,6 +1,6 @@
 const $=selector=>document.querySelector(selector),dialog=$('#agent-dialog'),form=$('#agent-form');
 let data={agents:[],tools:[],prompts:[]},editing=null,busy=false,creationKey=null,instructionDraft=[],plainMode=true;
-const labels={inspectOverdue:'采购风险检查',draftFollowup:'内部跟进草稿',delegateProcurement:'委派采购 Agent'};
+const labels={inspectOverdue:'采购风险检查',draftFollowup:'内部跟进草稿',delegateProcurement:'委派采购 Agent',inspectWorkflowSources:'查询工作流字段',previewWorkflow:'预览工作流'};
 const node=(tag,text,className)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;};
 function status(text,error=false,scope='#page-status'){const e=$(scope);e.textContent=text;e.dataset.error=String(error);}
 async function api(path='',method='GET',body){
@@ -60,7 +60,8 @@ function fill(agent){
  for(const tool of data.tools){
   if(agent&&!agent.allowedToolKeys.includes(tool.key))continue;
   const label=node('label',undefined,'am-tool'),input=node('input'),text=node('span');input.type='checkbox';input.name='tools';input.value=tool.key;input.checked=agent?.toolKeys.includes(tool.key)||false;
-  text.append(node('strong',labels[tool.key]||tool.key),node('small',tool.description));label.append(input,text);tools.append(label);
+  input.disabled=agent?.requiredToolKeys?.includes(tool.key)||false;
+  text.append(node('strong',(labels[tool.key]||tool.key)+(input.disabled?'（岗位内置）':'')),node('small',tool.description));label.append(input,text);tools.append(label);
  }
  $('#open-editor').hidden=!agent;if(agent)$('#open-editor').href='/studio/agents/'+encodeURIComponent(agent.id)+'/editor';
  $('#history-section').hidden=!agent;$('#draft-state').textContent=agent?(agent.hasDraft?'当前为未发布草稿':'当前版本已发布'):'新 Agent 默认先保存为草稿';

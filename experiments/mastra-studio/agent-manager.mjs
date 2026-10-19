@@ -16,7 +16,7 @@ const snapshotOf=value=>Object.fromEntries(snapshotKeys.filter(key=>value[key]!=
 
 // A project-owned UI and configuration service on the OSS storage/Agent APIs.
 // Neither EE Builder nor third-party plugin/code installation is enabled.
-export async function createAgentManager({mastra,storage,agents,tools,buildAgent}){
+export async function createAgentManager({mastra,storage,agents,tools,buildAgent,requiredToolKeys={}}){
  const store=await storage.getStore('agents');
  const prompts=await storage.getStore('promptBlocks');
  const builtins=new Set(Object.keys(agents)),limits=new Map();
@@ -58,7 +58,7 @@ export async function createAgentManager({mastra,storage,agents,tools,buildAgent
  async function detail(id){
   const row=await requireRow(id),latest=await store.getLatestVersion(id);
   if(!latest)throw fail('Agent 版本不完整。',409);
-  return{id,name:latest.name,description:latest.description||'',instructions:latest.instructions,toolKeys:validateSnapshot(id,latest),allowedToolKeys:allowedFor(id),builtin:builtins.has(id),versionId:latest.id,versionNumber:latest.versionNumber,publishedVersionId:row.activeVersionId||null,hasDraft:latest.id!==row.activeVersionId};
+  return{id,name:latest.name,description:latest.description||'',instructions:latest.instructions,toolKeys:[...new Set([...validateSnapshot(id,latest),...(requiredToolKeys[id]||[])])],requiredToolKeys:requiredToolKeys[id]||[],allowedToolKeys:allowedFor(id),builtin:builtins.has(id),versionId:latest.id,versionNumber:latest.versionNumber,publishedVersionId:row.activeVersionId||null,hasDraft:latest.id!==row.activeVersionId};
  }
  async function list(){
   const result=[];let page=0;

@@ -171,3 +171,13 @@ node --test experiments/mastra-studio/deepseek.test.mjs
 云端 PostgreSQL 的 Traces 查询还需运行 `node --test experiments/mastra-studio/observability.test.mjs`。该测试模拟非空 PostgreSQL 查询响应，经实际 Hono 路由验证游标与页码两种分页，以及输出/错误预览字段；空列表或仅验证轨迹入库不足以覆盖响应格式兼容性。当前 `@mastra/core` 与 `@mastra/server` 对齐到 1.78.0；升级 Mastra 依赖时须一起核对响应契约，不能仅依赖宽泛的 peerDependencies 范围。
 
 浏览器验收需实际通过公司图标进入 Studio，执行总管 Agent，查看 Traces 和 Workflows；不以单纯出现 Studio 首页作为完整运行证据。
+
+## 对话中生成与确认工作流
+
+总管 Agent 新增 `inspectWorkflowSources`（当前权限内的模块、字段元数据）与 `previewWorkflow` Tool。真实模型可把用户的描述转换为节点与连线；条件不明确时先询问。模型回复中的 `[预览工作流](/studio/workflow-preview/?id=proposal-...)` 会在对话中展开为流程图，显示人工审核的通过／拒绝分支、节点参数与触发条件。用户点击“确认保存到 Workflows”后才生成草稿，不自动发布或运行。
+
+服务端定义在 `workflow-tools.mjs`，和 Studio 共用进程，无独立 MCP 服务或新端口。预览与确认复用 `workflow-manager.mjs` 的校验和追加式存储；预览使用独立的 `proposal` 记录类型，不进入工作流列表。确认绑定预览版本，只允许原配置人操作；同源校验、30 分钟有效期、当前权限重新校验以及幂等保存由固定程序完成。身份来自服务端鉴权上下文，不接受模型参数或浏览器 `requestContext` 自报身份。既有 Agent 的提示词、配置版本和会话不被迁移或覆盖。
+
+默认离线实例不理解任意自然语言。可在总管对话输入 `/工作流工具演练`，通过真实 Tool 调用预览固定的“读取记录 → 人工审核 → 汇总”模板，点击确认保存验证完整链路。此演练不等于已经验证真实模型的自然语言设计能力；真实模型沿用已有 DeepSeek 配置，模型调用按供应商规则计费。此能力目前仅装配于通用 Studio 运行时，业务快照／其他独立运行时不会因此自动开放工具。
+
+专项验证：`node --test experiments/mastra-studio/workflow-tools.test.mjs`。测试使用临时存储及合成身份，覆盖真实 Agent HTTP 工具调用、确认前零工作流写入、取消、跨站与身份伪造拒绝、字段权限、重复确认、人工审核暂停与重启保全。

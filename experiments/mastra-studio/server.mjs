@@ -8,6 +8,7 @@ import {brandStudioScript} from './branding.mjs';
 import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
 import {guardBusinessRequest} from './business-request.mjs';
 import {guardEditorRequest} from './editor.mjs';
+import {withWorkflowToolContext} from './workflow-tools.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
@@ -30,7 +31,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    if(url.pathname==='/studio/manage')return new Response(null,{status:302,headers:{Location:'/studio/manage/'}});
    if(url.pathname==='/studio/workflow-manager')return new Response(null,{status:302,headers:{Location:'/studio/workflow-manager/'}});
    if(url.pathname.startsWith('/studio/workflow-manager/api/'))return lab.workflowManager?lab.workflowManager.handle(request,{actor,workflowAccess}):Response.json({error:'此环境不开放可视化工作流管理。'},{status:403});
-   const workflowFiles={'/studio/workflow-manager/':['workflow-manager.html','text/html; charset=utf-8'],'/studio/workflow-manager/app.js':['workflow-manager.js','text/javascript; charset=utf-8'],'/studio/workflow-manager/style.css':['workflow-manager.css','text/css; charset=utf-8']};
+   const workflowFiles={'/studio/workflow-manager/':['workflow-manager.html','text/html; charset=utf-8'],'/studio/workflow-manager/app.js':['workflow-manager.js','text/javascript; charset=utf-8'],'/studio/workflow-manager/style.css':['workflow-manager.css','text/css; charset=utf-8'],'/studio/workflow-preview/':['workflow-preview.html','text/html; charset=utf-8'],'/studio/workflow-preview/app.js':['workflow-preview.js','text/javascript; charset=utf-8'],'/studio/workflow-preview/style.css':['workflow-preview.css','text/css; charset=utf-8']};
    if(Object.hasOwn(workflowFiles,url.pathname)){
     if(!lab.workflowManager)return new Response(null,{status:404});if(!['GET','HEAD'].includes(request.method))return new Response(null,{status:405});
     const [file,type]=workflowFiles[url.pathname];return new Response(request.method==='HEAD'?null:await fs.readFile(new URL('./'+file,import.meta.url)),{headers:{'Content-Type':type,'Content-Security-Policy':csp,'Cache-Control':'no-store'}});
@@ -64,7 +65,8 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
     else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents,lab.storage);if(guarded instanceof Response)return guarded;request=guarded;}
     const fetch=async()=>{
-     const response=await app.fetch(request);
+     const trusted=actor&&request.method==='POST'&&request.headers.get('origin')===url.origin?{actor:{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true},workflowAccess}:undefined;
+     const response=await withWorkflowToolContext(trusted,()=>app.fetch(request));
      const edited=url.pathname.match(/^\/studio\/api\/stored\/agents\/([\w-]+)(?:\/versions\/[^/]+\/(?:activate|restore))?$/);
      if(response.ok&&edited&&lab.manager?.has(edited[1])&&!['GET','HEAD'].includes(request.method))await lab.manager.refresh(edited[1]);
      return response;
@@ -89,7 +91,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
    if(relative==='index.html'){
     const values={MASTRA_STUDIO_BASE_PATH:'/studio',MASTRA_API_PREFIX:'/studio/api',MASTRA_SERVER_HOST:url.hostname,MASTRA_SERVER_PORT:url.port,MASTRA_SERVER_PROTOCOL:url.protocol.slice(0,-1),MASTRA_AUTO_DETECT_URL:'true',MASTRA_TELEMETRY_DISABLED:'true',MASTRA_HIDE_CLOUD_CTA:'true',MASTRA_EXPERIMENTAL_FEATURES:'false',MASTRA_TEMPLATES:'false',MASTRA_EXPERIMENTAL_UI:'false',MASTRA_THEME_TOGGLE:'true'};
     const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<title>Mastra Studio</title>','<title>Agent Studio</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
-    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root"></div><script type="module" src="/studio/provider-status.js"></script>${lab.manager?'<script type="module" src="/studio/agent-manager-entry.js"></script>':''}`));
+    bytes=Buffer.from(html.replace('<div id="root"></div>',`<div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>${cloud?'云端 Agent Studio':'本地 Studio'} · ${businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root"></div><script type="module" src="/studio/provider-status.js"></script>${lab.manager?'<link rel="stylesheet" href="/studio/workflow-preview/style.css"><script type="module" src="/studio/agent-manager-entry.js"></script>':''}`));
    }else if(relative.endsWith('.js'))bytes=Buffer.from(brandStudioScript(bytes.toString()));
    return new Response(request.method==='HEAD'?null:bytes,{headers:{'Content-Type':type,'Content-Security-Policy':csp}});
   },

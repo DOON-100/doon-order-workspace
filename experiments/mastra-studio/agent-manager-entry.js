@@ -1,5 +1,6 @@
 // Mount project-owned actions beside native Agent lists and prompt previews.
 // Observe SPA renders rather than patching the packaged upstream Studio bundle.
+import {mountWorkflowPreviews} from '/studio/workflow-preview/app.js';
 let pending=false;
 function mountList(){
  const existing=document.querySelector('.doon-agent-actions:not(.doon-workflow-actions)');
@@ -30,7 +31,7 @@ function mountWorkflow(){
  const actions=document.createElement('nav');actions.className='doon-agent-actions doon-workflow-actions';actions.setAttribute('aria-label','工作流管理');
  const link=document.createElement('a');link.className=schedules.className;link.href='/studio/workflow-manager/';link.textContent='编辑与管理';actions.append(link);schedules.before(actions);
 }
-function mount(){pending=false;mountList();mountPrompt();mountWorkflow();}
+function mount(){pending=false;mountList();mountPrompt();mountWorkflow();mountWorkflowPreviews(document.querySelector('#root'));}
 const schedule=()=>{if(!pending){pending=true;requestAnimationFrame(mount);}};
 new MutationObserver(schedule).observe(document.querySelector('#root'),{childList:true,subtree:true});
 schedule();
