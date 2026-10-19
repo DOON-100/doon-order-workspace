@@ -53,6 +53,12 @@ T01 已完成 [19 项脚本操作登记及首批封装范围](docs/data-tools-op
 
 ## 开发与运行
 
+页面读取采用前台优先队列：当前页面最多两个并行请求，切页取消旧页面读取；空闲至少 3 秒后才逐个预取其他已开放页面的小型列表。隐藏标签页不启动预取，附件、历史及大归档按需读取。预取仅在当前账号和工作组的内存中保留至多 5 分钟、合计 4 MB，复用前校验当前成员状态及数据库修订号；保存、切组、退出或版本变化时失效。共享数据按当前页面每 30–60 秒刷新，入组检查每次打开工作空间只做一次。GET 使用单次请求内的记录类型索引，服务端不跨请求缓存业务数据，不改变写入与权限规则。
+
+加载策略回归：`node tests/workspace-loading.mjs`；隔离构建后设置 `DOON_BUILD_DIR=test-output/page-priority-build`，运行 `node standalone/test-page-priority-browser.mjs` 验证当前页优先、后台让路、切页及原记录哈希保全。
+
+内网运行时对 JSON 和页面文本资源协商 gzip；带构建指纹的 JS / CSS 可长期缓存，HTML、业务 API 和附件继续沿用原有不缓存策略。压缩不修改内容或业务记录，正式部署仍须独立备份、校验及发布。
+
 需要 Node.js 22.13+，测试使用 Node.js 的 `node:sqlite`。依赖锁定在 package-lock.json；SheetJS 使用官方 0.20.3 分发地址，参考 https://docs.sheetjs.com/docs/getting-started/installation/nodejs/ 。
 
 ```powershell

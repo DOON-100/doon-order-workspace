@@ -23,6 +23,9 @@ const checks=[];function pass(name){checks.push(name);console.log('PASS '+name);
 function workbook(rows){const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows),'订单');return XLSX.write(book,{type:'buffer',bookType:'xlsx'});}
 async function preview(rows,type='orders',user=admin,bytes){const f=new FormData();f.set('file',new File([bytes||workbook(rows)],type+'.xlsx'));f.set('type',type);const inspect=await ok('inspect',f,user);f.set('mapping',JSON.stringify(inspect.mapping));return ok('preview',f,user);}
 assert.equal((await call('data',undefined,null)).status,401);await ok('enroll',{});assert.equal((await call('data',undefined,clerk)).status,403);pass('匿名及未授权账号无法读取订单');
+assert.equal((await call('read-version',undefined,null)).status,401);assert.equal((await call('read-version',undefined,clerk)).status,403);
+const initialVersion=await ok('read-version'),initialRead=await call('data');assert.equal(String(initialVersion.revision),initialRead.headers.get('X-Workspace-Revision'));await initialRead.arrayBuffer();
+pass('预取版本检查只向当前有效成员开放，读取响应携带同一快照修订号');
 await ok('member',{name:'测试文员',email:clerk.email,role:'clerk',customers:[],active:true});await ok('enroll',{},clerk);
 await ok('member',{name:'测试客服',email:sales.email,role:'sales',customers:['测试客户甲'],active:true});await ok('enroll',{},sales);
 const initial=[{'订单号':'TEST-001','客户':'测试客户甲','客户 PO':'PO-A','图纸编号':'DN-TEST-A','圈色':'C1','镜片类型':'白片','交货批次':'A','订单数量':100,'负责人邮箱':clerk.email,'客户要求交期':'2026-10-10','内部跟进备注':'内部信息不得对客导出'},{'订单号':'TEST-002','客户':'测试客户乙','图纸编号':'DN-TEST-B','圈色':'C2','镜片类型':'太阳片','订单数量':50,'客户要求交期':'2026-10-12'}];
@@ -131,4 +134,5 @@ await import('./customer-quote-write-grants.mjs');
 await import('./fixed-tool-workbook.mjs');
 await import('./fixed-tool-fees.mjs');
 await import('./fixed-data-tools.mjs');
+await import('./workspace-loading.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

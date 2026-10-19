@@ -5,6 +5,19 @@ import {newId,now,email,all} from './domain';
 export class AppError extends Error{constructor(message:string,public status=400){super(message);}}
 export function database(){if(!env.DB)throw new AppError('共享数据库暂不可用，请稍后重试。',503);return env.DB;}
 export function bucket(){if(!env.BUCKET)throw new AppError('文件存储暂不可用，请稍后重试。',503);return env.BUCKET;}
+// Validate speculative browser reads against the current membership and revision
+// without reading orders, archives, attachments or historical snapshots.
+export async function readVersion(){
+ const db=database();
+ for(let retry=0;retry<3;retry++){
+  const start=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
+  const members=await db.prepare("SELECT data FROM records WHERE kind='member'").all<{data:string}>();
+  await actor({revision:start?.revision||0,records:members.results.map(row=>JSON.parse(row.data))});
+  const end=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
+  if(start?.revision===end?.revision)return {revision:end?.revision||0};
+ }
+ throw new AppError('其他成员正在更新，请刷新后重试。',409);
+}
 export async function snapshot():Promise<State>{
  const db=database();await db.prepare("INSERT OR IGNORE INTO workspace_revision (id,revision) VALUES ('main',0)").run();
  for(let retry=0;retry<3;retry++){

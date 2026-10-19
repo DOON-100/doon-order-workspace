@@ -1,4 +1,5 @@
 'use client';
+import {workspaceFetch} from './workspace-read-queue';
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -23,7 +24,7 @@ type Props={data?:Data;projectId?:string;roundId?:string;stepKey?:string;onDirty
 class TaskRequestError extends Error{constructor(message:string,public status:number){super(message);}}
 async function taskRequest(action:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<Feed>{
  // Personal assignments span business groups. Server authorization, not a UI team filter, determines access.
- const response=await fetch('/api/workspace/'+action,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',signal,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});
+ const response=await workspaceFetch('/api/workspace/'+action,{method:body?'POST':'GET',credentials:'same-origin',cache:'no-store',signal,headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined},{unscoped:true});
  let result:any;try{result=await response.json();}catch{throw new TaskRequestError('未取得完整返回，请使用同一请求核实并重试。',response.status>=400?response.status:0);}
  if(!response.ok)throw new TaskRequestError(result.error||'操作未完成，请核对后重试。',response.status);return result;
 }

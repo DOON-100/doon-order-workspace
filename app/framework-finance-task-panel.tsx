@@ -1,4 +1,5 @@
 'use client';
+import {workspaceFetch} from './workspace-read-queue';
 import {useEffect,useRef,useState} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Button} from '@/components/ui/button';
@@ -9,7 +10,7 @@ type Context={recordId?:string;customerId?:string;orderId?:string;tab?:string};
 type Feed={tasks:Entity[];orders:Entity[];sourceRequests:Entity[];financeMembers:Entity[];canCreate:boolean;asOf:string};
 type WriteRequest={scope:string;action:string;body:Record<string,unknown>};
 export async function writeFrameworkFinanceTask(r:WriteRequest){
- let response:Response;try{response=await fetch('/api/workspace/framework-finance-task-'+r.action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(r.body)});}catch{throw Object.assign(new Error('连接中断，操作结果尚不确定。请使用原请求核实重试，避免重复创建。'),{definite:false});}
+ let response:Response;try{response=await workspaceFetch('/api/workspace/framework-finance-task-'+r.action,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(r.body)});}catch{throw Object.assign(new Error('连接中断，操作结果尚不确定。请使用原请求核实重试，避免重复创建。'),{definite:false});}
  let result:any;try{result=await response.json();}catch{throw Object.assign(new Error('主机未返回完整结果，请使用原请求核实重试。'),{definite:response.status>=400&&response.status<500});}
  if(!response.ok)throw Object.assign(new Error(result.error||'操作未完成。'),{definite:response.status>=400&&response.status<500});
  if(!result?.ok||!result?.item?.id)throw Object.assign(new Error('操作结果尚不完整，请使用原请求核实重试。'),{definite:false});return result;

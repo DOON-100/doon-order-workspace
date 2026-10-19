@@ -9,7 +9,8 @@ import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
 const dir=await fs.mkdtemp(path.resolve('test-output/supplier-gateway-'));
 const build=path.join(dir,'build'),dataDir=path.join(dir,'data'),publicOrigin='https://supplier.test';
 await fs.mkdir(build,{recursive:true});await fs.mkdir(path.join(build,'client','assets'),{recursive:true});
-for(const file of ['runtime.mjs','auth.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs'])await fs.copyFile(path.resolve('standalone',file),path.join(build,file));
+for(const file of ['runtime.mjs','auth.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.resolve('standalone',file),path.join(build,file));
+await fs.cp(path.resolve('standalone/schedule-engine'),path.join(build,'schedule-engine'),{recursive:true});
 await fs.writeFile(path.join(build,'client','index.html'),'<html><body>synthetic supplier portal</body></html>');
 await fs.writeFile(path.join(build,'client','assets','test.js'),'/* synthetic asset */');
 // Transport tests use a deliberately tiny synthetic API; business ACL and attachment

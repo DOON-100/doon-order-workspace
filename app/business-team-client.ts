@@ -1,4 +1,5 @@
 'use client';
+import {workspaceFetch} from './workspace-read-queue';
 
 // This is a browser display scope. Every API keeps its existing authorization.
 let selectedBusinessTeam='';
@@ -11,17 +12,17 @@ export function getBusinessTeamScope(){
  return typeof window==='undefined'?'':selectedBusinessTeam;
 }
 
-export function businessTeamFetch(input:RequestInfo|URL,init?:RequestInit):Promise<Response>{
+export function businessTeamFetch(input:RequestInfo|URL,init?:RequestInit,options?:{background?:boolean}):Promise<Response>{
  const teamId=getBusinessTeamScope();
- if(!teamId||typeof window==='undefined')return fetch(input,init);
+ if(!teamId||typeof window==='undefined')return workspaceFetch(input,init,options);
  const request=input instanceof Request?input:undefined;
- if((init?.method||request?.method||'GET').toUpperCase()!=='GET')return fetch(input,init);
+ if((init?.method||request?.method||'GET').toUpperCase()!=='GET')return workspaceFetch(input,init,options);
  let url:URL;
  try{url=new URL(request?.url||String(input),window.location.href);}catch{return fetch(input,init);}
  if(url.origin!==window.location.origin||!url.pathname.startsWith('/api/workspace/'))return fetch(input,init);
  const headers=new Headers(init?.headers??request?.headers);
  headers.set('X-Workspace-Team',teamId);
- return fetch(input,{...init,headers});
+ return workspaceFetch(input,{...init,headers},options);
 }
 
 /** Downloads use the same request scope as list reads; ordinary links cannot carry it. */

@@ -17,7 +17,15 @@ export type Report={id:string;kind:'report';version:number;lineId:string;orderNo
 export type Entity={id:string;kind:string;[key:string]:any};
 export type State={revision:number;records:Entity[]};
 export type PreviewRow={index:number;status:'new'|'update'|'conflict'|'skip'|'error';reason:string;before?:any;after?:any;changes?:string[];expectedVersion?:number};
-export const all=(s:State,kind:string)=>s.records.filter(r=>r.kind===kind);
+// Request-local index, enabled only for GET snapshots. Writes and arbitrary
+// mutable states retain the original filtering behavior; no cross-user cache.
+const readIndexes=new WeakMap<State,{records:Entity[];length:number;kinds:Map<string,Entity[]>}>();
+export function indexReadState(s:State){
+ const kinds=new Map<string,Entity[]>();
+ for(const row of s.records){const rows=kinds.get(row.kind);if(rows)rows.push(row);else kinds.set(row.kind,[row]);}
+ readIndexes.set(s,{records:s.records,length:s.records.length,kinds});return s;
+}
+export const all=(s:State,kind:string)=>{const index=readIndexes.get(s);return index&&index.records===s.records&&index.length===s.records.length?(index.kinds.get(kind)||[]).slice():s.records.filter(r=>r.kind===kind);};
 export const now=()=>new Date().toISOString();
 export const newId=(prefix:string)=>prefix+'_'+crypto.randomUUID();
 export const clean=(x:unknown)=>String(x??'').normalize('NFKC').trim();

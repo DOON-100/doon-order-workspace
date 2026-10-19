@@ -5,11 +5,14 @@ import path from 'node:path';
 import fs from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
+import {gzip} from 'node:zlib';
+import {promisify} from 'node:util';
 import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
 import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
 import {scheduleBridgeConfig,createScheduleBridge} from './agent-schedules.mjs';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
+const compress=promisify(gzip);
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
 const supplierOnly=process.env.DOON_SERVER_MODE==='supplier',gateway=supplierOnly?supplierGatewayConfig():null;
 const employeeGateway=employeeGatewayConfig();
@@ -139,10 +142,17 @@ async function handle(req,res){
    if(!relative||!path.extname(relative))relative='index.html';
    const target=path.resolve(root,relative);if(!target.startsWith(root+path.sep)||relative.split(/[\\/]/).some(p=>p.startsWith('.')))fail('文件不存在。',404);
    const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
-   try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
+   const versioned=/^assets\/[\w-]+-[\w-]{8,}\.(?:js|css)$/.test(relative);
+   try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime,...(versioned?{'Cache-Control':'public, max-age=31536000, immutable'}:{})}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
   }
   const outgoing=new Headers(security);for(const [name,value] of response.headers)outgoing.set(name,value);
-  res.writeHead(response.status,Object.fromEntries(outgoing));res.end(Buffer.from(await response.arrayBuffer()));
+  let payload=Buffer.from(await response.arrayBuffer());
+  const acceptsGzip=String(req.headers['accept-encoding']||'').split(',').some(value=>/^\s*gzip\s*(?:;\s*q=(0(?:\.\d+)?|1(?:\.0+)?))?\s*$/.test(value)&&!/[;]\s*q=0(?:\.0*)?\s*$/.test(value));
+  if(payload.length>=1024&&response.status===200&&!outgoing.has('Content-Encoding')&&/^(?:text\/|application\/json|image\/svg)/.test(outgoing.get('Content-Type')||'')){
+   const vary=outgoing.get('Vary')||'';if(vary!=='*'&&!vary.toLowerCase().split(',').some(value=>value.trim()==='accept-encoding'))outgoing.set('Vary',[vary,'Accept-Encoding'].filter(Boolean).join(', '));
+   if(acceptsGzip){try{payload=await compress(payload,{level:4});outgoing.set('Content-Encoding','gzip');outgoing.set('Content-Length',String(payload.length));}catch{/* Compression is optional; keep the complete original response. */}}
+  }
+  res.writeHead(response.status,Object.fromEntries(outgoing));res.end(payload);
  }catch(e){const status=e.status||500;if(status===500)console.error('请求失败',e.message);res.writeHead(status,{...security,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:status===500?'服务暂不可用，请稍后重试。':e.message}));}
 }
 const server=localTLS?https.createServer({cert:await fs.readFile(process.env.DOON_TLS_CERT),key:await fs.readFile(process.env.DOON_TLS_KEY)},handle):http.createServer(handle);

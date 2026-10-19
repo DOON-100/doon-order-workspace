@@ -17,13 +17,23 @@ async function ok(route,body,cookie){const res=await request(route,body,cookie);
 try{
  for(let i=0;i<40;i++){try{if((await fetch(origin+'/health')).ok)break;}catch{}await new Promise(r=>setTimeout(r,100));}
  assert.equal((await request('/api/workspace/data')).status,401);
+ assert.equal((await request('/api/workspace/read-version')).status,401);
  assert.equal((await request('/api/workspace/data',undefined,'',{'oai-authenticated-user-id':'spoof','oai-authenticated-user-email':'admin@doon.local'})).status,401);
  assert.equal((await request('/api/auth/login',{username:'admin',password:initial},'',{Origin:'https://evil.example'})).status,403);pass('匿名、伪造身份头及跨站登录均无法进入');
  const login=await ok('/api/auth/login',{username:'admin',password:initial});adminCookie=login.res.headers.get('set-cookie').split(';')[0];assert(login.data.user.mustChange);assert.match(login.res.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);assert.equal((await request('/api/workspace/data',undefined,adminCookie)).status,403);
  const changed=await ok('/api/auth/password',{currentPassword:initial,password:'Test-Only-Admin-2026!'},adminCookie);const old=adminCookie;adminCookie=changed.res.headers.get('set-cookie').split(';')[0];assert.equal((await request('/api/workspace/data',undefined,old)).status,401);pass('首次改密后才可操作，旧会话失效');
+ const version=await ok('/api/workspace/read-version',undefined,adminCookie),read=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(String(version.data.revision),read.res.headers.get('X-Workspace-Revision'));
+ const document=await request('/'),html=await document.text(),asset=html.match(/src="([^\"]+\.js)"/)[1];assert.equal(document.headers.get('cache-control'),'no-store');
+ const plainAsset=await request(asset,undefined,'',{'Accept-Encoding':'identity'}),plainBytes=Buffer.from(await plainAsset.arrayBuffer());
+ const zippedAsset=await request(asset,undefined,'',{'Accept-Encoding':'gzip'}),zippedBytes=Buffer.from(await zippedAsset.arrayBuffer());
+ assert.equal(zippedAsset.headers.get('content-encoding'),'gzip');assert.deepEqual(zippedBytes,plainBytes);assert(Number(zippedAsset.headers.get('content-length'))<plainBytes.length*.5);
+ assert.match(zippedAsset.headers.get('cache-control'),/public.*immutable/);assert.match(zippedAsset.headers.get('vary'),/Accept-Encoding/);assert.equal(read.res.headers.get('cache-control'),'no-store');
+ const uncompressed=await request(asset,undefined,'',{'Accept-Encoding':'gzip;q=0'});assert.equal(uncompressed.headers.get('content-encoding'),null);await uncompressed.arrayBuffer();
+ pass('页面资源与JSON支持无损gzip，指纹资源可缓存，HTML和业务API仍不缓存');
  const expandedCustomers=Array.from({length:209},(_,i)=>'TEST-CUSTOMER-'+i);
  await ok('/api/auth/accounts',{username:'scope_test',name:'客户范围容量测试',password:'Test-Scope-Initial!',role:'sales',customers:expandedCustomers},adminCookie);
- assert.deepEqual((await ok('/api/workspace/data',undefined,adminCookie)).data.members.find(m=>m.name==='客户范围容量测试').customers,expandedCustomers);
+ const expandedState=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(expandedState.res.headers.get('content-encoding'),'gzip');assert.equal(expandedState.res.headers.get('cache-control'),'no-store');
+ assert.deepEqual(expandedState.data.members.find(m=>m.name==='客户范围容量测试').customers,expandedCustomers);
  assert.equal((await request('/api/auth/accounts',{username:'scope_overflow',name:'超限测试',password:'Test-Scope-Initial!',role:'sales',customers:Array.from({length:1001},(_,i)=>'TEST-CUSTOMER-'+i)},adminCookie)).status,400);
  pass('员工账号创建支持超过200个客户身份，超1000项仍拒绝');
  await ok('/api/auth/accounts',{username:'clerk',name:'电镀测试',password:'Test-Clerk-Initial!',role:'clerk',departments:['plating'],customers:[]},adminCookie);

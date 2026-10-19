@@ -11,8 +11,8 @@ import {operationGet,operationPost} from '@/lib/operations';
 import {syncFollowColumns} from '@/lib/ledger-edit';
 import {orderExportExtras} from '@/lib/order-export';
 import {z} from 'zod';
-import {actor,audit,AppError,bucket,commit,enroll,failure,json,sameOrigin,snapshot} from '@/lib/store';
-import {all,allowedFields,broad,readsAllOrders,roles,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,productTypeOf,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
+import {actor,audit,AppError,bucket,commit,enroll,failure,json,sameOrigin,snapshot,readVersion} from '@/lib/store';
+import {all,indexReadState,allowedFields,broad,readsAllOrders,roles,businessKey,canRead,clean,email,fields,fieldLabels,mergeFields,newId,normalizeField,now,packed,productTypeOf,progress,validApproval,type Entity,type Member,type Order,type Report,type State,type PreviewRow} from '@/lib/domain';
 import {makeWorkbook,openWorkbook,previewOrders,previewReports,sha,sheetRows,suggestMapping,isOriginalLedger,detectHeader} from '@/lib/workbooks';
 import {canSeeSupplierPrice} from '@/lib/suppliers';
 import {customerQuoteGet,customerQuotePost} from '@/lib/customer-quote-api';
@@ -116,7 +116,13 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  throw new AppError('接口不存在。',404);
 }catch(e){return failure(e);}}
 export async function GET(req:Request,ctx:Context){try{
- const {action}=await ctx.params,s=await snapshot(),m=await actor(s);
+ const {action}=await ctx.params;
+ if(action==='read-version')return json(await readVersion());
+ const s=indexReadState(await snapshot()),m=await actor(s);
+ const response=await workspaceRead(req,ctx,action,s,m);
+ response.headers.set('X-Workspace-Revision',String(s.revision));return response;
+}catch(e){return failure(e);}}
+async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Member){
  const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
@@ -125,7 +131,7 @@ export async function GET(req:Request,ctx:Context){try{
  if(action==='business-team-data')return json(businessTeamData(s,m));
  const response=await workspaceGet(req,ctx,s,m);
  return await scopeBusinessTeamResponse(action,req,s,m,response);
-}catch(e){return failure(e);}}
+}
 export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}

@@ -1,4 +1,5 @@
 'use client';
+import {workspaceFetch} from './workspace-read-queue';
 import {useMemo,useState} from 'react';
 import {CustomerDirectoryPanel} from './customer-directory-panel';
 import {ArrowRight,CheckCircle2,Download,FileSpreadsheet,RefreshCw,UploadCloud,UsersRound} from 'lucide-react';
@@ -11,7 +12,7 @@ import {broad,productTypeOf,readsAllOrders,type CustomerAccount,type Order} from
 
 type Side='sales'|'service'|'pmc';
 const statusClass=(s:string)=>s.includes('退回')?'red':s.includes('待')?'amber':s.includes('已')||s==='生产中'?'green':'blue';
-async function upload(action:string,file:File):Promise<{error?:string;count?:number;item?:unknown}>{const form=new FormData();form.set('file',file);const res=await fetch('/api/workspace/'+action,{method:'POST',body:form}),body=await res.json() as {error?:string;count?:number;item?:unknown};if(!res.ok)throw new Error(body.error||'上传失败');return body;}
+async function upload(action:string,file:File):Promise<{error?:string;count?:number;item?:unknown}>{const form=new FormData();form.set('file',file);const res=await workspaceFetch('/api/workspace/'+action,{method:'POST',body:form}),body=await res.json() as {error?:string;count?:number;item?:unknown};if(!res.ok)throw new Error(body.error||'上传失败');return body;}
 function download(url:string){const a=document.createElement('a');a.href=url;a.click();}
 const owns=(a:CustomerAccount|null|undefined,name:string,side:Side)=>a===null?false:!a||(side==='sales'?a.salesName:side==='service'?a.serviceName:a.pmcName).toLowerCase()===name.toLowerCase();
 
