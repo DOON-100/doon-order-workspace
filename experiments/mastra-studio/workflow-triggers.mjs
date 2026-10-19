@@ -1,3 +1,4 @@
+import {validateSchedule} from './workflow-schedule.mjs';
 // Pure, deterministic conditions. Inputs must already be projected by the source
 // module's authorization code. Never pass raw database rows to this evaluator.
 export const triggerOperators={eq:'等于',ne:'不等于',gt:'大于 / 晚于',gte:'大于等于',lt:'小于 / 早于',lte:'小于等于',contains:'包含',empty:'为空',notEmpty:'不为空',changed:'发生变化',unchanged:'没有变化',becameEmpty:'从有值变为空',becameSet:'从空变为有值'};
@@ -53,7 +54,7 @@ export function validateTrigger(input,catalog){
  if(!['manual','change','schedule'].includes(t.mode)||!['any','all'].includes(t.watchMode)||!['every','enter'].includes(t.transition)||t.dedupe!=='event-record'||t.ignoreWorkflow!==true)throw new Error('触发方式或去重策略无效');
  if(!Array.isArray(t.events)||!t.events.length||t.events.some(e=>!['created','updated'].includes(e))||new Set(t.events).size!==t.events.length)throw new Error('请选择新增或更新事件');
  if(!Array.isArray(t.watchFields)||t.watchFields.length>100||new Set(t.watchFields).size!==t.watchFields.length)throw new Error('监听字段无效');
- if(!t.schedule||Object.keys(t.schedule).some(k=>!['time','timezone'].includes(k))||!/^([01]\d|2[0-3]):[0-5]\d$/.test(t.schedule.time)||t.schedule.timezone!=='Asia/Shanghai')throw new Error('时间使用北京时间 HH:mm');
+ validateSchedule(t.schedule);
  if(t.mode!=='manual'&&(typeof t.source!=='string'||!t.source||t.source.length>160||!t.dataset))throw new Error('请选择业务模块和数据对象');
  if(t.dataset)parts(t.dataset);
  if(!t.scope||typeof t.scope!=='object'||Array.isArray(t.scope)||Object.entries(t.scope).some(([k,v])=>!['customerId','projectId','id','teamId'].includes(k)||typeof v!=='string'||v.length>160))throw new Error('查询范围无效');

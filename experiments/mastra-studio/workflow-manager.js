@@ -1,3 +1,5 @@
+import {scheduleFields} from '/studio/workflow-schedule-form.js';
+import {describeSchedule,nextScheduleRuns} from '/studio/workflow-schedule.js';
 const $=selector=>document.querySelector(selector),create=(tag,text,className)=>{const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(className)e.className=className;return e;};
 const rejectField=Symbol('reject-field-change');
 let data={workflows:[],catalog:[],agents:[]},current=null,selected=null,dirty=false,busy=false,reviews=[],reviewing=null,lastResult=null,creationId=null,pendingDecision=null,connecting=null,editingEdge=null;
@@ -96,7 +98,7 @@ function renderTrigger(panel,node){
  if(!triggerSources){panel.append(create('p','正在读取当前授权字段目录…','wm-help'));if(!triggerLoad){triggerLoad=1;api('sources').then(result=>{triggerSources=result;if(selected===node.id)inspect();}).catch(e=>status(e.message,true)).finally(()=>{triggerLoad=0;});}return;}
  const t=node.params.trigger||structuredClone(triggerSources.defaults);
  panel.append(create('p',triggerSources.mode==='synthetic'?'合成字段示例 · 未连接正式业务；不代表真实权限或完整业务字段。':'字段范围：当前登录用户可读的数据视图，含嵌套字段。','wm-help'));
- field(panel,'触发方式',t.mode,v=>{const cfg=triggerConfig(node);cfg.mode=v;if(v==='schedule')cfg.transition='every';inspect();},{options:[['manual','手动启动'],['change','业务记录发生变化'],['schedule','每天定时检查']]});
+ field(panel,'触发方式',t.mode,v=>{const cfg=triggerConfig(node);cfg.mode=v;if(v==='schedule')cfg.transition='every';inspect();},{options:[['manual','手动启动'],['change','业务记录发生变化'],['schedule','定时检查']]});
  if(t.mode==='manual'){panel.append(create('p','当前由手动试运行或已授权调用启动。选择其他方式后设置业务字段。','wm-help'));return;}
  field(panel,'业务模块',t.source,v=>{const cfg=triggerConfig(node);cfg.source=v;cfg.dataset='';cfg.scope={};cfg.watchFields=[];cfg.conditions={mode:'all',items:[]};inspect();},{options:[['','请选择模块'],...triggerSources.modules.map(s=>[s.id,s.label])]});
  if(!t.source)return;
@@ -115,8 +117,8 @@ function renderTrigger(panel,node){
   const details=create('details',undefined,'wm-trigger-watch'),summary=create('summary',`选择监听字段（${t.watchFields.length}）`),search=create('input'),list=create('div');search.placeholder='搜索字段名称或路径';search.setAttribute('aria-label','搜索监听字段');search.type='search';
   for(const f of dataset.fields){const label=create('label'),check=create('input');check.type='checkbox';check.checked=t.watchFields.includes(f.path);check.setAttribute('aria-label','监听：'+f.label);check.disabled=busy;check.addEventListener('change',()=>{const cfg=triggerConfig(node);cfg.watchFields=cfg.watchFields.filter(v=>v!==f.path);if(check.checked)cfg.watchFields.push(f.path);summary.textContent=`选择监听字段（${cfg.watchFields.length}）`;markDirty();});label.dataset.search=(f.label+' '+f.path).toLowerCase();label.append(check,create('span',f.label));list.append(label);}
   search.addEventListener('input',()=>{for(const label of list.children)label.hidden=!label.dataset.search.includes(search.value.trim().toLowerCase());});details.append(summary,search,list);panel.append(details,create('p','未选字段时监听任意可读字段。新增事件按新记录判断；空值不当作 0。','wm-help'));
- }else field(panel,'每天执行时间（北京时间）',t.schedule.time,v=>{triggerConfig(node).schedule.time=v;},{type:'time'});
- if(t.mode==='change')field(panel,'条件满足时机',t.transition,v=>triggerConfig(node).transition=v,{options:[['every','每次事件满足条件'],['enter','从不满足变为满足']]});else panel.append(create('p','定时检查按当前值筛选，每天每条记录最多运行一次。','wm-help'));
+ }else{const box=create('div',undefined,'wp-schedule-settings'),fields=create('div'),summary=create('p');const update=value=>{try{summary.textContent=describeSchedule(value)+'；下次计划：'+nextScheduleRuns(value)[0]?.replace('T',' ').replace('+08:00','');}catch(error){summary.textContent=error.message;}};scheduleFields(fields,t.schedule,value=>{triggerConfig(node).schedule=value;markDirty();update(value);});update(t.schedule);box.append(fields,summary);panel.append(box);}
+ if(t.mode==='change')field(panel,'条件满足时机',t.transition,v=>triggerConfig(node).transition=v,{options:[['every','每次事件满足条件'],['enter','从不满足变为满足']]});else panel.append(create('p','定时读取当前值；每个计划日期检查一次。发布后可在 Schedules 暂停或启用。','wm-help'));
  const conditions=create('button','编辑筛选条件（'+countConditions(t.conditions)+'）');conditions.disabled=busy;conditions.addEventListener('click',()=>{conditionNode=node;triggerConfig(node);renderConditions();$('#trigger-conditions-dialog').showModal();});
  const test=create('button','测试触发条件');test.disabled=busy;test.addEventListener('click',()=>openTriggerTest(node));
  const refresh=create('button','刷新字段目录');refresh.disabled=busy;refresh.addEventListener('click',()=>{triggerCatalogKey='';inspect();});panel.append(conditions,test,refresh,create('p','每个事件与记录只执行一次；忽略工作流自身产生的变更。发布后从新事件开始，不回跑历史。','wm-help'),create('p',triggerCatalog.eventsEnabled?'事件日志已启用；仅隔离合成环境的后台消费器可执行。':'自动触发未启用。当前可以配置、测试和保存规则。','wm-help'));

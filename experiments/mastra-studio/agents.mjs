@@ -13,6 +13,7 @@ import {z} from 'zod';
 import {localModel} from './offline-model.mjs';
 import {instructionsFor,profiles} from './profiles.mjs';
 import {createWorkflowTools} from './workflow-tools.mjs';
+import {defaultTrigger} from './workflow-triggers.mjs';
 
 export const syntheticOrders=Object.freeze([
  {orderId:'SYN-STUDIO-001',material:'合成镜腿',quantity:120,missing:30,supplier:'合成供应商甲',promisedDate:'2026-10-14',received:0,version:1},
@@ -33,12 +34,12 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
   const lastUser=prompt.findLastIndex(message=>message.role==='user'),recent=prompt.slice(lastUser+1);
   const results=recent.filter(message=>message.role==='tool').flatMap(message=>message.content||[]);
   const userText=JSON.stringify(prompt[lastUser]?.content||'');
-  if(delegate&&userText.includes('/工作流工具演练')){
+  if(delegate&&(userText.includes('/工作流工具演练')||userText.includes('/定时工作流演练'))){
    const receipt=results.find(result=>result.toolName==='previewWorkflow');
    if(receipt){const output=receipt.output?.value??receipt.output;return[{type:'text',text:output?.previewUrl?'【离线固定模板工具演练】\n[预览工作流]('+output.previewUrl+')\n请在下方查看流程并点击“确认保存”。确认前不会出现在 Workflows。本次仅验证工具与确认链路，不代表真实模型理解了自然语言。':'预览工具未成功返回，请核对当前登录身份和工具状态。'}];}
-   return[{type:'tool-call',toolCallId:randomUUID(),toolName:'previewWorkflow',input:JSON.stringify(workflowToolDemo())}];
+   return[{type:'tool-call',toolCallId:randomUUID(),toolName:'previewWorkflow',input:JSON.stringify(workflowToolDemo(userText.includes('/定时工作流演练')))}];
   }
-  if(delegate&&/工作流|workflow/i.test(userText))return[{type:'text',text:'当前是离线脚本，不能理解任意自然语言来设计工作流。输入 /工作流工具演练 可预览固定的“读取记录→人工审核→汇总”模板，再由你点击确认保存。启用真实模型后，由模型根据你的描述生成预览。'}];
+  if(delegate&&/工作流|workflow|定时|每天|每周|工作日/i.test(userText))return[{type:'text',text:'当前是离线脚本，不能理解任意自然语言来设计工作流。输入 /工作流工具演练 或 /定时工作流演练 可预览固定的“读取记录→人工审核→汇总”模板并设置时间，再由你点击确认保存。启用真实模型后，由模型根据你的描述生成预览。'}];
   if(!results.length)return[{type:'tool-call',toolCallId:randomUUID(),toolName:'inspectOverdue',input:'{}'}];
   if(delegate&&!results.some(result=>result.toolName==='delegateProcurement'))return[{type:'tool-call',toolCallId:randomUUID(),toolName:'delegateProcurement',input:JSON.stringify({orderId:'SYN-STUDIO-001'})}];
   if(!delegate&&!results.some(result=>result.toolName==='draftFollowup'))return[{type:'tool-call',toolCallId:randomUUID(),toolName:'draftFollowup',input:JSON.stringify({orderId:'SYN-STUDIO-001'})}];
@@ -79,7 +80,9 @@ export function createAgents(dataDir,{liveModel,storage:providedStorage,serviceN
 
 // Explicit, fixed fixture for exercising the real Tool pipeline offline.
 // This is never presented as free-form language understanding.
-export function workflowToolDemo(){
+export function workflowToolDemo(scheduled=false){
  const node=(id,type,label,y,params={})=>({id,type,label,x:180,y,params});
- return{requestId:randomUUID(),name:'SYN Agent Tool 创建与人工审核演练',description:'离线固定模板；只保存草稿，不发布或运行。',nodes:[node('start','start','开始',40),node('record','record','读取触发记录',170),node('review','review','人工审核',300,{title:'核对本次记录',role:'technical',reviewerId:'',instructions:'核对依据后决定通过或拒绝。',maxAgeMinutes:30}),node('summary','summary','汇总结果',450,{title:'审核后汇总'}),node('end','end','结束',600)],edges:[{from:'start',to:'record',port:'next'},{from:'record',to:'review',port:'next'},{from:'review',to:'summary',port:'approved'},{from:'review',to:'end',port:'rejected'},{from:'summary',to:'end',port:'next'}]};
+ const result={requestId:randomUUID(),name:'SYN Agent Tool 创建与人工审核演练',description:'离线固定模板；只保存草稿，不发布或运行。',nodes:[node('start','start','开始',40),node('record','record','读取触发记录',170),node('review','review','人工审核',300,{title:'核对本次记录',role:'technical',reviewerId:'',instructions:'核对依据后决定通过或拒绝。',maxAgeMinutes:30}),node('summary','summary','汇总结果',450,{title:'审核后汇总'}),node('end','end','结束',600)],edges:[{from:'start',to:'record',port:'next'},{from:'record',to:'review',port:'next'},{from:'review',to:'summary',port:'approved'},{from:'review',to:'end',port:'rejected'},{from:'summary',to:'end',port:'next'}]};
+ if(scheduled){result.name='SYN 定时工作流与人工审核演练';result.nodes[0].params.trigger={...defaultTrigger(),mode:'schedule',source:'drawing-data',dataset:'/records',schedule:{time:'09:00',timezone:'Asia/Shanghai',frequency:'weekdays',weekdays:[]}};}
+ return result;
 }

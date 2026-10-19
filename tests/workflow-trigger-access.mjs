@@ -36,6 +36,10 @@ test('全模块触发字段 API：真实权限投影、原子 outbox、回滚、
   const trigger={...defaultTrigger(),mode:'change',source:'data',dataset:'/orders',watchFields:['/notes'],conditions:{mode:'all',items:[{field:'/notes',operator:'eq',compare:'literal',value:'SYN matched'}]}};
   const page=await call('workflow-trigger-events',{trigger,cursor:0});assert.equal(page.status,200,JSON.stringify(page.body));assert.equal(page.body.events.length,1);assert.equal(page.body.events[0].recordId,a.id);assert.equal(page.body.events[0].matched,true);assert.ok(!JSON.stringify(page.body).includes('SYN-PRIVATE-B'));
   const again=await call('workflow-trigger-events',{trigger,cursor:page.body.cursor});assert.equal(again.body.events.length,0);
+  const weekday=new Date(Date.now()+8*3600000).getUTCDay()||7;
+  const scheduled={...trigger,mode:'schedule',schedule:{time:'00:00',timezone:'Asia/Shanghai',frequency:'weekly',weekdays:[weekday%7+1]}};
+  const notToday=await call('workflow-trigger-schedule',{trigger:scheduled});assert.equal(notToday.status,200);assert.equal(notToday.body.events.length,0,'非计划星期不扫描执行事件');
+  const today=await call('workflow-trigger-schedule',{trigger:{...scheduled,schedule:{...scheduled.schedule,weekdays:[weekday]}}});assert.equal(today.status,200);assert(today.body.events.length>0);assert(today.body.events.every(e=>e.recordId===a.id),'定时数据仍受当前账号范围限制');
   const bad=await call('workflow-trigger-events',{trigger:{...trigger,watchFields:['/privateField']},cursor:0});assert.equal(bad.status,403);
   const verified=await call('workflow-trigger-verify',{trigger,event:page.body.events[0]});assert.equal(verified.body.valid,true);
   const results=await Promise.allSettled([api.commit(1,[{...nextA,version:3,notes:'SYN concurrent A'}]),api.commit(1,[{...nextB,version:3,notes:'SYN concurrent B'}])]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(db.prepare('SELECT count(*) n FROM workflow_event_outbox').get().n,2);

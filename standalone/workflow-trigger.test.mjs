@@ -29,7 +29,16 @@ test('合成 HTTP 闭环：当前登录权限 → 全模块字段 → 事务变�
   let task;for(let n=0;n<30;n++){task=(await request('/studio/workflow-manager/api/reviews')).reviews.find(r=>r.workflowId===row.id);if(task)break;await new Promise(r=>setTimeout(r,250));}
   assert.ok(task,'真实保存事件应在后台启动流程并暂停审核');assert.equal(task.payload.trigger.recordId,order.id);assert.equal(task.payload.records[0].notes,'SYN HTTP trigger');
   const approved=await request('/studio/workflow-manager/api/reviews/'+task.taskId+'/decision',{action:'approve',comment:'SYN 核对隔离环境的触发记录与前后值',expectedVersionId:task.versionId,requestId:crypto.randomUUID()});assert.equal(approved.execution.status,'success');
-  await stop();await start();await request('/studio/workflow-manager/api/sources?source=data');await new Promise(r=>setTimeout(r,3500));
+  const planned=new Date(Date.now()+60000+8*3600000).toISOString(),scheduleTime=planned.slice(11,16),dueAt=Date.parse(planned.slice(0,10)+'T'+scheduleTime+':00+08:00'),scheduled=structuredClone(graph);
+  scheduled.name='SYN HTTP 定时核查';scheduled.nodes[0].params.trigger={...trigger,mode:'schedule',watchFields:[],schedule:{time:scheduleTime,timezone:'Asia/Shanghai',frequency:'daily',weekdays:[]}};
+  const createdSchedule=await fetch(origin+'/studio/workflow-manager/api/workflows',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json',Cookie:cookie},body:JSON.stringify({...scheduled,requestId:crypto.randomUUID()})});assert.equal(createdSchedule.status,201);const scheduleDraft=await createdSchedule.json();
+  const publishedSchedule=await request('/studio/workflow-manager/api/workflows/'+scheduleDraft.id+'/publish',{expectedVersionId:scheduleDraft.versionId});
+  assert.equal((await request('/studio/workflow-manager/api/schedules')).schedules.find(s=>s.id===publishedSchedule.id).state,'active');
+  await stop();await start();
+  // Do not visit Studio: its timer must load persisted workflows on its own.
+  while(Date.now()<dueAt+4500)await new Promise(r=>setTimeout(r,Math.min(1000,dueAt+4500-Date.now())));
+  const scheduledReviews=(await request('/studio/workflow-manager/api/reviews')).reviews.filter(r=>r.workflowId===publishedSchedule.id);assert.equal(scheduledReviews.length,1,'重启后无需打开 Studio，定时批次在真实后台自动启动');assert.equal(scheduledReviews[0].status,'pending');
+  await new Promise(r=>setTimeout(r,3500));assert.equal((await request('/studio/workflow-manager/api/reviews')).reviews.filter(r=>r.workflowId===publishedSchedule.id).length,1,'轮询不会重复启动本日定时批次');
   const reviews=(await request('/studio/workflow-manager/api/reviews')).reviews.filter(r=>r.workflowId===row.id);assert.equal(reviews.length,1,'重启不重复创建审核任务');
   const receipts=(await request('/studio/workflow-manager/api/deliveries')).deliveries.filter(r=>r.workflowId===row.id);assert.equal(new Set(receipts.map(r=>r.runId)).size,1);
  }finally{await stop();if(!dir.startsWith(path.resolve('test-output')+path.sep))throw Error('Unexpected test path');await fs.rm(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100}).catch(error=>{if(error.code!=='EBUSY')throw error;});}

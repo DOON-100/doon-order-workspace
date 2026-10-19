@@ -3,6 +3,7 @@ import {createWorkflow,createStep} from '@mastra/core/workflows';
 import {z} from 'zod';
 import {defaultTrigger,validateTrigger,evaluateTrigger,projectedDatasets,triggerOperators} from './workflow-triggers.mjs';
 import {workflowSources,syntheticSource} from './workflow-sources.mjs';
+import {validateSchedule,describeSchedule,nextScheduleRuns,scheduleSlot} from './workflow-schedule.mjs';
 
 const kind='doon-visual-workflow-ledger-v1',id=z.string().regex(/^[\w-]{1,160}$/).refine(value=>!['__proto__','constructor','prototype'].includes(value));
 const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -97,6 +98,22 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   const row=await append('proposal',key,{ownerId:actor.id,config,configHash:hash(config),requestId,status:'pending',sourceLabel:workflowSources.find(s=>s.id===trigger?.source)?.label||'',fieldLabels:Object.fromEntries((dataset?.fields||[]).map(f=>[f.path,f.label])),validUntil:new Date(now()+30*60000).toISOString()},null);
   return proposalDetail(row);
  });
+ async function scheduleList(actor,access){
+  const metadata=await sourceCatalog(access),runtimeReady=metadata.mode==='authorized'&&metadata.eventsEnabled===true&&access?.syntheticOnly===true,configs=new Map();for(const row of await records('config'))configs.set(row.entityId,row);
+  const schedules=[];
+  for(const saved of configs.values()){
+   if(!canReadConfig(saved,actor))continue;
+   const published=saved.payload.publishedVersionId?await requireVersion(saved.payload.publishedVersionId):null,activeTrigger=published?.payload.config.nodes.find(n=>n.type==='start')?.params.trigger,draftTrigger=saved.payload.config.nodes.find(n=>n.type==='start')?.params.trigger;
+   if(activeTrigger?.mode!=='schedule'&&draftTrigger?.mode!=='schedule')continue;
+   const row=activeTrigger?.mode==='schedule'?published:saved,trigger=activeTrigger?.mode==='schedule'?activeTrigger:draftTrigger,control=await latest('schedule-control',saved.entityId),isPublished=row.versionId===saved.payload.publishedVersionId,enabled=isPublished&&(!control||control.payload.enabled&&control.payload.configVersionId===row.versionId),slot=scheduleSlot(trigger.schedule,now()),receipt=await latest('schedule-slot','schedule-slot-'+hash([row.versionId,slot.day]));
+   let readable=true;if(access)try{await checkedTrigger(row.payload.config,access);}catch{readable=false;}
+   const state=!isPublished?'draft':control&&control.payload.configVersionId!==row.versionId?'version-changed':!enabled?'paused':!runtimeReady?'unavailable':!readable?'blocked':'active';
+   const runs=nextScheduleRuns(trigger.schedule,now()),activated=Math.max(Date.parse(row.payload.activatedAt||row.createdAt),Date.parse(control?.payload.at||row.createdAt));
+   if(state==='active'&&slot.due&&!receipt&&Date.parse(slot.dueAt)>activated)runs.unshift(slot.dueAt);
+   schedules.push({id:saved.entityId,name:row.payload.config.name,versionId:row.versionId,hasDraft:saved.versionId!==row.versionId,schedule:validateSchedule(trigger.schedule),summary:describeSchedule(trigger.schedule),nextRuns:runs.slice(0,3),state,enabled:!!enabled,controlVersionId:control?.versionId||null,canEnable:isPublished&&runtimeReady&&readable&&row.payload.ownerId===actor?.id,lastCheck:receipt?.payload||null,editUrl:'/studio/workflow-manager/?edit='+encodeURIComponent(saved.entityId)});
+  }
+  return{schedules,runtimeReady,message:runtimeReady?'后台调度已接通；执行时仍会核对当前权限。':'当前实例未接通自动调度。可设置并保存时间，不能宣称任务已经在运行。'};
+ }
  async function ensureReview({row,node,runId,engineId,preview,inputData}){
   return serial(async()=>{
    const taskId='review-'+hash([row.versionId,node.id,runId]).slice(0,40),existing=await latest('review',taskId);if(existing)return existing;
@@ -176,6 +193,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
   const url=new URL(request.url),base='/studio/workflow-manager/api/',route=url.pathname.slice(base.length);
   try{
    if(['GET','HEAD'].includes(request.method)){
+    if(route==='schedules')return json(await scheduleList(actor,workflowAccess));
     const proposal=route.match(/^proposals\/(proposal-[\w-]+)$/);if(proposal)return json(proposalDetail(await requireProposal(proposal[1],actor)));
     if(route==='sources')return json({...await sourceCatalog(workflowAccess,url.searchParams.get('source')||undefined,Object.fromEntries([...url.searchParams].filter(([k])=>['customerId','projectId','id','teamId'].includes(k)))),operators:triggerOperators,defaults:defaultTrigger()});
     if(route==='deliveries')return json({deliveries:(await records('delivery')).filter(r=>r.payload.ownerId===actor?.id).map(r=>({id:r.entityId,workflowId:r.payload.workflowId,eventId:r.payload.eventId,recordId:r.payload.recordId,runId:r.payload.execution?.runId||r.payload.runId,status:r.payload.execution?.status||r.payload.status})).slice(-100).reverse()});
@@ -186,6 +204,18 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
    }
    if(request.headers.get('origin')!==url.origin)throw fail('不允许跨站修改工作流或审核。',403);
    if(!request.headers.get('content-type')?.startsWith('application/json'))throw fail('请求格式不正确。',415);
+   const scheduleAction=route.match(/^schedules\/([\w-]+)\/state$/);
+   if(scheduleAction&&request.method==='POST')return await serial(async()=>{
+    if(!actor?.id||!['admin','programmer'].includes(actor.role))throw fail('需要有效的 Studio 管理身份。',403);
+    const body=await readBody(request,z.object({expectedVersionId:id,expectedControlVersionId:id.nullable(),enabled:z.boolean()}).strict()),saved=await requireConfig(scheduleAction[1]);
+    if(saved.payload.ownerId!==actor.id||!saved.payload.publishedVersionId)throw fail('只能管理本人已发布的定时工作流。',403);
+    const row=await requireVersion(saved.payload.publishedVersionId),control=await latest('schedule-control',saved.entityId),trigger=row.payload.config.nodes.find(n=>n.type==='start')?.params.trigger;
+    if(row.versionId!==body.expectedVersionId||(control?.versionId||null)!==body.expectedControlVersionId)throw fail('定时任务版本或状态已变化，请刷新后重试。',409);
+    if(trigger?.mode!=='schedule')throw fail('当前发布版本不是定时工作流。',409);
+    if(body.enabled){const metadata=await checkedTrigger(row.payload.config,workflowAccess);if(!workflowAccess?.syntheticOnly||metadata?.mode!=='authorized'||!metadata.eventsEnabled)throw fail('此实例尚未接通后台调度，暂不能启用。',409);}
+    await append('schedule-control',saved.entityId,{ownerId:actor.id,configVersionId:row.versionId,enabled:body.enabled,at:new Date(now()).toISOString(),actor:{id:actor.id,name:actor.name}},control);
+    return json({id:saved.entityId,enabled:body.enabled});
+   });
    const proposalAction=route.match(/^proposals\/(proposal-[\w-]+)\/(confirm|cancel)$/);
    if(proposalAction&&request.method==='POST')return await serial(async()=>{
     if(!actor?.id||!['admin','programmer'].includes(actor.role))throw fail('需要有效的 Studio 管理身份。',403);
@@ -198,6 +228,16 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     // supplied in the confirmation request. Recheck current field permissions.
     const {workflow}=await saveNewDraft({...p.config,requestId:p.requestId},{actor,workflowAccess,proposalId:current.entityId});
     return json(proposalDetail(await append('proposal',current.entityId,{...p,status:'confirmed',workflowId:workflow.id,workflowVersionId:workflow.versionId,confirmedAt:new Date(now()).toISOString()},current)));
+   });
+   const proposalSchedule=route.match(/^proposals\/(proposal-[\w-]+)\/schedule$/);
+   if(proposalSchedule&&request.method==='PATCH')return await serial(async()=>{
+    if(!actor?.id||!['admin','programmer'].includes(actor.role))throw fail('需要有效的 Studio 管理身份。',403);
+    const body=await readBody(request,z.object({expectedVersionId:id,schedule:z.any()}).strict()),current=await requireProposal(proposalSchedule[1],actor),p=current.payload;
+    if(current.versionId!==body.expectedVersionId||p.status!=='pending'||new Date(p.validUntil).getTime()<=now())throw fail('预览状态已变化或过期，请重新生成。',409);
+    const config=structuredClone(p.config),start=config.nodes.find(n=>n.type==='start');if(start.params.trigger?.mode!=='schedule')throw fail('此预览不是定时工作流。',409);
+    try{start.params.trigger.schedule=validateSchedule(body.schedule);}catch(error){throw fail(error.message);}
+    await checked(config);await checkedTrigger(config,workflowAccess);
+    return json(proposalDetail(await append('proposal',current.entityId,{...p,config,configHash:hash(config)},current)));
    });
    const target=route.match(/^workflows\/([\w-]+)/);if(target&&!canReadConfig(await requireConfig(target[1]),actor))throw fail('该触发规则属于其他配置人。',403);
    const triggerCheck=route.match(/^workflows\/([\w-]+)\/trigger-check$/);
@@ -251,11 +291,13 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
     if(!saved.payload.publishedVersionId)continue;const row=await requireVersion(saved.payload.publishedVersionId),trigger=row.payload.config.nodes.find(n=>n.type==='start')?.params.trigger;
     if(!trigger||trigger.mode==='manual'||!row.payload.ownerId||row.payload.triggerMode!=='authorized')continue;
     try{
+     const control=trigger.mode==='schedule'?await latest('schedule-control',row.entityId):null,slot=trigger.mode==='schedule'?scheduleSlot(trigger.schedule,now()):null,slotId=slot?'schedule-slot-'+hash([row.versionId,slot.day]):null;
+     if(slot&&(!slot.due||control&&(!control.payload.enabled||control.payload.configVersionId!==row.versionId)||await latest('schedule-slot',slotId)))continue;
      const access=await accessForOwner(row.payload.ownerId);if(!access?.syntheticOnly)continue;
      await checkedTrigger(row.payload.config,access);
      const cursorId='trigger-cursor-'+hash(row.versionId),cursor=await latest('cursor',cursorId),page=trigger.mode==='schedule'?await access.schedule(trigger):await access.poll(trigger,cursor?.payload.cursor??row.payload.activationCursor);
      if(!page.enabled)continue;
-     if(trigger.mode==='schedule'&&page.day&&new Date(page.day+'T'+trigger.schedule.time+':00+08:00').getTime()<=Date.parse(row.payload.activatedAt))continue;
+     if(slot&&(page.day!==slot.day||Date.parse(slot.dueAt)<=Math.max(Date.parse(row.payload.activatedAt),Date.parse(control?.payload.at||row.payload.activatedAt))))continue;
      let complete=true;for(const candidate of page.events.filter(e=>e.matched)){
       const deliveryId='trigger-delivery-'+hash([row.versionId,candidate.id,candidate.recordId]),previous=await latest('delivery',deliveryId);if(previous?.payload.execution)continue;
       const event={...candidate,scope:trigger.scope,syntheticOnly:true,triggerConfig:trigger},runId='trigger-'+hash(deliveryId).slice(0,40),workflow=compile(row,{engineId:'trigger-'+row.versionId,triggerEvent:event});
@@ -265,6 +307,7 @@ export async function createWorkflowManager({mastra,storage,tools,sourceFingerpr
       try{const run=await workflow.createRun({runId}),output=await run.start({inputData:{}}),execution={status:output.status,runId,result:output.result||null};await serial(()=>append('delivery',deliveryId,{...receipt.payload,execution},receipt));results.push({workflowId:row.entityId,status:output.status,deliveryId});}catch{complete=false;results.push({workflowId:row.entityId,status:'needs-attention',deliveryId});}
      }
      if(complete&&trigger.mode==='change'&&page.cursor>(cursor?.payload.cursor??row.payload.activationCursor))await serial(()=>append('cursor',cursorId,{cursor:page.cursor},cursor));
+     if(complete&&slot)await serial(()=>append('schedule-slot',slotId,{ownerId:row.payload.ownerId,workflowId:row.entityId,configVersionId:row.versionId,day:slot.day,dueAt:slot.dueAt,checkedAt:new Date(now()).toISOString(),matched:page.events.filter(e=>e.matched).length},null));
     }catch{results.push({workflowId:row.entityId,status:'blocked'});}
    }
    return results;

@@ -6,6 +6,7 @@ import {AppError,database,json} from './store';
 import {workflowEventStates,workflowEventsEnabled} from './workflow-events';
 import {workflowSources} from '../experiments/mastra-studio/workflow-sources.mjs';
 import {describeDataset,equal,evaluateTrigger,projectedDatasets,validateTrigger,valueAt,operatorsFor} from '../experiments/mastra-studio/workflow-triggers.mjs';
+import {scheduleSlot} from '../experiments/mastra-studio/workflow-schedule.mjs';
 type ReadView=(action:string,req:Request,s:State,m:Member)=>Promise<Response>;
 type Row=Record<string,any>;
 const scopeKeys=['customerId','projectId','id','teamId'];
@@ -59,8 +60,8 @@ export async function workflowSourcePost(action:string,req:Request,s:State,m:Mem
  }
  if(!workflowEventsEnabled(env))return json({enabled:false,mode:'authorized',events:[],cursor:s.revision,message:'业务事件采集未启用。规则可配置，不能宣称已开始监听。'});
  if(action==='workflow-trigger-schedule'){
-  const time=new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date()),day=time.slice(0,10),clock=time.slice(11,16);
-  if(trigger.mode!=='schedule'||clock<trigger.schedule.time)return json({enabled:true,events:[],day,cursor:s.revision});
+  const slot=scheduleSlot(trigger.schedule),day=slot.day;
+  if(trigger.mode!=='schedule'||!slot.due)return json({enabled:true,events:[],day,cursor:s.revision});
   const events=rowsAt(current,trigger.dataset).filter(r=>typeof r.id==='string').map(after=>{const event={id:'schedule-'+day+'-'+trigger.schedule.time,recordId:after.id,type:'schedule',source:trigger.source,dataset:trigger.dataset,scope,origin:'schedule',revision:s.revision,before:null,after};return{...event,...evaluateTrigger(trigger,event,describeDataset([after],trigger.dataset))};});
   return json({enabled:true,events,day,cursor:s.revision});
  }
