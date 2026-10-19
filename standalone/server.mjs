@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
 import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
+import {scheduleBridgeConfig,createScheduleBridge} from './agent-schedules.mjs';
 
 const root=path.join(path.dirname(fileURLToPath(import.meta.url)),'client');
 const reviewMode=process.env.DOON_REVIEW_MODE==='1';
@@ -40,6 +41,17 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
+const scheduleConfig=await scheduleBridgeConfig();
+if(scheduleConfig&&(supplierOnly||reviewMode))throw Error('此入口不允许启用后台只读调度');
+const scheduleBridge=scheduleConfig?createScheduleBridge({db,config:scheduleConfig,currentForOwner:async ownerId=>{
+ const member=runtime.records().find(r=>r.kind==='member'&&r.userId===ownerId),account=member&&db.prepare('SELECT id,username,must_change FROM local_accounts WHERE member_id=?').get(member.id);
+ return member&&account?{member,account,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}}:null;
+},readView:async(current,action,scope)=>{
+ const url=new URL('/api/workspace/'+action,'http://127.0.0.1:'+port);for(const [key,value] of Object.entries(scope))if(value)url.searchParams.set(key,value);
+ const response=await context.run(current,()=>api.GET(new Request(url),{params:Promise.resolve({action})}));
+ if(!response.ok||!response.headers.get('content-type')?.includes('application/json'))throw Object.assign(new Error('当前业务视图不可用。'),{status:response.status===403?403:503});return response.json();
+}}):null;
+
 const localTLS=!supplierOnly&&!!(process.env.DOON_TLS_CERT&&process.env.DOON_TLS_KEY),secure=supplierOnly||!!employeeGateway||localTLS,protocol=localTLS?'https':'http';
 const authOptions={recordHistory:!reviewMode,...(supplierOnly?{cookieName:supplierSessionName,supplierOnly:true}:reviewMode?{cookieName:'doon_review_session'}:employeeGateway?{cookieName:'doon_employee_session',employeeOnly:true}:{})};
 const supplierAuth=new Set(['session','login','logout','password']);
@@ -80,7 +92,10 @@ async function handle(req,res){
   else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
-   if(url.pathname.startsWith('/api/auth/')){
+   if(url.pathname.startsWith('/api/agent-schedules/')){
+    if(!scheduleBridge)fail('后台只读调度尚未启用。',404);
+    response=await scheduleBridge.handle(request,current);
+   }else if(url.pathname.startsWith('/api/auth/')){
     throttle(endpoint.ip);
     const action=url.pathname.slice('/api/auth/'.length);
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
