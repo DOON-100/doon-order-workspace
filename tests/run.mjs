@@ -130,6 +130,7 @@ await import('./payment-terms.mjs');
 await import('./ar-workspace-cases.mjs');
 await import('./ar-record-guards.mjs');
 await import('./ar-invoice-ledger.mjs');
+await import('./ar-customer-profiles.mjs');
 await import('./planning-control.mjs');
 await import('./customer-quote-write-grants.mjs');
 await import('./fixed-tool-workbook.mjs');

@@ -162,7 +162,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='documents'&&<HandoffBusinessPanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty} initialSection="documents" initialContext={navigationContext}/>}
  {isHandoffDocumentView(view)&&<HandoffBusinessPanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext} initialSection={({"order-confirmations":'order-pi',"engineering-materials":'engineering',"production-orders":'production',"production-shipments":'shipments',"logistics-waybills":'logistics',"finance-documents":'finance'} as Record<string,string>)[view]}/>}
  {view==='project-finance'&&<CustomerProjectPanel data={data} openOrder={setSelected} onOpenProjectInTeam={openProjectInTeam} onDirtyChange={setPmcDirty} initialArea="finance" initialContext={navigationContext}/>}
- {view==='ar-workspace'&&<ArWorkspacePanel data={data} onNavigate={setView}/>}
+ {view==='ar-workspace'&&<ArWorkspacePanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty}/>}
  {view==='payment-terms'&&<PaymentTermsPanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='mail'&&<HandoffChannelPanel data={data} channel="email" onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='whatsapp'&&<HandoffChannelPanel data={data} channel="whatsapp" onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}

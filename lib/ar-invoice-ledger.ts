@@ -1,6 +1,7 @@
 import {all,clean,type Entity,type Member,type State} from './domain';
 import {arAccess,arAttribution,arDay} from './ar-workspace';
 import {AppError} from './store';
+import {arCustomerProfile,arInvoiceExtra,arInvoiceTraceLinks,type ArCustomerProfile} from './ar-customer-profiles';
 
 /** Historical invoice archives and cumulative reconciliations are not cash events. */
 export const arInvoiceKey=(value:unknown)=>clean(value).normalize('NFKC').replace(/\s+/g,'').toUpperCase().replace(/\d+$/,digits=>digits.replace(/^0+(?=\d)/,''));
@@ -45,6 +46,7 @@ export function arInvoiceDuplicateReason(s:State,row:Entity){
 
 /** Preserve all versions, but select at most one version of each invoice for totals. */
 export function arInvoiceStatementSnapshot(s:State,m:Member,customerId:string,currency:string,asOf:string){
+ const profile=structuredClone(arCustomerProfile(s,customerId));
  const rows=all(s,'ar_invoice').filter(r=>r.customerId===customerId&&r.currency===currency&&arInvoiceReadable(s,m,r));
  const groups=new Map<string,Entity[]>();for(const r of rows){const key=arInvoiceKey(r.invoiceNo),group=groups.get(key)||[];group.push(r);groups.set(key,group);}
  const lines:Entity[]=[],issues:string[]=[],excluded:{id:string;invoiceNo:string;reason:string}[]=[];
@@ -70,5 +72,24 @@ export function arInvoiceStatementSnapshot(s:State,m:Member,customerId:string,cu
  const sourceBatches=all(s,'ar_invoice_import').filter(b=>rows.some(r=>r.batchId===b.id)).map(b=>({id:b.id,filename:b.filename,hash:b.hash,sourceCutoff:b.sourceCutoff,sourceAsOf:b.sourceAsOf,issues:b.issues}));
  for(const b of sourceBatches)for(const issue of b.issues||[])issues.push(`${b.filename}：${issue}`);
  const customer=all(s,'customer_account').find(c=>c.id===customerId);
- return {customerId,customer:clean(customer?.customer),customerCode:clean(customer?.customerCode),currency,asOf,status:'draft',teamId:'',lines,excluded,sourceBatches,totals:{knownAmountCents,confirmedAmountCents,confirmedReceivedCents,confirmedBalanceCents,pendingCount,duplicateCount,receivedCents:pendingCount?null:confirmedReceivedCents,balanceCents:pendingCount?null:confirmedBalanceCents},issues:[...new Set(issues)],basis:'历史发票档案草稿；金额为历史 STATEMENT 所列净应收，不表示 PI 票面金额或全订单余额。仅汇总唯一版本，历史累计核销不代表银行到账。已核对部分金额与未知部分分列，不能作为完整正式对账单。'};
+ return {customerId,customer:clean(customer?.customer),customerCode:clean(customer?.customerCode),currency,asOf,status:'draft',teamId:'',presentationVersion:1,customerProfileSnapshot:profile,lines:lines.map(row=>({...row,...arInvoiceStatementFields(s,m,row,profile)})),excluded,sourceBatches,totals:{knownAmountCents,confirmedAmountCents,confirmedReceivedCents,confirmedBalanceCents,pendingCount,duplicateCount,receivedCents:pendingCount?null:confirmedReceivedCents,balanceCents:pendingCount?null:confirmedBalanceCents},issues:[...new Set(issues)],basis:'历史发票档案草稿；金额为历史 STATEMENT 所列净应收，不表示 PI 票面金额或全订单余额。仅汇总唯一版本，历史累计核销不代表银行到账。已核对部分金额与未知部分分列，不能作为完整正式对账单。'};
+}
+
+/** Presentation evidence is frozen independently; it cannot change financial totals or source records. */
+function arInvoiceStatementFields(s:State,m:Member,row:Entity,profile:ArCustomerProfile){
+ const candidate=arInvoiceExtra(s,row.id),extra=candidate?.customerId===row.customerId?structuredClone(candidate):null;
+ const schemaCurrent=!!extra&&extra.profileId===profile.id&&extra.profileVersion===profile.version&&JSON.stringify(extra.schemaSnapshot)===JSON.stringify(profile.customFields);
+ const invoiceVersionCurrent=!!extra&&extra.invoiceVersion===row.version;
+ const fieldIssues:string[]=[];
+ if(extra&&!schemaCurrent)fieldIssues.push(`扩展字段配置已变化：原配置版本 ${extra.profileVersion}，本快照配置版本 ${profile.version}；旧值保留为历史依据，当前列待重新映射。`);
+ if(extra&&!invoiceVersionCurrent)fieldIssues.push(`发票版本已变化：扩展值绑定发票版本 ${extra.invoiceVersion}，本快照发票版本 ${row.version}；旧值保留为历史依据，当前列待重新核对并映射。`);
+ if(!extra&&profile.customFields.some(f=>f.required))fieldIssues.push('必填扩展字段尚未填写；不以空白代替已确认业务数据。');
+ const sourceLinksSnapshot=arInvoiceTraceLinks(s,m,row.id).filter(link=>link.status==='active'&&!link.targetUnavailable&&link.targetSnapshot).map(link=>{
+  const targetSnapshot:Entity={id:clean(link.targetSnapshot.id),kind:clean(link.targetSnapshot.kind)};
+  for(const key of ['version','label','view','orderId','projectId','orderNo','customerPO','projectNo','documentNo','drawing']){
+   const value=link.targetSnapshot[key];if(typeof value==='string'||typeof value==='number'&&Number.isFinite(value))targetSnapshot[key]=value;
+  }
+  return {id:link.id,kind:link.kind,invoiceId:link.invoiceId,customerId:link.customerId,invoiceVersion:link.invoiceVersion,targetKind:link.targetKind,targetId:link.targetId,targetVersion:link.targetVersion,targetSnapshot,note:clean(link.note),status:'active',targetChanged:!!link.targetChanged,createdAt:link.createdAt,createdById:link.createdById};
+ });
+ return {extraValuesSnapshot:extra,extraValuesState:extra?(schemaCurrent&&invoiceVersionCurrent?'current':'stale'):'missing',sourceLinksSnapshot,fieldIssues};
 }
