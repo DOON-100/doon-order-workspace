@@ -1,0 +1,4350 @@
+{
+  "format": "doon-department-contracts-v1",
+  "middlewareCommit": "35d441dbf250d28612e4b026f8d7fb932da0feb9",
+  "sources": [
+    {
+      "file": "docs/api-inventory/department-tools.json",
+      "sha256": "b5ab34abde23ee4281d771b19963b21a8c8ddc6e0f405b3f529021c0f77cd833"
+    },
+    {
+      "file": "lib/domain.ts",
+      "sha256": "26075caf1b698f1615328b4cf137c7fce8d91fa3fe2267a8c1f31c9d64f9c492"
+    },
+    {
+      "file": "lib/process-workspace.ts",
+      "sha256": "1f8b40454550ace20e87785332c42fdf5d1320e3835588d85e9411aaee8c0081"
+    }
+  ],
+  "groups": [
+    {
+      "id": "sales",
+      "label": "业务部",
+      "phase": "客户开发 → 需求与报价"
+    },
+    {
+      "id": "service",
+      "label": "客服与单证",
+      "phase": "订单评审 → 制单交接 → 售后复盘"
+    },
+    {
+      "id": "engineering",
+      "label": "工程部",
+      "phase": "图纸 → 样品与资料确认"
+    },
+    {
+      "id": "planning",
+      "label": "PMC 计划",
+      "phase": "订单接收 → 齐套与排程"
+    },
+    {
+      "id": "purchasing",
+      "label": "采购与外协",
+      "phase": "采购 → 催料与外发"
+    },
+    {
+      "id": "warehouse",
+      "label": "仓储物流",
+      "phase": "收货 → 仓储与发运"
+    },
+    {
+      "id": "production",
+      "label": "生产车间",
+      "phase": "工序流转 → 报工与损耗"
+    },
+    {
+      "id": "quality",
+      "label": "品质部",
+      "phase": "来料 → 过程与出货放行"
+    },
+    {
+      "id": "finance",
+      "label": "财务部",
+      "phase": "对账 → 应收与回款"
+    },
+    {
+      "id": "management",
+      "label": "系统管理",
+      "phase": "规则 → 账号与系统维护"
+    }
+  ],
+  "reads": [
+    {
+      "id": "data",
+      "label": "订单、报工、外发、收货与基础资料",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "source": "data",
+      "scopeParams": []
+    },
+    {
+      "id": "purchase-data",
+      "label": "采购跟单",
+      "groups": [
+        "purchasing"
+      ],
+      "source": "purchase-data",
+      "scopeParams": []
+    },
+    {
+      "id": "pmc-data",
+      "label": "PMC 核单与排期",
+      "groups": [
+        "planning"
+      ],
+      "source": "pmc-data",
+      "scopeParams": []
+    },
+    {
+      "id": "factory-orders",
+      "label": "工厂内部订单",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "source": "factory-orders",
+      "scopeParams": []
+    },
+    {
+      "id": "kingdee-pending-data",
+      "label": "金蝶待核对",
+      "groups": [
+        "purchasing"
+      ],
+      "source": "kingdee-pending-data",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-workflow-data",
+      "label": "客户档案与客户跟进",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "source": "customer-workflow-data",
+      "scopeParams": [
+        "customerId"
+      ]
+    },
+    {
+      "id": "customer-workflow-tasks",
+      "label": "客户待办",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "source": "customer-workflow-tasks",
+      "scopeParams": [
+        "customerId"
+      ]
+    },
+    {
+      "id": "customer-workflow-transfers",
+      "label": "客户公海与交接",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-workflow-transfers",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-project-data",
+      "label": "客户项目",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "warehouse"
+      ],
+      "source": "customer-project-data",
+      "scopeParams": []
+    },
+    {
+      "id": "project-collaboration-data",
+      "label": "项目协作",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "source": "project-collaboration-data",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-project-followup-data",
+      "label": "项目跟进与邮件",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-project-followup-data",
+      "scopeParams": []
+    },
+    {
+      "id": "project-finance-data",
+      "label": "项目财务",
+      "groups": [
+        "finance"
+      ],
+      "source": "project-finance-data",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-quotes",
+      "label": "客户报价",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-quotes",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-quote-completed",
+      "label": "已完成报价",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-quote-completed",
+      "scopeParams": []
+    },
+    {
+      "id": "customer-quote-templates",
+      "label": "报价模板",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-quote-templates",
+      "scopeParams": [
+        "customerAccountId"
+      ],
+      "requiredScope": [
+        "customerAccountId"
+      ]
+    },
+    {
+      "id": "customer-price-archive",
+      "label": "历史价格与发票依据",
+      "groups": [
+        "sales"
+      ],
+      "source": "customer-price-archive",
+      "scopeParams": [
+        "customerId"
+      ]
+    },
+    {
+      "id": "service-data",
+      "label": "客服业务与收款",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "source": "service-data",
+      "scopeParams": []
+    },
+    {
+      "id": "drawing-data",
+      "label": "工程画图",
+      "groups": [
+        "engineering"
+      ],
+      "source": "drawing-data",
+      "scopeParams": []
+    },
+    {
+      "id": "sop-data",
+      "label": "工程 SOP",
+      "groups": [
+        "engineering"
+      ],
+      "source": "sop-data",
+      "scopeParams": []
+    },
+    {
+      "id": "planning-control-data",
+      "label": "计划与产能",
+      "groups": [
+        "planning"
+      ],
+      "source": "planning-control-data",
+      "scopeParams": []
+    },
+    {
+      "id": "ar-workspace-data",
+      "label": "应收工作台",
+      "groups": [
+        "finance"
+      ],
+      "source": "ar-workspace-data",
+      "scopeParams": [
+        "customerId",
+        "teamId"
+      ]
+    },
+    {
+      "id": "ar-dashboard-data",
+      "label": "应收分析",
+      "groups": [
+        "finance"
+      ],
+      "source": "ar-dashboard-data",
+      "scopeParams": [
+        "customerId",
+        "teamId"
+      ]
+    },
+    {
+      "id": "payment-terms-data",
+      "label": "付款条款",
+      "groups": [
+        "finance"
+      ],
+      "source": "payment-terms-data",
+      "scopeParams": []
+    },
+    {
+      "id": "handoff-business-data",
+      "label": "业务交接与单据",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "source": "handoff-business-data",
+      "scopeParams": []
+    },
+    {
+      "id": "handoff-business-review-data",
+      "label": "生产审核",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "source": "handoff-business-review-data",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-channels",
+      "label": "沟通渠道",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "source": "framework-channels",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-notices",
+      "label": "业务通知",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "source": "framework-notices",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-knowledge",
+      "label": "规则文档",
+      "groups": [
+        "management"
+      ],
+      "source": "framework-knowledge",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-finance-tasks",
+      "label": "财务任务",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "source": "framework-finance-tasks",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-offboarding",
+      "label": "离职交接",
+      "groups": [
+        "management"
+      ],
+      "source": "framework-offboarding",
+      "scopeParams": []
+    },
+    {
+      "id": "fixed-data-tools",
+      "label": "固定数据工具",
+      "groups": [
+        "management"
+      ],
+      "source": "fixed-data-tools",
+      "scopeParams": []
+    },
+    {
+      "id": "finished-supplier-data",
+      "label": "成品外发工作台",
+      "groups": [
+        "purchasing",
+        "warehouse",
+        "quality"
+      ],
+      "source": "finished-supplier-data",
+      "scopeParams": []
+    },
+    {
+      "id": "business-team-data",
+      "label": "业务小组",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "source": "business-team-data",
+      "scopeParams": []
+    },
+    {
+      "id": "framework-settings",
+      "label": "系统业务配置",
+      "groups": [
+        "management"
+      ],
+      "source": "framework-settings",
+      "scopeParams": []
+    }
+  ],
+  "processes": [
+    {
+      "type": "rfq",
+      "label": "询价与需求评估",
+      "group": "sales"
+    },
+    {
+      "type": "sample",
+      "label": "样品与签样",
+      "group": "engineering"
+    },
+    {
+      "type": "engineering-change",
+      "label": "工程变更",
+      "group": "engineering"
+    },
+    {
+      "type": "iqc",
+      "label": "来料检验",
+      "group": "quality"
+    },
+    {
+      "type": "material-kit",
+      "label": "配套齐料",
+      "group": "planning"
+    },
+    {
+      "type": "warehouse",
+      "label": "仓库流转",
+      "group": "warehouse"
+    },
+    {
+      "type": "first-article",
+      "label": "首件确认",
+      "group": "quality"
+    },
+    {
+      "type": "process-quality",
+      "label": "过程检验",
+      "group": "quality"
+    },
+    {
+      "type": "outsourcing-quality",
+      "label": "外协检验",
+      "group": "quality"
+    },
+    {
+      "type": "oqc",
+      "label": "成品检验",
+      "group": "quality"
+    },
+    {
+      "type": "packaging",
+      "label": "包装核对",
+      "group": "warehouse"
+    },
+    {
+      "type": "shipment-release",
+      "label": "出货放行记录",
+      "group": "quality"
+    },
+    {
+      "type": "supplier-reconciliation",
+      "label": "供应商对账",
+      "group": "finance"
+    },
+    {
+      "type": "complaint",
+      "label": "客诉与复盘",
+      "group": "service"
+    }
+  ],
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-access-data",
+      "action": "ar-access-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收工作台与授权",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-access-grant-save",
+      "action": "ar-access-grant-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-customer-profile-save",
+      "action": "ar-customer-profile-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收客户模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-customer-profiles-data",
+      "action": "ar-customer-profiles-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收客户模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-dashboard-data",
+      "action": "ar-dashboard-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收工作台与授权",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-document-issue",
+      "action": "ar-document-issue",
+      "groups": [
+        "finance"
+      ],
+      "object": "正式财务单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-document-milestone",
+      "action": "ar-document-milestone",
+      "groups": [
+        "finance"
+      ],
+      "object": "正式财务单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-document-review",
+      "action": "ar-document-review",
+      "groups": [
+        "finance"
+      ],
+      "object": "正式财务单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-export",
+      "action": "ar-export",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收工作台与授权",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-invoice-data",
+      "action": "ar-invoice-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-extra-save",
+      "action": "ar-invoice-extra-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收客户模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-invoice-file",
+      "action": "ar-invoice-file",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-import",
+      "action": "ar-invoice-import",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-note",
+      "action": "ar-invoice-note",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-proof",
+      "action": "ar-invoice-proof",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-reconcile",
+      "action": "ar-invoice-reconcile",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-source-link",
+      "action": "ar-invoice-source-link",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收客户模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-invoice-statement",
+      "action": "ar-invoice-statement",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-invoice-statement-file",
+      "action": "ar-invoice-statement-file",
+      "groups": [
+        "finance"
+      ],
+      "object": "发票原件与对账",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ar-source-binding-save",
+      "action": "ar-source-binding-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ar-workspace-data",
+      "action": "ar-workspace-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "应收工作台与授权",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/attachment",
+      "action": "attachment",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单附件、备注与任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/backup",
+      "action": "backup",
+      "groups": [
+        "management"
+      ],
+      "object": "成员与维护",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/business-team-data",
+      "action": "business-team-data",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "object": "授权聚合数据、版本与业务组目录",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/comment",
+      "action": "comment",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单附件、备注与任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/commit-import",
+      "action": "commit-import",
+      "groups": [
+        "management",
+        "planning",
+        "production"
+      ],
+      "object": "原表/MES 文件导入与批次",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/correction",
+      "action": "correction",
+      "groups": [
+        "planning",
+        "production"
+      ],
+      "object": "订单维护与核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-import",
+      "action": "customer-import",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户主档",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-master-capabilities",
+      "action": "customer-master-capabilities",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户主档",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-price-archive",
+      "action": "customer-price-archive",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-price-archive-export",
+      "action": "customer-price-archive-export",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-price-archive-file",
+      "action": "customer-price-archive-file",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-price-archive-file-upload",
+      "action": "customer-price-archive-file-upload",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-price-archive-import",
+      "action": "customer-price-archive-import",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-price-selection-save",
+      "action": "customer-price-selection-save",
+      "groups": [
+        "sales"
+      ],
+      "object": "历史价格原件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-assignment-roster-save",
+      "action": "customer-project-assignment-roster-save",
+      "groups": [
+        "management"
+      ],
+      "object": "项目团队与责任名单",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-attachment",
+      "action": "customer-project-attachment",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "warehouse"
+      ],
+      "object": "项目、图纸与样办共用查询及原件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-bulk-link",
+      "action": "customer-project-bulk-link",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-communication",
+      "action": "customer-project-communication",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-confirmation",
+      "action": "customer-project-confirmation",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-data",
+      "action": "customer-project-data",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "warehouse"
+      ],
+      "object": "项目、图纸与样办共用查询及原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-dispatch-receive",
+      "action": "customer-project-dispatch-receive",
+      "groups": [
+        "warehouse",
+        "service"
+      ],
+      "object": "样办寄送与签收",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-drawing",
+      "action": "customer-project-drawing",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-drawing-withdraw",
+      "action": "customer-project-drawing-withdraw",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-entry-save",
+      "action": "customer-project-entry-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-file",
+      "action": "customer-project-file",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "warehouse"
+      ],
+      "object": "项目、图纸与样办共用查询及原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-followup-data",
+      "action": "customer-project-followup-data",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-followup-history",
+      "action": "customer-project-followup-history",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-followup-import",
+      "action": "customer-project-followup-import",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-followup-mail-classify",
+      "action": "customer-project-followup-mail-classify",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-followup-promote",
+      "action": "customer-project-followup-promote",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-followup-save",
+      "action": "customer-project-followup-save",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-followup-source-file",
+      "action": "customer-project-followup-source-file",
+      "groups": [
+        "sales"
+      ],
+      "object": "项目跟进与历史邮件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-project-history",
+      "action": "customer-project-history",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "warehouse"
+      ],
+      "object": "项目、图纸与样办共用查询及原件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-item-save",
+      "action": "customer-project-item-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-quote-link",
+      "action": "customer-project-quote-link",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-restore",
+      "action": "customer-project-restore",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-round-save",
+      "action": "customer-project-round-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-sample-dispatch",
+      "action": "customer-project-sample-dispatch",
+      "groups": [
+        "warehouse",
+        "service"
+      ],
+      "object": "样办寄送与签收",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-sample-feedback",
+      "action": "customer-project-sample-feedback",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-sample-promise",
+      "action": "customer-project-sample-promise",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-sample-release",
+      "action": "customer-project-sample-release",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-sample-update",
+      "action": "customer-project-sample-update",
+      "groups": [
+        "engineering",
+        "service"
+      ],
+      "object": "项目图纸、签样与样办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-save",
+      "action": "customer-project-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-task-review",
+      "action": "customer-project-task-review",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-task-save",
+      "action": "customer-project-task-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-task-submit",
+      "action": "customer-project-task-submit",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-team-save",
+      "action": "customer-project-team-save",
+      "groups": [
+        "management"
+      ],
+      "object": "项目团队与责任名单",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-project-trash",
+      "action": "customer-project-trash",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户项目、样办与回收站",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-access",
+      "action": "customer-quote-access",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-access-update",
+      "action": "customer-quote-access-update",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-completed",
+      "action": "customer-quote-completed",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-completed-export",
+      "action": "customer-quote-completed-export",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-confirm",
+      "action": "customer-quote-confirm",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-file",
+      "action": "customer-quote-file",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-media-file",
+      "action": "customer-quote-media-file",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-media-upload",
+      "action": "customer-quote-media-upload",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-record-sent",
+      "action": "customer-quote-record-sent",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-revise",
+      "action": "customer-quote-revise",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-save",
+      "action": "customer-quote-save",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-template-apply",
+      "action": "customer-quote-template-apply",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-template-archive",
+      "action": "customer-quote-template-archive",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-template-export",
+      "action": "customer-quote-template-export",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价模板成品",
+      "boundary": "artifact-generation"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-template-output-file",
+      "action": "customer-quote-template-output-file",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-template-register",
+      "action": "customer-quote-template-register",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-templates",
+      "action": "customer-quote-templates",
+      "groups": [
+        "sales"
+      ],
+      "object": "报价模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-quote-upload",
+      "action": "customer-quote-upload",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quote-version",
+      "action": "customer-quote-version",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-quotes",
+      "action": "customer-quotes",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户报价",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-save",
+      "action": "customer-save",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户主档",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-template",
+      "action": "customer-template",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户主档",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-accept",
+      "action": "customer-workflow-accept",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-cancel-handoff",
+      "action": "customer-workflow-cancel-handoff",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-claim",
+      "action": "customer-workflow-claim",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-claim-approve",
+      "action": "customer-workflow-claim-approve",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-data",
+      "action": "customer-workflow-data",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-export",
+      "action": "customer-workflow-export",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-file",
+      "action": "customer-workflow-file",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-file-save",
+      "action": "customer-workflow-file-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-file-upload",
+      "action": "customer-workflow-file-upload",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-files",
+      "action": "customer-workflow-files",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-followup",
+      "action": "customer-workflow-followup",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-handoff",
+      "action": "customer-workflow-handoff",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-history",
+      "action": "customer-workflow-history",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-pool-approve",
+      "action": "customer-workflow-pool-approve",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-pool-reject",
+      "action": "customer-workflow-pool-reject",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-pool-request",
+      "action": "customer-workflow-pool-request",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-pool-withdraw",
+      "action": "customer-workflow-pool-withdraw",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-primary",
+      "action": "customer-workflow-primary",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-profile-save",
+      "action": "customer-workflow-profile-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-project",
+      "action": "customer-workflow-project",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-project-document",
+      "action": "customer-workflow-project-document",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-project-document-save",
+      "action": "customer-workflow-project-document-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-project-log",
+      "action": "customer-workflow-project-log",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-project-save",
+      "action": "customer-workflow-project-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户文件与轻量项目",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-schedule",
+      "action": "customer-workflow-schedule",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户档案与跟进",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-task-history",
+      "action": "customer-workflow-task-history",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户待办",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/customer-workflow-task-save",
+      "action": "customer-workflow-task-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户待办",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-tasks",
+      "action": "customer-workflow-tasks",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "客户待办",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/customer-workflow-transfers",
+      "action": "customer-workflow-transfers",
+      "groups": [
+        "sales"
+      ],
+      "object": "客户公海与交接",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/data",
+      "action": "data",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "object": "授权聚合数据、版本与业务组目录",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-correction",
+      "action": "drawing-correction",
+      "groups": [
+        "engineering",
+        "planning"
+      ],
+      "object": "图号更正",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/drawing-data",
+      "action": "drawing-data",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-detail-add",
+      "action": "drawing-detail-add",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-email-intake",
+      "action": "drawing-email-intake",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-event-review",
+      "action": "drawing-event-review",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/drawing-history",
+      "action": "drawing-history",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-import",
+      "action": "drawing-import",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-review",
+      "action": "drawing-review",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/drawing-save",
+      "action": "drawing-save",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程画图",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/edit-order",
+      "action": "edit-order",
+      "groups": [
+        "planning",
+        "production"
+      ],
+      "object": "订单维护与核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/enroll",
+      "action": "enroll",
+      "groups": [
+        "management"
+      ],
+      "object": "成员与维护",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/export",
+      "action": "export",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单原表与报表",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/factory-order-export",
+      "action": "factory-order-export",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/factory-order-save",
+      "action": "factory-order-save",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/factory-order-table-commit",
+      "action": "factory-order-table-commit",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/factory-order-table-export",
+      "action": "factory-order-table-export",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/factory-order-table-preview",
+      "action": "factory-order-table-preview",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/factory-order-template",
+      "action": "factory-order-template",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/factory-order-templates",
+      "action": "factory-order-templates",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/factory-orders",
+      "action": "factory-orders",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/file",
+      "action": "file",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单附件、备注与任务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-accept",
+      "action": "finished-supplier-accept",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-attachment",
+      "action": "finished-supplier-attachment",
+      "groups": [
+        "warehouse",
+        "purchasing",
+        "quality"
+      ],
+      "object": "成品外协凭证",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-baseline-confirm",
+      "action": "finished-supplier-baseline-confirm",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-baseline-stage",
+      "action": "finished-supplier-baseline-stage",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-close",
+      "action": "finished-supplier-close",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/finished-supplier-data",
+      "action": "finished-supplier-data",
+      "groups": [
+        "purchasing",
+        "warehouse",
+        "quality"
+      ],
+      "object": "成品外协授权视图",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-exception",
+      "action": "finished-supplier-exception",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/finished-supplier-file",
+      "action": "finished-supplier-file",
+      "groups": [
+        "warehouse",
+        "purchasing",
+        "quality"
+      ],
+      "object": "成品外协凭证",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-order-confirm",
+      "action": "finished-supplier-order-confirm",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-progress",
+      "action": "finished-supplier-progress",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-promise",
+      "action": "finished-supplier-promise",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-qc",
+      "action": "finished-supplier-qc",
+      "groups": [
+        "quality",
+        "purchasing"
+      ],
+      "object": "成品外协质检",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-receive",
+      "action": "finished-supplier-receive",
+      "groups": [
+        "warehouse",
+        "purchasing"
+      ],
+      "object": "成品外协发运、收货、退货与入仓",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-return",
+      "action": "finished-supplier-return",
+      "groups": [
+        "warehouse",
+        "purchasing"
+      ],
+      "object": "成品外协发运、收货、退货与入仓",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-rework-confirm",
+      "action": "finished-supplier-rework-confirm",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-shipment",
+      "action": "finished-supplier-shipment",
+      "groups": [
+        "warehouse",
+        "purchasing"
+      ],
+      "object": "成品外协发运、收货、退货与入仓",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-stock",
+      "action": "finished-supplier-stock",
+      "groups": [
+        "warehouse",
+        "purchasing"
+      ],
+      "object": "成品外协发运、收货、退货与入仓",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/finished-supplier-task-create",
+      "action": "finished-supplier-task-create",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "成品供应商协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/fixed-data-tools",
+      "action": "fixed-data-tools",
+      "groups": [
+        "management"
+      ],
+      "object": "固定数据工具",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/fixed-tool-fees-decision",
+      "action": "fixed-tool-fees-decision",
+      "groups": [
+        "sales"
+      ],
+      "object": "固定报价费用工具",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/fixed-tool-fees-preview",
+      "action": "fixed-tool-fees-preview",
+      "groups": [
+        "sales"
+      ],
+      "object": "固定报价费用工具",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/fixed-tool-file",
+      "action": "fixed-tool-file",
+      "groups": [
+        "management"
+      ],
+      "object": "固定数据工具",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/fixed-tool-job",
+      "action": "fixed-tool-job",
+      "groups": [
+        "management"
+      ],
+      "object": "固定数据工具",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/fixed-tool-ownership",
+      "action": "fixed-tool-ownership",
+      "groups": [
+        "management"
+      ],
+      "object": "固定数据工具",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/fixed-tool-quote",
+      "action": "fixed-tool-quote",
+      "groups": [
+        "sales"
+      ],
+      "object": "固定报价费用工具",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/fixed-tool-workbook",
+      "action": "fixed-tool-workbook",
+      "groups": [
+        "management"
+      ],
+      "object": "固定数据工具",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-account-save",
+      "action": "framework-account-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务规则、渠道配置与知识",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-channel-context",
+      "action": "framework-channel-context",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-channel-history",
+      "action": "framework-channel-history",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-channels",
+      "action": "framework-channels",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-config-save",
+      "action": "framework-config-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务规则、渠道配置与知识",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-accept",
+      "action": "framework-finance-task-accept",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-cancel",
+      "action": "framework-finance-task-cancel",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-finance-task-history",
+      "action": "framework-finance-task-history",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-return",
+      "action": "framework-finance-task-return",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-review",
+      "action": "framework-finance-task-review",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-save",
+      "action": "framework-finance-task-save",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-finance-task-submit",
+      "action": "framework-finance-task-submit",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-finance-task-summary",
+      "action": "framework-finance-task-summary",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-finance-tasks",
+      "action": "framework-finance-tasks",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "财务协作任务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-knowledge",
+      "action": "framework-knowledge",
+      "groups": [
+        "management"
+      ],
+      "object": "业务规则、渠道配置与知识",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-knowledge-document",
+      "action": "framework-knowledge-document",
+      "groups": [
+        "management"
+      ],
+      "object": "业务规则、渠道配置与知识",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-message-bind",
+      "action": "framework-message-bind",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-message-link",
+      "action": "framework-message-link",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-message-process",
+      "action": "framework-message-process",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-message-save",
+      "action": "framework-message-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "沟通渠道、规则文档与通知",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-notice-receive",
+      "action": "framework-notice-receive",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "object": "本人授权通知与签收",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-notices",
+      "action": "framework-notices",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "object": "本人授权通知与签收",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-offboarding",
+      "action": "framework-offboarding",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-offboarding-accept",
+      "action": "framework-offboarding-accept",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-offboarding-cancel",
+      "action": "framework-offboarding-cancel",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-offboarding-draft",
+      "action": "framework-offboarding-draft",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/framework-offboarding-finalize",
+      "action": "framework-offboarding-finalize",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-offboarding-incoming",
+      "action": "framework-offboarding-incoming",
+      "groups": [
+        "management"
+      ],
+      "object": "离职交接",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/framework-settings",
+      "action": "framework-settings",
+      "groups": [
+        "management"
+      ],
+      "object": "业务规则、渠道配置与知识",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-adoption-sign",
+      "action": "handoff-business-adoption-sign",
+      "groups": [
+        "planning",
+        "production"
+      ],
+      "object": "生产审核规则与采纳",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-attachment",
+      "action": "handoff-business-attachment",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-confirm",
+      "action": "handoff-business-confirm",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/handoff-business-data",
+      "action": "handoff-business-data",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-deposit-declaration",
+      "action": "handoff-business-deposit-declaration",
+      "groups": [
+        "service",
+        "finance"
+      ],
+      "object": "交接定金与例外",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/handoff-business-file",
+      "action": "handoff-business-file",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-generate",
+      "action": "handoff-business-generate",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/handoff-business-history",
+      "action": "handoff-business-history",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-payment-exception",
+      "action": "handoff-business-payment-exception",
+      "groups": [
+        "service",
+        "finance"
+      ],
+      "object": "交接定金与例外",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/handoff-business-print",
+      "action": "handoff-business-print",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-return",
+      "action": "handoff-business-return",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/handoff-business-review-data",
+      "action": "handoff-business-review-data",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-review-policy",
+      "action": "handoff-business-review-policy",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-save",
+      "action": "handoff-business-save",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-service-config",
+      "action": "handoff-business-service-config",
+      "groups": [
+        "management"
+      ],
+      "object": "交接服务配置",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/handoff-business-submit",
+      "action": "handoff-business-submit",
+      "groups": [
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "finance"
+      ],
+      "object": "业务交接与单据",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/inspect",
+      "action": "inspect",
+      "groups": [
+        "management",
+        "planning",
+        "production"
+      ],
+      "object": "原表/MES 文件导入与批次",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/job",
+      "action": "job",
+      "groups": [
+        "management",
+        "planning",
+        "production"
+      ],
+      "object": "原表/MES 文件导入与批次",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/kingdee-export",
+      "action": "kingdee-export",
+      "groups": [
+        "planning",
+        "management"
+      ],
+      "object": "金蝶订单导出与模板",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/kingdee-pending-commit",
+      "action": "kingdee-pending-commit",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "金蝶待核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/kingdee-pending-data",
+      "action": "kingdee-pending-data",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "金蝶待核对",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/kingdee-pending-file",
+      "action": "kingdee-pending-file",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "金蝶待核对",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/kingdee-pending-preview",
+      "action": "kingdee-pending-preview",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "金蝶待核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/kingdee-template",
+      "action": "kingdee-template",
+      "groups": [
+        "planning",
+        "management"
+      ],
+      "object": "金蝶订单导出与模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ledger-assign",
+      "action": "ledger-assign",
+      "groups": [
+        "planning"
+      ],
+      "object": "订单指派与归档",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ledger-commit",
+      "action": "ledger-commit",
+      "groups": [
+        "management",
+        "planning"
+      ],
+      "object": "原版工作簿导入",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ledger-edit",
+      "action": "ledger-edit",
+      "groups": [
+        "production",
+        "planning"
+      ],
+      "object": "订单工序、外发收货与原表",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ledger-export",
+      "action": "ledger-export",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单原表与报表",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/ledger-file",
+      "action": "ledger-file",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单原表与报表",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ledger-lifecycle",
+      "action": "ledger-lifecycle",
+      "groups": [
+        "planning"
+      ],
+      "object": "订单指派与归档",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/ledger-preview",
+      "action": "ledger-preview",
+      "groups": [
+        "management",
+        "planning"
+      ],
+      "object": "原版工作簿导入",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/loss-export",
+      "action": "loss-export",
+      "groups": [
+        "production"
+      ],
+      "object": "损耗",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/loss-record",
+      "action": "loss-record",
+      "groups": [
+        "production"
+      ],
+      "object": "损耗",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/match",
+      "action": "match",
+      "groups": [
+        "planning",
+        "production"
+      ],
+      "object": "订单维护与核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/member",
+      "action": "member",
+      "groups": [
+        "management"
+      ],
+      "object": "成员与维护",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/metric-export",
+      "action": "metric-export",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单原表与报表",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/outsource-approve",
+      "action": "outsource-approve",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/outsource-cancel",
+      "action": "outsource-cancel",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/outsource-create",
+      "action": "outsource-create",
+      "groups": [
+        "purchasing",
+        "production"
+      ],
+      "object": "工序外发登记",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/outsource-update",
+      "action": "outsource-update",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/pack",
+      "action": "pack",
+      "groups": [
+        "production",
+        "warehouse"
+      ],
+      "object": "包装入仓",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/payment-terms-authorize",
+      "action": "payment-terms-authorize",
+      "groups": [
+        "finance"
+      ],
+      "object": "付款条件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/payment-terms-authorizers-save",
+      "action": "payment-terms-authorizers-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/payment-terms-data",
+      "action": "payment-terms-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "付款条件",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/payment-terms-disable",
+      "action": "payment-terms-disable",
+      "groups": [
+        "finance"
+      ],
+      "object": "付款条件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/payment-terms-save",
+      "action": "payment-terms-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "付款条件",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-capacity-allocation-save",
+      "action": "planning-capacity-allocation-save",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-capacity-allocation-transition",
+      "action": "planning-capacity-allocation-transition",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-capacity-window-save",
+      "action": "planning-capacity-window-save",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-control-calculation-save",
+      "action": "planning-control-calculation-save",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/planning-control-data",
+      "action": "planning-control-data",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/planning-control-history",
+      "action": "planning-control-history",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-control-save",
+      "action": "planning-control-save",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/planning-control-transition",
+      "action": "planning-control-transition",
+      "groups": [
+        "planning"
+      ],
+      "object": "计划与产能",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/pmc-data",
+      "action": "pmc-data",
+      "groups": [
+        "planning"
+      ],
+      "object": "PMC 核单",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/pmc-review",
+      "action": "pmc-review",
+      "groups": [
+        "planning"
+      ],
+      "object": "PMC 核单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/pmc-round",
+      "action": "pmc-round",
+      "groups": [
+        "planning"
+      ],
+      "object": "PMC 核单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/pmc-save",
+      "action": "pmc-save",
+      "groups": [
+        "planning"
+      ],
+      "object": "PMC 核单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/preview",
+      "action": "preview",
+      "groups": [
+        "management",
+        "planning",
+        "production"
+      ],
+      "object": "原表/MES 文件导入与批次",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/process-data",
+      "action": "process-data",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "quality",
+        "finance"
+      ],
+      "object": "部门流程记录",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/process-history",
+      "action": "process-history",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "quality",
+        "finance"
+      ],
+      "object": "部门流程记录",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/process-save",
+      "action": "process-save",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "warehouse",
+        "quality",
+        "finance"
+      ],
+      "object": "部门流程记录",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-adjustment",
+      "action": "project-adjustment",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-after-sale-cost",
+      "action": "project-after-sale-cost",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-after-sale-save",
+      "action": "project-after-sale-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-allocation",
+      "action": "project-allocation",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-allocation-release",
+      "action": "project-allocation-release",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-charge-confirm",
+      "action": "project-charge-confirm",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-charge-save",
+      "action": "project-charge-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-collaboration-acknowledge",
+      "action": "project-collaboration-acknowledge",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-collaboration-cancel",
+      "action": "project-collaboration-cancel",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-collaboration-complete",
+      "action": "project-collaboration-complete",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/project-collaboration-data",
+      "action": "project-collaboration-data",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-collaboration-followup",
+      "action": "project-collaboration-followup",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-collaboration-save",
+      "action": "project-collaboration-save",
+      "groups": [
+        "sales",
+        "service",
+        "engineering"
+      ],
+      "object": "项目跨部门协作",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-credit-apply",
+      "action": "project-credit-apply",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-document-confirm",
+      "action": "project-document-confirm",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/project-document-print",
+      "action": "project-document-print",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-document-revise",
+      "action": "project-document-revise",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-document-save",
+      "action": "project-document-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-document-sent",
+      "action": "project-document-sent",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/project-finance-data",
+      "action": "project-finance-data",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-finance-entry-save",
+      "action": "project-finance-entry-save",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-finance-grant-save",
+      "action": "project-finance-grant-save",
+      "groups": [
+        "management"
+      ],
+      "object": "业务授权与规则配置",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/project-finance-history",
+      "action": "project-finance-history",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-payment-notice",
+      "action": "project-payment-notice",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-payment-requirement",
+      "action": "project-payment-requirement",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-receipt-reverse",
+      "action": "project-receipt-reverse",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-receipt-verify",
+      "action": "project-receipt-verify",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-refund-cancel",
+      "action": "project-refund-cancel",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-refund-execute",
+      "action": "project-refund-execute",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/project-refund-request",
+      "action": "project-refund-request",
+      "groups": [
+        "finance"
+      ],
+      "object": "项目财务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/purchase-archive",
+      "action": "purchase-archive",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/purchase-commit",
+      "action": "purchase-commit",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/purchase-data",
+      "action": "purchase-data",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/purchase-export",
+      "action": "purchase-export",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/purchase-held",
+      "action": "purchase-held",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/purchase-history",
+      "action": "purchase-history",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/purchase-preview",
+      "action": "purchase-preview",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/purchase-receipt",
+      "action": "purchase-receipt",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/purchase-save",
+      "action": "purchase-save",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "采购跟单",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/read-version",
+      "action": "read-version",
+      "groups": [
+        "sales",
+        "service",
+        "engineering",
+        "planning",
+        "purchasing",
+        "warehouse",
+        "production",
+        "quality",
+        "finance",
+        "management"
+      ],
+      "object": "授权聚合数据、版本与业务组目录",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/receipt-confirm",
+      "action": "receipt-confirm",
+      "groups": [
+        "warehouse"
+      ],
+      "object": "送货凭证与收货确认",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/receipt-photo",
+      "action": "receipt-photo",
+      "groups": [
+        "warehouse"
+      ],
+      "object": "送货凭证与收货确认",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/review",
+      "action": "review",
+      "groups": [
+        "planning",
+        "production"
+      ],
+      "object": "订单维护与核对",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/service-attachment",
+      "action": "service-attachment",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "object": "客服业务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/service-data",
+      "action": "service-data",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "object": "客服业务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/service-file",
+      "action": "service-file",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "object": "客服业务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/service-history",
+      "action": "service-history",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "object": "客服业务",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/service-receipt",
+      "action": "service-receipt",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "客服业务收款及冲销",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/service-receipt-reverse",
+      "action": "service-receipt-reverse",
+      "groups": [
+        "finance",
+        "service"
+      ],
+      "object": "客服业务收款及冲销",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/service-save",
+      "action": "service-save",
+      "groups": [
+        "service",
+        "warehouse",
+        "finance"
+      ],
+      "object": "客服业务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-attachment",
+      "action": "sop-attachment",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-cancel",
+      "action": "sop-cancel",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-change",
+      "action": "sop-change",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-confirm",
+      "action": "sop-confirm",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-create",
+      "action": "sop-create",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/sop-data",
+      "action": "sop-data",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/sop-file",
+      "action": "sop-file",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/sop-history",
+      "action": "sop-history",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-mes-upload",
+      "action": "sop-mes-upload",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-prepare",
+      "action": "sop-prepare",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/sop-target",
+      "action": "sop-target",
+      "groups": [
+        "engineering"
+      ],
+      "object": "工程 SOP",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/supplier-export",
+      "action": "supplier-export",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/supplier-quote-export",
+      "action": "supplier-quote-export",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/supplier-quote-file",
+      "action": "supplier-quote-file",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/supplier-quote-file",
+      "action": "supplier-quote-file",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/supplier-quote-save",
+      "action": "supplier-quote-save",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/supplier-quote-template",
+      "action": "supplier-quote-template",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/supplier-save",
+      "action": "supplier-save",
+      "groups": [
+        "purchasing"
+      ],
+      "object": "供应商与外协",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/task",
+      "action": "task",
+      "groups": [
+        "planning",
+        "production",
+        "service"
+      ],
+      "object": "订单附件、备注与任务",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/template",
+      "action": "template",
+      "groups": [
+        "management",
+        "planning",
+        "production"
+      ],
+      "object": "原表/MES 文件导入与批次",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/unified-communication-complete-review",
+      "action": "unified-communication-complete-review",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/unified-communication-data",
+      "action": "unified-communication-data",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "GET",
+      "path": "/api/workspace/unified-communication-history",
+      "action": "unified-communication-history",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "read-contract-review"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/unified-communication-return",
+      "action": "unified-communication-return",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/unified-communication-save",
+      "action": "unified-communication-save",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/unified-communication-submit",
+      "action": "unified-communication-submit",
+      "groups": [
+        "sales",
+        "service"
+      ],
+      "object": "人工沟通草稿",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "POST",
+      "path": "/api/workspace/workflow",
+      "action": "workflow",
+      "groups": [
+        "service",
+        "planning"
+      ],
+      "object": "客户主档、工厂订单与金蝶模板",
+      "boundary": "confirmed-business-action"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/session",
+      "groups": [
+        "management"
+      ],
+      "object": "会话摘要",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "groups": [
+        "management"
+      ],
+      "object": "登录",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/logout",
+      "groups": [
+        "management"
+      ],
+      "object": "注销",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/password",
+      "groups": [
+        "management"
+      ],
+      "object": "本人改密",
+      "boundary": "application-only"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/maintenance",
+      "groups": [
+        "management"
+      ],
+      "object": "运行状态",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/accounts",
+      "groups": [
+        "management"
+      ],
+      "object": "账号目录",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/accounts",
+      "groups": [
+        "management"
+      ],
+      "object": "创建账号",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/history",
+      "groups": [
+        "management"
+      ],
+      "object": "登录历史",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/reset",
+      "groups": [
+        "management"
+      ],
+      "object": "重置密码",
+      "boundary": "application-only"
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/backup",
+      "groups": [
+        "management"
+      ],
+      "object": "备份摘要",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/backup",
+      "groups": [
+        "management"
+      ],
+      "object": "备份维护",
+      "boundary": "human-admin-flow"
+    },
+    {
+      "method": "GET",
+      "path": "/api/agent-schedules/status",
+      "groups": [
+        "management"
+      ],
+      "object": "调度桥状态",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/grant",
+      "groups": [
+        "management"
+      ],
+      "object": "本人定时授权",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/revoke",
+      "groups": [
+        "management"
+      ],
+      "object": "撤销本人授权",
+      "boundary": "application-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/probe",
+      "groups": [
+        "management"
+      ],
+      "object": "服务身份探测",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/lease",
+      "groups": [
+        "management"
+      ],
+      "object": "后台租约",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/owners",
+      "groups": [
+        "management"
+      ],
+      "object": "有效授权人",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/catalog",
+      "groups": [
+        "management"
+      ],
+      "object": "授权数据目录",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/schedule",
+      "groups": [
+        "management"
+      ],
+      "object": "日历匹配",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/verify",
+      "groups": [
+        "management"
+      ],
+      "object": "来源核验",
+      "boundary": "service-only"
+    },
+    {
+      "method": "POST",
+      "path": "/api/agent-schedules/service/query",
+      "groups": [
+        "management"
+      ],
+      "object": "后台授权查询",
+      "boundary": "service-only"
+    },
+    {
+      "method": "GET",
+      "path": "/health",
+      "groups": [
+        "management"
+      ],
+      "object": "存活状态",
+      "boundary": "application-only"
+    },
+    {
+      "method": "GET",
+      "path": "/api/review-mode",
+      "groups": [
+        "management"
+      ],
+      "object": "验收副本标识",
+      "boundary": "application-only"
+    }
+  ]
+}

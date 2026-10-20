@@ -43,7 +43,7 @@ export function createScheduledAccess({client,worker,user,grantId,configVersionI
  const check=async()=>{const metadata=await call('catalog');if(metadata.ownerId!==user.identity.id||metadata.configVersionId!==configVersionId||!equal(metadata.trigger,validateTrigger(trigger)))throw fail('后台授权不属于当前流程版本。',403);return metadata;};
  const t=validateTrigger(trigger);
  const access={
-  syntheticOnly:false,scheduledReadOnly:true,
+  syntheticOnly:false,scheduledReadOnly:true,assertCurrent:check,
   async catalog(source,scope={}){if(source&&(source!==t.source||!equal(scope,t.scope)))throw fail('查询超出此工作流授权。',403);const metadata=await check();return source?metadata:{...metadata,modules:[{id:t.source,label:t.source}]};},
   schedule:async requested=>{if(!equal(validateTrigger(requested),t))throw fail('定时配置不匹配。',403);await check();return call('schedule');},
   verify:async event=>{await check();return(await call('verify',{event})).valid;},

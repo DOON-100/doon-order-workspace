@@ -8,14 +8,15 @@ const user={username:'SYN-user',role:'admin',personnelType:'internal',mustChange
 test('业务传输只能读取固定 GET 接口，凭据不进入返回值，拒绝跨地址与任意范围',async()=>{
  const calls=[];
  const transport=(options,done)=>{
-  calls.push(options);const request=new EventEmitter();request.end=()=>{const response=new EventEmitter();response.statusCode=options.path.endsWith('customer-quote-templates')?400:200;response.headers={'content-type':'application/json'};done(response);queueMicrotask(()=>{response.emit('data',Buffer.from('{"rows":[{"id":"SYN-1"}]}'));response.emit('end');});};return request;
+  calls.push(options);const request=new EventEmitter();request.end=()=>{const response=new EventEmitter();response.statusCode=options.path.startsWith('/api/workspace/customer-quote-templates')?400:200;response.headers={'content-type':'application/json'};done(response);queueMicrotask(()=>{response.emit('data',Buffer.from('{"rows":[{"id":"SYN-1"}]}'));response.emit('end');});};return request;
  };
  const read=createBusinessReader({publicOrigin:'https://example.test',transport});
  const result=await read('other=not-forwarded; doon_employee_session='+'s'.repeat(43),'purchase-data');
  assert.deepEqual(result,{rows:[{id:'SYN-1'}]});assert.equal(calls[0].method,'GET');assert.equal(calls[0].path,'/api/workspace/purchase-data');assert.equal(calls[0].hostname,'host.docker.internal');assert(!calls[0].headers.Cookie.includes('other'));assert.equal(calls[0].rejectUnauthorized,true);
  await assert.rejects(read('doon_session='+'s'.repeat(43),'https://evil.test'));
  await assert.rejects(read('doon_session='+'s'.repeat(43),'data',{path:'../../private'}));assert.equal(calls.length,1);
- await assert.rejects(read('doon_session='+'s'.repeat(43),'customer-quote-templates'),{status:400},'旧模块要求查询参数时保留 400，不把它误判为全局 503');
+ await assert.rejects(read('doon_session='+'s'.repeat(43),'customer-quote-templates'),{status:400},'缺少必填客户参数时本地拒绝');assert.equal(calls.length,1);
+ await assert.rejects(read('doon_session='+'s'.repeat(43),'customer-quote-templates',{customerAccountId:'SYN-C'}),{status:400},'原接口 400 保留');
  assert.throws(()=>createBusinessReader({publicOrigin:'https://example.test',connectHost:'evil.test'}));
 });
 
@@ -49,6 +50,6 @@ test('旧模块缺省参数及单模块失败不会阻断全部目录；并行�
   reads++;if(source==='data')return{records:[{id:'SYN-1',status:'已确认'}]};
   throw Object.assign(new Error('synthetic unavailable'),{status:source==='customer-project-data'?503:source==='customer-quote-templates'?400:404});
  }});
- const [one,two]=await Promise.all([access.catalog(),access.catalog()]);assert.equal(one,two);assert.equal(authCalls,1);assert.equal(reads,34);assert.equal(one.modules[0].id,'data');assert.deepEqual(one.unavailable,[{source:'customer-project-data',status:503}]);
- await access.catalog();assert.equal(authCalls,2);assert.equal(reads,68);
+ const [one,two]=await Promise.all([access.catalog(),access.catalog()]);assert.equal(one,two);assert.equal(authCalls,1);assert.equal(reads,33,'需要指定客户的报价模板不发出无参数请求');assert.equal(one.modules[0].id,'data');assert.deepEqual(one.unavailable,[{source:'customer-project-data',status:503}]);
+ await access.catalog();assert.equal(authCalls,2);assert.equal(reads,66);
 });

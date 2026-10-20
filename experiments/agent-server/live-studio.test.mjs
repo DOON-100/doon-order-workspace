@@ -20,6 +20,13 @@ test('云端只读运行时保留免费配置、真实字段与人工审核，�
   studio=await createStudio({dataDir:dir,storage,cloud:true,liveReadOnly:true,scopeId:'SYN-isolation',deepseekOptions:{env:{}}});
   const call=async(route,method='GET',body)=>{const response=await withBusinessAccess(access,()=>studio.handle(new Request('https://example.test/studio/'+route,{method,headers:{Origin:'https://example.test','Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})}),{actor,workflowAccess:access}));return{status:response.status,body:await response.json()};};
   const list=await call('manage/api/agents');assert.equal(list.status,200);assert.equal(list.body.agents.length,4);assert(list.body.tools.some(t=>t.key==='readBusinessRecords'));assert(!list.body.tools.some(t=>t.key==='inspectOverdue'));
+  const departmentKeys=list.body.tools.filter(t=>t.key.startsWith('department')).map(t=>t.key);assert.equal(departmentKeys.length,10);
+  assert(departmentKeys.every(key=>list.body.agents.find(a=>a.id==='supervisor').requiredToolKeys.includes(key)));
+  const custom=await call('manage/api/agents','POST',{name:'SYN十部门助手',description:'合成契约验证',instructions:'按原账号权限查询，不执行写入。',toolKeys:departmentKeys,requestId:randomUUID()});
+  assert.equal(custom.status,201);assert.equal(custom.body.toolKeys.length,10);
+  const selected=await studio.mastra.getAgentById(custom.body.id);assert.equal(Object.keys(await selected.listTools()).length,10);
+  const departmentRows=await withBusinessAccess(access,()=>studio.tools.departmentEngineering.execute({operation:'query',action:'drawing-data',arguments:{dataset:'/records',limit:1}}));assert.equal(departmentRows.records[0].id,'SYN-DRAWING');
+  assert.equal((await call('api/tools/department-engineering/execute','POST',{operation:'query',action:'drawing-data',arguments:{dataset:'/records'}})).status,403,'直接工具 HTTP 入口不能绕过受信任上下文');
   const workflows=await call('workflow-manager/api/workflows');assert.equal(workflows.body.workflows.length,0);assert(!workflows.body.catalog.some(n=>n.type==='scan'));assert(workflows.body.catalog.some(n=>n.type==='review'));
   const catalog=await call('workflow-manager/api/sources?source=drawing-data');assert.equal(catalog.body.mode,'authorized');assert(catalog.body.datasets.find(d=>d.path==='/records').fields.some(f=>f.path==='/status'));
   const rows=await withBusinessAccess(access,()=>studio.tools.readBusinessRecords.execute({source:'drawing-data',dataset:'/records',limit:1}));assert.equal(rows.records[0].id,'SYN-DRAWING');assert.equal(rows.mode,'live-readonly');

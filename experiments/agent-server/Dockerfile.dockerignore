@@ -22,6 +22,11 @@
 !mastra-studio/workflow-schedules.js
 !mastra-studio/workflow-schedules.css
 !mastra-studio/live-agents.mjs
+!mastra-studio/department-registry.json
+!mastra-studio/process-contract.generated.mjs
+!mastra-studio/department-contracts.mjs
+!mastra-studio/department-executor.mjs
+!mastra-studio/department-tools.mjs
 !mastra-studio/workflow-manager.html
 !mastra-studio/workflow-manager.js
 !mastra-studio/workflow-manager.css

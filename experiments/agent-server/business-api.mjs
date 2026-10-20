@@ -4,6 +4,7 @@ import {isIP} from 'node:net';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import {parsePublicOrigin,sessionCookie,canEnterStudio} from './session.mjs';
 import {workflowSources} from '../mastra-studio/workflow-sources.mjs';
+import {businessReadSources,readScopeSchema,recordQuerySchema} from '../mastra-studio/department-contracts.mjs';
 import {projectedDatasets,valueAt} from '../mastra-studio/workflow-triggers.mjs';
 import {businessProjection,liveDataset,sameLiveEvent,readableLiveHistory,queryForEvent} from '../mastra-studio/workflow-live-data.mjs';
 import {scheduleAuthorization} from './schedule-client.mjs';
@@ -13,7 +14,13 @@ const context=new AsyncLocalStorage();
 export const withBusinessAccess=(access,operation)=>context.run(access,operation);
 export function currentBusinessAccess(){const access=context.getStore();if(!access)throw new Error('业务查询需要当前有效登录。');return access;}
 const fail=(message,status=403)=>Object.assign(new Error(message),{status});
-const sources=new Map(workflowSources.map(source=>[source.id,source]));
+const sources=new Map(businessReadSources.map(source=>[source.id,source]));
+function checkedScope(source,scope){
+ if(!sources.has(source))throw fail('业务读取接口尚未适配。');
+ const parsed=readScopeSchema(source).safeParse(scope);
+ if(!parsed.success)throw fail('查询范围无效或缺少该动作要求的参数。',400);
+ return parsed.data;
+}
 
 // Fixed GET read views only. Cookies remain in this closure, never in Mastra,
 // model arguments, requestContext, traces, configuration or persistent storage.
@@ -23,7 +30,7 @@ export function createBusinessReader({publicOrigin,connectHost='host.docker.inte
  return async(cookie,source,scope={})=>{
   const definition=sources.get(source),filtered=sessionCookie(cookie);
   if(!definition||!filtered)throw fail('业务模块或登录状态无效。');
-  if(!scope||typeof scope!=='object'||Array.isArray(scope)||Object.entries(scope).some(([key,value])=>!definition.scopeParams.includes(key)||typeof value!=='string'||value.length>160))throw fail('查询范围无效。');
+  scope=checkedScope(source,scope);
   const url=new URL('/api/workspace/'+source,origin);for(const [key,value] of Object.entries(scope))if(value)url.searchParams.set(key,value);
   return new Promise((resolve,reject)=>{
    const request=transport({hostname:connectHost,port:Number(origin.port||443),method:'GET',path:url.pathname+url.search,servername:isIP(origin.hostname)?'':origin.hostname,rejectUnauthorized:true,checkServerIdentity:(_,cert)=>tls.checkServerIdentity(origin.hostname,cert),headers:{Host:origin.host,Cookie:filtered,Accept:'application/json'},timeout:15000},response=>{
@@ -51,7 +58,7 @@ export function createBusinessAccess({cookie,user,authenticate,read,scheduleClie
  // The platform read handler validates the same cookie, active membership and
  // current row/field permissions on every GET. Check Studio admission once per
  // tool operation rather than consuming an auth/session request per module.
- const authorized=async(source,scope={})=>businessProjection(await read(cookie,source,scope));
+ const authorized=async(source,scope={})=>businessProjection(await read(cookie,source,checkedScope(source,scope)));
  const pendingCatalogs=new Map();
  function catalog(source,scope={}){
   const key=JSON.stringify([source,scope]);if(pendingCatalogs.has(key))return pendingCatalogs.get(key);
@@ -64,7 +71,10 @@ export function createBusinessAccess({cookie,user,authenticate,read,scheduleClie
   await Promise.all(Array.from({length:2},async()=>{while(index<workflowSources.length){const item=workflowSources[index++];try{const body=await authorized(item.id),datasets=projectedDatasets(body);if(datasets.length)modules.push({...item,datasetCount:datasets.length,fieldCount:datasets.reduce((sum,d)=>sum+d.fields.length,0)});}catch(error){if(error.status===401)throw error;if(![400,403,404].includes(error.status))unavailable.push({source:item.id,status:error.status||503});}}}));
   return{modules:modules.sort((a,b)=>a.id.localeCompare(b.id)),unavailable,mode:'authorized',eventsEnabled:false,readAt:new Date(now()).toISOString(),message:'实时读取当前账号可见的业务 API；unavailable 中的模块本次读取失败，不能当作没有业务数据。'+(scheduleClient?'后台定时任务需在定时任务页单独启用。':'后台自动调度尚未启用。')};
  }
- async function query({source,scope={},dataset,offset=0,limit=10,id,query,fields}){
+ async function query(input){
+  const parsed=recordQuerySchema.safeParse(input);
+  if(!parsed.success)throw fail('查询参数无效。',400);
+  const {source,scope,dataset,offset,limit,id,query,fields}=parsed.data;
   await verifyActor();
   const body=await authorized(source,scope),datasets=projectedDatasets(body),definition=datasets.find(row=>row.path===dataset);
   if(!definition)throw fail('数据对象不存在或当前不可见。');
@@ -81,7 +91,13 @@ export function createBusinessAccess({cookie,user,authenticate,read,scheduleClie
   const trigger=event.triggerConfig,view=liveDataset(await authorized(trigger.source,trigger.scope),trigger);
   return verify?sameLiveEvent(event,trigger,view.rows):view.rows.some(row=>row.id===event.recordId&&['customerId','customerAccountId','customer','projectId','orderId','lineId','supplierId'].every(k=>row[k]===event.after[k])&&readableLiveHistory(event.after,row));
  }
- const access={syntheticOnly:false,catalog,query,...(scheduleClient?scheduleAuthorization(scheduleClient,cookie,schedulerStatus):{scheduleStatus:async()=>({ready:false})}),poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:event=>visible(event,true),visible:event=>visible(event)};
- access.withEvent=(event,operation)=>withBusinessAccess({...access,query:async input=>query(queryForEvent(input,event))},operation);
+ async function processDraftContext(type,id){
+  await verifyActor();
+  const body=await authorized('process-data',{type});
+  const record=id&&Array.isArray(body.records)?body.records.find(row=>row.id===id&&row.type===type):null;
+  return{actorId,canCreate:body.canCreate===true&&Array.isArray(body.allowedKinds)&&body.allowedKinds.includes(type),record:record||null,readAt:new Date(now()).toISOString()};
+ }
+ const access={syntheticOnly:false,assertCurrent:verifyActor,catalog,query,processDraftContext,...(scheduleClient?scheduleAuthorization(scheduleClient,cookie,schedulerStatus):{scheduleStatus:async()=>({ready:false})}),poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:event=>visible(event,true),visible:event=>visible(event)};
+ access.withEvent=(event,operation)=>withBusinessAccess({...access,processDraftContext:async()=>{throw fail('后台事件任务不能生成业务修改草稿。');},query:async input=>query(queryForEvent(input,event))},operation);
  return access;
 }
