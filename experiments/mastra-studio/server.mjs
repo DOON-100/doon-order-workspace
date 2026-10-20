@@ -8,6 +8,13 @@ import {guardBusinessRequest} from './business-request.mjs';
 import {guardEditorRequest} from './editor.mjs';
 import {withWorkflowToolContext} from './workflow-tools.mjs';
 
+// These pinned SDK endpoints use POST for structured read filters. Keep this
+// list explicit: observability also exposes destructive POST/DELETE routes.
+const observabilityReadPosts=new Set([
+ 'traces/query','traces/aggregate','traces/query/fields','traces/query/values','threads/query','spans/query',
+ ...['metrics','scores','feedback'].flatMap(kind=>['aggregate','breakdown','timeseries','percentiles'].map(operation=>kind+'/'+operation)),
+].map(route=>'/studio/api/observability/'+route));
+
 export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime,liveReadOnly=false,scopeId}){
  await fs.mkdir(dataDir,{recursive:true});
  await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
@@ -52,7 +59,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
     if(liveReadOnly&&request.method!=='GET'&&request.method!=='HEAD'){
      if(/^\/studio\/api\/agents\/[^/]+\/(?:generate|stream|send-message|threads\/subscribe|threads\/abort)$/.test(url.pathname)){
       const guarded=await guardBusinessRequest(request,{agents:lab.agents});if(guarded instanceof Response)return guarded;request=guarded;
-     }else if(!url.pathname.startsWith('/studio/api/stored/')&&!url.pathname.startsWith('/studio/api/editor/'))return Response.json({error:'当前云端入口只开放受控配置和只读对话；请通过工作流管理入口运行流程。'},{status:403});
+     }else if(!(request.method==='POST'&&observabilityReadPosts.has(url.pathname))&&!url.pathname.startsWith('/studio/api/stored/')&&!url.pathname.startsWith('/studio/api/editor/'))return Response.json({error:'当前云端入口只开放受控配置和只读查询；请通过工作流管理入口运行流程。'},{status:403});
     }
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
     else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents,lab.storage);if(guarded instanceof Response)return guarded;request=guarded;}
