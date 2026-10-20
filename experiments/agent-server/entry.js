@@ -10,7 +10,7 @@ function update(){
 }
 async function check(){
  if(checking)return;checking=true;
- try{const response=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});const user=response.ok?(await response.json()).user:null;allowed=!!user&&!user.mustChange&&['admin','programmer'].includes(user.role);}catch{allowed=false;}
+ try{const response=await fetch('/api/auth/session',{credentials:'same-origin',cache:'no-store'});const user=response.ok?(await response.json()).user:null;allowed=!!user&&user.mustChange===false&&user.active!==false&&user.personnelType==='internal'&&['admin','pmc','production','clerk','sales','finance','programmer','viewer'].includes(user.role);}catch{allowed=false;}
  finally{checking=false;update();}
 }
 new MutationObserver(update).observe(document.body,{childList:true,subtree:true});check();

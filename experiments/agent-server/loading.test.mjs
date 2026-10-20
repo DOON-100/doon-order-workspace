@@ -32,9 +32,9 @@ test('Studio packaged UI loads without creating user storage; gzip, ETag, HEAD a
 });
 
 test('Gateway still authenticates cached assets and loads UI while a user runtime is cold',async()=>{
- let revoked=false,authCalls=0,runtimes=0,releases=0,release;
+ let revoked=false,external=false,authCalls=0,runtimes=0,releases=0,release;
  const cold=new Promise(resolve=>release=resolve),assets=createStudioAssets({cloud:true,liveReadOnly:true});
- const server=createAgentServer({publicOrigin:'https://synthetic.test',staticStudio:assets,authenticate:async cookie=>{authCalls++;return !revoked&&cookie?{username:'synthetic',role:'admin',mustChange:false}:null;},acquireRuntime:async()=>{runtimes++;await cold;return{studio:{handle:async()=>Response.json({ok:true})},release:()=>releases++};}});
+ const server=createAgentServer({publicOrigin:'https://synthetic.test',staticStudio:assets,authenticate:async cookie=>{authCalls++;return !revoked&&cookie?{username:'synthetic',role:'clerk',personnelType:external?'external':'internal',mustChange:false}:null;},acquireRuntime:async()=>{runtimes++;await cold;return{studio:{handle:async()=>Response.json({ok:true})},release:()=>releases++};}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const call=(route,headers={})=>new Promise((resolve,reject)=>{
   const req=http.get({hostname:'127.0.0.1',port,path:'/studio/'+route,headers:{Host:'synthetic.test',Cookie:'synthetic',...headers}},res=>{const chunks=[];res.on('data',bytes=>chunks.push(bytes));res.on('end',()=>resolve({status:res.statusCode,headers:res.headers,body:Buffer.concat(chunks)}));});req.on('error',reject);
@@ -44,6 +44,7 @@ test('Gateway still authenticates cached assets and loads UI while a user runtim
   const first=await call('brand.css');assert.equal(first.status,200);assert.equal(runtimes,0);
   const etag=first.headers.etag,prior=authCalls;
   assert.equal((await call('brand.css',{'If-None-Match':etag})).status,304);assert.equal(authCalls,prior+1);
+  external=true;assert.equal((await call('brand.css',{'If-None-Match':etag})).status,403,'改为外部后不能通过已有静态缓存进入 Studio');external=false;
   revoked=true;assert.equal((await call('brand.css',{'If-None-Match':etag})).status,401);revoked=false;
   api=call('api/agents');await new Promise(resolve=>setTimeout(resolve,25));assert.equal(runtimes,1);
   const ui=await Promise.race([call(''),new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('UI waited on runtime initialization')),1500);t.unref();})]);

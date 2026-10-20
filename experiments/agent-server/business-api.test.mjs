@@ -4,7 +4,7 @@ import {EventEmitter} from 'node:events';
 import {createBusinessReader,createBusinessAccess,businessProjection,withBusinessAccess,currentBusinessAccess} from './business-api.mjs';
 import {createRuntimePool,userSchema} from './runtime-pool.mjs';
 
-const user={username:'SYN-user',role:'admin',mustChange:false,identity:{id:'SYN-A'}};
+const user={username:'SYN-user',role:'admin',personnelType:'internal',mustChange:false,identity:{id:'SYN-A'}};
 test('业务传输只能读取固定 GET 接口，凭据不进入返回值，拒绝跨地址与任意范围',async()=>{
  const calls=[];
  const transport=(options,done)=>{

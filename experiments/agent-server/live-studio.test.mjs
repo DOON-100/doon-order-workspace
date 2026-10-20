@@ -13,7 +13,7 @@ import {withWorkflowToolContext} from '../mastra-studio/workflow-tools.mjs';
 test('云端只读运行时保留免费配置、真实字段与人工审核，禁止伪造工具结果及合成采购节点',async()=>{
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-cloud-readonly-'));
  const storage=new LibSQLStore({id:'live-test-'+randomUUID(),url:'file:'+path.join(dir,'test.sqlite').replaceAll('\\','/')});
- const user={username:'SYN',role:'admin',mustChange:false,identity:{id:'SYN-A'}},actor={id:'SYN-A',role:'admin',name:'SYN审核人'};
+ const user={username:'SYN',role:'admin',personnelType:'internal',mustChange:false,identity:{id:'SYN-A'}},actor={id:'SYN-A',role:'admin',name:'SYN审核人'};
  const access=createBusinessAccess({cookie:'synthetic',user,authenticate:async()=>user,read:async(cookie,source)=>{if(source!=='drawing-data')throw Object.assign(new Error(),{status:403});return{records:[{id:'SYN-DRAWING',version:1,status:'待确认'}]};}});
  let studio;
  try{

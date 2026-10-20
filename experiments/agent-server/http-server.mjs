@@ -26,7 +26,7 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
     if(req.method==='GET'&&['/studio','/studio/'].includes(url.pathname)){res.writeHead(302,{Location:'/login','Cache-Control':'no-store'});return res.end();}
     return json(res,401,{error:'请先登录数据台。'});
    }
-   if(!canEnterStudio(user))return json(res,403,{error:'agent 工作台仅限已完成改密的管理员或程序员。'});
+   if(!canEnterStudio(user))return json(res,403,{error:'agent 工作台仅限已完成改密的内部账号。'});
    const generation=/\/agents\/[^/]+\/(stream|generate|send-message|stream-network|network)(\/|$)/.test(url.pathname);
    if(generation){if(active>=maxActive)return json(res,429,{error:'当前模型验证并发已满，请稍后重试。'});active++;counted=true;}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(value!==undefined&&!['cookie','authorization','host','connection','content-length'].includes(key))headers.set(key,Array.isArray(value)?value.join(','):value);

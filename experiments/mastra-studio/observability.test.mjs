@@ -44,7 +44,7 @@ test('真实只读 HTTP 入口允许轨迹和指标 POST 查询，保留身份�
    store.queryTraces=async()=>{reads++;return{traces:[{...trace,traceId:'SYN-'+id}],page:{next:null}};};
    store.getMetricBreakdown=async()=>{reads++;return{groups:[]};};
   }
-  server=createAgentServer({publicOrigin:'https://synthetic.test',syntheticOnly:false,authenticate:async cookie=>!revoked&&studios[cookie]?{username:cookie,role:'programmer',mustChange:false}:null,acquireRuntime:async user=>({studio:studios[user.username],release(){}})});
+  server=createAgentServer({publicOrigin:'https://synthetic.test',syntheticOnly:false,authenticate:async cookie=>!revoked&&studios[cookie]?{username:cookie,role:'programmer',personnelType:'internal',mustChange:false}:null,acquireRuntime:async user=>({studio:studios[user.username],release(){}})});
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   const call=(route,body={},cookie='A',method='POST',origin='https://synthetic.test')=>new Promise((resolve,reject)=>{
    const payload=JSON.stringify(body);

@@ -11,12 +11,12 @@ const client=(port,path,{method='GET',headers={},body}={})=>new Promise((resolve
 test('HTTPS origin、会话筛选和角色策略拒绝不明确的授权',()=>{
  assert.throws(()=>parsePublicOrigin('http://example.test'));assert.throws(()=>parsePublicOrigin('https://user:secret@example.test'));assert.throws(()=>parsePublicOrigin('https://example.test/path'));
  assert.equal(sessionCookie('other=secret; doon_employee_session='+'a'.repeat(43)),'doon_employee_session='+'a'.repeat(43));assert.equal(sessionCookie('doon_session=invalid'),'');
- for(const user of [null,{username:'test',mustChange:true,role:'admin'},{username:'test',mustChange:false,role:'sales'},{username:'test',mustChange:false,role:'admin',active:false},{role:'admin'}])assert.equal(canEnterStudio(user),false);
- assert.equal(canEnterStudio({username:'test',role:'programmer',mustChange:false}),true);
+ for(const user of [null,{username:'test',mustChange:true,role:'admin',personnelType:'internal'},{username:'test',mustChange:false,role:'admin',personnelType:'external'},{username:'test',mustChange:false,role:'programmer'},{username:'test',personnelType:'internal',mustChange:false,role:'admin',active:false},{username:'test',personnelType:'internal',mustChange:false,role:'supplier'},{role:'admin'}])assert.equal(canEnterStudio(user),false);
+ for(const role of ['admin','pmc','production','clerk','sales','finance','programmer','viewer'])assert.equal(canEnterStudio({username:'test',role,personnelType:'internal',mustChange:false}),true);
 });
 test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不转发 Cookie',async()=>{
  let revoked=false,unavailable=false,calls=0;
- const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async cookie=>{calls++;if(unavailable)throw new Error('private auth detail');if(revoked||!cookie)return null;return{username:'synthetic',identity:{id:'SYN-REAL-ID',name:'合成登录用户'},role:cookie==='sales'?'sales':'admin',mustChange:cookie==='initial'};},studio:{handle:async(request,context)=>Response.json({ok:true,cookie:request.headers.get('cookie'),authorization:request.headers.get('authorization'),actor:context?.actor})}});
+ const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async cookie=>{calls++;if(unavailable)throw new Error('private auth detail');if(revoked||!cookie)return null;return{username:'synthetic',identity:{id:'SYN-REAL-ID',name:'合成登录用户'},role:['sales','internal-sales'].includes(cookie)?'sales':'admin',personnelType:['sales','external-admin'].includes(cookie)?'external':'internal',mustChange:cookie==='initial'};},studio:{handle:async(request,context)=>Response.json({ok:true,cookie:request.headers.get('cookie'),authorization:request.headers.get('authorization'),actor:context?.actor})}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const request=(path,{cookie,method='GET',origin='https://example.test',host='example.test'}={})=>client(port,path,{method,headers:{Host:host,...(cookie?{Cookie:cookie}:{}),...(method==='GET'?{}:{Origin:origin}),'X-Role':'admin',Authorization:'untrusted'}});
  try{
@@ -24,6 +24,8 @@ test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不
   assert.equal((await request('/agent-studio-entry.js')).status,200);
   assert.equal((await request('/studio/')).status,302);assert.equal((await request('/studio/api/agents')).status,401);assert.equal((await request('/studio/assets/test.js')).status,401);
   assert.equal((await request('/studio/',{cookie:'sales'})).status,403);assert.equal((await request('/studio/',{cookie:'initial'})).status,403);
+  assert.equal((await request('/studio/',{cookie:'external-admin'})).status,403);
+  assert.equal((await request('/studio/api/agents',{cookie:'internal-sales'})).status,200,'内部销售不再受管理员/程序员角色限制');
   assert.equal((await request('/studio/api/agents',{cookie:'valid',method:'POST',origin:'https://evil.test'})).status,403);
   const editorRoute='/studio/api/stored/agents/procurement';
   assert.equal((await request(editorRoute,{method:'PATCH'})).status,401,'Editor 保存同样需要现有会话');
@@ -50,7 +52,7 @@ test('真实 HTTP 网关逐次鉴权、保护静态和 API、校验 Origin、不
 });
 test('模型并发上限与大载荷拒绝，客户端取消不使服务退出',async()=>{
  let release;const pending=new Promise(resolve=>release=resolve);
- const server=createAgentServer({publicOrigin:'https://example.test',maxActive:1,authenticate:async()=>({username:'synthetic',role:'admin',mustChange:false}),studio:{handle:async request=>{if(request.url.endsWith('/stream'))await pending;return new Response('ok');}}});
+ const server=createAgentServer({publicOrigin:'https://example.test',maxActive:1,authenticate:async()=>({username:'synthetic',role:'admin',personnelType:'internal',mustChange:false}),studio:{handle:async request=>{if(request.url.endsWith('/stream'))await pending;return new Response('ok');}}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const request=(path,body)=>client(port,path,{method:'POST',headers:{Host:'example.test',Origin:'https://example.test'},body});
  let running;

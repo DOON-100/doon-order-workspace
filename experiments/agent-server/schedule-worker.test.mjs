@@ -18,14 +18,14 @@ import {liveDataset,sameLiveEvent} from '../mastra-studio/workflow-live-data.mjs
 const key='SYN_'+ 'k'.repeat(43),origin='https://schedule.example.test';
 function fixture(){
  const db=new DatabaseSync(':memory:');db.exec('CREATE TABLE records(id TEXT PRIMARY KEY,data TEXT);');db.prepare('INSERT INTO records VALUES(?,?)').run('SYN-ORIGINAL',JSON.stringify({version:7,attachment:'SYN-HASH'}));
- let clock=Date.parse('2026-10-19T08:59:00+08:00'),active=true,role='admin',rows=[{id:'SYN-A',version:1,status:'待确认',password:'SYN-private'}],reads=0;
- const current=()=>({member:{id:'SYN-MEMBER',userId:'SYN-OWNER',name:'合成配置人',active,role},account:{id:'SYN-ACCOUNT',username:'synthetic',must_change:0}}),user=()=>({username:'synthetic',identity:{id:'SYN-OWNER',name:'合成配置人'},mustChange:false,role});
+ let clock=Date.parse('2026-10-19T08:59:00+08:00'),active=true,role='admin',personnelType='internal',rows=[{id:'SYN-A',version:1,status:'待确认',password:'SYN-private'}],reads=0;
+ const current=()=>({member:{id:'SYN-MEMBER',userId:'SYN-OWNER',name:'合成配置人',active,role,personnelType},account:{id:'SYN-ACCOUNT',username:'synthetic',must_change:0}}),user=()=>({username:'synthetic',identity:{id:'SYN-OWNER',name:'合成配置人'},personnelType,mustChange:false,role});
  const read=async(_,source,scope)=>{assert.equal(source,'drawing-data');assert.deepEqual(scope,{});reads++;if(!active)throw Object.assign(Error(),{status:403});return{revision:1,records:structuredClone(rows)};};
  const bridge=createScheduleBridge({db,config:{token:key},currentForOwner:async id=>id==='SYN-OWNER'?current():null,readView:read,now:()=>clock});
  const client=async(action,body,{service=false,cookie='SYN-cookie'}={})=>{const request=new Request(origin+'/api/agent-schedules/'+action,{method:body===undefined?'GET':'POST',headers:{Origin:origin,'Content-Type':'application/json',...(service?{Authorization:'Bearer '+key}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});const response=await bridge.handle(request,service?null:cookie==='SYN-cookie'?current():null);return response.json();};
  const trigger={...defaultTrigger(),mode:'schedule',source:'drawing-data',dataset:'/records'};
  const digest=()=>createHash('sha256').update(JSON.stringify(db.prepare('SELECT * FROM records').all())).digest('hex');
- return{db,bridge,client,current,user,read,trigger,digest,clock:()=>clock,setClock:v=>{clock=Date.parse(v);},setActive:v=>{active=v;},setRole:v=>{role=v;},setRows:v=>{rows=v;},reads:()=>reads};
+ return{db,bridge,client,current,user,read,trigger,digest,clock:()=>clock,setClock:v=>{clock=Date.parse(v);},setActive:v=>{active=v;},setRole:v=>{role=v;},setPersonnelType:v=>{personnelType=v;},setRows:v=>{rows=v;},reads:()=>reads};
 }
 
 test('独立后台授权：当前身份、精确范围、过期/撤销、来源变化、租约隔离和原始数据保全',async()=>{
@@ -41,7 +41,8 @@ test('独立后台授权：当前身份、精确范围、过期/撤销、来源�
   const page=await f.client('service/schedule',worker,{service:true});assert.equal(page.events.length,1);assert(!JSON.stringify(page).includes('SYN-private'));
   const event={...page.events[0],triggerConfig:f.trigger};assert.equal((await f.client('service/verify',{...worker,event},{service:true})).valid,true);
   f.setRows([{id:'SYN-A',version:2,status:'已确认'}]);assert.equal((await f.client('service/verify',{...worker,event},{service:true})).valid,false);
-  f.setRole('viewer');await assert.rejects(f.client('service/catalog',worker,{service:true}),/身份已失效/);f.setRole('admin');
+  f.setRole('viewer');await f.client('service/catalog',worker,{service:true});
+  f.setPersonnelType('external');await assert.rejects(f.client('service/catalog',worker,{service:true}),/身份已失效/);f.setPersonnelType('internal');f.setRole('admin');
   await f.client('revoke',{workflowId:'SYN-WF',grantId:grant.grantId});await assert.rejects(f.client('service/catalog',worker,{service:true}),/授权已/);
   const next=await f.client('grant',{workflowId:'SYN-WF',configVersionId:'SYN-V2',trigger:f.trigger});assert.notEqual(next.grantId,grant.grantId);
   f.setClock('2026-10-19T09:02:00+08:00');const second=await f.client('service/lease',{workerId:'SYN-OTHER'},{service:true});assert(second.fence>worker.fence);

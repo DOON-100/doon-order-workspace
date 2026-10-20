@@ -28,4 +28,4 @@ export function createSessionChecker({publicOrigin,connectHost='host.docker.inte
   request.on('timeout',()=>request.destroy());request.on('error',()=>reject(new Error('Authentication unavailable')));request.end();
  });
 }
-export const canEnterStudio=user=>!!user&&typeof user.username==='string'&&user.active!==false&&user.mustChange===false&&['admin','programmer'].includes(user.role);
+export const canEnterStudio=user=>!!user&&typeof user.username==='string'&&user.active!==false&&user.mustChange===false&&user.personnelType==='internal'&&['admin','pmc','production','clerk','sales','finance','programmer','viewer'].includes(user.role);
