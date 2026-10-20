@@ -32,7 +32,7 @@ export async function executeDepartment(group,input,access){
   const metadata=await access.catalog(action.source,fixedScope(action,args.scope));
   return{action:action.id,status:action.status,writeEnabled:false,contractRevision,
    arguments:describeSchema(action.kind==='read'?readArguments(action):draftArguments(action.type)),
-   metadata,rules:action.kind==='draft'?['必须先核对关联与来源；不猜客户、订单、负责人或证据。','更新需当前 ID 和版本，仅合并显式修改字段，其余字段保留。','完成条件、数量平衡、日期、金额等复用中台固定校验。','只返回草稿；关联授权仍需提交服务校验，尚无业务保存或确认入口。']:[]};
+   metadata,rules:action.kind==='draft'?['必须先核对关联与来源；不猜客户、订单、负责人或证据。','更新需当前 ID 和版本，仅合并显式修改字段，其余字段保留。','完成条件、数量平衡、日期、金额等复用中台固定校验。',access.stageProcessDraft?'会登记待确认预览并返回链接；必须由本人打开后确认。未知项或冲突未解决时不能确认。':'当前只返回草稿，尚未启用确认通道。']:[]};
  }
  if(request.operation==='query'){
   if(action.kind!=='read')throw fail('此动作不能用于查询。');
@@ -61,5 +61,5 @@ export async function executeDepartment(group,input,access){
  const result={status:'draft-only',saved:false,executed:false,approvalRequired:true,writeEnabled:false,readAt:context.readAt,binding,changes,proposed,basis:args.basis,basisVerified:false,
   message:'仅生成字段校验草稿。尚未保存或批准；正式执行仍须人工核对，并由中台重新校验关联、权限、版本与幂等。此草稿哈希不是批准令牌。'};
  if(Buffer.byteLength(JSON.stringify(result))>48*1024)throw fail('草稿过大，请缩小本次修改范围。',413);
- return result;
+ return access.stageProcessDraft?access.stageProcessDraft(result):result;
 }

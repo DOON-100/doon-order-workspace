@@ -59,7 +59,7 @@ export function departmentCatalog(group){
  return{department,contractRevision,authorization:'checked-by-original-api-on-every-read',writeEnabled:false,
   actions:departmentActions.filter(row=>row.groups.includes(group)).map(({id,label,kind,status,requiredScope})=>({id,label,kind,status,...(requiredScope?{requiredScope}:{})})),
   pendingEndpoints:registry.endpoints.filter(row=>row.groups.includes(group)&&!readActions.some(action=>row.method==='GET'&&action.source===row.action)&&row.action!=='process-data').map(({method,path,object,boundary})=>({method,path,object,boundary,status:'not-executable'})),
-  message:'目录是接口能力清单，不代表当前账号权限或数据存在。inspect/query 每次通过原业务接口校验。prepare 仅形成待核对草稿，不保存、不审批、不执行。'};
+  message:'目录是接口能力清单，不代表当前账号权限或数据存在。inspect/query 每次通过原业务接口校验。prepare 不直接修改业务；启用确认通道时返回人工预览链接，由本人核对后执行。'};
 }
 
 // Small schema description for discovery; Zod remains the validator. Refinements

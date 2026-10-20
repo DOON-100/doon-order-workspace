@@ -5,7 +5,7 @@ import {pipeline} from 'node:stream/promises';
 import {parsePublicOrigin,canEnterStudio} from './session.mjs';
 import {withModelAccess} from '../mastra-studio/model-scheduler.mjs';
 
-export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=Infinity}){
+export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,processChanges,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=Infinity}){
  const origin=parsePublicOrigin(publicOrigin);let active=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
@@ -35,7 +35,8 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
    if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'工作台请求超过大小限制。'});body=Buffer.concat(chunks);}
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
-   const access=businessAccess?.({cookie:req.headers.cookie||'',user});
+   const changes=processChanges?.({cookie:req.headers.cookie||'',user});
+   const access=businessAccess?.({cookie:req.headers.cookie||'',user,...(changes?{stageProcessDraft:draft=>changes.stage(draft)}:{})});
    const modelOwner=actor.id,modelRole=user.role,modelCookie=req.headers.cookie||'';
    const modelAccess={owner:modelOwner,authorize:async()=>{
     const current=await authenticate(modelCookie);
@@ -46,7 +47,7 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
    const isStatic=!!response;
    if(!response){
     lease=acquireRuntime?await acquireRuntime(user):null;
-    response=await withModelAccess(modelAccess,()=>withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{})})));
+    response=await withModelAccess(modelAccess,()=>withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{}),...(changes?{processChanges:changes}:{})})));
    }
    const outgoing=Object.fromEntries(response.headers);if(!isStatic){delete outgoing['cache-control'];outgoing['Cache-Control']='no-store';}outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
    // Both the direct stream and Studio's long-lived thread subscription must

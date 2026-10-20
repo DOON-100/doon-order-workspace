@@ -32,9 +32,10 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
   // send-message acknowledges before its background stream ends. An absent
   // HTTP lease does not make that runtime safe to evict.
   isBusy:()=>Object.values(lab.agents).some(agent=>agent.listActiveThreadRuns().length>0),
-  async handle(request,{actor,workflowAccess}={}){
+  async handle(request,{actor,workflowAccess,processChanges}={}){
    const asset=await assets.handle(request);if(asset)return asset;
    const url=new URL(request.url);
+   if(url.pathname==='/studio/process-change/api')return processChanges?processChanges.handle(request,{actor}):Response.json({error:'当前实例未启用流程人工确认。'},{status:403});
    if(url.pathname.startsWith('/studio/workflow-manager/api/')){
     if(!lab.workflowManager)return Response.json({error:'此环境不开放可视化工作流管理。'},{status:403});
     const trusted=actor&&request.method==='POST'&&request.headers.get('origin')===url.origin?{actor:{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true},workflowAccess}:undefined;

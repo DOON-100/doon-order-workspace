@@ -8,6 +8,7 @@ import {createRuntimePool} from './runtime-pool.mjs';
 import {loadScheduleKey,createScheduleClient} from './schedule-client.mjs';
 import {createScheduleWorker} from './schedule-worker.mjs';
 import {processModelScheduler} from '../mastra-studio/model-scheduler.mjs';
+import {createProcessChangeClient,createProcessChangeSession} from './process-change-client.mjs';
 
 const publicOrigin=process.env.DOON_AGENT_PUBLIC_ORIGIN;
 const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'});
@@ -19,9 +20,11 @@ const pool=live?createRuntimePool({create:async(user,schema)=>{
 const studio=live?null:await createStudio({dataDir:'/tmp/agent-studio',storage:await createCloudStorage(),cloud:true});
 const staticStudio=live?createStudioAssets({cloud:true,liveReadOnly:true,hasManager:true,hasWorkflowManager:true}):studio.assets;
 const read=live?createBusinessReader({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
+// Opt-in only; a code/image update alone must never enable business confirmations.
+const processChangeClient=live&&process.env.DOON_AGENT_PROCESS_CHANGES_ENABLED==='1'?createProcessChangeClient({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
 const scheduleKey=live?await loadScheduleKey():null,scheduleClient=scheduleKey?createScheduleClient({publicOrigin,key:scheduleKey,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
 const scheduleWorker=scheduleClient?createScheduleWorker({client:scheduleClient,pool}):null;
-const server=createAgentServer({publicOrigin,studio,staticStudio,authenticate,syntheticOnly:!live,schedulerStatus:()=>scheduleWorker?.status()||{state:'disabled'},...(live?{acquireRuntime:user=>pool.acquire(user),businessAccess:({cookie,user})=>createBusinessAccess({cookie,user,authenticate,read,scheduleClient,schedulerStatus:()=>scheduleWorker?.status()}),withAccess:withBusinessAccess}:{} )});
+const server=createAgentServer({publicOrigin,studio,staticStudio,authenticate,syntheticOnly:!live,schedulerStatus:()=>scheduleWorker?.status()||{state:'disabled'},...(live?{acquireRuntime:user=>pool.acquire(user),businessAccess:({cookie,user,stageProcessDraft})=>createBusinessAccess({cookie,user,authenticate,read,scheduleClient,stageProcessDraft,schedulerStatus:()=>scheduleWorker?.status()}),withAccess:withBusinessAccess}:{} ),...(processChangeClient?{processChanges:({cookie,user})=>createProcessChangeSession({cookie,user,authenticate,client:processChangeClient})}:{})});
 await staticStudio.warm();
 scheduleWorker?.start();
 server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:!live,model:process.env.DOON_STUDIO_MODEL||'offline'})));

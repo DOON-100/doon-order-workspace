@@ -27,6 +27,10 @@
 !mastra-studio/department-contracts.mjs
 !mastra-studio/department-executor.mjs
 !mastra-studio/department-tools.mjs
+!mastra-studio/process-change.html
+!mastra-studio/process-change.js
+!mastra-studio/process-change.css
+!agent-server/process-change-client.mjs
 !mastra-studio/workflow-manager.html
 !mastra-studio/workflow-manager.js
 !mastra-studio/workflow-manager.css
