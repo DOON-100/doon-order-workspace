@@ -29,6 +29,9 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
  const assets=createStudioAssets({cloud,businessFacts:!!businessFacts,liveModel:!!liveModel,liveReadOnly,hasManager:!!lab.manager,hasWorkflowManager:!!lab.workflowManager});
  return{
   ...lab,assets,
+  // send-message acknowledges before its background stream ends. An absent
+  // HTTP lease does not make that runtime safe to evict.
+  isBusy:()=>Object.values(lab.agents).some(agent=>agent.listActiveThreadRuns().length>0),
   async handle(request,{actor,workflowAccess}={}){
    const asset=await assets.handle(request);if(asset)return asset;
    const url=new URL(request.url);

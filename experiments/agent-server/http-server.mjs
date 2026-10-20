@@ -43,7 +43,16 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
     response=await withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{})}));
    }
    const outgoing=Object.fromEntries(response.headers);if(!isStatic){delete outgoing['cache-control'];outgoing['Cache-Control']='no-store';}outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
+   // Both the direct stream and Studio's long-lived thread subscription must
+   // reach the client incrementally, including before the first model token.
+   const streaming=/^text\/event-stream(?:;|$)/i.test(response.headers.get('content-type')||'')||/\/agents\/[^/]+\/stream\/?$/.test(url.pathname);
+   if(streaming){
+    outgoing['Cache-Control']='no-store, no-transform';
+    outgoing['X-Accel-Buffering']='no';
+    delete outgoing['content-length'];
+   }
    delete outgoing['set-cookie'];res.writeHead(response.status,outgoing);
+   if(streaming)res.flushHeaders();
    if(req.method==='HEAD'||!response.body)return res.end();
    await pipeline(Readable.fromWeb(response.body),res);
   }catch(error){
