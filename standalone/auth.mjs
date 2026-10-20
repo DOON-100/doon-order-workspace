@@ -2,6 +2,7 @@ import {randomBytes,randomUUID,createHash,scrypt as scryptCallback,timingSafeEqu
 import {promisify} from 'node:util';
 import {isIP} from 'node:net';
 import {db,memberFor,transaction,saveRecords,auditLocal} from './runtime.mjs';
+import {personnelTypeOf,personnelTypes} from './personnel.mjs';
 const scrypt=promisify(scryptCallback);
 const hashToken=token=>createHash('sha256').update(token).digest('hex');
 export const sessionName='doon_session';
@@ -29,7 +30,7 @@ export function session(request,options={}){
  if(options.supplierOnly&&member.role!=='supplier'||options.employeeOnly&&member.role==='supplier')return null;
  db.prepare('UPDATE local_sessions SET last_seen=? WHERE token_hash=?').run(now,digest);return {account,member,digest,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}};
 }
-export function publicSession(s){return s?{username:s.account.username,mustChange:!!s.account.must_change,role:s.member.role,...(s.member.role==='supplier'?{supplierId:s.member.supplierId}:{}),identity:{id:s.member.userId,name:s.member.name,email:s.member.email}}:null;}
+export function publicSession(s){return s?{username:s.account.username,mustChange:!!s.account.must_change,role:s.member.role,personnelType:personnelTypeOf(s.member),...(s.member.role==='supplier'?{supplierId:s.member.supplierId}:{}),identity:{id:s.member.userId,name:s.member.name,email:s.member.email}}:null;}
 function cookie(token,secure,clear=false,options={}){return `${cookieName(options)}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear?0:43200}${secure?'; Secure':''}`;}
 function issue(account,secure,options={}){const token=randomBytes(32).toString('base64url'),now=Date.now();db.prepare('DELETE FROM local_sessions WHERE expires_at<?').run(now);db.prepare('INSERT INTO local_sessions VALUES(?,?,?,?)').run(sessionDigest(token,options),account.id,now+12*3600000,now);return cookie(token,secure,false,options);}
 function recordAuthEvent(username,account,member,event,ip,options={},reason=''){
@@ -61,10 +62,14 @@ export async function changePassword(s,body,secure,options={}){validatePassword(
 export async function createAccount(input,actor,{owner=false,existingMember}={}){
  const username=String(input.username||'').trim().toLowerCase(),name=String(input.name||'').trim();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))fail('账号需为 3 至 32 位字母、数字、点、短横线或下划线，以字母开头。');if(!name||name.length>100)fail('请填写姓名。');
  const role=existingMember?.role||input.role||'clerk';if(!['admin','pmc','production','clerk','sales','finance','programmer','viewer','supplier'].includes(role))fail('角色无效。');const supplierId=role==='supplier'?String(existingMember?.supplierId||input.supplierId||'').trim():undefined;
+ if(input.personnelType!==undefined&&!personnelTypes.includes(input.personnelType))fail('人员类型无效。');
+ const personnelType=existingMember?personnelTypeOf(existingMember):input.personnelType??(role==='supplier'?'external':'internal');
+ if(role==='supplier'&&personnelType!=='external')fail('供应商账号必须为外部人员。');
  if(role==='supplier'&&(owner||!activeSupplier({role,supplierId})))fail('请先选择有效的供应商主档。');
  const depts=role==='supplier'?[]:(input.departments||[]),customers=role==='supplier'?[]:(input.customers||[]);if(!Array.isArray(depts)||depts.some(d=>!departments.has(d)))fail('部门无效。');if(!Array.isArray(customers)||customers.length>1000||customers.some(c=>typeof c!=='string'||!c.trim()||c.length>100))fail('客户范围无效。');
  const orderScope=role==='supplier'?'assigned':input.orderScope??(['clerk','sales'].includes(role)?'all':'assigned');if(!['all','assigned'].includes(orderScope))fail('查看范围无效。');
  const hash=await passwordHash(input.password),id='local_'+randomUUID(),at=new Date().toISOString();let member=existingMember?{...existingMember,userId:id}:{id:'member_'+randomUUID(),kind:'member',userId:id,email:username+'@doon.local',name,role,orderScope,customers,departments:depts,active:true,owner,createdAt:at};
+ member={...member,personnelType};
  if(role==='supplier')member={...member,supplierId,orderScope:'assigned',customers:[],departments:[]};
  transaction(()=>{if(role==='supplier'&&!activeSupplier(member))fail('供应商状态已变化，请重新选择。',409);if(db.prepare('SELECT id FROM local_accounts WHERE username=?').get(username))fail('该登录账号已存在。',409);db.prepare('INSERT INTO local_accounts VALUES(?,?,?,?,1,?)').run(id,username,member.id,hash,at);saveRecords([member,auditLocal(actor||member,role==='supplier'?'创建供应商账号':'创建内网账号',member.id)]);});return {username,memberId:member.id};
 }

@@ -32,7 +32,13 @@ test('原生 HTTP 后台只读桥：真实登录授权、独立服务身份、�
   await request('/api/auth/logout',{});cookie='';assert.equal((await request('/api/agent-schedules/service/schedule',worker,{service:true})).status,200,'后台凭据不依赖普通会话续期');
   await stop();await start();lease=(await request('/api/agent-schedules/service/lease',{workerId:'SYN-HTTP',fence:worker.fence},{service:true})).data;assert.equal(lease.acquired,true);worker.fence=lease.fence;
   assert.equal((await request('/api/agent-schedules/service/schedule',worker,{service:true})).data.events.length,1,'授权在独立表中持久保存');
-  const member=JSON.parse(db.prepare("SELECT data FROM records WHERE kind='member' AND json_extract(data,'$.role')='admin'").get().data);member.active=false;db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(member),member.id);
+  const member=JSON.parse(db.prepare("SELECT data FROM records WHERE kind='member' AND json_extract(data,'$.role')='admin'").get().data);
+  member.personnelType='external';db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(member),member.id);
+  assert.equal((await request('/api/agent-schedules/service/schedule',worker,{service:true})).status,403,'既有后台授权不能绕过外部账号准入限制');
+  member.personnelType='internal';member.role='viewer';member.customers=['SYN合成客户'];db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(member),member.id);
+  const internalRead=await request('/api/agent-schedules/service/schedule',worker,{service:true});
+  assert.equal(internalRead.status,200,JSON.stringify(internalRead.data));
+  member.active=false;db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(member),member.id);
   assert.equal((await request('/api/agent-schedules/service/schedule',worker,{service:true})).status,403);
   assert.equal(digest(),baseline);assert.equal(db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='workflow_event_outbox'").get().n,0,'定时只读无需启用业务变更采集');
  }finally{await stop();db.close();const root=path.resolve('test-output')+path.sep;if(!path.resolve(dir).startsWith(root))throw Error('Unexpected test directory');await fs.rm(dir,{recursive:true,force:true,maxRetries:10,retryDelay:100});}
