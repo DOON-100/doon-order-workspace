@@ -7,6 +7,7 @@ import {createBusinessReader,createBusinessAccess,withBusinessAccess} from './bu
 import {createRuntimePool} from './runtime-pool.mjs';
 import {loadScheduleKey,createScheduleClient} from './schedule-client.mjs';
 import {createScheduleWorker} from './schedule-worker.mjs';
+import {processModelScheduler} from '../mastra-studio/model-scheduler.mjs';
 
 const publicOrigin=process.env.DOON_AGENT_PUBLIC_ORIGIN;
 const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'});
@@ -24,4 +25,4 @@ const server=createAgentServer({publicOrigin,studio,staticStudio,authenticate,sy
 await staticStudio.warm();
 scheduleWorker?.start();
 server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:!live,model:process.env.DOON_STUDIO_MODEL||'offline'})));
-for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void scheduleWorker?.close();server.close(async()=>{await scheduleWorker?.close();await(pool||studio).close();process.exit(0);});});
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void processModelScheduler.close();void scheduleWorker?.close();server.close(async()=>{await processModelScheduler.close();await scheduleWorker?.close();await(pool||studio).close();process.exit(0);});});

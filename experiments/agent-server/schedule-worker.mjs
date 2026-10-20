@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {createScheduledAccess} from './schedule-client.mjs';
 import {withBusinessAccess} from './business-api.mjs';
 import {withWorkflowToolContext} from '../mastra-studio/workflow-tools.mjs';
+import {withModelAccess} from '../mastra-studio/model-scheduler.mjs';
 
 // One leased worker across containers; users and their durable schemas are
 // discovered from explicit grants without opening Studio or persisting cookies.
@@ -22,7 +23,7 @@ export function createScheduleWorker({client,pool,intervalMs=15000,renewMs=20000
      const output=await manager.processTriggers(async(ownerId,{row,control,trigger})=>{
       if(ownerId!==user.identity.id||trigger.mode!=='schedule'||!control?.payload.enabled||control.payload.configVersionId!==row.versionId||!control.payload.grantId||!valid)return null;
       return createScheduledAccess({client,worker,user,grantId:control.payload.grantId,configVersionId:row.versionId,trigger,valid:()=>valid&&!stopping});
-     },{runWithAccess:(access,operation)=>withBusinessAccess(access,()=>withWorkflowToolContext({actor:{id:user.identity.id,name:user.identity.name,role:user.role},workflowAccess:access,readOnly:true},operation))});results.push(...output);
+     },{runWithAccess:(access,operation)=>withModelAccess({owner:String(user.identity.id),authorize:()=>access.catalog()},()=>withBusinessAccess(access,()=>withWorkflowToolContext({actor:{id:user.identity.id,name:user.identity.name,role:user.role},workflowAccess:access,readOnly:true},operation)))});results.push(...output);
     }catch{results.push({status:'runtime-unavailable'});}finally{handle?.release();}
    }
    state={state:valid?'idle':'blocked',lastTick:new Date().toISOString(),lastError:results.some(r=>['blocked','needs-attention','runtime-unavailable'].includes(r.status))?'task-needs-attention':null};return results;

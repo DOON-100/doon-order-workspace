@@ -18,7 +18,7 @@ const observabilityReadPosts=new Set([
 export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime,liveReadOnly=false,scopeId}){
  await fs.mkdir(dataDir,{recursive:true});
  await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
- const deepseek=createDeepSeekStatus(deepseekOptions),liveModel=await deepseek.model();
+ const deepseek=createDeepSeekStatus({...deepseekOptions,modelOwner:scopeId||'local',requireModelAccess:cloud&&liveReadOnly}),liveModel=await deepseek.model();
  if(businessFacts&&cloud)throw new Error('真实快照模式仅供本机隔离验证');
  if(createRuntime&&cloud)throw new Error('闭环验证运行时仅供本机隔离环境');
  if(liveReadOnly&&(!cloud||!storage||!scopeId))throw new Error('Live API mode requires isolated cloud storage');
@@ -50,7 +50,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
     if(!selected)return new Response(null,{status:404});
     const actual=await selected.getModel(),provider=String(actual.provider||'');
     const model={provider:provider.startsWith('deepseek')?'DeepSeek':provider.includes('offline')?'合成脚本':provider,id:actual.modelId,live:!provider.includes('offline')};
-    return Response.json({...await deepseek.get({refresh}),model},{headers:{'Cache-Control':'no-store'}});
+    return Response.json({...await deepseek.get({refresh}),model,modelQueue:deepseek.schedulerStatus()},{headers:{'Cache-Control':'no-store'}});
    }
    if(url.pathname==='/studio/business/profiles')return Response.json({mode:liveReadOnly?'live-readonly':businessFacts?'real-snapshot':'synthetic',...(businessFacts?{coverage:businessFacts.coverage()}:{}),profiles:(await import('./profiles.mjs')).profiles},{headers:{'Cache-Control':'no-store'}});
    if(url.pathname==='/studio/api'||url.pathname.startsWith('/studio/api/')){

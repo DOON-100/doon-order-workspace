@@ -3,8 +3,9 @@ import fs from 'node:fs/promises';
 import {Readable} from 'node:stream';
 import {pipeline} from 'node:stream/promises';
 import {parsePublicOrigin,canEnterStudio} from './session.mjs';
+import {withModelAccess} from '../mastra-studio/model-scheduler.mjs';
 
-export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=2}){
+export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=Infinity}){
  const origin=parsePublicOrigin(publicOrigin);let active=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
@@ -35,12 +36,17 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
    const controller=new AbortController();res.once('close',()=>{if(!res.writableEnded)controller.abort();});
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
    const access=businessAccess?.({cookie:req.headers.cookie||'',user});
+   const modelOwner=actor.id,modelRole=user.role,modelCookie=req.headers.cookie||'';
+   const modelAccess={owner:modelOwner,authorize:async()=>{
+    const current=await authenticate(modelCookie);
+    if(!canEnterStudio(current)||String(current.identity?.id||current.username)!==modelOwner||current.role!==modelRole)throw new Error('Model authorization changed');
+   }};
    const request=new Request(url,{method:req.method,headers,body,signal:controller.signal});
    let response=await staticStudio?.handle(request);
    const isStatic=!!response;
    if(!response){
     lease=acquireRuntime?await acquireRuntime(user):null;
-    response=await withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{})}));
+    response=await withModelAccess(modelAccess,()=>withAccess(access,()=>(lease?.studio||studio).handle(request,{actor,...(access?{workflowAccess:access}:{})})));
    }
    const outgoing=Object.fromEntries(response.headers);if(!isStatic){delete outgoing['cache-control'];outgoing['Cache-Control']='no-store';}outgoing['X-Content-Type-Options']='nosniff';outgoing['X-Frame-Options']='DENY';outgoing['Referrer-Policy']='no-referrer';
    // Both the direct stream and Studio's long-lived thread subscription must

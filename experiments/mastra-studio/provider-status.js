@@ -8,6 +8,8 @@ function state(){
  if(!current)return{label:'正在查询',tone:'pending'};
  if(current.sessionExpired)return{label:'登录已失效',tone:'error'};
  if(current.status==='unconfigured')return{label:'未配置接口密钥',tone:'pending'};
+ if(current.modelQueue?.own.queued)return{label:'本账号正在等待模型'+(current.modelQueue.own.active?'（另有调用处理中）':''),tone:'pending'};
+ if(current.modelQueue?.own.active)return{label:'本账号模型正在处理',tone:'pending'};
  const error=current.error||current.lastModelCall?.error;
  if(error)return{label:`${error.httpStatus?`响应码 ${error.httpStatus} · `:''}${error.title}`,tone:'error'};
  return current.balance?.available?{label:'余额接口正常',tone:'ok'}:{label:'余额不可用',tone:'error'};
@@ -30,6 +32,11 @@ function renderDetails(){
  header.append(element('h2','DeepSeek 接入详情'),close);dialog.append(header);
  dialog.append(element('p',`当前模型：${current?.model?.provider||'—'} / ${current?.model?.id||'—'}`));
  dialog.append(element('p',`状态：${state().label}`));
+ if(current?.modelQueue){
+  const queue=current.modelQueue;
+  dialog.append(element('p',`模型调用：运行 ${queue.active}/${queue.limits.running}，等待 ${queue.queued}/${queue.limits.queued}；本账号运行 ${queue.own.active}、等待 ${queue.own.queued}。`));
+  if(queue.own.queued)dialog.append(element('p',`已等待 ${Math.floor(queue.own.waitingMs/1000)} 秒。可以使用对话中的停止按钮取消本次等待。`,'ds-muted'));
+ }
  dialog.append(element('p',`余额查询时间：${time(current?.checkedAt)}${current?.cached?'（缓存）':''}`,'ds-muted'));
  if(current?.balance){
   for(const row of current.balance.infos){
@@ -70,4 +77,4 @@ dialog.addEventListener('click',event=>{if(event.target===dialog){const rect=dia
 const resize=new ResizeObserver(entries=>{card.classList.toggle('ds-compact',entries[0].contentRect.width<160);});
 function mount(){const footer=document.querySelector('[data-slot="sidebar-footer"]'),meta=footer?.querySelector('[data-slot="sidebar-footer-meta"]');if(footer&&!footer.contains(card)){if(dialog.open)dialog.close();footer.insertBefore(card,meta||null);footer.insertBefore(dialog,meta||null);dialog.removeAttribute('aria-hidden');dialog.removeAttribute('data-base-ui-inert');resize.disconnect();resize.observe(footer);}}
 new MutationObserver(mount).observe(document.body,{childList:true,subtree:true});mount();render();load();
-setInterval(()=>{if(!document.hidden)load();},15000);
+setInterval(()=>{if(!document.hidden)load();},5000);

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {createDeepSeek} from '@ai-sdk/deepseek';
+import {processModelScheduler,currentModelAccess,ModelScheduleError} from './model-scheduler.mjs';
 
 export const docsUrl='https://api-docs.deepseek.com/zh-cn/quick_start/error_codes/';
 const types={
@@ -32,16 +33,20 @@ export async function loadDeepSeekFileKey(env=process.env){
  if(key)env.DEEPSEEK_API_KEY=key;
  else delete env.DEEPSEEK_API_KEY;
 }
-export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.now,timeoutMs=8000}={}){
+export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.now,timeoutMs=8000,scheduler=processModelScheduler,modelOwner='local',requireModelAccess=false}={}){
  let cached=null,cachedKey=null,expires=0,inflight=null,inflightKey=null,lastModelCall=null;
  const requested=env.DOON_STUDIO_MODEL||'offline';
  if(!['offline','deepseek-flash','deepseek-v4-pro'].includes(requested))throw new Error('DOON_STUDIO_MODEL must be offline, deepseek-flash or deepseek-v4-pro');
  const modelInfo=requested==='offline'?{provider:'合成脚本',id:'scripted-studio-v1',live:false}:{provider:'DeepSeek',id:requested,live:true};
  async function apiFetch(input,init={}){
+  const generation=String(input).includes('/chat/completions');
   try{
-   const timeout=AbortSignal.timeout(String(input).includes('/chat/completions')?60000:timeoutMs);
-   const response=await fetchImpl(input,{...init,redirect:'error',signal:init.signal?AbortSignal.any([init.signal,timeout]):timeout});
-   if(String(input).includes('/chat/completions')){
+   const access=currentModelAccess();
+   if(generation&&requireModelAccess&&!access?.authorize)throw new ModelScheduleError('模型调用缺少有效服务端身份。',403,'authorization');
+   const timeout=generation?null:AbortSignal.timeout(timeoutMs);
+   const options={...init,redirect:'error',...(timeout?{signal:init.signal?AbortSignal.any([init.signal,timeout]):timeout}:{})};
+   const response=generation?await scheduler.fetch(fetchImpl,input,options,access||{owner:modelOwner}):await fetchImpl(input,options);
+   if(generation){
     let body={};if(!response.ok)body=await response.clone().json().catch(()=>({}));
     lastModelCall={checkedAt:new Date(now()).toISOString(),ok:response.ok,error:response.ok?null:explainError(response.status,body,await readDeepSeekKey(env))};
     if(!response.ok){
@@ -51,7 +56,14 @@ export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.n
    }
    return response;
   }catch(error){
-   if(String(input).includes('/chat/completions')){
+   if(generation){
+    if(init.signal?.aborted)throw init.signal.reason;
+    if(error instanceof ModelScheduleError){
+     lastModelCall={checkedAt:new Date(now()).toISOString(),ok:false,error:localError('模型调度未完成',error.message,'查看等待状态；必要时停止旧请求后重新提交。')};
+     // A local rejection is not a provider HTTP response. Preserve this safe,
+     // non-retryable error without SDK-generated requestBodyValues in logs.
+     throw error;
+    }
     lastModelCall={checkedAt:new Date(now()).toISOString(),ok:false,error:localError('模型连接失败','网络连接失败或请求超时。','检查服务端网络，稍后重试。')};
     throw new Error('DeepSeek 模型连接失败；请查看侧栏状态。');
    }
@@ -60,6 +72,7 @@ export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.n
  }
  return{
   modelInfo,
+  schedulerStatus:()=>scheduler.snapshot(currentModelAccess()?.owner||modelOwner),
   async model(){
    if(!modelInfo.live)return undefined;
    const apiKey=await readDeepSeekKey(env);if(!apiKey)throw new Error('DeepSeek model requires a server-side API key');

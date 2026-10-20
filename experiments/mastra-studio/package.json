@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs",
+    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs model-scheduler.test.mjs observability.test.mjs business.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs",
     "test:workflows": "node --test workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs",
     "test:manager": "node --test agent-manager.test.mjs prompt-reference.test.mjs",
     "test:editor": "node --test editor.test.mjs",
