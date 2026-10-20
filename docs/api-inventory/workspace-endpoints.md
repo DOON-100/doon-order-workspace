@@ -2,7 +2,7 @@
 
 由 `node scripts/audit-api-inventory.mjs` 静态生成；不要手改。总体结论、原生认证/调度接口和范围说明见[清点报告](../api-inventory.md)。
 
-按 HTTP 方法 + action 去重，共 **336 项**，其中 GET 108、POST 228。所有 action 的路径前缀为 `/api/workspace/`。
+按 HTTP 方法 + action 去重，共 **341 项**，其中 GET 110、POST 231。所有 action 的路径前缀为 `/api/workspace/`。
 
 “动作索引”仅帮助检索，不是 CRUD 授权声明；保存可能仅更新或兼有新增，取消/退回/退货不是物理删除。GET 不自动证明零副作用。权限说明为模块入口摘要，完整判定仍需沿处理器及其调用的规则函数核对。页面引用仅证明存在字符串引用，不证明请求方法、页面可见性或执行成功。
 
@@ -40,18 +40,19 @@
 | [应收工作台与授权](#module-28) | 4 | 2 | 6 |
 | [发票原件与对账](#module-29) | 3 | 5 | 8 |
 | [应收客户模板](#module-30) | 1 | 3 | 4 |
-| [正式财务单据](#module-31) | 0 | 3 | 3 |
-| [付款条件](#module-32) | 1 | 4 | 5 |
-| [业务交接与单据](#module-33) | 5 | 6 | 11 |
-| [交接定金与例外](#module-34) | 0 | 2 | 2 |
-| [交接服务配置](#module-35) | 0 | 1 | 1 |
-| [生产审核规则与采纳](#module-36) | 0 | 2 | 2 |
-| [沟通渠道、规则文档与通知](#module-37) | 7 | 7 | 14 |
-| [财务协作任务](#module-38) | 3 | 6 | 9 |
-| [离职交接](#module-39) | 2 | 4 | 6 |
-| [人工沟通草稿](#module-40) | 2 | 4 | 6 |
-| [固定数据工具](#module-41) | 3 | 2 | 5 |
-| [固定报价费用工具](#module-42) | 1 | 2 | 3 |
+| [应收总表](#module-31) | 2 | 3 | 5 |
+| [正式财务单据](#module-32) | 0 | 3 | 3 |
+| [付款条件](#module-33) | 1 | 4 | 5 |
+| [业务交接与单据](#module-34) | 5 | 6 | 11 |
+| [交接定金与例外](#module-35) | 0 | 2 | 2 |
+| [交接服务配置](#module-36) | 0 | 1 | 1 |
+| [生产审核规则与采纳](#module-37) | 0 | 2 | 2 |
+| [沟通渠道、规则文档与通知](#module-38) | 7 | 7 | 14 |
+| [财务协作任务](#module-39) | 3 | 6 | 9 |
+| [离职交接](#module-40) | 2 | 4 | 6 |
+| [人工沟通草稿](#module-41) | 2 | 4 | 6 |
+| [固定数据工具](#module-42) | 3 | 2 | 5 |
+| [固定报价费用工具](#module-43) | 1 | 2 | 3 |
 
 <a id="module-1"></a>
 
@@ -61,27 +62,27 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `attachment` | 新增/登记/上传 | [POST:167](../../app/api/workspace/%5Baction%5D/route.ts#L167) | [app/customer-project-entry-forms.ts:32](../../app/customer-project-entry-forms.ts#L32) |
-| GET | `backup` | 查询/历史/能力 | [workspaceGet:118](../../app/api/workspace/%5Baction%5D/route.ts#L118) | [app/support-panels.tsx:37](../../app/support-panels.tsx#L37) |
-| GET | `business-team-data` | 查询/历史/能力 | [workspaceRead:136](../../app/api/workspace/%5Baction%5D/route.ts#L136) | [app/workspace-read-queue.ts:20](../../app/workspace-read-queue.ts#L20) |
-| POST | `comment` | 新增/登记/上传 | [POST:200](../../app/api/workspace/%5Baction%5D/route.ts#L200) | [app/customer-project-panel.tsx:252](../../app/customer-project-panel.tsx#L252) |
-| POST | `commit-import` | 解析/预览/导入（不能假定无副作用） | [POST:188](../../app/api/workspace/%5Baction%5D/route.ts#L188) | [app/import-panel.tsx:26](../../app/import-panel.tsx#L26) |
-| POST | `correction` | 修改/关联/指派 | [POST:231](../../app/api/workspace/%5Baction%5D/route.ts#L231) | [app/purchase-panel.tsx:35](../../app/purchase-panel.tsx#L35) |
-| GET | `data` | 查询/历史/能力 | [workspaceGet:106](../../app/api/workspace/%5Baction%5D/route.ts#L106) | [app/customer-directory-panel.tsx:104](../../app/customer-directory-panel.tsx#L104) |
-| POST | `edit-order` | 修改/关联/指派 | [POST:189](../../app/api/workspace/%5Baction%5D/route.ts#L189) | [app/detail-panel.tsx:21](../../app/detail-panel.tsx#L21) |
-| POST | `enroll` | 专用业务动作 | [POST:142](../../app/api/workspace/%5Baction%5D/route.ts#L142) | [app/assignment-panel.tsx:16](../../app/assignment-panel.tsx#L16) |
-| POST | `export` | 专用业务动作 | [POST:166](../../app/api/workspace/%5Baction%5D/route.ts#L166) | [app/workspace.tsx:129](../../app/workspace.tsx#L129) |
-| GET | `file` | 读取/文件/导出 | [workspaceGet:108](../../app/api/workspace/%5Baction%5D/route.ts#L108) | [app/ar-invoice-ledger-panel.tsx:109](../../app/ar-invoice-ledger-panel.tsx#L109) |
-| POST | `inspect` | 解析/预览/导入（不能假定无副作用） | [POST:167](../../app/api/workspace/%5Baction%5D/route.ts#L167) | [app/fixed-data-tools-panel.tsx:20](../../app/fixed-data-tools-panel.tsx#L20) |
-| GET | `job` | 查询/历史/能力 | [workspaceGet:107](../../app/api/workspace/%5Baction%5D/route.ts#L107) | [app/import-panel.tsx:27](../../app/import-panel.tsx#L27) |
-| POST | `match` | 修改/关联/指派 | [POST:226](../../app/api/workspace/%5Baction%5D/route.ts#L226) | [app/support-panels.tsx:18](../../app/support-panels.tsx#L18) |
-| POST | `member` | 保存（具体新增/修改见实现） | [POST:207](../../app/api/workspace/%5Baction%5D/route.ts#L207) | [app/support-panels.tsx:36](../../app/support-panels.tsx#L36) |
-| POST | `pack` | 专用业务动作 | [POST:165](../../app/api/workspace/%5Baction%5D/route.ts#L165) | 未找到精确静态引用；不能据此认定未使用 |
-| POST | `preview` | 解析/预览/导入（不能假定无副作用） | [POST:167](../../app/api/workspace/%5Baction%5D/route.ts#L167) | [app/import-panel.tsx:25](../../app/import-panel.tsx#L25) |
-| GET | `read-version` | 查询/历史/能力 | [GET:123](../../app/api/workspace/%5Baction%5D/route.ts#L123) | [app/workspace-read-queue.ts:104](../../app/workspace-read-queue.ts#L104) |
-| POST | `review` | 专用业务动作 | [POST:235](../../app/api/workspace/%5Baction%5D/route.ts#L235) | [app/customer-quote-panel.tsx:229](../../app/customer-quote-panel.tsx#L229) |
-| POST | `task` | 专用业务动作 | [POST:204](../../app/api/workspace/%5Baction%5D/route.ts#L204) | [app/customer-project-entry-forms.ts:31](../../app/customer-project-entry-forms.ts#L31) |
-| GET | `template` | 读取/文件/导出 | [workspaceGet:114](../../app/api/workspace/%5Baction%5D/route.ts#L114) | [app/handoff-framework-panel.tsx:55](../../app/handoff-framework-panel.tsx#L55) |
+| POST | `attachment` | 新增/登记/上传 | [POST:170](../../app/api/workspace/%5Baction%5D/route.ts#L170) | [app/customer-project-entry-forms.ts:32](../../app/customer-project-entry-forms.ts#L32) |
+| GET | `backup` | 查询/历史/能力 | [workspaceGet:119](../../app/api/workspace/%5Baction%5D/route.ts#L119) | [app/support-panels.tsx:37](../../app/support-panels.tsx#L37) |
+| GET | `business-team-data` | 查询/历史/能力 | [workspaceRead:138](../../app/api/workspace/%5Baction%5D/route.ts#L138) | [app/workspace-read-queue.ts:20](../../app/workspace-read-queue.ts#L20) |
+| POST | `comment` | 新增/登记/上传 | [POST:203](../../app/api/workspace/%5Baction%5D/route.ts#L203) | [app/customer-project-panel.tsx:252](../../app/customer-project-panel.tsx#L252) |
+| POST | `commit-import` | 解析/预览/导入（不能假定无副作用） | [POST:191](../../app/api/workspace/%5Baction%5D/route.ts#L191) | [app/import-panel.tsx:26](../../app/import-panel.tsx#L26) |
+| POST | `correction` | 修改/关联/指派 | [POST:234](../../app/api/workspace/%5Baction%5D/route.ts#L234) | [app/purchase-panel.tsx:35](../../app/purchase-panel.tsx#L35) |
+| GET | `data` | 查询/历史/能力 | [workspaceGet:107](../../app/api/workspace/%5Baction%5D/route.ts#L107) | [app/customer-directory-panel.tsx:104](../../app/customer-directory-panel.tsx#L104) |
+| POST | `edit-order` | 修改/关联/指派 | [POST:192](../../app/api/workspace/%5Baction%5D/route.ts#L192) | [app/detail-panel.tsx:21](../../app/detail-panel.tsx#L21) |
+| POST | `enroll` | 专用业务动作 | [POST:144](../../app/api/workspace/%5Baction%5D/route.ts#L144) | [app/assignment-panel.tsx:16](../../app/assignment-panel.tsx#L16) |
+| POST | `export` | 专用业务动作 | [POST:169](../../app/api/workspace/%5Baction%5D/route.ts#L169) | [app/workspace.tsx:130](../../app/workspace.tsx#L130) |
+| GET | `file` | 读取/文件/导出 | [workspaceGet:109](../../app/api/workspace/%5Baction%5D/route.ts#L109) | [app/ar-invoice-ledger-panel.tsx:112](../../app/ar-invoice-ledger-panel.tsx#L112) |
+| POST | `inspect` | 解析/预览/导入（不能假定无副作用） | [POST:170](../../app/api/workspace/%5Baction%5D/route.ts#L170) | [app/fixed-data-tools-panel.tsx:21](../../app/fixed-data-tools-panel.tsx#L21) |
+| GET | `job` | 查询/历史/能力 | [workspaceGet:108](../../app/api/workspace/%5Baction%5D/route.ts#L108) | [app/import-panel.tsx:27](../../app/import-panel.tsx#L27) |
+| POST | `match` | 修改/关联/指派 | [POST:229](../../app/api/workspace/%5Baction%5D/route.ts#L229) | [app/support-panels.tsx:18](../../app/support-panels.tsx#L18) |
+| POST | `member` | 保存（具体新增/修改见实现） | [POST:210](../../app/api/workspace/%5Baction%5D/route.ts#L210) | [app/support-panels.tsx:36](../../app/support-panels.tsx#L36) |
+| POST | `pack` | 专用业务动作 | [POST:168](../../app/api/workspace/%5Baction%5D/route.ts#L168) | 未找到精确静态引用；不能据此认定未使用 |
+| POST | `preview` | 解析/预览/导入（不能假定无副作用） | [POST:170](../../app/api/workspace/%5Baction%5D/route.ts#L170) | [app/import-panel.tsx:25](../../app/import-panel.tsx#L25) |
+| GET | `read-version` | 查询/历史/能力 | [GET:124](../../app/api/workspace/%5Baction%5D/route.ts#L124) | [app/workspace-read-queue.ts:104](../../app/workspace-read-queue.ts#L104) |
+| POST | `review` | 专用业务动作 | [POST:238](../../app/api/workspace/%5Baction%5D/route.ts#L238) | [app/customer-quote-panel.tsx:229](../../app/customer-quote-panel.tsx#L229) |
+| POST | `task` | 专用业务动作 | [POST:207](../../app/api/workspace/%5Baction%5D/route.ts#L207) | [app/customer-project-entry-forms.ts:31](../../app/customer-project-entry-forms.ts#L31) |
+| GET | `template` | 读取/文件/导出 | [workspaceGet:115](../../app/api/workspace/%5Baction%5D/route.ts#L115) | [app/handoff-framework-panel.tsx:56](../../app/handoff-framework-panel.tsx#L56) |
 
 <a id="module-2"></a>
 
@@ -248,14 +249,14 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `planning-capacity-allocation-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:134](../../app/planning-control-panel.tsx#L134) |
-| POST | `planning-capacity-allocation-transition` | 专用业务动作 | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:135](../../app/planning-control-panel.tsx#L135) |
-| POST | `planning-capacity-window-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:133](../../app/planning-control-panel.tsx#L133) |
-| POST | `planning-control-calculation-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:131](../../app/planning-control-panel.tsx#L131) |
-| GET | `planning-control-data` | 查询/历史/能力 | [planningControlGet:68](../../lib/planning-control-api.ts#L68) | [app/planning-control-panel.tsx:75](../../app/planning-control-panel.tsx#L75) |
-| GET | `planning-control-history` | 查询/历史/能力 | [planningControlGet:68](../../lib/planning-control-api.ts#L68) | [app/planning-control-panel.tsx:79](../../app/planning-control-panel.tsx#L79) |
-| POST | `planning-control-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:130](../../app/planning-control-panel.tsx#L130) |
-| POST | `planning-control-transition` | 专用业务动作 | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:132](../../app/planning-control-panel.tsx#L132) |
+| POST | `planning-capacity-allocation-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:135](../../app/planning-control-panel.tsx#L135) |
+| POST | `planning-capacity-allocation-transition` | 专用业务动作 | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:136](../../app/planning-control-panel.tsx#L136) |
+| POST | `planning-capacity-window-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:134](../../app/planning-control-panel.tsx#L134) |
+| POST | `planning-control-calculation-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:132](../../app/planning-control-panel.tsx#L132) |
+| GET | `planning-control-data` | 查询/历史/能力 | [planningControlGet:68](../../lib/planning-control-api.ts#L68) | [app/planning-control-panel.tsx:76](../../app/planning-control-panel.tsx#L76) |
+| GET | `planning-control-history` | 查询/历史/能力 | [planningControlGet:68](../../lib/planning-control-api.ts#L68) | [app/planning-control-panel.tsx:80](../../app/planning-control-panel.tsx#L80) |
+| POST | `planning-control-save` | 保存（具体新增/修改见实现） | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:131](../../app/planning-control-panel.tsx#L131) |
+| POST | `planning-control-transition` | 专用业务动作 | [planningControlPost:76](../../lib/planning-control-api.ts#L76) | [app/planning-control-panel.tsx:133](../../app/planning-control-panel.tsx#L133) |
 
 <a id="module-12"></a>
 
@@ -405,13 +406,13 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `customer-workflow-file` | 读取/文件/导出 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:32](../../app/customer-workflow-files.tsx#L32) |
-| POST | `customer-workflow-file-save` | 保存（具体新增/修改见实现） | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:25](../../app/customer-workflow-files.tsx#L25) |
-| POST | `customer-workflow-file-upload` | 新增/登记/上传 | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:24](../../app/customer-workflow-files.tsx#L24) |
-| GET | `customer-workflow-files` | 读取/文件/导出 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:15](../../app/customer-workflow-files.tsx#L15) |
+| GET | `customer-workflow-file` | 读取/文件/导出 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:33](../../app/customer-workflow-files.tsx#L33) |
+| POST | `customer-workflow-file-save` | 保存（具体新增/修改见实现） | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:26](../../app/customer-workflow-files.tsx#L26) |
+| POST | `customer-workflow-file-upload` | 新增/登记/上传 | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:25](../../app/customer-workflow-files.tsx#L25) |
+| GET | `customer-workflow-files` | 读取/文件/导出 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:16](../../app/customer-workflow-files.tsx#L16) |
 | GET | `customer-workflow-project` | 查询/历史/能力 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-early-development.tsx:13](../../app/customer-early-development.tsx#L13) |
-| GET | `customer-workflow-project-document` | 查询/历史/能力 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:16](../../app/customer-workflow-files.tsx#L16) |
-| POST | `customer-workflow-project-document-save` | 保存（具体新增/修改见实现） | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:32](../../app/customer-workflow-files.tsx#L32) |
+| GET | `customer-workflow-project-document` | 查询/历史/能力 | [customerWorkflowFileGet:35](../../lib/customer-workflow-files.ts#L35) | [app/customer-workflow-files.tsx:17](../../app/customer-workflow-files.tsx#L17) |
+| POST | `customer-workflow-project-document-save` | 保存（具体新增/修改见实现） | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | [app/customer-workflow-files.tsx:33](../../app/customer-workflow-files.tsx#L33) |
 | POST | `customer-workflow-project-log` | 专用业务动作 | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `customer-workflow-project-save` | 保存（具体新增/修改见实现） | [customerWorkflowFilePost:60](../../lib/customer-workflow-files.ts#L60) | 未找到精确静态引用；不能据此认定未使用 |
 
@@ -445,7 +446,7 @@
 | POST | `customer-workflow-pool-request` | 专用业务动作 | [customerWorkflowTransferPost:45](../../lib/customer-workflow-transfers.ts#L45) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `customer-workflow-pool-withdraw` | 取消/回收/归档/恢复等状态动作 | [customerWorkflowTransferPost:45](../../lib/customer-workflow-transfers.ts#L45) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `customer-workflow-primary` | 专用业务动作 | [customerWorkflowTransferPost:45](../../lib/customer-workflow-transfers.ts#L45) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `customer-workflow-transfers` | 查询/历史/能力 | [customerWorkflowTransferGet:31](../../lib/customer-workflow-transfers.ts#L31) | [app/customer-workflow-panel.tsx:40](../../app/customer-workflow-panel.tsx#L40) |
+| GET | `customer-workflow-transfers` | 查询/历史/能力 | [customerWorkflowTransferGet:31](../../lib/customer-workflow-transfers.ts#L31) | [app/customer-workflow-panel.tsx:41](../../app/customer-workflow-panel.tsx#L41) |
 
 <a id="module-24"></a>
 
@@ -555,12 +556,12 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `ar-access-data` | 查询/历史/能力 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | [app/ar-workspace-panel.tsx:35](../../app/ar-workspace-panel.tsx#L35) |
+| GET | `ar-access-data` | 查询/历史/能力 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | [app/ar-workspace-panel.tsx:39](../../app/ar-workspace-panel.tsx#L39) |
 | POST | `ar-access-grant-save` | 保存（具体新增/修改见实现） | [arWorkspacePost:35](../../lib/ar-workspace-api.ts#L35) | 未找到精确静态引用；不能据此认定未使用 |
 | GET | `ar-dashboard-data` | 查询/历史/能力 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | [standalone/schedule-engine/workflow-sources.mjs:9](../../standalone/schedule-engine/workflow-sources.mjs#L9) |
 | GET | `ar-export` | 读取/文件/导出 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | 未找到精确静态引用；不能据此认定未使用 |
-| POST | `ar-source-binding-save` | 保存（具体新增/修改见实现） | [arWorkspacePost:35](../../lib/ar-workspace-api.ts#L35) | [app/ar-workspace-panel.tsx:61](../../app/ar-workspace-panel.tsx#L61) |
-| GET | `ar-workspace-data` | 查询/历史/能力 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | [app/ar-workspace-panel.tsx:33](../../app/ar-workspace-panel.tsx#L33) |
+| POST | `ar-source-binding-save` | 保存（具体新增/修改见实现） | [arWorkspacePost:35](../../lib/ar-workspace-api.ts#L35) | [app/ar-workspace-panel.tsx:66](../../app/ar-workspace-panel.tsx#L66) |
+| GET | `ar-workspace-data` | 查询/历史/能力 | [arWorkspaceGet:16](../../lib/ar-workspace-api.ts#L16) | [app/ar-workspace-panel.tsx:37](../../app/ar-workspace-panel.tsx#L37) |
 
 <a id="module-29"></a>
 
@@ -570,14 +571,14 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `ar-invoice-data` | 查询/历史/能力 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-customer-profile-panel.tsx:40](../../app/ar-customer-profile-panel.tsx#L40) |
-| GET | `ar-invoice-file` | 读取/文件/导出 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-customer-profile-panel.tsx:110](../../app/ar-customer-profile-panel.tsx#L110) |
-| POST | `ar-invoice-import` | 解析/预览/导入（不能假定无副作用） | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:111](../../app/ar-invoice-ledger-panel.tsx#L111) |
-| POST | `ar-invoice-note` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:118](../../app/ar-invoice-ledger-panel.tsx#L118) |
-| POST | `ar-invoice-proof` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:123](../../app/ar-invoice-ledger-panel.tsx#L123) |
-| POST | `ar-invoice-reconcile` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:130](../../app/ar-invoice-ledger-panel.tsx#L130) |
-| POST | `ar-invoice-statement` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:136](../../app/ar-invoice-ledger-panel.tsx#L136) |
-| GET | `ar-invoice-statement-file` | 读取/文件/导出 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-invoice-ledger-panel.tsx:152](../../app/ar-invoice-ledger-panel.tsx#L152) |
+| GET | `ar-invoice-data` | 查询/历史/能力 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-customer-profile-panel.tsx:41](../../app/ar-customer-profile-panel.tsx#L41) |
+| GET | `ar-invoice-file` | 读取/文件/导出 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-customer-profile-panel.tsx:111](../../app/ar-customer-profile-panel.tsx#L111) |
+| POST | `ar-invoice-import` | 解析/预览/导入（不能假定无副作用） | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:114](../../app/ar-invoice-ledger-panel.tsx#L114) |
+| POST | `ar-invoice-note` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:121](../../app/ar-invoice-ledger-panel.tsx#L121) |
+| POST | `ar-invoice-proof` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:126](../../app/ar-invoice-ledger-panel.tsx#L126) |
+| POST | `ar-invoice-reconcile` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:133](../../app/ar-invoice-ledger-panel.tsx#L133) |
+| POST | `ar-invoice-statement` | 专用业务动作 | [arInvoiceLedgerPost:111](../../lib/ar-invoice-ledger-api.ts#L111) | [app/ar-invoice-ledger-panel.tsx:139](../../app/ar-invoice-ledger-panel.tsx#L139) |
+| GET | `ar-invoice-statement-file` | 读取/文件/导出 | [arInvoiceLedgerGet:104](../../lib/ar-invoice-ledger-api.ts#L104) | [app/ar-invoice-ledger-panel.tsx:155](../../app/ar-invoice-ledger-panel.tsx#L155) |
 
 <a id="module-30"></a>
 
@@ -587,12 +588,26 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `ar-customer-profile-save` | 保存（具体新增/修改见实现） | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:84](../../app/ar-customer-profile-panel.tsx#L84) |
-| GET | `ar-customer-profiles-data` | 读取/文件/导出 | [arCustomerProfilesGet:40](../../lib/ar-customer-profiles-api.ts#L40) | [app/ar-customer-profile-panel.tsx:39](../../app/ar-customer-profile-panel.tsx#L39) |
-| POST | `ar-invoice-extra-save` | 保存（具体新增/修改见实现） | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:97](../../app/ar-customer-profile-panel.tsx#L97) |
-| POST | `ar-invoice-source-link` | 专用业务动作 | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:104](../../app/ar-customer-profile-panel.tsx#L104) |
+| POST | `ar-customer-profile-save` | 保存（具体新增/修改见实现） | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:85](../../app/ar-customer-profile-panel.tsx#L85) |
+| GET | `ar-customer-profiles-data` | 读取/文件/导出 | [arCustomerProfilesGet:40](../../lib/ar-customer-profiles-api.ts#L40) | [app/ar-customer-profile-panel.tsx:40](../../app/ar-customer-profile-panel.tsx#L40) |
+| POST | `ar-invoice-extra-save` | 保存（具体新增/修改见实现） | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:98](../../app/ar-customer-profile-panel.tsx#L98) |
+| POST | `ar-invoice-source-link` | 专用业务动作 | [arCustomerProfilesPost:50](../../lib/ar-customer-profiles-api.ts#L50) | [app/ar-customer-profile-panel.tsx:105](../../app/ar-customer-profile-panel.tsx#L105) |
 
 <a id="module-31"></a>
+
+## 应收总表
+
+权限入口：现有 AR 读取范围；登记与核对仅有权管理员；原来源只读及版本校验。
+
+| 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
+| --- | --- | --- | --- | --- |
+| GET | `ar-master-data` | 查询/历史/能力 | [arMasterLedgerGet:33](../../lib/ar-master-ledger-api.ts#L33) | [app/ar-master-ledger-panel.tsx:133](../../app/ar-master-ledger-panel.tsx#L133) |
+| POST | `ar-master-entry-save` | 保存（具体新增/修改见实现） | [arMasterLedgerPost:48](../../lib/ar-master-ledger-api.ts#L48) | [app/ar-master-ledger-panel.tsx:207](../../app/ar-master-ledger-panel.tsx#L207) |
+| GET | `ar-master-export` | 读取/文件/导出 | [arMasterLedgerGet:33](../../lib/ar-master-ledger-api.ts#L33) | [app/ar-master-ledger-panel.tsx:226](../../app/ar-master-ledger-panel.tsx#L226) |
+| POST | `ar-master-register-legacy` | 专用业务动作 | [arMasterLedgerPost:48](../../lib/ar-master-ledger-api.ts#L48) | [app/ar-master-ledger-panel.tsx:221](../../app/ar-master-ledger-panel.tsx#L221) |
+| POST | `ar-master-source-link` | 专用业务动作 | [arMasterLedgerPost:48](../../lib/ar-master-ledger-api.ts#L48) | [app/ar-master-ledger-panel.tsx:214](../../app/ar-master-ledger-panel.tsx#L214) |
+
+<a id="module-32"></a>
 
 ## 正式财务单据
 
@@ -600,11 +615,11 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `ar-document-issue` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:55](../../app/ar-workspace-panel.tsx#L55) |
-| POST | `ar-document-milestone` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:63](../../app/ar-workspace-panel.tsx#L63) |
-| POST | `ar-document-review` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:55](../../app/ar-workspace-panel.tsx#L55) |
+| POST | `ar-document-issue` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:60](../../app/ar-workspace-panel.tsx#L60) |
+| POST | `ar-document-milestone` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:68](../../app/ar-workspace-panel.tsx#L68) |
+| POST | `ar-document-review` | 专用业务动作 | [arDocumentPost:58](../../lib/ar-document-issue.ts#L58) | [app/ar-workspace-panel.tsx:60](../../app/ar-workspace-panel.tsx#L60) |
 
-<a id="module-32"></a>
+<a id="module-33"></a>
 
 ## 付款条件
 
@@ -614,11 +629,11 @@
 | --- | --- | --- | --- | --- |
 | POST | `payment-terms-authorize` | 专用业务动作 | [paymentTermsPost:31](../../lib/payment-terms-api.ts#L31) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `payment-terms-authorizers-save` | 保存（具体新增/修改见实现） | [paymentTermsPost:31](../../lib/payment-terms-api.ts#L31) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `payment-terms-data` | 查询/历史/能力 | [paymentTermsGet:25](../../lib/payment-terms-api.ts#L25) | [app/ar-workspace-panel.tsx:34](../../app/ar-workspace-panel.tsx#L34) |
+| GET | `payment-terms-data` | 查询/历史/能力 | [paymentTermsGet:25](../../lib/payment-terms-api.ts#L25) | [app/ar-workspace-panel.tsx:38](../../app/ar-workspace-panel.tsx#L38) |
 | POST | `payment-terms-disable` | 取消/回收/归档/恢复等状态动作 | [paymentTermsPost:31](../../lib/payment-terms-api.ts#L31) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `payment-terms-save` | 保存（具体新增/修改见实现） | [paymentTermsPost:31](../../lib/payment-terms-api.ts#L31) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-33"></a>
+<a id="module-34"></a>
 
 ## 业务交接与单据
 
@@ -632,13 +647,13 @@
 | GET | `handoff-business-file` | 读取/文件/导出 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | [app/framework-business-query-panel.tsx:43](../../app/framework-business-query-panel.tsx#L43) |
 | POST | `handoff-business-generate` | 专用业务动作 | [handoffBusinessPost:123](../../lib/handoff-business-api.ts#L123) | 未找到精确静态引用；不能据此认定未使用 |
 | GET | `handoff-business-history` | 查询/历史/能力 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `handoff-business-print` | 读取/文件/导出 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | [app/handoff-business-panel.tsx:118](../../app/handoff-business-panel.tsx#L118) |
+| GET | `handoff-business-print` | 读取/文件/导出 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | [app/handoff-business-panel.tsx:119](../../app/handoff-business-panel.tsx#L119) |
 | POST | `handoff-business-return` | 专用业务动作 | [handoffBusinessPost:123](../../lib/handoff-business-api.ts#L123) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `handoff-business-review-data` | 查询/历史/能力 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | [app/handoff-workbench-panel.tsx:23](../../app/handoff-workbench-panel.tsx#L23) |
+| GET | `handoff-business-review-data` | 查询/历史/能力 | [handoffBusinessGet:87](../../lib/handoff-business-api.ts#L87) | [app/handoff-workbench-panel.tsx:24](../../app/handoff-workbench-panel.tsx#L24) |
 | POST | `handoff-business-save` | 保存（具体新增/修改见实现） | [handoffBusinessPost:123](../../lib/handoff-business-api.ts#L123) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `handoff-business-submit` | 专用业务动作 | [handoffBusinessPost:123](../../lib/handoff-business-api.ts#L123) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-34"></a>
+<a id="module-35"></a>
 
 ## 交接定金与例外
 
@@ -649,7 +664,7 @@
 | POST | `handoff-business-deposit-declaration` | 专用业务动作 | [businessPaymentPost:11](../../lib/handoff-payment-actions.ts#L11) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `handoff-business-payment-exception` | 专用业务动作 | [businessPaymentPost:11](../../lib/handoff-payment-actions.ts#L11) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-35"></a>
+<a id="module-36"></a>
 
 ## 交接服务配置
 
@@ -659,7 +674,7 @@
 | --- | --- | --- | --- | --- |
 | POST | `handoff-business-service-config` | 专用业务动作 | [businessSettingsPost:10](../../lib/handoff-business-settings.ts#L10) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-36"></a>
+<a id="module-37"></a>
 
 ## 生产审核规则与采纳
 
@@ -670,7 +685,7 @@
 | POST | `handoff-business-adoption-sign` | 专用业务动作 | [productionReviewPost:29](../../lib/handoff-production-review.ts#L29) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `handoff-business-review-policy` | 专用业务动作 | [productionReviewPost:29](../../lib/handoff-production-review.ts#L29) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-37"></a>
+<a id="module-38"></a>
 
 ## 沟通渠道、规则文档与通知
 
@@ -678,22 +693,22 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `framework-account-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:58](../../app/handoff-framework-panel.tsx#L58) |
-| GET | `framework-channel-context` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:104](../../app/handoff-framework-panel.tsx#L104) |
-| GET | `framework-channel-history` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:104](../../app/handoff-framework-panel.tsx#L104) |
-| GET | `framework-channels` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:38](../../app/handoff-framework-panel.tsx#L38) |
-| POST | `framework-config-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:57](../../app/handoff-framework-panel.tsx#L57) |
-| GET | `framework-knowledge` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:68](../../app/handoff-framework-panel.tsx#L68) |
-| GET | `framework-knowledge-document` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:70](../../app/handoff-framework-panel.tsx#L70) |
-| POST | `framework-message-bind` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:97](../../app/handoff-framework-panel.tsx#L97) |
-| POST | `framework-message-link` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:106](../../app/handoff-framework-panel.tsx#L106) |
-| POST | `framework-message-process` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:97](../../app/handoff-framework-panel.tsx#L97) |
-| POST | `framework-message-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:98](../../app/handoff-framework-panel.tsx#L98) |
-| POST | `framework-notice-receive` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-workbench-panel.tsx:33](../../app/handoff-workbench-panel.tsx#L33) |
-| GET | `framework-notices` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-workbench-panel.tsx:24](../../app/handoff-workbench-panel.tsx#L24) |
-| GET | `framework-settings` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:28](../../app/handoff-framework-panel.tsx#L28) |
+| POST | `framework-account-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:59](../../app/handoff-framework-panel.tsx#L59) |
+| GET | `framework-channel-context` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:105](../../app/handoff-framework-panel.tsx#L105) |
+| GET | `framework-channel-history` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:105](../../app/handoff-framework-panel.tsx#L105) |
+| GET | `framework-channels` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:39](../../app/handoff-framework-panel.tsx#L39) |
+| POST | `framework-config-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:58](../../app/handoff-framework-panel.tsx#L58) |
+| GET | `framework-knowledge` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:69](../../app/handoff-framework-panel.tsx#L69) |
+| GET | `framework-knowledge-document` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:71](../../app/handoff-framework-panel.tsx#L71) |
+| POST | `framework-message-bind` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:98](../../app/handoff-framework-panel.tsx#L98) |
+| POST | `framework-message-link` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:107](../../app/handoff-framework-panel.tsx#L107) |
+| POST | `framework-message-process` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:98](../../app/handoff-framework-panel.tsx#L98) |
+| POST | `framework-message-save` | 保存（具体新增/修改见实现） | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-framework-panel.tsx:99](../../app/handoff-framework-panel.tsx#L99) |
+| POST | `framework-notice-receive` | 专用业务动作 | [frameworkPost:90](../../lib/handoff-framework-api.ts#L90) | [app/handoff-workbench-panel.tsx:34](../../app/handoff-workbench-panel.tsx#L34) |
+| GET | `framework-notices` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-workbench-panel.tsx:25](../../app/handoff-workbench-panel.tsx#L25) |
+| GET | `framework-settings` | 查询/历史/能力 | [frameworkGet:48](../../lib/handoff-framework-api.ts#L48) | [app/handoff-framework-panel.tsx:29](../../app/handoff-framework-panel.tsx#L29) |
 
-<a id="module-38"></a>
+<a id="module-39"></a>
 
 ## 财务协作任务
 
@@ -703,15 +718,15 @@
 | --- | --- | --- | --- | --- |
 | POST | `framework-finance-task-accept` | 专用业务动作 | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `framework-finance-task-cancel` | 取消/回收/归档/恢复等状态动作 | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `framework-finance-task-history` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:46](../../app/framework-finance-task-panel.tsx#L46) |
+| GET | `framework-finance-task-history` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:47](../../app/framework-finance-task-panel.tsx#L47) |
 | POST | `framework-finance-task-return` | 专用业务动作 | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `framework-finance-task-review` | 专用业务动作 | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `framework-finance-task-save` | 保存（具体新增/修改见实现） | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `framework-finance-task-submit` | 专用业务动作 | [frameworkFinanceTaskPost:66](../../lib/framework-finance-task.ts#L66) | 未找到精确静态引用；不能据此认定未使用 |
-| GET | `framework-finance-task-summary` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:45](../../app/framework-finance-task-panel.tsx#L45) |
-| GET | `framework-finance-tasks` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:20](../../app/framework-finance-task-panel.tsx#L20) |
+| GET | `framework-finance-task-summary` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:46](../../app/framework-finance-task-panel.tsx#L46) |
+| GET | `framework-finance-tasks` | 查询/历史/能力 | [frameworkFinanceTaskGet:47](../../lib/framework-finance-task.ts#L47) | [app/framework-finance-task-panel.tsx:21](../../app/framework-finance-task-panel.tsx#L21) |
 
-<a id="module-39"></a>
+<a id="module-40"></a>
 
 ## 离职交接
 
@@ -719,14 +734,14 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `framework-offboarding` | 查询/历史/能力 | [frameworkOffboardingGet:119](../../lib/framework-offboarding.ts#L119) | [app/framework-offboarding-panel.tsx:11](../../app/framework-offboarding-panel.tsx#L11) |
-| POST | `framework-offboarding-accept` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:35](../../app/framework-offboarding-panel.tsx#L35) |
-| POST | `framework-offboarding-cancel` | 取消/回收/归档/恢复等状态动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:16](../../app/framework-offboarding-panel.tsx#L16) |
-| POST | `framework-offboarding-draft` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:16](../../app/framework-offboarding-panel.tsx#L16) |
-| POST | `framework-offboarding-finalize` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:17](../../app/framework-offboarding-panel.tsx#L17) |
-| GET | `framework-offboarding-incoming` | 查询/历史/能力 | [frameworkOffboardingGet:115](../../lib/framework-offboarding.ts#L115) | [app/framework-offboarding-panel.tsx:33](../../app/framework-offboarding-panel.tsx#L33) |
+| GET | `framework-offboarding` | 查询/历史/能力 | [frameworkOffboardingGet:119](../../lib/framework-offboarding.ts#L119) | [app/framework-offboarding-panel.tsx:12](../../app/framework-offboarding-panel.tsx#L12) |
+| POST | `framework-offboarding-accept` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:36](../../app/framework-offboarding-panel.tsx#L36) |
+| POST | `framework-offboarding-cancel` | 取消/回收/归档/恢复等状态动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:17](../../app/framework-offboarding-panel.tsx#L17) |
+| POST | `framework-offboarding-draft` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:17](../../app/framework-offboarding-panel.tsx#L17) |
+| POST | `framework-offboarding-finalize` | 专用业务动作 | [frameworkOffboardingPost:169](../../lib/framework-offboarding.ts#L169) | [app/framework-offboarding-panel.tsx:18](../../app/framework-offboarding-panel.tsx#L18) |
+| GET | `framework-offboarding-incoming` | 查询/历史/能力 | [frameworkOffboardingGet:115](../../lib/framework-offboarding.ts#L115) | [app/framework-offboarding-panel.tsx:34](../../app/framework-offboarding-panel.tsx#L34) |
 
-<a id="module-40"></a>
+<a id="module-41"></a>
 
 ## 人工沟通草稿
 
@@ -741,7 +756,7 @@
 | POST | `unified-communication-save` | 保存（具体新增/修改见实现） | [unifiedCommunicationPost:57](../../lib/unified-communication-api.ts#L57) | 未找到精确静态引用；不能据此认定未使用 |
 | POST | `unified-communication-submit` | 专用业务动作 | [unifiedCommunicationPost:57](../../lib/unified-communication-api.ts#L57) | 未找到精确静态引用；不能据此认定未使用 |
 
-<a id="module-41"></a>
+<a id="module-42"></a>
 
 ## 固定数据工具
 
@@ -749,13 +764,13 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `fixed-data-tools` | 查询/历史/能力 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:89](../../app/fixed-data-tools-panel.tsx#L89) |
-| GET | `fixed-tool-file` | 读取/文件/导出 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:140](../../app/fixed-data-tools-panel.tsx#L140) |
-| GET | `fixed-tool-job` | 查询/历史/能力 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:97](../../app/fixed-data-tools-panel.tsx#L97) |
-| POST | `fixed-tool-ownership` | 专用业务动作 | [fixedDataToolsPost:67](../../lib/fixed-data-tools-api.ts#L67) | [app/fixed-data-tools-panel.tsx:117](../../app/fixed-data-tools-panel.tsx#L117) |
-| POST | `fixed-tool-workbook` | 专用业务动作 | [fixedDataToolsPost:67](../../lib/fixed-data-tools-api.ts#L67) | [app/fixed-data-tools-panel.tsx:115](../../app/fixed-data-tools-panel.tsx#L115) |
+| GET | `fixed-data-tools` | 查询/历史/能力 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:90](../../app/fixed-data-tools-panel.tsx#L90) |
+| GET | `fixed-tool-file` | 读取/文件/导出 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:141](../../app/fixed-data-tools-panel.tsx#L141) |
+| GET | `fixed-tool-job` | 查询/历史/能力 | [fixedDataToolsGet:49](../../lib/fixed-data-tools-api.ts#L49) | [app/fixed-data-tools-panel.tsx:98](../../app/fixed-data-tools-panel.tsx#L98) |
+| POST | `fixed-tool-ownership` | 专用业务动作 | [fixedDataToolsPost:67](../../lib/fixed-data-tools-api.ts#L67) | [app/fixed-data-tools-panel.tsx:118](../../app/fixed-data-tools-panel.tsx#L118) |
+| POST | `fixed-tool-workbook` | 专用业务动作 | [fixedDataToolsPost:67](../../lib/fixed-data-tools-api.ts#L67) | [app/fixed-data-tools-panel.tsx:116](../../app/fixed-data-tools-panel.tsx#L116) |
 
-<a id="module-42"></a>
+<a id="module-43"></a>
 
 ## 固定报价费用工具
 
@@ -763,13 +778,13 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `fixed-tool-fees-decision` | 专用业务动作 | [fixedToolFeesPost:106](../../lib/fixed-tool-fees.ts#L106) | [app/fixed-data-tools-panel.tsx:137](../../app/fixed-data-tools-panel.tsx#L137) |
-| POST | `fixed-tool-fees-preview` | 解析/预览/导入（不能假定无副作用） | [fixedToolFeesPost:106](../../lib/fixed-tool-fees.ts#L106) | [app/fixed-data-tools-panel.tsx:129](../../app/fixed-data-tools-panel.tsx#L129) |
-| GET | `fixed-tool-quote` | 查询/历史/能力 | [fixedToolFeesGet:99](../../lib/fixed-tool-fees.ts#L99) | [app/fixed-data-tools-panel.tsx:121](../../app/fixed-data-tools-panel.tsx#L121) |
+| POST | `fixed-tool-fees-decision` | 专用业务动作 | [fixedToolFeesPost:106](../../lib/fixed-tool-fees.ts#L106) | [app/fixed-data-tools-panel.tsx:138](../../app/fixed-data-tools-panel.tsx#L138) |
+| POST | `fixed-tool-fees-preview` | 解析/预览/导入（不能假定无副作用） | [fixedToolFeesPost:106](../../lib/fixed-tool-fees.ts#L106) | [app/fixed-data-tools-panel.tsx:130](../../app/fixed-data-tools-panel.tsx#L130) |
+| GET | `fixed-tool-quote` | 查询/历史/能力 | [fixedToolFeesGet:99](../../lib/fixed-tool-fees.ts#L99) | [app/fixed-data-tools-panel.tsx:122](../../app/fixed-data-tools-panel.tsx#L122) |
 
 ## 静态核对
 
-- 追踪 81 个方法/处理器组合；支持字面量、允许列表、前缀拼接、后缀分发、schema 键和动作映射。
+- 追踪 83 个方法/处理器组合；支持字面量、允许列表、前缀拼接、后缀分发、schema 键和动作映射。
 - 无法解析的允许列表：0；页面直接工作区 URL 未匹配项：0。
 - 另有 4 组页面动态拼接前缀，已单列到 JSON 的 dynamicClientPrefixes；它们不计为未匹配完整路径，也不构成逐参数运行验收。
 - 完整分发链、全部证据和引用位置、参与扫描文件的 SHA-256 见同目录 JSON。源码按 UTF-8、CRLF 统一为 LF 后计算哈希，不含业务记录。

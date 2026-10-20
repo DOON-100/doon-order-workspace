@@ -231,6 +231,7 @@ const modules=[
  ['应收工作台与授权','lib/ar-workspace-api.ts','arAccess、canConfigure；公司/业务组/客户范围'],
  ['发票原件与对账','lib/ar-invoice-ledger-api.ts','应收读取/维护范围、原件归属、对账及请求幂等'],
  ['应收客户模板','lib/ar-customer-profiles-api.ts','writer、customer 授权；核心账务字段禁止重定义'],
+ ['应收总表','lib/ar-master-ledger-api.ts','现有 AR 读取范围；登记与核对仅有权管理员；原来源只读及版本校验'],
  ['正式财务单据','lib/ar-document-issue.ts','审核、签发及里程碑分别按财务/业务组/来源权限校验'],
  ['付款条件','lib/payment-terms-api.ts','requireRead/requireWrite；只读取数账号禁止写、管理员指定授权负责人'],
  ['业务交接与单据','lib/handoff-business-api.ts','业务角色、来源/单据/客户范围；提交、审核、附件和打印'],

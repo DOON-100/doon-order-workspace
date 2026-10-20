@@ -6,7 +6,7 @@
 
 ## 范围与组织方式
 
-共 359 个去重接口，其中工作区 336 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
+共 364 个去重接口，其中工作区 341 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
 
 - 分组帮助 Agent 找到业务能力，不是角色或授权列表。账号能否操作，由原中台逐请求、逐记录、逐字段校验。
 - 同一 Agent 可以使用多个分组；进入某组、创建 Agent 或勾选工具都不增加权限。
@@ -26,7 +26,7 @@
 | [仓储物流](#warehouse) | 40 | 仓库流转、包装核对 |
 | [生产车间](#production) | 28 | 使用已有专用业务动作 |
 | [品质部](#quality) | 12 | 来料检验、首件确认、过程检验、外协检验、成品检验、出货放行记录 |
-| [财务部](#finance) | 83 | 供应商对账 |
+| [财务部](#finance) | 88 | 供应商对账 |
 | [系统管理](#management) | 65 | 使用已有专用业务动作 |
 
 <a id="sales"></a>
@@ -348,6 +348,7 @@
 | 应收客户模板 | `ar-customer-profiles-data` | `ar-customer-profile-save`、`ar-invoice-extra-save`、`ar-invoice-source-link` | [ar-customer-profiles-api.ts](../../lib/ar-customer-profiles-api.ts) |
 | 正式财务单据 | 由关联视图/专用入口读取，未另造查询 | `ar-document-issue`、`ar-document-milestone`、`ar-document-review` | [ar-document-issue.ts](../../lib/ar-document-issue.ts) |
 | 发票原件与对账 | `ar-invoice-data`、`ar-invoice-file`、`ar-invoice-statement-file` | `ar-invoice-import`、`ar-invoice-note`、`ar-invoice-proof`、`ar-invoice-reconcile`、`ar-invoice-statement` | [ar-invoice-ledger-api.ts](../../lib/ar-invoice-ledger-api.ts) |
+| 应收总表 | `ar-master-data`、`ar-master-export` | `ar-master-entry-save`、`ar-master-register-legacy`、`ar-master-source-link` | [ar-master-ledger-api.ts](../../lib/ar-master-ledger-api.ts) |
 | 授权聚合数据、版本与业务组目录 | `business-team-data`、`data`、`read-version` | 此对象未登记 POST 动作 | [route.ts](../../app/api/workspace/%5Baction%5D/route.ts) |
 | 财务协作任务 | `framework-finance-task-history`、`framework-finance-task-summary`、`framework-finance-tasks` | `framework-finance-task-accept`、`framework-finance-task-cancel`、`framework-finance-task-return`、`framework-finance-task-review`、`framework-finance-task-save`、`framework-finance-task-submit` | [framework-finance-task.ts](../../lib/framework-finance-task.ts) |
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
@@ -361,8 +362,8 @@
 
 本组接入边界：
 
-- 读取候选，待核验返回字段及副作用：29 项。
-- 业务动作，按具体内容确认后执行：54 项。
+- 读取候选，待核验返回字段及副作用：31 项。
+- 业务动作，按具体内容确认后执行：57 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 

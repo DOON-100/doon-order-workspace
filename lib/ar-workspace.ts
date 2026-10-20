@@ -155,8 +155,12 @@ export function arWorkspaceData(s:State,m:Member,query:ArQuery={}){
  for(const r of periodRows(receipts))accumulate(r,true);for(const r of periodRows(shipments).filter(r=>r.status==='actual'))accumulate(r,false);
  const allVisible=[...receivables,...receipts,...shipments],customerIds=new Set(allVisible.map(r=>r.customerId));
  const pending:{id:string;sourceKind:string;sourceId:string;customerId:string;customer:string;teamId:string;title:string;issues:string[];currency?:string;sourceAmountCents?:number|null;sourceReceivedCents?:number|null;sourceBalanceCents?:number|null;raw?:{paymentTermsRaw:string;originalAmountDecimal:string;invoiceDateRaw:string;dueDateRaw:string;remarkRaw:string;poPlRaw:string;sourceSheet:string;sourceRow:number|null};confirmed?:boolean;contributesToProductionBalance?:boolean}[]=allVisible.filter(r=>r.issues.length).map(r=>({id:r.id,sourceKind:r.sourceKind,sourceId:r.sourceId,customerId:r.customerId,customer:r.customer,teamId:r.teamId,title:r.title,issues:r.issues}));
- // Imported legacy review rows are deliberately not receivables or cash events.
- for(const legacy of all(s,'ar_legacy_pending').filter(r=>r.status==='pending')){
+ // Registration is tracked independently; immutable legacy rows remain source evidence.
+ const registeredLegacy=new Set(all(s,'ar_master_entry').flatMap(r=>[
+  ...(r.sourceKind==='ar_legacy_pending'?[r.sourceId]:[]),
+  ...(Array.isArray(r.additionalSources)?r.additionalSources.filter((v:Entity)=>v.kind==='ar_legacy_pending').map((v:Entity)=>v.id):[]),
+ ]));
+ for(const legacy of all(s,'ar_legacy_pending').filter(r=>r.status==='pending'&&!registeredLegacy.has(r.id))){
   const row=base(s,legacy,clean(legacy.title)||'历史货款待核对',legacy.amountCents,legacy.currency,'');
   if(!visible(row))continue;pending.push({id:row.id,sourceKind:row.sourceKind,sourceId:row.sourceId,customerId:row.customerId,customer:row.customerId?row.customer:clean(legacy.customerLabel)||'待匹配客户',teamId:row.teamId,title:row.title,currency:row.currency,sourceAmountCents:cents(legacy.amountCents),sourceReceivedCents:cents(legacy.receivedCents),sourceBalanceCents:cents(legacy.balanceCents),raw:{paymentTermsRaw:clean(legacy.paymentTermsRaw),originalAmountDecimal:clean(legacy.originalAmountDecimal),invoiceDateRaw:clean(legacy.invoiceDateRaw),dueDateRaw:clean(legacy.dueDateRaw),remarkRaw:clean(legacy.remarkRaw),poPlRaw:clean(legacy.poPlRaw),sourceSheet:clean(legacy.sourceSheet),sourceRow:Number.isSafeInteger(legacy.sourceRow)?legacy.sourceRow:null},confirmed:false,contributesToProductionBalance:false,issues:[...new Set([...row.issues,...list(legacy.issues),'历史迁移待核对，不计正式余额或业绩'])]});
  }
