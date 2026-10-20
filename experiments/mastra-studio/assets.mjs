@@ -40,11 +40,12 @@ export function createStudioAssets({cloud=false,businessFacts=false,liveModel=fa
   },
   async handle(request){
   const url=new URL(request.url);
-  if(!['GET','HEAD'].includes(request.method)||!/^\/studio(?:\/|$)/.test(url.pathname)||/^\/studio\/(?:api(?:\/|$)|manage\/api(?:\/|$)|workflow-manager\/api(?:\/|$)|process-change\/api(?:\/|$)|integrations\/|business\/)/.test(url.pathname))return null;
+  if(!['GET','HEAD'].includes(request.method)||!/^\/studio(?:\/|$)/.test(url.pathname)||/^\/studio\/(?:api(?:\/|$)|manage\/api(?:\/|$)|workflow-manager\/api(?:\/|$)|(?:process-change|purchase-change)\/api(?:\/|$)|integrations\/|business\/)/.test(url.pathname))return null;
    const changeFiles={'/studio/process-change/':['process-change.html','text/html; charset=utf-8'],'/studio/process-change/app.js':['process-change.js','text/javascript; charset=utf-8'],'/studio/process-change/style.css':['process-change.css','text/css; charset=utf-8']};
-   if(Object.hasOwn(changeFiles,url.pathname)){
+   const changePath=url.pathname.replace(/^\/studio\/purchase-change\//,'/studio/process-change/');
+   if(Object.hasOwn(changeFiles,changePath)){
     if(!liveReadOnly)return new Response(null,{status:404});
-    const [file,type]=changeFiles[url.pathname];return assetResponse(await fs.readFile(new URL('./'+file,import.meta.url)),type,request);
+    const [file,type]=changeFiles[changePath];return assetResponse(await fs.readFile(new URL('./'+file,import.meta.url)),type,request);
    }
    if(url.pathname==='/studio')return new Response(null,{status:302,headers:{Location:'/studio/'}});
    if(url.pathname==='/studio/manage')return new Response(null,{status:302,headers:{Location:'/studio/manage/'}});

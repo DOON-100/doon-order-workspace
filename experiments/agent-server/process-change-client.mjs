@@ -4,11 +4,13 @@ import {isIP} from 'node:net';
 import {randomUUID} from 'node:crypto';
 import {parsePublicOrigin,sessionCookie,canEnterStudio} from './session.mjs';
 
-const protocol='doon-process-change-v1',uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const fail=(message,status=503,uncertain=false)=>Object.assign(new Error(message),{status,uncertain});
 // Fixed transport only. This client is not a model tool; confirmations stay in
 // the HTTP handler closure, separate from AsyncLocalStorage business tools.
-export function createProcessChangeClient({publicOrigin,connectHost='host.docker.internal',transport=https.request}){
+export function createProcessChangeClient({publicOrigin,connectHost='host.docker.internal',transport=https.request,domain='process'}){
+ if(!['process','purchase'].includes(domain))throw Error('Invalid change domain');
+ const prefix=domain+'-change';
  const origin=parsePublicOrigin(publicOrigin);
  if(!['host.docker.internal','127.0.0.1','localhost'].includes(connectHost))throw Error('Invalid platform host');
  return async(cookie,operation,input)=>{
@@ -16,7 +18,7 @@ export function createProcessChangeClient({publicOrigin,connectHost='host.docker
   const filtered=sessionCookie(cookie);if(!filtered)throw fail('登录已失效。',401);
   const writing=['preview','confirm','cancel'].includes(operation);
   if(operation==='get'&&!uuid.test(input?.id||''))throw fail('预览编号无效。',400);
-  const endpoint=operation==='get'?'process-change?id='+encodeURIComponent(input.id):'process-change-'+operation;
+  const endpoint=operation==='get'?prefix+'?id='+encodeURIComponent(input.id):prefix+'-'+operation;
   const bytes=writing?Buffer.from(JSON.stringify(input)):null;if(bytes?.length>64*1024)throw fail('预览内容过大。',413);
   return new Promise((resolve,reject)=>{
    const request=transport({hostname:connectHost,port:Number(origin.port||443),path:'/api/workspace/'+endpoint,method:writing?'POST':'GET',servername:isIP(origin.hostname)?'':origin.hostname,rejectUnauthorized:true,checkServerIdentity:(_,cert)=>tls.checkServerIdentity(origin.hostname,cert),headers:{Host:origin.host,Origin:origin.origin,Cookie:filtered,Accept:'application/json',...(bytes?{'Content-Type':'application/json','Content-Length':bytes.length}:{})},timeout:15000},response=>{
@@ -32,7 +34,9 @@ export function createProcessChangeClient({publicOrigin,connectHost='host.docker
   });
  };
 }
-export function createProcessChangeSession({cookie,user,authenticate,client}){
+export function createProcessChangeSession({cookie,user,authenticate,client,domain='process'}){
+ if(!['process','purchase'].includes(domain))throw Error('Invalid change domain');
+ const protocol='doon-'+domain+'-change-v1',route='/studio/'+domain+'-change/';
  const actorId=String(user.identity?.id||user.username);
  async function verify(){
   const current=await authenticate(cookie);
@@ -46,10 +50,11 @@ export function createProcessChangeSession({cookie,user,authenticate,client}){
  return{
   // Only this method is exposed to the department executor.
   async stage(draft){
+   if((draft.domain||'process')!==domain)throw fail('提案业务类型不匹配。',400);
    await verify();const contract=await client(cookie,'contract');
    if(contract.protocol!==protocol||!/^[a-f0-9]{64}$/.test(contract.rulesVersion||''))throw fail('中台尚未接通兼容的流程确认协议。',409);
    if(draft.binding.actorId!==actorId)throw fail('草稿身份不匹配。',403);
-   const id=randomUUID(),previewUrl='/studio/process-change/?id='+id;
+   const id=randomUUID(),previewUrl=route+'?id='+id;
    const payload={...draft.proposed,...(draft.binding.recordId?{id:draft.binding.recordId,version:draft.binding.recordVersion}:{})};
    try{
     const result=await client(cookie,'preview',{requestId:id,rulesVersion:contract.rulesVersion,payload,basis:draft.basis});
@@ -64,7 +69,7 @@ export function createProcessChangeSession({cookie,user,authenticate,client}){
    const url=new URL(request.url),json=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store'}});
    try{
     if(!actor||actor.id!==actorId)throw fail('需要当前真实登录身份。',403);
-    if(url.pathname!=='/studio/process-change/api')return json({error:'Not found'},404);
+    if(url.pathname!==route+'api')return json({error:'Not found'},404);
     if(request.method==='GET'){
      if([...url.searchParams.keys()].some(key=>key!=='id')||url.searchParams.getAll('id').length!==1)throw fail('查询参数无效。',400);
      return json(await get(url.searchParams.get('id')));

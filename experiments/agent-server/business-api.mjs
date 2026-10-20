@@ -49,7 +49,7 @@ export function createBusinessReader({publicOrigin,connectHost='host.docker.inte
 
 // These fields are transport/account metadata, not business records. The
 // original platform read handler remains authoritative for row/field grants.
-export function createBusinessAccess({cookie,user,authenticate,read,scheduleClient,schedulerStatus,stageProcessDraft,now=()=>Date.now()}){
+export function createBusinessAccess({cookie,user,authenticate,read,scheduleClient,schedulerStatus,stageProcessDraft,stagePurchaseDraft,now=()=>Date.now()}){
  const actorId=String(user.identity?.id||user.username);
  async function verifyActor(){
   const current=await authenticate(cookie);
@@ -97,7 +97,11 @@ export function createBusinessAccess({cookie,user,authenticate,read,scheduleClie
   const record=id&&Array.isArray(body.records)?body.records.find(row=>row.id===id&&row.type===type):null;
   return{actorId,canCreate:body.canCreate===true&&Array.isArray(body.allowedKinds)&&body.allowedKinds.includes(type),record:record||null,readAt:new Date(now()).toISOString()};
  }
- const access={syntheticOnly:false,assertCurrent:verifyActor,catalog,query,processDraftContext,...(stageProcessDraft?{stageProcessDraft}:{}),...(scheduleClient?scheduleAuthorization(scheduleClient,cookie,schedulerStatus):{scheduleStatus:async()=>({ready:false})}),poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:event=>visible(event,true),visible:event=>visible(event)};
- access.withEvent=(event,operation)=>withBusinessAccess({...access,stageProcessDraft:undefined,processDraftContext:async()=>{throw fail('后台事件任务不能生成业务修改草稿。');},query:async input=>query(queryForEvent(input,event))},operation);
+ async function purchaseDraftContext(id){
+  await verifyActor();const body=await authorized('purchase-data');
+  return{actorId,canEdit:body.canEdit===true,record:body.rows?.find(row=>row.id===id)||null};
+ }
+ const access={syntheticOnly:false,assertCurrent:verifyActor,catalog,query,processDraftContext,purchaseDraftContext,...(stageProcessDraft?{stageProcessDraft}:{}),...(stagePurchaseDraft?{stagePurchaseDraft}:{}),...(scheduleClient?scheduleAuthorization(scheduleClient,cookie,schedulerStatus):{scheduleStatus:async()=>({ready:false})}),poll:async()=>({enabled:false,events:[],message:'当前生产后台未启用变更采集。'}),verify:event=>visible(event,true),visible:event=>visible(event)};
+ access.withEvent=(event,operation)=>withBusinessAccess({...access,stageProcessDraft:undefined,stagePurchaseDraft:undefined,purchaseDraftContext:async()=>{throw fail('后台事件任务不能生成采购修改提案。');},processDraftContext:async()=>{throw fail('后台事件任务不能生成业务修改草稿。');},query:async input=>query(queryForEvent(input,event))},operation);
  return access;
 }

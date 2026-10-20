@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
+import {purchaseDraftArguments,preparePurchase} from './purchase-contracts.mjs';
 import {departmentCatalog,departmentAction,readArguments,inspectArguments,draftArguments,describeSchema,validateProcessPayload,processPayloadSchema,contractRevision} from './department-contracts.mjs';
 
 export const departmentInputSchema=z.discriminatedUnion('operation',[
@@ -31,14 +32,15 @@ export async function executeDepartment(group,input,access){
   const args=parse(inspectArguments(action),request.arguments);
   const metadata=await access.catalog(action.source,fixedScope(action,args.scope));
   return{action:action.id,status:action.status,writeEnabled:false,contractRevision,
-   arguments:describeSchema(action.kind==='read'?readArguments(action):draftArguments(action.type)),
-   metadata,rules:action.kind==='draft'?['必须先核对关联与来源；不猜客户、订单、负责人或证据。','更新需当前 ID 和版本，仅合并显式修改字段，其余字段保留。','完成条件、数量平衡、日期、金额等复用中台固定校验。',access.stageProcessDraft?'会登记待确认预览并返回链接；必须由本人打开后确认。未知项或冲突未解决时不能确认。':'当前只返回草稿，尚未启用确认通道。']:[]};
+   arguments:describeSchema(action.kind==='read'?readArguments(action):action.kind==='purchase-draft'?purchaseDraftArguments(action.operation):draftArguments(action.type)),
+   metadata,rules:action.kind==='draft'?['必须先核对关联与来源；不猜客户、订单、负责人或证据。','更新需当前 ID 和版本，仅合并显式修改字段，其余字段保留。','完成条件、数量平衡、日期、金额等复用中台固定校验。',access.stageProcessDraft?'会登记待确认预览并返回链接；必须由本人打开后确认。未知项或冲突未解决时不能确认。':'当前只返回草稿，尚未启用确认通道。']:action.kind==='purchase-draft'?['每份提案只处理一条明确的采购明细；先查询并核对供应商、物料、单位、源行和版本。','普通收货、退货和补货分别登记，不能混用；数量余额由中台固定程序计算。','未核对的期初基数必须先由原业务入口处理；本工具不开放期初核定、更正、导入、新建采购单或删除。',access.stagePurchaseDraft?'登记预览后由本人核对完整载荷和数量效果再确认。':'采购确认通道未启用，仅返回草稿。']:[]};
  }
  if(request.operation==='query'){
   if(action.kind!=='read')throw fail('此动作不能用于查询。');
   const args=parse(readArguments(action),request.arguments);
   return access.query({...args,source:action.source,scope:fixedScope(action,args.scope)});
  }
+ if(request.operation==='prepare'&&action.kind==='purchase-draft')return preparePurchase(action,request.arguments,access);
  if(action.kind!=='draft')throw fail('此动作尚未接入新增／修改草稿。');
  if(typeof access.processDraftContext!=='function')throw fail('当前任务仅可读取，不能生成业务修改草稿。',403);
  const args=parse(draftArguments(action.type),request.arguments);

@@ -59,3 +59,5 @@
 !agent-server/schedule-client.mjs
 !agent-server/schedule-worker.mjs
 !mastra-studio/workflow-live-data.mjs
+
+!mastra-studio/purchase-contracts.mjs

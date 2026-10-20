@@ -1,5 +1,6 @@
 import registry from './department-registry.json' with {type:'json'};
 import {z} from 'zod';
+import {purchaseActions} from './purchase-contracts.mjs';
 import {processKinds,processSaveSchema,processDetailsSchema,assertProcessCompletion} from './process-contract.generated.mjs';
 
 export const departmentGroups=registry.groups;
@@ -47,7 +48,7 @@ const processActions=registry.processes.flatMap(row=>[
  {id:'process-'+row.type,label:row.label,groups:[row.group],source:'process-data',type:row.type,kind:'read',status:'read-adapter'},
  {id:'prepare-process-'+row.type,label:row.label+'新增／修改草稿',groups:[row.group],source:'process-data',type:row.type,kind:'draft',status:'draft-only'},
 ]);
-export const departmentActions=[...readActions,...processActions];
+export const departmentActions=[...readActions,...processActions,...purchaseActions];
 export function departmentAction(group,id){
  const action=departmentActions.find(row=>row.id===id&&row.groups.includes(group));
  if(!action)throw new Error('该动作尚未接入当前部门工具，请先查看动作目录。');
@@ -58,7 +59,7 @@ export function departmentCatalog(group){
  if(!department)throw new Error('部门不存在。');
  return{department,contractRevision,authorization:'checked-by-original-api-on-every-read',writeEnabled:false,
   actions:departmentActions.filter(row=>row.groups.includes(group)).map(({id,label,kind,status,requiredScope})=>({id,label,kind,status,...(requiredScope?{requiredScope}:{})})),
-  pendingEndpoints:registry.endpoints.filter(row=>row.groups.includes(group)&&!readActions.some(action=>row.method==='GET'&&action.source===row.action)&&row.action!=='process-data').map(({method,path,object,boundary})=>({method,path,object,boundary,status:'not-executable'})),
+  pendingEndpoints:registry.endpoints.filter(row=>row.groups.includes(group)&&!readActions.some(action=>row.method==='GET'&&action.source===row.action)&&row.action!=='process-data').map(({method,path,action,object,boundary})=>({method,path,object,boundary,...(method==='POST'&&purchaseActions.some(item=>item.nativeAction===action)?{status:'controlled-actions-only',actions:purchaseActions.filter(item=>item.nativeAction===action).map(item=>item.id)}:{status:'not-executable'})})),
   message:'目录是接口能力清单，不代表当前账号权限或数据存在。inspect/query 每次通过原业务接口校验。prepare 不直接修改业务；启用确认通道时返回人工预览链接，由本人核对后执行。'};
 }
 
@@ -71,6 +72,7 @@ export function describeSchema(schema){
  if(name==='ZodEffects')return{...describeSchema(d.schema),programValidation:true};
  if(name==='ZodObject')return{type:'object',additionalProperties:false,properties:Object.fromEntries(Object.entries(schema.shape).map(([key,value])=>[key,describeSchema(value)]))};
  if(name==='ZodDiscriminatedUnion')return{oneOf:d.options.map(describeSchema)};
+ if(name==='ZodUnion')return{oneOf:d.options.map(describeSchema)};
  if(name==='ZodLiteral')return{const:d.value};
  if(name==='ZodEnum')return{type:'string',enum:d.values};
  if(name==='ZodArray')return{type:'array',items:describeSchema(d.type),minItems:d.minLength?.value,maxItems:d.maxLength?.value};

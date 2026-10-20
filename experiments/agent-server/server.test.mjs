@@ -64,25 +64,26 @@ test('模型并发上限与大载荷拒绝，客户端取消不使服务退出',
  }finally{release();await running?.catch(()=>{});await new Promise(resolve=>server.close(resolve));}
 });
 
-test('流程确认会话只交给受信任页面，工具上下文只获得登记预览能力',async()=>{
+for(const domain of ['process','purchase'])test(domain+' 确认会话只交给页面，工具上下文只获得登记预览能力',async()=>{
+ const contextKey=domain+'Changes',stageKey=domain==='process'?'stageProcessDraft':'stagePurchaseDraft';
  const user={username:'SYN',identity:{id:'SYN-A'},role:'admin',personnelType:'internal',mustChange:false};
  let staged=0,handled=0,revoked=false,toolAccess;
  const changes={stage:async()=>{staged++;return {executed:false};},handle:async()=>{handled++;return Response.json({confirmed:true});}};
  const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async cookie=>!revoked&&cookie==='SYN-session'?user:null,
-  processChanges:({cookie,user:current})=>{assert.equal(cookie,'SYN-session');assert.equal(current,user);return changes;},
-  businessAccess:options=>{assert.equal(options.handle,undefined);assert.equal(options.processChanges,undefined);return {stageProcessDraft:options.stageProcessDraft};},
+  [contextKey]:({cookie,user:current})=>{assert.equal(cookie,'SYN-session');assert.equal(current,user);return changes;},
+  businessAccess:options=>{assert.equal(options.handle,undefined);assert.equal(options.processChanges,undefined);assert.equal(options.purchaseChanges,undefined);return {[stageKey]:options[stageKey]};},
   withAccess:async(access,run)=>{toolAccess=access;return run();},
   studio:{handle:async(request,context)=>{
    assert.equal(context.actor.id,'SYN-A');assert.equal(toolAccess.handle,undefined);assert.equal(toolAccess.confirm,undefined);
-   if(request.url.endsWith('/stage'))return Response.json(await toolAccess.stageProcessDraft({}));
-   return context.processChanges.handle(request,{actor:context.actor});
+   if(request.url.endsWith('/stage'))return Response.json(await toolAccess[stageKey]({}));
+   return context[contextKey].handle(request,{actor:context.actor});
   }}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
  const request=(route,origin='https://example.test')=>client(port,route,{method:'POST',headers:{Host:'example.test',Origin:origin,Cookie:'SYN-session'},body:'{}'});
  try{
   assert.equal((await request('/studio/api/tools/stage')).status,200);assert.equal(staged,1);assert.equal(handled,0);
-  assert.equal((await request('/studio/process-change/api','https://cross-site.invalid')).status,403);assert.equal(handled,0);
-  assert.equal((await request('/studio/process-change/api')).status,200);assert.equal(handled,1);
-  revoked=true;assert.equal((await request('/studio/process-change/api')).status,401);assert.equal(handled,1);
+  assert.equal((await request('/studio/'+domain+'-change/api','https://cross-site.invalid')).status,403);assert.equal(handled,0);
+  assert.equal((await request('/studio/'+domain+'-change/api')).status,200);assert.equal(handled,1);
+  revoked=true;assert.equal((await request('/studio/'+domain+'-change/api')).status,401);assert.equal(handled,1);
  }finally{await new Promise(resolve=>server.close(resolve));}
 });
