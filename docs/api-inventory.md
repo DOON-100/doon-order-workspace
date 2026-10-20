@@ -18,6 +18,8 @@
 
 完整逐项表见 **[工作区接口清单](api-inventory/workspace-endpoints.md)**；机器可读证据见 **[接口索引 JSON](api-inventory/workspace-endpoints.json)**。每项都有方法、action、动作索引、处理器位置、分发链及可找到的页面引用。
 
+按用户确认的左侧 10 个分组，后续整理见 **[部门工具适配表](api-inventory/department-tools.md)** 和[分组配置](api-inventory/department-mapping.json)。其中保留跨部门共用接口，并将 14 类流程、12 类业务资料/单据、6 类客服记录按具体类型归组；当前是静态接入方案，尚未注册运行工具。
+
 仓库刷新 `git fetch origin` 本次因 GitHub 443 连接失败未成功，不能把本地基线称为已核实的最新远端或服务器运行版本。源码清点不等于接口线上已开放、权限测试通过或 Agent 已接通。
 
 ## 2. 业务能力覆盖表
