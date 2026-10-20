@@ -66,7 +66,7 @@ const rates=new Map();
 function fail(message,status=400){throw Object.assign(new Error(message),{status});}
 const reply=(body,status=200,headers={})=>Response.json(body,{status,headers});
 function localIP(ip){return /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip.replace(/^::ffff:/,''))||ip==='::1';}
-function throttle(ip){const now=Date.now();for(const [key,r] of rates)if(r.until<now)rates.delete(key);const r=rates.get(ip)||{until:now+60000,count:0};r.count++;rates.set(ip,r);if(r.count>60)fail('操作过于频繁，请稍后再试。',429);}
+function throttle(key,limit=60){const now=Date.now();for(const [entry,r] of rates)if(r.until<now)rates.delete(entry);const r=rates.get(key)||{until:now+60000,count:0};r.count++;rates.set(key,r);if(r.count>limit)fail('操作过于频繁，请稍后再试。',429);}
 async function handle(req,res){
  try{
   let endpoint;
@@ -100,8 +100,12 @@ async function handle(req,res){
     if(!scheduleBridge)fail('后台只读调度尚未启用。',404);
     response=await scheduleBridge.handle(request,current);
    }else if(url.pathname.startsWith('/api/auth/')){
-    throttle(endpoint.ip);
     const action=url.pathname.slice('/api/auth/'.length);
+    // Studio revalidates every asset/API request through one proxy IP. Only a
+    // freshly verified session gets its own bounded read budget; login and all
+    // other auth operations retain the original per-IP protection.
+    const sessionRead=action==='session'&&req.method==='GET'&&current;
+    throttle(sessionRead?'session:'+current.digest:endpoint.ip,sessionRead?600:60);
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
     if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current)});
     else if(action==='login'&&req.method==='POST'){const result=await login(await request.json(),endpoint.ip,secure,authOptions);response=reply({user:result.user},200,{'Set-Cookie':result.cookie});}

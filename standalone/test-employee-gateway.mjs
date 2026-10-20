@@ -39,6 +39,27 @@ try{
  assert(events.some(e=>e.username==='supplier'&&e.event==='login_failure'&&e.actor==='未认证访问者'));
  assert.equal(JSON.parse((await request('/api/auth/session',undefined,{Cookie:token.replace('doon_employee_session','doon_session')})).body).user,null);
  assert.equal(JSON.parse((await request('/api/review-mode')).body).syntheticOnly,true);
+ // Studio assets and API requests share a container IP but must not exhaust
+ // the login bucket. Each verified session remains bounded independently.
+ const signedAgain=await request('/api/auth/login',{username:'admin',password:'Synthetic-Employee-2026!'});assert.equal(signedAgain.status,200);
+ const otherToken=signedAgain.headers['set-cookie'][0].split(';')[0];
+ for(const c of [token,otherToken]){
+  const burst=await Promise.all(Array.from({length:120},()=>request('/api/auth/session',undefined,{Cookie:c,'x-forwarded-for':'198.51.100.30'})));
+  assert(burst.every(r=>r.status===200&&JSON.parse(r.body).user?.username==='admin'));
+ }
+ for(let n=0;n<4;n++){
+  const burst=await Promise.all(Array.from({length:120},()=>request('/api/auth/session',undefined,{Cookie:token,'x-forwarded-for':'198.51.100.30'})));
+  assert(burst.every(r=>r.status===200));
+ }
+ assert.equal((await request('/api/auth/session',undefined,{Cookie:token})).status,429);
+ assert.equal((await request('/api/auth/session',undefined,{Cookie:otherToken})).status,200);
+ const logout=await request('/api/auth/logout',{}, {Cookie:token});assert.equal(logout.status,200);
+ assert.equal(JSON.parse((await request('/api/auth/session',undefined,{Cookie:token})).body).user,null);
+ assert.equal((await request('/api/workspace/data',undefined,{Cookie:token})).status,401);
+ for(let n=0;n<61;n++)await request('/api/auth/accounts',undefined,{Cookie:otherToken,'x-forwarded-for':'198.51.100.40'});
+ assert.equal((await request('/api/auth/accounts',undefined,{Cookie:otherToken,'x-forwarded-for':'198.51.100.40'})).status,429);
+ assert.equal((await request('/api/auth/session',undefined,{Cookie:otherToken,'x-forwarded-for':'198.51.100.40'})).status,200);
+ console.log('PASS Studio-sized authenticated bursts isolate sessions; read limits, logout revocation and account-operation throttling remain enforced');
  // Separate clients behind the same proxy must not share login throttling buckets.
  for(let i=0;i<61;i++)await request('/api/auth/session',undefined,{'x-forwarded-for':'198.51.100.20'});
  assert.equal((await request('/api/auth/session',undefined,{'x-forwarded-for':'198.51.100.20'})).status,429);
