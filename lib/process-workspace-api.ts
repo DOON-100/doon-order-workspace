@@ -62,9 +62,9 @@ export async function processWorkspaceGet(action:string,req:Request,s:State,m:Me
   businessTeamScope:{teamId},notice:'流程作业记录仅用于跟进与证据登记，不替代 ERP 库存、财务记账或品质系统的实际放行。'});
 }
 
-export async function processWorkspacePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(action!=='process-save')return null;
- const teamId=requestTeam(req,s,m),input=parse(processSaveSchema,await req.json());
+// Shared deterministic validation and write plan. Building a plan never commits.
+export async function buildProcessSave(req:Request,s:State,m:Member,body:unknown,source='流程作业工作台'){
+ const teamId=requestTeam(req,s,m),input=parse(processSaveSchema,body);
  if(!canWriteProcessKind(s,m,input.type))throw new AppError('当前角色或部门没有该流程的维护权限。',403);
  const details=parse(processDetailsSchema(input.type),input.details) as Record<string,string|number>;
  const {id,version,token,...values}=input,fields:ProcessFields={...values,details};
@@ -75,7 +75,7 @@ export async function processWorkspacePost(action:string,req:Request,s:State,m:M
   const prior=(all(s,'process_record_revision') as ProcessRevision[]).find(row=>row.actorId===m.id&&row.requestToken===token);
   if(prior){
    if(prior.requestFingerprint!==hash)throw new AppError('本次操作标识已用于不同内容，请核对后重新提交。',409);
-   const record=readable(s,m,prior.recordId,teamId);return json({ok:true,idempotent:true,record:publicRecord(s,m,record)});
+   const record=readable(s,m,prior.recordId,teamId);return {before:record,fields,record,updates:[] as Entity[],idempotent:true};
   }
  }
  const before=id?readable(s,m,id,teamId):null;
@@ -89,7 +89,13 @@ export async function processWorkspacePost(action:string,req:Request,s:State,m:M
  const at=now(),record:ProcessRecord={...fields,id:before?.id||newId('process_record'),kind:'process_record',version:(before?.version||0)+1,createdAt:before?.createdAt||at,createdById:before?.createdById||m.id,updatedAt:at,updatedById:m.id,updatedBy:m.name};
  const actionLabel=before?'更新流程作业记录':'新增流程作业记录';
  const revision:ProcessRevision={id:newId('process_record_revision'),kind:'process_record_revision',recordId:record.id,customerId:record.customerId,orderId:record.orderId,teamId:record.teamId,version:record.version,action:actionLabel,actorId:m.id,actor:m.name,createdAt:at,snapshot:structuredClone(record),...(token?{requestToken:token,requestFingerprint:hash}:{})};
- const updates:Entity[]=[record,revision,audit(m,record,before,actionLabel,'流程作业工作台')];
- await commit(s.revision,updates);
- return json({ok:true,record:publicRecord({...s,records:[...s.records.filter(row=>row.id!==record.id),record]},m,record)});
+ const updates:Entity[]=[record,revision,audit(m,record,before,actionLabel,source)];
+ return {before,fields,record,updates,idempotent:false};
+}
+export async function processWorkspacePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ if(action!=='process-save')return null;
+ const plan=await buildProcessSave(req,s,m,await req.json());
+ if(plan.updates.length)await commit(s.revision,plan.updates);
+ const record=plan.record;
+ return json({ok:true,...(plan.idempotent?{idempotent:true}:{}),record:publicRecord({...s,records:[...s.records.filter(row=>row.id!==record.id),record]},m,record)});
 }

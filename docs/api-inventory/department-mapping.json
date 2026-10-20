@@ -13,6 +13,7 @@
     "lib/finished-supplier-api.ts": ["purchasing"],
     "lib/kingdee-pending-api.ts": ["purchasing"],
     "lib/process-workspace-api.ts": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"],
+    "lib/process-change-api.ts": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"],
     "lib/planning-control-api.ts": ["planning"],
     "lib/engineering-drawing-api.ts": ["engineering"],
     "lib/drawing-correction-api.ts": ["engineering", "planning"],
@@ -47,6 +48,7 @@
     "lib/fixed-tool-fees.ts": ["sales"]
   },
   "overrides": [
+    {"actions": ["process-change-contract", "process-change", "process-change-preview", "process-change-confirm", "process-change-cancel"], "groups": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"], "object": "流程变更人工预览、确认与执行回读", "boundary": "application-only", "note": "固定页面与受控客户端使用；不向模型注册任意确认工具。本人确认绑定完整预览、来源、规则和有效期；业务与回执同事务。"},
     {"actions": ["data", "read-version", "business-team-data"], "groups": ["sales", "service", "engineering", "planning", "purchasing", "warehouse", "production", "quality", "finance", "management"], "object": "授权聚合数据、版本与业务组目录", "note": "共用查询需按任务投影数据集和必要字段，不把整份聚合响应交给模型。"},
     {"actions": ["member", "enroll", "backup"], "groups": ["management"], "object": "成员与维护", "boundary": "human-admin-flow"},
     {"actions": ["inspect", "preview", "commit-import", "job", "template"], "groups": ["management", "planning", "production"], "object": "原表/MES 文件导入与批次", "note": "沿用原解析、批次及提交流程；预览可能保存原件与批次。"},

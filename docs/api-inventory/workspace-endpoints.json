@@ -5,7 +5,7 @@
   "sourceFiles": [
     {
       "path": "app/api/workspace/[action]/route.ts",
-      "sha256": "9a45051c7f47e27501348772105c032b48d240e975161c120bf3a918540576ad"
+      "sha256": "e35500b7a5a30ebd18152aef89a42d686a043a143df99861eea20f817105ee75"
     },
     {
       "path": "lib/ar-customer-profiles-api.ts",
@@ -152,8 +152,12 @@
       "sha256": "5ff9dbb7013192a79795cb074c3a2edcb268bcfff0ad89f13633406ac21dadb0"
     },
     {
+      "path": "lib/process-change-api.ts",
+      "sha256": "0d6f0480e3bfe2630c565465865b4409f1946ff812168d72a9140afcde57ce5d"
+    },
+    {
       "path": "lib/process-workspace-api.ts",
-      "sha256": "36909ebe094c8c277ba7b129f9e0a72acfef96dd05e15b4bfb3858d6245e5ad0"
+      "sha256": "e7839b3f9f0f9952875b42b3b0014be9d148f98b1d2848414923ba6702b747fd"
     },
     {
       "path": "lib/project-collaboration-api.ts",
@@ -180,8 +184,8 @@
       "sha256": "ac62bce271f9c2acd40b9cdd5121ecae8d92591681f6e79a539de32a68b9d500"
     }
   ],
-  "handlerCount": 81,
-  "endpointCount": 336,
+  "handlerCount": 83,
+  "endpointCount": 341,
   "unresolved": [],
   "unmatchedClientPaths": [],
   "dynamicClientPrefixes": [
@@ -223,7 +227,7 @@
       "references": [
         {
           "file": "app/framework-finance-task-panel.tsx",
-          "line": 13
+          "line": 14
         }
       ],
       "matchingActions": [
@@ -242,7 +246,7 @@
       "references": [
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 34
+          "line": 35
         }
       ],
       "matchingActions": [
@@ -315,7 +319,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 35
+          "line": 36
         }
       ],
       "module": "应收工作台与授权",
@@ -392,7 +396,7 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 84
+          "line": 85
         }
       ],
       "module": "应收客户模板",
@@ -419,7 +423,7 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 39
+          "line": 40
         }
       ],
       "module": "应收客户模板",
@@ -477,11 +481,11 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 55
+          "line": 56
         },
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 62
+          "line": 63
         }
       ],
       "module": "正式财务单据",
@@ -519,7 +523,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 63
+          "line": 64
         }
       ],
       "module": "正式财务单据",
@@ -579,11 +583,11 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 55
+          "line": 56
         },
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 62
+          "line": 63
         }
       ],
       "module": "正式财务单据",
@@ -654,11 +658,11 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 40
+          "line": 41
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 60
+          "line": 61
         }
       ],
       "module": "发票原件与对账",
@@ -684,7 +688,7 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 97
+          "line": 98
         }
       ],
       "module": "应收客户模板",
@@ -711,11 +715,11 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 110
+          "line": 111
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 138
+          "line": 139
         }
       ],
       "module": "发票原件与对账",
@@ -751,7 +755,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 111
+          "line": 112
         }
       ],
       "module": "发票原件与对账",
@@ -787,7 +791,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 118
+          "line": 119
         }
       ],
       "module": "发票原件与对账",
@@ -823,7 +827,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 123
+          "line": 124
         }
       ],
       "module": "发票原件与对账",
@@ -849,7 +853,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 130
+          "line": 131
         }
       ],
       "module": "发票原件与对账",
@@ -885,11 +889,11 @@
       "references": [
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 104
+          "line": 105
         },
         {
           "file": "app/ar-customer-profile-panel.tsx",
-          "line": 108
+          "line": 109
         }
       ],
       "module": "应收客户模板",
@@ -925,7 +929,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 136
+          "line": 137
         }
       ],
       "module": "发票原件与对账",
@@ -963,7 +967,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 152
+          "line": 153
         }
       ],
       "module": "发票原件与对账",
@@ -989,7 +993,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 61
+          "line": 62
         }
       ],
       "module": "应收工作台与授权",
@@ -1016,7 +1020,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 33
+          "line": 34
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -1037,7 +1041,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 167,
+          "line": 170,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -1046,7 +1050,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 170,
+          "line": 173,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1074,7 +1078,7 @@
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 126
+          "line": 127
         },
         {
           "file": "app/supplier-portal.tsx",
@@ -1095,7 +1099,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 118,
+          "line": 119,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -1134,7 +1138,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 136,
+          "line": 138,
           "handler": "workspaceRead",
           "kind": "comparison",
           "chain": [
@@ -1151,7 +1155,7 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 98
+          "line": 99
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -1168,7 +1172,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 200,
+          "line": 203,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1205,7 +1209,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 188,
+          "line": 191,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1221,7 +1225,7 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 105
+          "line": 106
         }
       ],
       "module": "订单总表、导入、附件与成员",
@@ -1234,7 +1238,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 231,
+          "line": 234,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1407,15 +1411,15 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 132
+          "line": 133
         },
         {
           "file": "app/workspace.tsx",
-          "line": 149
+          "line": 150
         },
         {
           "file": "app/workspace.tsx",
-          "line": 157
+          "line": 158
         },
         {
           "file": "app/[section]/page.tsx",
@@ -1828,7 +1832,7 @@
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 18
+          "line": 19
         },
         {
           "file": "app/supplier-operations-panel.tsx",
@@ -2095,7 +2099,7 @@
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 19
+          "line": 20
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -3916,19 +3920,19 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 132
+          "line": 133
         },
         {
           "file": "app/workspace.tsx",
-          "line": 140
+          "line": 141
         },
         {
           "file": "app/workspace.tsx",
-          "line": 149
+          "line": 150
         },
         {
           "file": "app/workspace.tsx",
-          "line": 156
+          "line": 157
         },
         {
           "file": "app/[section]/page.tsx",
@@ -4274,11 +4278,11 @@
         },
         {
           "file": "app/customer-workflow-panel.tsx",
-          "line": 39
+          "line": 40
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 25
+          "line": 26
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -4347,7 +4351,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 32
+          "line": 33
         }
       ],
       "module": "客户文件与轻量项目",
@@ -4385,7 +4389,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 25
+          "line": 26
         }
       ],
       "module": "客户文件与轻量项目",
@@ -4412,7 +4416,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 24
+          "line": 25
         }
       ],
       "module": "客户文件与轻量项目",
@@ -4454,7 +4458,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 15
+          "line": 16
         }
       ],
       "module": "客户文件与轻量项目",
@@ -4990,7 +4994,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 16
+          "line": 17
         }
       ],
       "module": "客户文件与轻量项目",
@@ -5028,7 +5032,7 @@
       "references": [
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 32
+          "line": 33
         }
       ],
       "module": "客户文件与轻量项目",
@@ -5283,11 +5287,11 @@
       "references": [
         {
           "file": "app/customer-workflow-panel.tsx",
-          "line": 40
+          "line": 41
         },
         {
           "file": "app/customer-workflow-panel.tsx",
-          "line": 61
+          "line": 62
         },
         {
           "file": "app/customer-workflow-tasks.tsx",
@@ -5295,7 +5299,7 @@
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 22
+          "line": 23
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -5316,7 +5320,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 106,
+          "line": 107,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -5346,11 +5350,11 @@
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 44
+          "line": 45
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 160
+          "line": 161
         },
         {
           "file": "app/kingdee-pending-panel.tsx",
@@ -5378,7 +5382,7 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "standalone/preview-losses.mjs",
@@ -5749,7 +5753,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 189,
+          "line": 192,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5778,7 +5782,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 142,
+          "line": 144,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5806,7 +5810,7 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "standalone/main.tsx",
@@ -5823,7 +5827,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 166,
+          "line": 169,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5832,7 +5836,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 241,
+          "line": 244,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5844,7 +5848,7 @@
       "references": [
         {
           "file": "app/workspace.tsx",
-          "line": 129
+          "line": 130
         }
       ],
       "module": "订单总表、导入、附件与成员",
@@ -6088,7 +6092,7 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 177
+          "line": 178
         },
         {
           "file": "app/[section]/page.tsx",
@@ -6109,7 +6113,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 108,
+          "line": 109,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -6123,19 +6127,19 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 109
+          "line": 110
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 121
+          "line": 122
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 156
+          "line": 157
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 162
+          "line": 163
         },
         {
           "file": "app/collaboration-panel.tsx",
@@ -6215,11 +6219,11 @@
         },
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 24
+          "line": 25
         },
         {
           "file": "app/customer-workflow-files.tsx",
-          "line": 31
+          "line": 32
         },
         {
           "file": "app/detail-panel.tsx",
@@ -6251,15 +6255,15 @@
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 115
+          "line": 116
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 159
+          "line": 160
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 126
+          "line": 127
         },
         {
           "file": "app/handoff-order-hub.tsx",
@@ -7213,7 +7217,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 89
+          "line": 90
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -7254,7 +7258,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 137
+          "line": 138
         }
       ],
       "module": "固定报价费用工具",
@@ -7302,7 +7306,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 129
+          "line": 130
         }
       ],
       "module": "固定报价费用工具",
@@ -7329,7 +7333,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 140
+          "line": 141
         }
       ],
       "module": "固定数据工具",
@@ -7367,11 +7371,11 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 103
+          "line": 104
         }
       ],
       "module": "固定数据工具",
@@ -7397,7 +7401,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 117
+          "line": 118
         }
       ],
       "module": "固定数据工具",
@@ -7436,7 +7440,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 121
+          "line": 122
         }
       ],
       "module": "固定报价费用工具",
@@ -7472,7 +7476,7 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 115
+          "line": 116
         }
       ],
       "module": "固定数据工具",
@@ -7508,7 +7512,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 58
+          "line": 59
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -7548,7 +7552,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 104
+          "line": 105
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -7588,7 +7592,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 104
+          "line": 105
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -7616,15 +7620,15 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 38
+          "line": 39
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 86
+          "line": 87
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -7664,7 +7668,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 57
+          "line": 58
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -7805,7 +7809,7 @@
       "references": [
         {
           "file": "app/framework-finance-task-panel.tsx",
-          "line": 46
+          "line": 47
         }
       ],
       "module": "财务协作任务",
@@ -8089,7 +8093,7 @@
       "references": [
         {
           "file": "app/framework-finance-task-panel.tsx",
-          "line": 45
+          "line": 46
         }
       ],
       "module": "财务协作任务",
@@ -8118,15 +8122,15 @@
       "references": [
         {
           "file": "app/framework-finance-task-panel.tsx",
-          "line": 20
+          "line": 21
         },
         {
           "file": "app/framework-finance-task-panel.tsx",
-          "line": 35
+          "line": 36
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 26
+          "line": 27
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -8174,7 +8178,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 68
+          "line": 69
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -8222,7 +8226,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 70
+          "line": 71
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8258,11 +8262,11 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 107
+          "line": 108
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8298,7 +8302,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 106
+          "line": 107
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8334,11 +8338,11 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 97
+          "line": 98
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 104
+          "line": 105
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8364,11 +8368,11 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 98
+          "line": 99
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 105
+          "line": 106
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8404,7 +8408,7 @@
       "references": [
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 33
+          "line": 34
         }
       ],
       "module": "沟通渠道、规则文档与通知",
@@ -8444,7 +8448,7 @@
       "references": [
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 24
+          "line": 25
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -8481,15 +8485,15 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 11
+          "line": 12
         },
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 16
+          "line": 17
         },
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 35
+          "line": 36
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -8542,7 +8546,7 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 35
+          "line": 36
         }
       ],
       "module": "离职交接",
@@ -8580,7 +8584,7 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 16
+          "line": 17
         }
       ],
       "module": "离职交接",
@@ -8607,7 +8611,7 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 16
+          "line": 17
         }
       ],
       "module": "离职交接",
@@ -8645,7 +8649,7 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 17
+          "line": 18
         }
       ],
       "module": "离职交接",
@@ -8674,11 +8678,11 @@
       "references": [
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 33
+          "line": 34
         },
         {
           "file": "app/framework-offboarding-panel.tsx",
-          "line": 35
+          "line": 36
         }
       ],
       "module": "离职交接",
@@ -8718,11 +8722,11 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 28
+          "line": 29
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 38
+          "line": 39
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -8864,7 +8868,7 @@
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 21
+          "line": 22
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -8938,11 +8942,11 @@
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 126
+          "line": 127
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 155
+          "line": 156
         }
       ],
       "module": "业务交接与单据",
@@ -9058,11 +9062,11 @@
       "references": [
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 118
+          "line": 119
         },
         {
           "file": "app/handoff-business-panel.tsx",
-          "line": 132
+          "line": 133
         }
       ],
       "module": "业务交接与单据",
@@ -9133,7 +9137,7 @@
       "references": [
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 23
+          "line": 24
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -9270,7 +9274,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 167,
+          "line": 170,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9279,7 +9283,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 180,
+          "line": 183,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9291,27 +9295,27 @@
       "references": [
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 20
+          "line": 21
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 30
+          "line": 31
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 32
+          "line": 33
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 75
+          "line": 76
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 160
+          "line": 161
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
-          "line": 162
+          "line": 163
         },
         {
           "file": "app/import-panel.tsx",
@@ -9332,7 +9336,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 107,
+          "line": 108,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -9627,7 +9631,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 165,
+          "line": 168,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9746,7 +9750,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 165,
+          "line": 168,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9865,7 +9869,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 226,
+          "line": 229,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9898,7 +9902,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 207,
+          "line": 210,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10088,7 +10092,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 165,
+          "line": 168,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10254,7 +10258,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 34
+          "line": 35
         },
         {
           "file": "app/customer-directory-panel.tsx",
@@ -10266,7 +10270,7 @@
         },
         {
           "file": "app/payment-terms-panel.tsx",
-          "line": 16
+          "line": 17
         },
         {
           "file": "app/workspace-prefetch.ts",
@@ -10412,7 +10416,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 134
+          "line": 135
         }
       ],
       "module": "计划与产能",
@@ -10438,7 +10442,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 135
+          "line": 136
         }
       ],
       "module": "计划与产能",
@@ -10474,7 +10478,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 133
+          "line": 134
         }
       ],
       "module": "计划与产能",
@@ -10510,7 +10514,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 131
+          "line": 132
         }
       ],
       "module": "计划与产能",
@@ -10537,7 +10541,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 75
+          "line": 76
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -10579,19 +10583,19 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 79
+          "line": 80
         },
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 94
+          "line": 95
         },
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 96
+          "line": 97
         },
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 213
+          "line": 214
         }
       ],
       "module": "计划与产能",
@@ -10627,7 +10631,7 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 130
+          "line": 131
         }
       ],
       "module": "计划与产能",
@@ -10663,15 +10667,15 @@
       "references": [
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 132
+          "line": 133
         },
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 194
+          "line": 195
         },
         {
           "file": "app/planning-control-panel.tsx",
-          "line": 210
+          "line": 211
         }
       ],
       "module": "计划与产能",
@@ -10824,7 +10828,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 167,
+          "line": 170,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10833,7 +10837,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 179,
+          "line": 182,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10849,10 +10853,158 @@
         },
         {
           "file": "app/workspace.tsx",
-          "line": 105
+          "line": 106
         }
       ],
       "module": "订单总表、导入、附件与成员",
+      "actionIndex": "解析/预览/导入（不能假定无副作用）"
+    },
+    {
+      "method": "GET",
+      "action": "process-change",
+      "path": "/api/workspace/process-change",
+      "evidence": [
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 60,
+          "handler": "processChangeGet",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/process-change-api.ts#processChangeGet"
+          ]
+        }
+      ],
+      "owner": "lib/process-change-api.ts",
+      "references": [],
+      "module": "流程变更人工确认",
+      "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "POST",
+      "action": "process-change-cancel",
+      "path": "/api/workspace/process-change-cancel",
+      "evidence": [
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 69,
+          "handler": "processChangePost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        },
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 92,
+          "handler": "processChangePost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        }
+      ],
+      "owner": "lib/process-change-api.ts",
+      "references": [],
+      "module": "流程变更人工确认",
+      "actionIndex": "取消/回收/归档/恢复等状态动作"
+    },
+    {
+      "method": "POST",
+      "action": "process-change-confirm",
+      "path": "/api/workspace/process-change-confirm",
+      "evidence": [
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 69,
+          "handler": "processChangePost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        },
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 89,
+          "handler": "processChangePost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        }
+      ],
+      "owner": "lib/process-change-api.ts",
+      "references": [],
+      "module": "流程变更人工确认",
+      "actionIndex": "专用业务动作"
+    },
+    {
+      "method": "GET",
+      "action": "process-change-contract",
+      "path": "/api/workspace/process-change-contract",
+      "evidence": [
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 60,
+          "handler": "processChangeGet",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/process-change-api.ts#processChangeGet"
+          ]
+        },
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 62,
+          "handler": "processChangeGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/process-change-api.ts#processChangeGet"
+          ]
+        }
+      ],
+      "owner": "lib/process-change-api.ts",
+      "references": [],
+      "module": "流程变更人工确认",
+      "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "POST",
+      "action": "process-change-preview",
+      "path": "/api/workspace/process-change-preview",
+      "evidence": [
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 69,
+          "handler": "processChangePost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        },
+        {
+          "file": "lib/process-change-api.ts",
+          "line": 71,
+          "handler": "processChangePost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/process-change-api.ts#processChangePost"
+          ]
+        }
+      ],
+      "owner": "lib/process-change-api.ts",
+      "references": [],
+      "module": "流程变更人工确认",
       "actionIndex": "解析/预览/导入（不能假定无副作用）"
     },
     {
@@ -10939,7 +11091,7 @@
       "evidence": [
         {
           "file": "lib/process-workspace-api.ts",
-          "line": 66,
+          "line": 96,
           "handler": "processWorkspacePost",
           "kind": "comparison",
           "chain": [
@@ -12780,7 +12932,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 123,
+          "line": 124,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -12865,7 +13017,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 235,
+          "line": 238,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -12893,7 +13045,7 @@
         },
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 48
+          "line": 49
         },
         {
           "file": "app/metric-details.tsx",
@@ -13845,7 +13997,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 204,
+          "line": 207,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -13874,7 +14026,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 114,
+          "line": 115,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -13888,7 +14040,7 @@
       "references": [
         {
           "file": "app/handoff-framework-panel.tsx",
-          "line": 55
+          "line": 56
         },
         {
           "file": "app/import-panel.tsx",
@@ -13949,7 +14101,7 @@
         },
         {
           "file": "app/handoff-workbench-panel.tsx",
-          "line": 20
+          "line": 21
         },
         {
           "file": "app/workspace-prefetch.ts",

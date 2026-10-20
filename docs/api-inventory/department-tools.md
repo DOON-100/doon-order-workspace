@@ -6,11 +6,11 @@
 
 ## 范围与组织方式
 
-共 359 个去重接口，其中工作区 336 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
+共 364 个去重接口，其中工作区 341 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
 
 - 分组帮助 Agent 找到业务能力，不是角色或授权列表。账号能否操作，由原中台逐请求、逐记录、逐字段校验。
 - 同一 Agent 可以使用多个分组；进入某组、创建 Agent 或勾选工具都不增加权限。
-- 按业务对象生成具体动作工具，共用执行层；不会将 336 个接口全部作为独立工具一次塞给模型。
+- 按业务对象生成具体动作工具，共用执行层；不会将 341 个接口全部作为独立工具一次塞给模型。
 - 通用流程按 14 种 type 固定各自字段与规则；模型不能任意切换 type、直接更新状态绕过专用动作。
 - 账号、密码、会话、服务身份和调度属于系统管理清点范围，其中应用内/后台专用入口不能作为普通模型工具。
 - 管理组只是目录归属：human-admin-flow 不表示所有动作都必须是 admin，仍采用原角色/负责人规则。
@@ -18,15 +18,15 @@
 
 | 分组 | 接口关联数（含共用） | 所含业务流程类型 |
 | --- | ---: | --- |
-| [业务部](#sales) | 111 | 询价与需求评估 |
-| [客服与单证](#service) | 116 | 客诉与复盘 |
-| [工程部](#engineering) | 56 | 样品与签样、工程变更 |
-| [PMC 计划](#planning) | 66 | 配套齐料 |
+| [业务部](#sales) | 116 | 询价与需求评估 |
+| [客服与单证](#service) | 121 | 客诉与复盘 |
+| [工程部](#engineering) | 61 | 样品与签样、工程变更 |
+| [PMC 计划](#planning) | 71 | 配套齐料 |
 | [采购与外协](#purchasing) | 47 | 使用已有专用业务动作 |
-| [仓储物流](#warehouse) | 40 | 仓库流转、包装核对 |
+| [仓储物流](#warehouse) | 45 | 仓库流转、包装核对 |
 | [生产车间](#production) | 28 | 使用已有专用业务动作 |
-| [品质部](#quality) | 12 | 来料检验、首件确认、过程检验、外协检验、成品检验、出货放行记录 |
-| [财务部](#finance) | 83 | 供应商对账 |
+| [品质部](#quality) | 17 | 来料检验、首件确认、过程检验、外协检验、成品检验、出货放行记录 |
+| [财务部](#finance) | 88 | 供应商对账 |
 | [系统管理](#management) | 65 | 使用已有专用业务动作 |
 
 <a id="sales"></a>
@@ -55,6 +55,7 @@
 | 固定报价费用工具 | `fixed-tool-quote` | `fixed-tool-fees-decision`、`fixed-tool-fees-preview` | [fixed-tool-fees.ts](../../lib/fixed-tool-fees.ts) |
 | 沟通渠道、规则文档与通知 | `framework-channel-context`、`framework-channel-history`、`framework-channels` | `framework-message-bind`、`framework-message-link`、`framework-message-process`、`framework-message-save` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目跨部门协作 | `project-collaboration-data` | `project-collaboration-acknowledge`、`project-collaboration-cancel`、`project-collaboration-complete`、`project-collaboration-followup`、`project-collaboration-save` | [project-collaboration-api.ts](../../lib/project-collaboration-api.ts) |
 | 人工沟通草稿 | `unified-communication-data`、`unified-communication-history` | `unified-communication-complete-review`、`unified-communication-return`、`unified-communication-save`、`unified-communication-submit` | [unified-communication-api.ts](../../lib/unified-communication-api.ts) |
@@ -64,6 +65,7 @@
 - 读取候选，待核验返回字段及副作用：43 项。
 - 业务动作，按具体内容确认后执行：67 项。
 - 文件生成/归档，非纯读取：1 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -97,6 +99,7 @@
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
 | 业务交接与单据 | `handoff-business-data`、`handoff-business-file`、`handoff-business-history`、`handoff-business-print`、`handoff-business-review-data` | `handoff-business-attachment`、`handoff-business-confirm`、`handoff-business-generate`、`handoff-business-return`、`handoff-business-save`、`handoff-business-submit` | [handoff-business-api.ts](../../lib/handoff-business-api.ts) |
 | 交接定金与例外 | 由关联视图/专用入口读取，未另造查询 | `handoff-business-deposit-declaration`、`handoff-business-payment-exception` | [handoff-payment-actions.ts](../../lib/handoff-payment-actions.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目跨部门协作 | `project-collaboration-data` | `project-collaboration-acknowledge`、`project-collaboration-cancel`、`project-collaboration-complete`、`project-collaboration-followup`、`project-collaboration-save` | [project-collaboration-api.ts](../../lib/project-collaboration-api.ts) |
 | 客服业务 | `service-data`、`service-file`、`service-history` | `service-attachment`、`service-save` | [service-workspace-api.ts](../../lib/service-workspace-api.ts) |
@@ -107,6 +110,7 @@
 
 - 业务动作，按具体内容确认后执行：73 项。
 - 读取候选，待核验返回字段及副作用：43 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -138,6 +142,7 @@
 | 工程画图 | `drawing-data`、`drawing-history` | `drawing-detail-add`、`drawing-email-intake`、`drawing-event-review`、`drawing-import`、`drawing-review`、`drawing-save` | [engineering-drawing-api.ts](../../lib/engineering-drawing-api.ts) |
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
 | 业务交接与单据 | `handoff-business-data`、`handoff-business-file`、`handoff-business-history`、`handoff-business-print`、`handoff-business-review-data` | `handoff-business-attachment`、`handoff-business-confirm`、`handoff-business-generate`、`handoff-business-return`、`handoff-business-save`、`handoff-business-submit` | [handoff-business-api.ts](../../lib/handoff-business-api.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目跨部门协作 | `project-collaboration-data` | `project-collaboration-acknowledge`、`project-collaboration-cancel`、`project-collaboration-complete`、`project-collaboration-followup`、`project-collaboration-save` | [project-collaboration-api.ts](../../lib/project-collaboration-api.ts) |
 | 工程 SOP | `sop-data`、`sop-file`、`sop-history` | `sop-attachment`、`sop-cancel`、`sop-change`、`sop-confirm`、`sop-create`、`sop-mes-upload`、`sop-prepare`、`sop-target` | [engineering-sop-api.ts](../../lib/engineering-sop-api.ts) |
@@ -146,6 +151,7 @@
 
 - 读取候选，待核验返回字段及副作用：20 项。
 - 业务动作，按具体内容确认后执行：36 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -186,12 +192,14 @@
 | 订单工序、外发收货与原表 | 由关联视图/专用入口读取，未另造查询 | `ledger-edit` | [operations.ts](../../lib/operations.ts) |
 | 计划与产能 | `planning-control-data`、`planning-control-history` | `planning-capacity-allocation-save`、`planning-capacity-allocation-transition`、`planning-capacity-window-save`、`planning-control-calculation-save`、`planning-control-save`、`planning-control-transition` | [planning-control-api.ts](../../lib/planning-control-api.ts) |
 | PMC 核单 | `pmc-data` | `pmc-review`、`pmc-round`、`pmc-save` | [pmc-api.ts](../../lib/pmc-api.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 
 本组接入边界：
 
 - 业务动作，按具体内容确认后执行：41 项。
 - 读取候选，待核验返回字段及副作用：25 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -251,6 +259,7 @@
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
 | 业务交接与单据 | `handoff-business-data`、`handoff-business-file`、`handoff-business-history`、`handoff-business-print`、`handoff-business-review-data` | `handoff-business-attachment`、`handoff-business-confirm`、`handoff-business-generate`、`handoff-business-return`、`handoff-business-save`、`handoff-business-submit` | [handoff-business-api.ts](../../lib/handoff-business-api.ts) |
 | 包装入仓 | 由关联视图/专用入口读取，未另造查询 | `pack` | [route.ts](../../app/api/workspace/%5Baction%5D/route.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 送货凭证与收货确认 | 由关联视图/专用入口读取，未另造查询 | `receipt-confirm`、`receipt-photo` | [operations.ts](../../lib/operations.ts) |
 | 客服业务 | `service-data`、`service-file`、`service-history` | `service-attachment`、`service-save` | [service-workspace-api.ts](../../lib/service-workspace-api.ts) |
@@ -259,6 +268,7 @@
 
 - 读取候选，待核验返回字段及副作用：19 项。
 - 业务动作，按具体内容确认后执行：21 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -316,12 +326,14 @@
 | 成品外协授权视图 | `finished-supplier-data` | 此对象未登记 POST 动作 | [finished-supplier-api.ts](../../lib/finished-supplier-api.ts) |
 | 成品外协质检 | 由关联视图/专用入口读取，未另造查询 | `finished-supplier-qc` | [finished-supplier-api.ts](../../lib/finished-supplier-api.ts) |
 | 本人授权通知与签收 | `framework-notices` | `framework-notice-receive` | [handoff-framework-api.ts](../../lib/handoff-framework-api.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 
 本组接入边界：
 
 - 读取候选，待核验返回字段及副作用：8 项。
 - 业务动作，按具体内容确认后执行：4 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -354,6 +366,7 @@
 | 业务交接与单据 | `handoff-business-data`、`handoff-business-file`、`handoff-business-history`、`handoff-business-print`、`handoff-business-review-data` | `handoff-business-attachment`、`handoff-business-confirm`、`handoff-business-generate`、`handoff-business-return`、`handoff-business-save`、`handoff-business-submit` | [handoff-business-api.ts](../../lib/handoff-business-api.ts) |
 | 交接定金与例外 | 由关联视图/专用入口读取，未另造查询 | `handoff-business-deposit-declaration`、`handoff-business-payment-exception` | [handoff-payment-actions.ts](../../lib/handoff-payment-actions.ts) |
 | 付款条件 | `payment-terms-data` | `payment-terms-authorize`、`payment-terms-disable`、`payment-terms-save` | [payment-terms-api.ts](../../lib/payment-terms-api.ts) |
+| 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目财务 | `project-document-print`、`project-finance-data`、`project-finance-history` | `project-adjustment`、`project-after-sale-cost`、`project-after-sale-save`、`project-allocation`、`project-allocation-release`、`project-charge-confirm`、`project-charge-save`、`project-credit-apply`、`project-document-confirm`、`project-document-revise`、`project-document-save`、`project-document-sent`、`project-finance-entry-save`、`project-payment-notice`、`project-payment-requirement`、`project-receipt-reverse`、`project-receipt-verify`、`project-refund-cancel`、`project-refund-execute`、`project-refund-request` | [customer-project-finance-api.ts](../../lib/customer-project-finance-api.ts) |
 | 客服业务 | `service-data`、`service-file`、`service-history` | `service-attachment`、`service-save` | [service-workspace-api.ts](../../lib/service-workspace-api.ts) |
@@ -363,6 +376,7 @@
 
 - 读取候选，待核验返回字段及副作用：29 项。
 - 业务动作，按具体内容确认后执行：54 项。
+- 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
 
@@ -450,7 +464,7 @@
 
 ## 当前交付与待实施项
 
-- 已完成：10 组与页面导航对应；359 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
+- 已完成：10 组与页面导航对应；364 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
 - 字段来源索引是文件级导航，不是已完成的每个动作输入/输出契约。JSON 的 contractStatus 明确为 source-located-not-adapted。
 - 下一步实施：从原 schema 提取动作精确入参和返回投影，建立公共执行层及变更确认入口，再逐组接入 Studio 并做权限/业务回归。
 - 原表导入预览、固定工具结果和报价模板导出可能落盘，不能仅用 GET/POST 或名称决定副作用。

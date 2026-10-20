@@ -211,6 +211,7 @@ const modules=[
  ['成品供应商协作','lib/finished-supplier-api.ts','authenticated、employee、供应商身份及任务分配；阶段分别校验'],
  ['金蝶待核对','lib/kingdee-pending-api.ts','读取范围与维护角色；原表下载和导入权限'],
  ['部门流程记录','lib/process-workspace-api.ts','requestTeam、canWriteProcessKind、canEditProcessRecord；客户/订单关联'],
+ ['流程变更人工确认','lib/process-change-api.ts','本人身份、同源、完整预览摘要、来源/规则版本及有效期；复用原流程保存校验'],
  ['计划与产能','lib/planning-control-api.ts','currentMember、visible、planningManager、ownerProgress；业务组范围'],
  ['工程画图','lib/engineering-drawing-api.ts','画图读取/维护、客户范围、事件审核及字段权限'],
  ['图号更正','lib/drawing-correction-api.ts','canCorrectDrawing；订单范围、版本与历史关联保护'],
