@@ -22,7 +22,8 @@ export async function purchaseGet(action:string,req:Request,s:State,m:Member):Pr
 }
 async function post(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!action.startsWith('purchase-'))return null;manage(m);
- const existing=all(s,'purchase') as Purchase[],get=(id:string)=>{const p=existing.find(p=>p.id===id);if(!p)throw new AppError('采购明细不存在。',404);return p;};
+ if(['purchase-save','purchase-receipt','purchase-archive'].includes(action)){const plan=buildPurchaseWrite(action,await req.json(),s,m);if(plan.updates.length)await commit(s.revision,plan.updates);return json(plan.response);}
+ const existing=all(s,'purchase') as Purchase[];
  if(action==='purchase-preview'){
   const form=await req.formData(),file=form.get('file'),sourceAsOf=validDate(String(form.get('sourceAsOf')||''));if(!sourceAsOf)throw new AppError('请填写金蝶导出截至日期。');
   if(!(file instanceof File)||!file.size||file.size>10*1024*1024||!file.name.toLowerCase().endsWith('.xlsx'))throw new AppError('请选择不超过 10 MB 的金蝶采购跟踪 XLSX。');
@@ -49,15 +50,25 @@ async function post(action:string,req:Request,s:State,m:Member):Promise<Response
   }
   const next={...job,offset:job.offset+batch.length,status:job.offset+batch.length>=job.total?'已完成':'导入中',updatedAt:now()};await commit(s.revision,[...updates,next]);return json(next);
  }
+
+ return null;
+}
+export async function purchasePost(action:string,req:Request,s:State,m:Member){try{return await post(action,req,s,m);}catch(e){if(e instanceof z.ZodError)throw new AppError('请完整填写有效的数量、日期、单据号和核对说明。');throw e;}}
+
+// Shared validation and write plan; callers choose the single atomic commit.
+export function buildPurchaseWrite(action:string,body:unknown,s:State,m:Member){
+ if(!m.active)throw new AppError('账号已停用。',403);manage(m);
+ const existing=visiblePurchases(s,m),get=(id:string)=>{const p=existing.find(row=>row.id===id);if(!p)throw new AppError('采购明细不存在或无权维护。',403);return p;};
  if(action==='purchase-save'){
-  const input=z.object({changes:z.array(z.object({id:z.string(),version:z.number().int().positive(),field:z.enum(['promisedDate','expectedDate','nextFollowupDate','followupNote']),value:z.string().max(3000)})).min(1).max(100)}).parse(await req.json()),updates=new Map<string,Purchase>();
+  const input=z.object({changes:z.array(z.object({id:z.string(),version:z.number().int().positive(),field:z.enum(['promisedDate','expectedDate','nextFollowupDate','followupNote']),value:z.string().max(3000)})).min(1).max(100)}).parse(body),updates=new Map<string,Purchase>();
   for(const c of input.changes){const p=get(c.id);if(p.lifecycle==='archived'||sourceClosed(p))throw new AppError('存档或金蝶已关闭的采购单仅可查看。',409);const v=c.field==='followupNote'?c.value.trim():validDate(c.value);const base=p.version===c.version?p:all(s,'audit').find(a=>a.targetId===p.id&&a.before?.version===c.version)?.before;if(!base)throw new AppError('版本已变，请刷新后核对。',409);if(p[c.field]!==base[c.field]&&p[c.field]!==v)throw new AppError(`${followFields[c.field]}已被同事修改，本次输入未保存，请刷新核对。`,409);updates.set(p.id,{...(updates.get(p.id)||p),[c.field]:v,version:p.version+1,updatedAt:now(),updatedBy:m.name});}
-  await commit(s.revision,[...updates.values()].flatMap(p=>[p,audit(m,p,get(p.id),'编辑采购跟进单元格')]));return json({rows:[...updates.values()]});
+  return {updates:[...updates.values()].flatMap(p=>[p,audit(m,p,get(p.id),'编辑采购跟进单元格')]),response:{rows:[...updates.values()]},idempotent:false};
  }
  if(action==='purchase-receipt'){
-  const p=z.object({id:z.string(),version:z.number().int(),type:z.enum(['opening','receipt','return','replacement','correction']),quantity:z.number().finite().min(0).max(1e9),returnPending:z.number().finite().min(0).max(1e9).optional(),date:z.string(),reference:z.string().trim().min(2).max(120),note:z.string().trim().min(2).max(3000),token:z.string().uuid()}).parse(await req.json());
-  const duplicate=all(s,'purchase_event').find(e=>e.token===p.token);if(duplicate){if(duplicate.purchaseId!==p.id)throw new AppError('重复请求标识不一致。');return json({row:get(p.id),reused:true});}
-  const old=get(p.id);if(old.version!==p.version)throw new AppError('这条明细已更新，请关闭窗口刷新后重新核对。',409);const date=validDate(p.date);if(!date)throw new AppError('请填写业务日期。');
+  const p=z.object({id:z.string(),version:z.number().int(),type:z.enum(['opening','receipt','return','replacement','correction']),quantity:z.number().finite().min(0).max(1e9),returnPending:z.number().finite().min(0).max(1e9).optional(),date:z.string(),reference:z.string().trim().min(2).max(120),note:z.string().trim().min(2).max(3000),token:z.string().uuid()}).parse(body);
+  p.date=validDate(p.date);
+  const duplicate=all(s,'purchase_event').find(e=>e.token===p.token);if(duplicate){if(duplicate.actorId!==m.id||(['id','version','type','quantity','returnPending','date','reference','note','token'] as const).some(key=>JSON.stringify(key==='id'?duplicate.purchaseId:duplicate[key])!==JSON.stringify(p[key])))throw new AppError('重复请求标识已用于其他身份或不同内容。',409);return {updates:[] as Entity[],response:{row:get(p.id),reused:true},idempotent:true};}
+  const old=get(p.id);if(old.version!==p.version)throw new AppError('这条明细已更新，请关闭窗口刷新后重新核对。',409);const date=p.date;if(!date)throw new AppError('请填写业务日期。');
   if(sourceClosed(old)||old.auditStatus!=='已审核')throw new AppError('金蝶已关闭或未审核的订单须先在金蝶核对状态，再导入更新。');
   if(old.lifecycle==='archived'&&p.type!=='return')throw new AppError('已交货档案只允许登记实际退货，退货后自动恢复跟进。');
   if(all(s,'purchase_event').some(e=>e.purchaseId===p.id&&e.type===p.type&&e.reference===p.reference))throw new AppError('此明细的同类凭证已登记，请核对历史，勿重复入账。',409);
@@ -74,13 +85,12 @@ async function post(action:string,req:Request,s:State,m:Member):Promise<Response
   received=roundQty(received);pending=roundQty(pending);if(received<0||received>old.quantity||pending<0||pending>roundQty(old.quantity-received))throw new AppError('已收不能超过采购数量，退货待补不能超过剩余数量。');
   const next={...old,received,returnPending:pending,balanceKnown:true,lifecycle:'active' as const,completedDate:'',archivedAt:'',archivedBy:'',archiveNote:'',version:old.version+1,updatedAt:now(),updatedBy:m.name};
   const names={opening:'核对初始数量',receipt:'采购收货',return:'退货待补',replacement:'退货补回',correction:'更正收货基数'},event={...p,id:newId('purchase_event'),kind:'purchase_event',purchaseId:old.id,actor:m.name,actorId:m.id,createdAt:now(),date,before:{known:old.balanceKnown,received:old.received,returnPending:old.returnPending,lifecycle:old.lifecycle},after:{received,pending,remaining:remaining(next)},event:names[p.type]};
-  await commit(s.revision,[next,event,audit(m,next,old,names[p.type],p.reference+' · '+p.note)]);return json({row:next});
+  return {updates:[next,event,audit(m,next,old,names[p.type],p.reference+' · '+p.note)],response:{row:next},idempotent:false};
  }
  if(action==='purchase-archive'){
-  const p=z.object({items:z.array(z.object({id:z.string(),version:z.number().int()})).min(1).max(100),date:z.string(),note:z.string().trim().min(2).max(1000)}).parse(await req.json()),date=validDate(p.date);if(!date)throw new AppError('请填写齐货日期。');if(new Set(p.items.map(i=>i.id)).size!==p.items.length)throw new AppError('明细重复。');const updates:Entity[]=[];
+  const p=z.object({items:z.array(z.object({id:z.string(),version:z.number().int()})).min(1).max(100),date:z.string(),note:z.string().trim().min(2).max(1000)}).parse(body),date=validDate(p.date);if(!date)throw new AppError('请填写齐货日期。');if(new Set(p.items.map(i=>i.id)).size!==p.items.length)throw new AppError('明细重复。');const updates:Entity[]=[];
   for(const i of p.items){const old=get(i.id);if(old.version!==i.version)throw new AppError('数量或跟进已变，请重新核对后存档。',409);if(old.lifecycle==='archived'||!full(old)||sourceClosed(old)||old.auditStatus!=='已审核')throw new AppError('仅已审核、已核对齐货、无退货待补的在跟明细可存档。');const next={...old,lifecycle:'archived',completedDate:date,archivedAt:now(),archivedBy:m.name,archiveNote:p.note,version:old.version+1,updatedAt:now(),updatedBy:m.name};updates.push(next,audit(m,next,old,'确认已齐货并存档',p.note));}
-  await commit(s.revision,updates);return json({ok:true,count:p.items.length});
+  return {updates,response:{ok:true,count:p.items.length},idempotent:false};
  }
- return null;
+ throw new AppError('采购动作尚未接入。');
 }
-export async function purchasePost(action:string,req:Request,s:State,m:Member){try{return await post(action,req,s,m);}catch(e){if(e instanceof z.ZodError)throw new AppError('请完整填写有效的数量、日期、单据号和核对说明。');throw e;}}

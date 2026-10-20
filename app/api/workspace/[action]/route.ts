@@ -1,5 +1,6 @@
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
+import {purchaseChangeGet,purchaseChangePost} from '@/lib/purchase-change-api';
 import {assertHandoffProductionGate,requiresProductionGate} from '@/lib/handoff-production-gate';
 import {commitImport} from '@/lib/import-commit';
 import {drawingCorrectionPost} from '@/lib/drawing-correction-api';
@@ -128,6 +129,7 @@ export async function GET(req:Request,ctx:Context){try{
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
 }catch(e){return failure(e);}}
 async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Member){
+ const purchaseChange=await purchaseChangeGet(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangeGet(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
@@ -145,6 +147,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;

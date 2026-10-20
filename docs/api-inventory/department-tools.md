@@ -6,11 +6,11 @@
 
 ## 范围与组织方式
 
-共 369 个去重接口，其中工作区 346 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
+共 374 个去重接口，其中工作区 351 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
 
 - 分组帮助 Agent 找到业务能力，不是角色或授权列表。账号能否操作，由原中台逐请求、逐记录、逐字段校验。
 - 同一 Agent 可以使用多个分组；进入某组、创建 Agent 或勾选工具都不增加权限。
-- 按业务对象生成具体动作工具，共用执行层；不会将 346 个接口全部作为独立工具一次塞给模型。
+- 按业务对象生成具体动作工具，共用执行层；不会将 351 个接口全部作为独立工具一次塞给模型。
 - 通用流程按 14 种 type 固定各自字段与规则；模型不能任意切换 type、直接更新状态绕过专用动作。
 - 账号、密码、会话、服务身份和调度属于系统管理清点范围，其中应用内/后台专用入口不能作为普通模型工具。
 - 管理组只是目录归属：human-admin-flow 不表示所有动作都必须是 admin，仍采用原角色/负责人规则。
@@ -22,7 +22,7 @@
 | [客服与单证](#service) | 121 | 客诉与复盘 |
 | [工程部](#engineering) | 61 | 样品与签样、工程变更 |
 | [PMC 计划](#planning) | 71 | 配套齐料 |
-| [采购与外协](#purchasing) | 47 | 使用已有专用业务动作 |
+| [采购与外协](#purchasing) | 52 | 使用已有专用业务动作 |
 | [仓储物流](#warehouse) | 45 | 仓库流转、包装核对 |
 | [生产车间](#production) | 28 | 使用已有专用业务动作 |
 | [品质部](#quality) | 17 | 来料检验、首件确认、过程检验、外协检验、成品检验、出货放行记录 |
@@ -234,11 +234,13 @@
 | 供应商与外协 | `supplier-export`、`supplier-quote-export`、`supplier-quote-file`、`supplier-quote-template` | `outsource-approve`、`outsource-cancel`、`outsource-update`、`supplier-quote-file`、`supplier-quote-save`、`supplier-save` | [supplier-api.ts](../../lib/supplier-api.ts) |
 | 工序外发登记 | 由关联视图/专用入口读取，未另造查询 | `outsource-create` | [operations.ts](../../lib/operations.ts) |
 | 采购跟单 | `purchase-data`、`purchase-export`、`purchase-held`、`purchase-history` | `purchase-archive`、`purchase-commit`、`purchase-preview`、`purchase-receipt`、`purchase-save` | [purchase-api.ts](../../lib/purchase-api.ts) |
+| 采购跟进、收货、退货、补货与齐货存档人工确认 | `purchase-change`、`purchase-change-contract` | `purchase-change-cancel`、`purchase-change-confirm`、`purchase-change-preview` | [purchase-change-api.ts](../../lib/purchase-change-api.ts) |
 
 本组接入边界：
 
 - 读取候选，待核验返回字段及副作用：16 项。
 - 业务动作，按具体内容确认后执行：31 项。
+- 应用内流程，不交模型凭据：5 项。
 
 <a id="warehouse"></a>
 
@@ -465,7 +467,7 @@
 
 ## 当前交付与待实施项
 
-- 已完成：10 组与页面导航对应；369 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
+- 已完成：10 组与页面导航对应；374 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
 - 字段来源索引是文件级导航，不是已完成的每个动作输入/输出契约。JSON 的 contractStatus 明确为 source-located-not-adapted。
 - 下一步实施：从原 schema 提取动作精确入参和返回投影，建立公共执行层及变更确认入口，再逐组接入 Studio 并做权限/业务回归。
 - 原表导入预览、固定工具结果和报价模板导出可能落盘，不能仅用 GET/POST 或名称决定副作用。

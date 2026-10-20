@@ -9,6 +9,7 @@
     "lib/supplier-api.ts": ["purchasing"],
     "lib/loss-api.ts": ["production"],
     "lib/purchase-api.ts": ["purchasing"],
+    "lib/purchase-change-api.ts": ["purchasing"],
     "lib/pmc-api.ts": ["planning"],
     "lib/finished-supplier-api.ts": ["purchasing"],
     "lib/kingdee-pending-api.ts": ["purchasing"],
@@ -49,6 +50,7 @@
     "lib/fixed-tool-fees.ts": ["sales"]
   },
   "overrides": [
+    {"actions": ["purchase-change-contract", "purchase-change", "purchase-change-preview", "purchase-change-confirm", "purchase-change-cancel"], "groups": ["purchasing"], "object": "采购跟进、收货、退货、补货与齐货存档人工确认", "boundary": "application-only", "note": "只接入已登记动作、每份预览一条明细；数量由固定程序计算，确认绑定载荷和效果；不向模型开放确认或任意 URL。"},
     {"actions": ["process-change-contract", "process-change", "process-change-preview", "process-change-confirm", "process-change-cancel"], "groups": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"], "object": "流程变更人工预览、确认与执行回读", "boundary": "application-only", "note": "固定页面与受控客户端使用；不向模型注册任意确认工具。本人确认绑定完整预览、来源、规则和有效期；业务与回执同事务。"},
     {"actions": ["data", "read-version", "business-team-data"], "groups": ["sales", "service", "engineering", "planning", "purchasing", "warehouse", "production", "quality", "finance", "management"], "object": "授权聚合数据、版本与业务组目录", "note": "共用查询需按任务投影数据集和必要字段，不把整份聚合响应交给模型。"},
     {"actions": ["member", "enroll", "backup"], "groups": ["management"], "object": "成员与维护", "boundary": "human-admin-flow"},
