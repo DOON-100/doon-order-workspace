@@ -1,4 +1,5 @@
 'use client';
+import {clientId} from '@/lib/client-id';
 import {businessTeamFetch} from './business-team-client';
 import {useEffect,useState,type FormEvent} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -26,7 +27,7 @@ const time=(value:string)=>value?value.replace('T',' ').slice(0,19):'—';
 export function useWorkflowMutation(onDone:()=>Promise<void>){
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[pending,setPending]=useState<{action:string;body:unknown}|null>(null);
  async function run(action:string,body:Record<string,unknown>,retry=false){
-  if(busy||pending&&!retry)return;const submission=retry&&pending?pending:{action,body:{...body,token:crypto.randomUUID()}};setBusy(true);setError('');setNotice('');
+  if(busy||pending&&!retry)return;const submission=retry&&pending?pending:{action,body:{...body,token:clientId()}};setBusy(true);setError('');setNotice('');
   try{await workflowRequest(submission.action,submission.body);setPending(null);setNotice('已保存，操作留痕及原资料版本已保留。');await onDone();}
   catch(e){setError(e instanceof Error?e.message:'保存失败');if(!(e instanceof WorkflowRequestError)||e.status>=500||!e.status)setPending(submission);else setPending(null);}
   finally{setBusy(false);}

@@ -1,4 +1,5 @@
 'use client';
+import {clientId} from '@/lib/client-id';
 import {useMemo,useState} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {ArrowUpRight,RefreshCw,Search} from 'lucide-react';
@@ -30,7 +31,7 @@ export function HandoffWorkbenchPanel({data,onNavigate}:Props){
  const filtered=scoped.filter(t=>(category==='全部'||category==='逾期'&&t.date&&t.date<today||category===categoryFor(t))&&(state==='全部'||state==='已确认'?state==='全部'||t.done:!t.done)&&(!search||[t.title,t.customer,t.reference,t.owner,t.nextAction].join(' ').toLowerCase().includes(search.toLowerCase())));
  const pending=scoped.filter(t=>!t.done),partial=sources.some(([,q])=>q.isError),loading=sources.some(([,q])=>q.isPending);
  function open(t:FrameworkTodo){onNavigate(t.view,{recordId:t.recordId||t.id.slice(t.id.indexOf(':')+1),customerId:t.customerId,projectId:t.projectId,orderId:t.orderId,tab:t.tab||(t.source==='统一沟通'?'messages':t.source==='项目任务'?'tasks':t.source==='客户跟进'?'followups':t.view==='pmc-handoff'?'pmc-handoff':undefined)});}
- async function receive(t:FrameworkTodo){setReceiveError('');setReceiving(t.id);try{await request('framework-notice-receive',{token:crypto.randomUUID(),id:t.recordId,expectedVersion:t.receiveVersion});await notices.refetch();}catch(e){setReceiveError(e instanceof Error?e.message:'收阅未保存，请重试');}finally{setReceiving('');}}
+ async function receive(t:FrameworkTodo){setReceiveError('');setReceiving(t.id);try{await request('framework-notice-receive',{token:clientId(),id:t.recordId,expectedVersion:t.receiveVersion});await notices.refetch();}catch(e){setReceiveError(e instanceof Error?e.message:'收阅未保存，请重试');}finally{setReceiving('');}}
  if(!enabled)return <Empty title="当前账号没有内部工作台范围" detail="请使用已启用的内部成员账号。"/>;
  return <div className="hf-workspace" data-handoff-workbench><header className="hf-heading"><div><p className="eyebrow">工作区</p><h1>工作台</h1><p className="subtitle">具体客户、订单、款号、部门和下一步集中处理。{today}</p></div><Button variant="outline" disabled={sources.some(([,q])=>q.isFetching)} onClick={()=>sources.forEach(([,q])=>void q.refetch())}><RefreshCw size={16}/>刷新来源</Button></header>
   <FrameworkBusinessQueryPanel data={data} profiles={customerProfiles.isError?[]:customerProfiles.data?.customers} business={business.isError?undefined:business.data} projects={projects.isError?undefined:projects.data} communications={communications.isError?undefined:communications.data} followups={followups.isError?undefined:followups.data} today={today} partial={partial} onNavigate={onNavigate} onActive={active=>setSubmitted(active?"active":"")}/>

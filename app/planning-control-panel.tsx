@@ -1,4 +1,5 @@
 'use client';
+import {clientId} from '@/lib/client-id';
 
 import {cloneElement,useEffect,useId,useRef,useState,type FormEvent,type ReactElement,type ReactNode} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
@@ -95,7 +96,7 @@ export function PlanningControlPanel({data,onDirtyChange,initialContext,onNaviga
   finally{inFlight.current=false;setBusy(false);}
   if(saved){try{await Promise.all([client.invalidateQueries({queryKey:['planning-control']}),client.invalidateQueries({queryKey:['planning-control-history']}),client.invalidateQueries({queryKey:['workspace']})]);}catch{setMessage('保存已经确认；列表刷新失败，请点击刷新读取最新结果。');}}
  }
- const mutate=(action:string,body:Record<string,unknown>)=>{const key=JSON.stringify([action,body]);if(retry.current?.key!==key)retry.current={key,token:crypto.randomUUID()};void submitRequest({action,body,token:retry.current.token,success});};
+ const mutate=(action:string,body:Record<string,unknown>)=>{const key=JSON.stringify([action,body]);if(retry.current?.key!==key)retry.current={key,token:clientId()};void submitRequest({action,body,token:retry.current.token,success});};
  const reopenData=async()=>{const result=await query.refetch();if(result.isSuccess){setBlocked(false);setError('');if(editor?.type==='record'&&editor.draft.id&&!result.data.records.some(record=>record.id===editor.draft.id)){setEditor(null);setSelectedId('');}}};
  function newRecord(module:PlanningModule){
   if(!feed?.canCreate)return;

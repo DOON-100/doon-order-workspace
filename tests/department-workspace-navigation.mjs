@@ -43,9 +43,12 @@ assert(!restrictedLeaves.some(item=>item.context?.tab==='supplier-reconciliation
 assert(!leaves(nav.departmentWorkspaceNavigation([{id:'settings',label:'系统设置',icon:'settings',group:'管理'}],user)).some(item=>item.view==='maintenance'));
 const owner=member('admin',{owner:true}),ownerLeaves=leaves(nav.departmentWorkspaceNavigation(nav.memberWorkspaceNavigation(owner),owner));
 assert.equal(ownerLeaves.filter(item=>item.view==='business-tools').length,1);
+const administrator=member('admin',{owner:false});
+assert.equal(leaves(nav.departmentWorkspaceNavigation(nav.memberWorkspaceNavigation(administrator),administrator)).filter(item=>item.view==='business-tools').length,1);
+for(const identity of [member('sales',{owner:true}),member('admin',{owner:true,active:false})])assert(!nav.memberWorkspaceNavigation(identity).some(item=>item.id==='business-tools'));
 for(const identity of [undefined,member('supplier'),member('pmc',{active:false})])assert(leaves(nav.departmentWorkspaceNavigation(all,identity)).every(item=>item.source==='existing'),'Unauthenticated, inactive and supplier identities gain no new process pages');
 assert.deepEqual(nav.departmentWorkspaceNavigation([],user),[],'Empty authorized navigation stays empty');
-pass('Quotation, maintenance and owner visibility remain caller-controlled; new entries require active internal membership and visible source pages.');
+pass('Quotation and maintenance visibility remain caller-controlled; tools require active administrator membership independently of owner protection.');
 
 const groups=nav.departmentWorkspaceNavigation(all,user),result=leaves(groups);
 for(const item of result){

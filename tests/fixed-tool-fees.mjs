@@ -34,7 +34,7 @@ await build({stdin:{contents:"export * from './lib/fixed-tool-fees'; export {sna
 }}]});
 const api=await import(pathToFileURL(outfile).href);
 const at='2026-10-17T00:00:00.000Z';
-const owner={id:'synthetic_fee_owner',kind:'member',name:'Synthetic Owner',email:'fees@test.invalid',userId:'synthetic_fee_user',role:'admin',owner:true,active:true,customers:[],createdAt:at};
+const owner={id:'synthetic_fee_owner',kind:'member',name:'Synthetic Owner',email:'fees@test.invalid',userId:'synthetic_fee_user',role:'admin',owner:false,active:true,customers:[],createdAt:at};
 const customer={id:'synthetic_fee_customer',kind:'customer_account',customer:'Synthetic Customer',customerCode:'FEE-TEST',active:true,version:1};
 const baseQuote={id:'synthetic_fee_quote',kind:'customer_quote',status:'draft',version:1,companyEn:'Synthetic Company',companyZh:'合成公司',collectionEn:'',collectionZh:'',customerAccountId:customer.id,customerCode:customer.customerCode,customerName:customer.customer,quoteNo:'SYNTHETIC-FEES',quoteDate:'2026-10-17',validUntil:'',currency:'USD',createdAt:at,createdBy:owner.name,createdById:owner.id,updatedAt:at,updatedBy:owner.name,updatedById:owner.id,
  lines:[{id:'line_a',model:'SYNTH-A',descriptionZh:'合成甲',descriptionEn:'Synthetic A',quantity:20,unitPrice:15,toolingFee:null,sourceFormula:'HIDDEN-SOURCE-FORMULA'},{id:'line_b',model:'SYNTH-B',descriptionZh:'合成乙',descriptionEn:'Synthetic B',quantity:30,unitPrice:25,toolingFee:4}],
@@ -60,11 +60,12 @@ const decide=(job,decision='approve')=>({id:job.id,previewHash:job.previewHash,d
 const safe=value=>{assert(!JSON.stringify(value).includes('HIDDEN-'));for(const key of ['unitPrice','quantity','internalCosts','exchangeRateCnyPerUsd','sourceFileKey','proposal','beforeHash'])assert(!JSON.stringify(value).includes('"'+key+'"'));};
 
 const view=await ok('fixed-tool-quote?id='+baseQuote.id);safe(view);assert.equal(view.quote.lines[0].toolingFee,null);assert.equal(view.quote.customerCharges[0].amount,10);
-for(const actor of [{...owner,active:false},{...owner,owner:false},{...owner,role:'sales'}]){await rejected('fixed-tool-quote?id='+baseQuote.id,undefined,403,actor);await rejected('fixed-tool-fees-preview',payload('denied_preview'),403,actor);}
+for(const actor of [{...owner,active:false},{...owner,role:'sales'}]){await rejected('fixed-tool-quote?id='+baseQuote.id,undefined,403,actor);await rejected('fixed-tool-fees-preview',payload('denied_preview'),403,actor);}
+safe(await ok('fixed-tool-quote?id='+baseQuote.id,undefined,{...owner,owner:true}));
 put({...customer,active:false});await rejected('fixed-tool-quote?id='+baseQuote.id,undefined,403);put(customer);
 put({...baseQuote,customerAccountId:null});await rejected('fixed-tool-fees-preview',payload('unbound_quote'),409);put(baseQuote);
 put({...baseQuote,status:'confirmed'});await rejected('fixed-tool-quote?id='+baseQuote.id,undefined,409);put(baseQuote);
-pass('仅活跃owner管理员和有效关联客户可读写；DTO不泄露成本、内部依据或附件key，null不转零');
+pass('活跃管理员不依赖owner标记，仍须有效关联客户；DTO不泄露成本、内部依据或附件key，null不转零');
 
 for(const bad of [
  {...payload('bad_extra_key'),internalNotesZh:'tamper'},

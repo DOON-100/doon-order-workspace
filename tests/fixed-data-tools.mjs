@@ -33,10 +33,11 @@ put({id:'fixed_customer_a',kind:'customer_account',customer:'合成客户甲',cu
 put({id:'fixed_customer_b',kind:'customer_account',customer:'合成客户乙',customerCode:'SYN-B',active:true,version:2,salesMemberIds:[],serviceMemberIds:[],salesName:'',serviceName:'',pmcName:''});
 put({id:'fixed_customer_unknown',kind:'customer_account',customer:'合成旧客户',customerCode:'SYN-U',active:true,version:1,salesName:'不可猜测归属',serviceName:'',pmcName:''});
 const baseline=JSON.stringify(records());
-for(const user of [staff,admin])assert.equal((await call('fixed-data-tools',undefined,user)).status,403);
+assert.equal((await call('fixed-data-tools',undefined,staff)).status,403);
+assert.equal((await call('fixed-data-tools',undefined,admin)).status,200);
 assert.equal((await call('fixed-tool-ownership',{requestKey:'spoofed_actor',customerIds:['fixed_customer_a'],actorId:ownerMember.id})).status,400);
 assert.equal((await call('fixed-tool-ownership',{requestKey:'cross_origin',customerIds:['fixed_customer_a']},owner,{origin:'https://evil.test'})).status,403);
-pass('real session, owner role, strict actor rejection and same-origin guard');
+pass('real session, active administrator role without owner flag, strict actor rejection and same-origin guard');
 const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['款号','金额'],['SYN-A',10],['SYN-B',20]]),'合成表');
 const bytes=XLSX.write(book,{type:'buffer',bookType:'xlsx'}),sourceHash=createHash('sha256').update(bytes).digest('hex');
 function upload(key='workbook_inspect_1',operation='inspect'){const form=new FormData();form.set('file',new File([bytes],'合成原件.xlsx'));form.set('operation',operation);form.set('requestKey',key);if(operation==='rows'){form.set('sheet','合成表');form.set('range','A1:B3');form.set('headerRow','1');}return form;}
@@ -48,6 +49,10 @@ let result=await call(`fixed-tool-file?id=${inspected.id}&artifact=result`);asse
 assert.equal((await ok('fixed-tool-job?requestKey=workbook_inspect_1')).job.id,inspected.id);
 assert.equal((await call('fixed-tool-workbook',upload('workbook_inspect_1','rows'))).status,409);
 assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=source`,undefined,staff)).status,403);
+assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=source`,undefined,admin)).status,403);
+const adminInspected=(await ok('fixed-tool-workbook',upload('admin_workbook_inspect'),admin)).job;
+assert.equal((await call(`fixed-tool-file?id=${adminInspected.id}&artifact=source`,undefined,admin)).status,200);
+assert.equal((await call(`fixed-tool-file?id=${adminInspected.id}&artifact=source`)).status,403);
 assert.equal((await call(`file?id=${inspected.id}`)).status,404);
 pass('uploaded bytes preserved, hashed immutable artifacts, idempotent results and private download');
 const extracted=(await ok('fixed-tool-workbook',upload('workbook_rows_1','rows'))).job;
@@ -74,7 +79,9 @@ put({...records().find(r=>r.id==='fixed_customer_a'),active:false});
 assert.equal((await call(`fixed-tool-file?id=${ownership.id}&artifact=result`)).status,403);
 assert.equal((await call(`fixed-tool-job?id=${ownership.id}`)).status,403);
 put({...records().find(r=>r.id==='fixed_customer_a'),active:true});
-put({...ownerMember,owner:false});assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,403);put(ownerMember);
+put({...ownerMember,owner:false});assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,200);
+put({...ownerMember,role:'sales'});assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,403);
+put({...ownerMember,active:false});assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,403);put(ownerMember);
 const privateJob=records().find(r=>r.id===inspected.id),originalResult=files.get(privateJob.resultFileKey);files.set(privateJob.resultFileKey,new TextEncoder().encode('corruption'));
 assert.equal((await call(`fixed-tool-file?id=${inspected.id}&artifact=result`)).status,409);
 assert.equal((await call('fixed-tool-workbook',upload())).status,409);

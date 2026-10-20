@@ -4,6 +4,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Check,Download,FileSpreadsheet,History,RefreshCw,ShieldCheck} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {clientId} from '@/lib/client-id';
+import {canUseFixedDataTools} from '@/lib/fixed-data-tools-access';
 import {businessTeamFetch} from './business-team-client';
 import {dateTime,Input} from './ui';
 import type {Data} from './workspace';
@@ -64,7 +65,7 @@ function OwnershipResults({preview}:{preview:OwnershipPreview}){
 }
 
 export function FixedDataToolsPanel({data}:{data:Data}){
- if(!data.me.active||data.me.role!=='admin'||data.me.owner!==true)return null;
+ if(!canUseFixedDataTools(data.me))return null;
  return <FixedToolsWorkspace key={data.me.id} actorId={data.me.id}/>;
 }
 

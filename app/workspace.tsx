@@ -7,6 +7,7 @@ import {prefetchWorkspacePages} from './workspace-prefetch';
 import {MetricCards,MetricDetails} from './metric-details';
 import type {MetricKey} from '@/lib/metric-details';
 import {readsAllOrders} from '@/lib/domain';
+import {canUseFixedDataTools} from '@/lib/fixed-data-tools-access';
 import {useState,useMemo,useEffect,useRef,useCallback} from 'react';
 import {QueryClient,QueryClientProvider,useQuery,useQueryClient} from '@tanstack/react-query';
 import {useReactTable,getCoreRowModel,getSortedRowModel,getPaginationRowModel,flexRender,type ColumnDef,type SortingState,type VisibilityState} from '@tanstack/react-table';
@@ -157,7 +158,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='personal-tasks'&&<PersonalTasksPanel data={data} onNavigate={(destination,context)=>{if(pmcDirtyRef.current)return;setView(destination,context);if(destination==='customer-projects'&&teamId)onTeamChange('');}} initialContext={navigationContext} onDirtyChange={personalDirtyChanged}/>}
  {view==='workbench'&&<FrameworkWorkbench data={data} onNavigate={setView}/>}
- {view==='business-tools'&&(data.me.active&&data.me.role==='admin'&&data.me.owner?<BusinessToolsPanel data={data} onNavigate={setView} maintenanceAvailable={!!MaintenancePanel}/>:<AccessNotice me={data.me} title="暂无固定工具访问权限" detail="首批固定工具仅对工作空间所有者管理员开放。"/>)}
+ {view==='business-tools'&&(canUseFixedDataTools(data.me)?<BusinessToolsPanel data={data} onNavigate={setView} maintenanceAvailable={!!MaintenancePanel}/>:<AccessNotice me={data.me} title="暂无固定工具访问权限" detail="固定工具仅对有效管理员开放。"/>)}
  {view==='communications'&&<UnifiedCommunicationPanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='documents'&&<HandoffBusinessPanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty} initialSection="documents" initialContext={navigationContext}/>}
  {isHandoffDocumentView(view)&&<HandoffBusinessPanel data={data} onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext} initialSection={({"order-confirmations":'order-pi',"engineering-materials":'engineering',"production-orders":'production',"production-shipments":'shipments',"logistics-waybills":'logistics',"finance-documents":'finance'} as Record<string,string>)[view]}/>}

@@ -2,6 +2,7 @@ import {z} from 'zod';
 import {all,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {canMaintainCustomerQuoteAccount} from './customer-quote-access';
 import {AppError} from './store';
+import {canUseFixedDataTools} from './fixed-data-tools-access';
 
 export const fixedToolRuleVersion='fixed-tools-v1';
 export type FixedToolJob=Entity & {
@@ -15,7 +16,7 @@ export function parseFixedTool<T extends z.ZodTypeAny>(schema:T,value:unknown):z
  return parsed.data;
 }
 export function assertFixedToolOwner(m:Member){
- if(!m.active||m.role!=='admin'||m.owner!==true)throw new AppError('首批固定工具仅对已登录的工作空间所有者管理员开放。',403);
+ if(!canUseFixedDataTools(m))throw new AppError('固定工具仅对已登录的有效管理员开放。',403);
 }
 export function fixedToolCustomers(s:State,m:Member,ids:string[]):CustomerAccount[]{
  assertFixedToolOwner(m);

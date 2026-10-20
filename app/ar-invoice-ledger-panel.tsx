@@ -1,4 +1,5 @@
 'use client';
+import {clientId} from '@/lib/client-id';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
@@ -71,7 +72,7 @@ export function ArInvoiceLedgerPanel({data, onNavigate}: {data: {me?: {id?: stri
   async function mutate(action: string, body: Record<string, unknown> | FormData, key: string, success: string) {
     if (inflight.current || !canWrite) return false;
     inflight.current = true; setBusy(true); setError(''); setMessage('');
-    if (retry.current?.key !== key) retry.current = {key, token: crypto.randomUUID()};
+    if (retry.current?.key !== key) retry.current = {key, token: clientId()};
     try {
       if (body instanceof FormData) body.set('token', retry.current.token);
       await request(action, body instanceof FormData ? body : {...body, token: retry.current.token});
