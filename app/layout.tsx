@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "度昂订单协作中台",
+  title: "度昂业务中台",
   description: "订单汇总、多人跟进、MES核对与客户交期报表。",
   other: {
     "codex-preview": "development",
