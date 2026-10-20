@@ -40,6 +40,7 @@ import {businessTeamData,scopeBusinessTeamResponse,filterBusinessTeamRows} from 
 import {arWorkspaceGet,arWorkspacePost} from '@/lib/ar-workspace-api';
 import {arInvoiceLedgerGet,arInvoiceLedgerPost} from '@/lib/ar-invoice-ledger-api';
 import {arCustomerProfilesGet,arCustomerProfilesPost} from '@/lib/ar-customer-profiles-api';
+import {arMasterLedgerGet,arMasterLedgerPost} from '@/lib/ar-master-ledger-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
@@ -134,6 +135,7 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
  const invoiceLedger=await arInvoiceLedgerGet(action,req,s,m);if(invoiceLedger)return invoiceLedger;
  const arProfiles=await arCustomerProfilesGet(action,req,s,m);if(arProfiles)return arProfiles;
+ const arMaster=await arMasterLedgerGet(action,req,s,m);if(arMaster)return arMaster;
  const paymentTerms=await paymentTermsGet(action,req,s,m);if(paymentTerms)return paymentTerms;
  if(action==='business-team-data')return json(businessTeamData(s,m));
  const response=await workspaceGet(req,ctx,s,m);
@@ -150,6 +152,7 @@ export async function POST(req:Request,ctx:Context){try{
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
  const invoiceLedger=await arInvoiceLedgerPost(action,req,s,m);if(invoiceLedger)return invoiceLedger;
  const arProfiles=await arCustomerProfilesPost(action,req,s,m);if(arProfiles)return arProfiles;
+ const arMaster=await arMasterLedgerPost(action,req,s,m);if(arMaster)return arMaster;
  const paymentTerms=await paymentTermsPost(action,req,s,m);if(paymentTerms)return paymentTerms;
  const supplier=await finishedSupplierPost(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);

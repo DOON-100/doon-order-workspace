@@ -49,9 +49,9 @@ function Status({invoice}: {invoice: Invoice}) {
   return <span className={`ail-status ${state}`}>{paymentLabels[state] || '未核对'}</span>;
 }
 
-export function ArInvoiceLedgerPanel({data, onNavigate}: {data: {me?: {id?: string}; revision?: unknown}; onNavigate?: WorkspaceNavigate}) {
+export function ArInvoiceLedgerPanel({data, onNavigate, initialCustomerId = '', initialInvoiceId = ''}: {data: {me?: {id?: string}; revision?: unknown}; onNavigate?: WorkspaceNavigate; initialCustomerId?: string; initialInvoiceId?: string}) {
   const client = useQueryClient(), scope = useBusinessTeamScope(), teamId = scope?.teamId || '';
-  const [customerId, setCustomerId] = useState(''), [currency, setCurrency] = useState(''), [status, setStatus] = useState(''), [search, setSearch] = useState(''), [page, setPage] = useState(0);
+  const [customerId, setCustomerId] = useState(initialCustomerId), [currency, setCurrency] = useState(''), [status, setStatus] = useState(''), [search, setSearch] = useState(''), [page, setPage] = useState(0);
   const [error, setError] = useState(''), [message, setMessage] = useState(''), [busy, setBusy] = useState(false), [downloading, setDownloading] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null), [note, setNote] = useState(''), [proof, setProof] = useState<File | null>(null), [received, setReceived] = useState(''), [reason, setReason] = useState(''), [verified, setVerified] = useState(false);
   const [importOpen, setImportOpen] = useState(false), [manifest, setManifest] = useState<ImportManifest | null>(null), [manifestName, setManifestName] = useState(''), [workbook, setWorkbook] = useState<File | null>(null), [importVerified, setImportVerified] = useState(false);
@@ -68,6 +68,8 @@ export function ArInvoiceLedgerPanel({data, onNavigate}: {data: {me?: {id?: stri
   const currentInvoice = editor && invoices.find(invoice => invoice.id === editor.invoice.id);
   const editorStale = !!editor && (!currentInvoice || currentInvoice.version !== editor.invoice.version);
   useEffect(() => setPage(0), [customerId, currency, status, search, teamId]);
+  const openedInitialInvoice = useRef(false);
+  useEffect(() => {if (!openedInitialInvoice.current && initialInvoiceId && feed) {openedInitialInvoice.current = true; const invoice = invoices.find(row => row.id === initialInvoiceId); if (invoice) openInvoice(invoice); else setError('该原发票在当前授权范围内不可读取，请回总表核对来源。');}}, [feed, initialInvoiceId, invoices]);
 
   async function mutate(action: string, body: Record<string, unknown> | FormData, key: string, success: string) {
     if (inflight.current || !canWrite) return false;

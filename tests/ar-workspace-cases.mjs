@@ -40,6 +40,14 @@ assert.equal(view(s,admin,{periodType:'quarter',period:'2026-Q4'}).performance.b
 pass('month, quarter and year use actual cash dates with strict periods');
 put(s,{id:'legacy',kind:'ar_legacy_pending',customerLabel:'Legacy synthetic',teamId:'',currency:'USD',amountCents:9999900,balanceCents:9999900,status:'pending',title:'Needs mapping',issues:['unconfirmed']});assert(view(s).pending.some(p=>p.sourceId==='legacy'));assert(!view(s,sales).pending.some(p=>p.sourceId==='legacy'));assert.equal(view(s).totalsByCurrency.USD.receivableCents,29500);assert.equal(view(s).performance.byCurrency.USD.netCashCents,14000);
 pass('legacy staging is company-only when unassigned and never enters balances or cash');
+const legacySnapshot=JSON.stringify(s.records.find(r=>r.id==='legacy'));
+put(s,{id:'registered-legacy',kind:'ar_master_entry',sourceKind:'ar_legacy_pending',sourceId:'legacy',reviewStatus:'pending',version:1});
+assert(!view(s).pending.some(p=>p.sourceId==='legacy'));assert.equal(JSON.stringify(s.records.find(r=>r.id==='legacy')),legacySnapshot);assert.equal(view(s).totalsByCurrency.USD.receivableCents,29500);assert.equal(view(s).performance.byCurrency.USD.netCashCents,14000);
+pass('registered legacy rows leave the staging queue without changing source, existing receivables or cash');
+const mergedLegacy={...s.records.find(r=>r.id==='legacy'),id:'legacy-duplicate'};
+put(s,mergedLegacy,{id:'registered-invoice-group',kind:'ar_master_entry',sourceKind:'ar_invoice_group',sourceId:'customer|SYN-INV',additionalSources:[structuredClone(mergedLegacy)],reviewStatus:'pending',version:1});
+assert(!view(s).pending.some(p=>p.sourceId==='legacy-duplicate'));assert.equal(s.records.find(r=>r.id==='legacy-duplicate'),mergedLegacy);
+pass('a legacy invoice merged as additional evidence leaves staging while its original row remains intact');
 put(s,{id:'undated',kind:'project_receipt',customerId:'customer',currency:'EUR',amountCents:999,date:''},{id:'shipment',kind:'service_record',type:'shipment',customerId:'customer',teamId:'a',status:'done',details:{shipDate:'2026-10-11',quantity:10}});data=view(s);assert.equal(data.dataQuality.undatedCashCount,1);assert.equal(data.shipments[0].amountCents,null);assert.equal(data.shipments[0].currency,'');assert.equal(data.dataQuality.unvaluedShipmentCount,1);assert(!data.performance.byCurrency.EUR);
 pass('missing shipment prices/currencies and receipt dates stay unknown, not fabricated contribution');
 let duplicates=put(base(),{id:'sa',kind:'service_record',type:'receivable',customerId:'customer',teamId:'a',title:'Original',status:'open',dueDate:'2026-10-01',details:{currency:'USD',amountCents:5000}},

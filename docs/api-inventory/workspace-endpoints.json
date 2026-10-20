@@ -5,7 +5,7 @@
   "sourceFiles": [
     {
       "path": "app/api/workspace/[action]/route.ts",
-      "sha256": "e35500b7a5a30ebd18152aef89a42d686a043a143df99861eea20f817105ee75"
+      "sha256": "6a241d0c843245f8326af6ad75fdd6bf1ccaf12177b73f6488349fbfbcd27fe2"
     },
     {
       "path": "lib/ar-customer-profiles-api.ts",
@@ -18,6 +18,10 @@
     {
       "path": "lib/ar-invoice-ledger-api.ts",
       "sha256": "7be16e2fbd9f96eb766d1cbdddf669debfa346a0676aa6a7ba31b125a558afbc"
+    },
+    {
+      "path": "lib/ar-master-ledger-api.ts",
+      "sha256": "67e3a65fb6335af918d722e1014be9e353161c567059eaefd905ee1635e0463a"
     },
     {
       "path": "lib/ar-workspace-api.ts",
@@ -184,8 +188,8 @@
       "sha256": "ac62bce271f9c2acd40b9cdd5121ecae8d92591681f6e79a539de32a68b9d500"
     }
   ],
-  "handlerCount": 83,
-  "endpointCount": 341,
+  "handlerCount": 85,
+  "endpointCount": 346,
   "unresolved": [],
   "unmatchedClientPaths": [],
   "dynamicClientPrefixes": [
@@ -319,7 +323,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 36
+          "line": 39
         }
       ],
       "module": "应收工作台与授权",
@@ -481,11 +485,11 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 56
+          "line": 60
         },
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 63
+          "line": 67
         }
       ],
       "module": "正式财务单据",
@@ -523,7 +527,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 64
+          "line": 68
         }
       ],
       "module": "正式财务单据",
@@ -583,11 +587,11 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 56
+          "line": 60
         },
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 63
+          "line": 67
         }
       ],
       "module": "正式财务单据",
@@ -719,7 +723,7 @@
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 139
+          "line": 141
         }
       ],
       "module": "发票原件与对账",
@@ -755,7 +759,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 112
+          "line": 114
         }
       ],
       "module": "发票原件与对账",
@@ -791,7 +795,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 119
+          "line": 121
         }
       ],
       "module": "发票原件与对账",
@@ -827,7 +831,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 124
+          "line": 126
         }
       ],
       "module": "发票原件与对账",
@@ -853,7 +857,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 131
+          "line": 133
         }
       ],
       "module": "发票原件与对账",
@@ -929,7 +933,7 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 137
+          "line": 139
         }
       ],
       "module": "发票原件与对账",
@@ -967,11 +971,182 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 153
+          "line": 155
         }
       ],
       "module": "发票原件与对账",
       "actionIndex": "读取/文件/导出"
+    },
+    {
+      "method": "GET",
+      "action": "ar-master-data",
+      "path": "/api/workspace/ar-master-data",
+      "evidence": [
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 33,
+          "handler": "arMasterLedgerGet",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerGet"
+          ]
+        },
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 37,
+          "handler": "arMasterLedgerGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerGet"
+          ]
+        }
+      ],
+      "owner": "lib/ar-master-ledger-api.ts",
+      "references": [
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 133
+        },
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 134
+        }
+      ],
+      "module": "应收总表",
+      "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "POST",
+      "action": "ar-master-entry-save",
+      "path": "/api/workspace/ar-master-entry-save",
+      "evidence": [
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 48,
+          "handler": "arMasterLedgerPost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerPost"
+          ]
+        },
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 75,
+          "handler": "arMasterLedgerPost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerPost"
+          ]
+        }
+      ],
+      "owner": "lib/ar-master-ledger-api.ts",
+      "references": [
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 207
+        }
+      ],
+      "module": "应收总表",
+      "actionIndex": "保存（具体新增/修改见实现）"
+    },
+    {
+      "method": "GET",
+      "action": "ar-master-export",
+      "path": "/api/workspace/ar-master-export",
+      "evidence": [
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 33,
+          "handler": "arMasterLedgerGet",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerGet"
+          ]
+        }
+      ],
+      "owner": "lib/ar-master-ledger-api.ts",
+      "references": [
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 226
+        }
+      ],
+      "module": "应收总表",
+      "actionIndex": "读取/文件/导出"
+    },
+    {
+      "method": "POST",
+      "action": "ar-master-register-legacy",
+      "path": "/api/workspace/ar-master-register-legacy",
+      "evidence": [
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 48,
+          "handler": "arMasterLedgerPost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerPost"
+          ]
+        },
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 50,
+          "handler": "arMasterLedgerPost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerPost"
+          ]
+        }
+      ],
+      "owner": "lib/ar-master-ledger-api.ts",
+      "references": [
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 221
+        }
+      ],
+      "module": "应收总表",
+      "actionIndex": "专用业务动作"
+    },
+    {
+      "method": "POST",
+      "action": "ar-master-source-link",
+      "path": "/api/workspace/ar-master-source-link",
+      "evidence": [
+        {
+          "file": "lib/ar-master-ledger-api.ts",
+          "line": 48,
+          "handler": "arMasterLedgerPost",
+          "kind": "allowlist",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/ar-master-ledger-api.ts#arMasterLedgerPost"
+          ]
+        }
+      ],
+      "owner": "lib/ar-master-ledger-api.ts",
+      "references": [
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 214
+        },
+        {
+          "file": "app/ar-master-ledger-panel.tsx",
+          "line": 216
+        }
+      ],
+      "module": "应收总表",
+      "actionIndex": "专用业务动作"
     },
     {
       "method": "POST",
@@ -993,7 +1168,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 62
+          "line": 66
         }
       ],
       "module": "应收工作台与授权",
@@ -1020,7 +1195,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 34
+          "line": 37
         },
         {
           "file": "standalone/schedule-engine/workflow-sources.mjs",
@@ -1041,7 +1216,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 170,
+          "line": 173,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -1050,7 +1225,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 173,
+          "line": 176,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1099,7 +1274,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 119,
+          "line": 120,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -1138,7 +1313,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 138,
+          "line": 140,
           "handler": "workspaceRead",
           "kind": "comparison",
           "chain": [
@@ -1172,7 +1347,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 203,
+          "line": 206,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1209,7 +1384,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 191,
+          "line": 194,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1238,7 +1413,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 234,
+          "line": 237,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5320,7 +5495,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 107,
+          "line": 108,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -5753,7 +5928,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 192,
+          "line": 195,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5782,7 +5957,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 144,
+          "line": 146,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5827,7 +6002,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 169,
+          "line": 172,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5836,7 +6011,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 244,
+          "line": 247,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6113,7 +6288,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 109,
+          "line": 110,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -6127,19 +6302,19 @@
       "references": [
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 110
+          "line": 112
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 122
+          "line": 124
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 157
+          "line": 159
         },
         {
           "file": "app/ar-invoice-ledger-panel.tsx",
-          "line": 163
+          "line": 165
         },
         {
           "file": "app/collaboration-panel.tsx",
@@ -9274,7 +9449,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 170,
+          "line": 173,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9283,7 +9458,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 183,
+          "line": 186,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9336,7 +9511,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 108,
+          "line": 109,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -9631,7 +9806,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 168,
+          "line": 171,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9750,7 +9925,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 168,
+          "line": 171,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9869,7 +10044,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 229,
+          "line": 232,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9902,7 +10077,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 210,
+          "line": 213,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10092,7 +10267,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 168,
+          "line": 171,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10258,7 +10433,7 @@
       "references": [
         {
           "file": "app/ar-workspace-panel.tsx",
-          "line": 35
+          "line": 38
         },
         {
           "file": "app/customer-directory-panel.tsx",
@@ -10828,7 +11003,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 170,
+          "line": 173,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10837,7 +11012,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 182,
+          "line": 185,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -12932,7 +13107,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 124,
+          "line": 125,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -13017,7 +13192,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 238,
+          "line": 241,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -13997,7 +14172,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 207,
+          "line": 210,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -14026,7 +14201,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 115,
+          "line": 116,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [

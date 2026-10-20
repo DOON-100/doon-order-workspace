@@ -34,6 +34,7 @@
     "lib/ar-workspace-api.ts": ["finance"],
     "lib/ar-invoice-ledger-api.ts": ["finance"],
     "lib/ar-customer-profiles-api.ts": ["finance"],
+    "lib/ar-master-ledger-api.ts": ["finance"],
     "lib/ar-document-issue.ts": ["finance"],
     "lib/payment-terms-api.ts": ["finance"],
     "lib/handoff-business-api.ts": ["service", "engineering", "planning", "warehouse", "finance"],
