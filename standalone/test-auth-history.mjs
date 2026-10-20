@@ -9,7 +9,7 @@ import {DatabaseSync} from 'node:sqlite';
 await fs.mkdir('test-output',{recursive:true});
 const root=await fs.mkdtemp(path.resolve('test-output/auth-history-')),build=path.join(root,'build'),data=path.join(root,'data');
 await fs.mkdir(path.join(build,'client'),{recursive:true});
-for(const name of ['runtime.mjs','auth.mjs','server.mjs','employee-gateway.mjs','supplier-gateway.mjs'])await fs.copyFile(path.join('standalone',name),path.join(build,name));
+for(const name of ['runtime.mjs','auth.mjs','personnel.mjs','server.mjs','employee-gateway.mjs','supplier-gateway.mjs'])await fs.copyFile(path.join('standalone',name),path.join(build,name));
 await fs.writeFile(path.join(build,'client','index.html'),'<html>Synthetic authentication test</html>');
 await fs.writeFile(path.join(build,'workspace-api.mjs'),`export async function GET(){return Response.json({ok:true});}export async function POST(){return Response.json({ok:true});}`);
 const password='Synthetic-Auth-History-2026!';

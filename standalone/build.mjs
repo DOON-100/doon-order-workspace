@@ -11,7 +11,7 @@ await viteBuild({configFile:false,root:dir,plugins:[react()],resolve:{alias:{'@'
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(out,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 await build({entryPoints:['standalone/agent-policy.ts'],outfile:path.join(out,'agent-policy.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root}});
 await build({entryPoints:['standalone/agent-schedules.mjs'],outfile:path.join(out,'agent-schedules.mjs'),bundle:true,format:'esm',platform:'node',packages:'external'});
-for(const file of ['runtime.mjs','auth.mjs','server.mjs','manage.mjs','supplier-gateway.mjs','employee-gateway.mjs','studio.mjs','agent-platform.mjs','workflow-outbox.mjs'])await fs.copyFile(path.join(dir,file),path.join(out,file));
+for(const file of ['runtime.mjs','auth.mjs','personnel.mjs','server.mjs','manage.mjs','supplier-gateway.mjs','employee-gateway.mjs','studio.mjs','agent-platform.mjs','workflow-outbox.mjs'])await fs.copyFile(path.join(dir,file),path.join(out,file));
 for(const extension of ['js','css'])await fs.copyFile(path.join(root,'experiments/mastra-studio/autonomy','agent-inbox.'+extension),path.join(out,'client','agent-workbench-inbox.'+extension));
 await writeCustomerPriceBuildEvidence(out,expectedSources);
 console.log('内网版构建完成：'+out);

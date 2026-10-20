@@ -25,6 +25,7 @@ async function preview(rows,type='orders',user=admin,bytes){const f=new FormData
 assert.equal((await call('data',undefined,null)).status,401);await ok('enroll',{});assert.equal((await call('data',undefined,clerk)).status,403);pass('匿名及未授权账号无法读取订单');
 await ok('member',{name:'测试文员',email:clerk.email,role:'clerk',customers:[],active:true});await ok('enroll',{},clerk);
 await ok('member',{name:'测试客服',email:sales.email,role:'sales',customers:['测试客户甲'],active:true});await ok('enroll',{},sales);
+const {testMemberPersonnel}=await import('./member-personnel-cases.mjs');await testMemberPersonnel({ok,call,state,clerk,pass});
 const initial=[{'订单号':'TEST-001','客户':'测试客户甲','客户 PO':'PO-A','图纸编号':'DN-TEST-A','圈色':'C1','镜片类型':'白片','交货批次':'A','订单数量':100,'负责人邮箱':clerk.email,'客户要求交期':'2026-10-10','内部跟进备注':'内部信息不得对客导出'},{'订单号':'TEST-002','客户':'测试客户乙','图纸编号':'DN-TEST-B','圈色':'C2','镜片类型':'太阳片','订单数量':50,'客户要求交期':'2026-10-12'}];
 const job=await preview(initial);assert.equal(job.rows.filter(r=>r.status==='new').length,2);await ok('commit-import',{id:job.id,selected:[2,3]});
 await ok('commit-import',{id:job.id,selected:[2,3]});assert.equal((await state()).orders.length,2);const again=await preview(initial);assert(again.rows.every(r=>r.status==='skip'));pass('订单导入、重复提交与重复文件均不新增重复行');

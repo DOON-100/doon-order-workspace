@@ -13,7 +13,7 @@ await fs.mkdir(output,{recursive:true});
 const root=await fs.mkdtemp(path.join(output,'planning-control-deployment-test-'));
 const powershell=path.join(process.env.SystemRoot||'C:/Windows','System32/WindowsPowerShell/v1.0/powershell.exe');
 const scriptName='部署生产计划增强.ps1';
-const files=['server.mjs','workspace-api.mjs','runtime.mjs','auth.mjs','manage.mjs','supplier-gateway.mjs','employee-gateway.mjs','client/index.html'];
+const files=['server.mjs','workspace-api.mjs','runtime.mjs','auth.mjs','personnel.mjs','manage.mjs','supplier-gateway.mjs','employee-gateway.mjs','client/index.html'];
 const scenarios=['success','served-page-failure','partial-copy-failure','frozen-data-change','stale-baseline','concurrent-release'];
 const checks=[];
 const put=async(name,data)=>{await fs.mkdir(path.dirname(name),{recursive:true});await fs.writeFile(name,data);};

@@ -1,5 +1,6 @@
 import {randomUUID,timingSafeEqual} from 'node:crypto';
 import fs from 'node:fs/promises';
+import {personnelTypeOf} from './personnel.mjs';
 import {workflowSources} from '../experiments/mastra-studio/workflow-sources.mjs';
 import {validateTrigger,evaluateTrigger,equal} from '../experiments/mastra-studio/workflow-triggers.mjs';
 import {scheduleSlot} from '../experiments/mastra-studio/workflow-schedule.mjs';
@@ -24,9 +25,9 @@ export function createScheduleBridge({db,config,currentForOwner,readView,now=Dat
  const latest=(owner,workflow)=>{const row=db.prepare('SELECT data FROM studio_schedule_grants WHERE owner_id=? AND workflow_id=? ORDER BY seq DESC LIMIT 1').get(owner,workflow);return row?JSON.parse(row.data):null;};
  const get=id=>{const row=db.prepare('SELECT data FROM studio_schedule_grants WHERE id=?').get(id);return row?JSON.parse(row.data):null;};
  const append=(owner,workflow,payload)=>{const row={...payload,id:'grant-'+randomUUID(),ownerId:owner,workflowId:workflow,at:new Date(now()).toISOString()};db.prepare('INSERT INTO studio_schedule_grants(id,owner_id,workflow_id,data) VALUES(?,?,?,?)').run(row.id,owner,workflow,JSON.stringify(row));return row;};
- function admit(current){if(!current?.member?.active||current.account?.must_change||!['admin','programmer'].includes(current.member.role)||!current.member.userId)fail('后台授权身份已失效。');return current;}
+ function admit(current){if(!current?.member?.active||current.account?.must_change||personnelTypeOf(current.member)!=='internal'||!current.member.userId)fail('后台授权身份已失效。');return current;}
  const owner=current=>admit(current).member.userId;
- const publicUser=current=>({username:current.account.username,mustChange:false,role:current.member.role,identity:{id:current.member.userId,name:current.member.name}});
+ const publicUser=current=>({username:current.account.username,mustChange:false,role:current.member.role,personnelType:personnelTypeOf(current.member),identity:{id:current.member.userId,name:current.member.name}});
  async function dataset(current,trigger){return liveDataset(await readView(current,trigger.source,trigger.scope),trigger);}
  function service(request){const a=Buffer.from(request.headers.get('authorization')||''),b=Buffer.from('Bearer '+config.token);if(a.length!==b.length||!timingSafeEqual(a,b))fail('后台服务身份无效。',401);}
  function lease(input){const row=db.prepare("SELECT * FROM studio_schedule_lease WHERE id='scheduler'").get();if(!row||row.worker!==input.workerId||row.fence!==input.fence||row.expires_at<=now())fail('后台执行租约已失效。',409);}
