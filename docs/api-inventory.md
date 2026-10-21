@@ -1,26 +1,26 @@
 # 中台接口清点：Agent 全模块增删改查接入基线
 
-日期：2026-10-20（Asia/Shanghai）。本次只清点接口，不接工具、不改变权限、不执行任何业务请求或部署。
+日期：2026-10-21（Asia/Shanghai）。本清单生成仅做静态源码索引，不注册工具、不改变权限，也不触发业务请求或部署。
 
 ## 1. 清点结论
 
-以 `16dd3fc` 业务源码及本次采购确认接口为基线，清点到 **374 项规范接口动作**：
+以 `204450f` 业务源码及本次金蝶采购只读查询接口为基线，清点到 **376 项规范接口动作**：
 
 | 范围 | 数量 | 说明 |
 | --- | ---: | --- |
-| `/api/workspace/{action}` | 351 | GET 114、POST 237，覆盖 45 个处理器文件分组 |
+| `/api/workspace/{action}` | 353 | GET 116、POST 237，覆盖 46 个处理器文件分组 |
 | `/api/auth/*` | 11 | 登录、会话、账号及维护 |
 | `/api/agent-schedules/*` | 10 | 本人调度授权及后台只读桥 |
 | `/health`、`/api/review-mode` | 2 | 运行状态、验收副本标识 |
-| 合计 | **374** | 按规范方法 + 路径去重；不另计 HEAD 兼容行为 |
+| 合计 | **376** | 按规范方法 + 路径去重；不另计 HEAD 兼容行为 |
 
-**45 是处理器文件分组数，不是页面数或独立业务模块数；237 个 POST 也不等于 237 个通用写接口。** 导入、上传、预览、审批、状态流转、授权配置都包含其中。
+**46 是处理器文件分组数，不是页面数或独立业务模块数；237 个 POST 也不等于 237 个通用写接口。** 导入、上传、预览、审批、状态流转、授权配置都包含其中。
 
 完整逐项表见 **[工作区接口清单](api-inventory/workspace-endpoints.md)**；机器可读证据见 **[接口索引 JSON](api-inventory/workspace-endpoints.json)**。每项都有方法、action、动作索引、处理器位置、分发链及可找到的页面引用。
 
 按用户确认的左侧 10 个分组，后续整理见 **[部门工具适配表](api-inventory/department-tools.md)** 和[分组配置](api-inventory/department-mapping.json)。其中保留跨部门共用接口，并将 14 类流程、12 类业务资料/单据、6 类客服记录按具体类型归组；当前是静态接入方案，尚未注册运行工具。
 
-仓库刷新 `git fetch origin` 本次因 GitHub 443 连接失败未成功，不能把本地基线称为已核实的最新远端或服务器运行版本。源码清点不等于接口线上已开放、权限测试通过或 Agent 已接通。
+本清单是静态源码索引，不代表服务器已部署当前版本。源码清点不等于接口线上已开放、权限测试通过或 Agent 已接通。
 
 ## 2. 业务能力覆盖表
 
@@ -37,6 +37,7 @@
 | PMC 核单 | `pmc-data` | `pmc-round` | `pmc-save` | 无独立删除入口 | `pmc-review` |
 | 成品供应商协作 | `finished-supplier-data/file` | `finished-supplier-task-create/attachment` | 复期、进度、异常等专用动作 | 结单 `finished-supplier-close`；退货不是删除 | 接单、基线确认、质检、收货、返工、入仓 |
 | 金蝶待核对 | `kingdee-pending-data/file` | `kingdee-pending-preview → kingdee-pending-commit` | 来源快照经确认增量登记 | 无独立删除入口 | 不代表金蝶/MES 实时写接口 |
+| 金蝶采购只读查询 | `kingdee-readonly-status/query` | 无 | 无 | 无 | 鉴权后只读查询采购列表与商品行，不生成中台快照或业务关联 |
 | 部门流程记录 | `process-data/history` | `process-save` | `process-save` | 状态遵循各流程 schema；无独立通用删除 | 多记录类型共用入口，按 type 校验 |
 | 计划与产能 | `planning-control-data/history` | 计划、产能窗口、分配的 save | 对应 save | 通过 transition 允许的状态变化 | 计算保存、计划/分配状态流转 |
 | 损耗 | 总表数据、`loss-export` | `loss-record` | 用确认记录增减更正 | 无独立删除入口 | 部门确认、月度口径 |
@@ -100,7 +101,7 @@
 4. 模块处理器检查角色、客户/业务组/部门/任务范围、字段权限和当前业务状态。
 5. `commit()` 校验工作区修订号；很多模块另有记录版本、请求 token、审计和回读。
 
-对应源码：[原生入口](../standalone/server.mjs)、[会话](../standalone/auth.mjs)、[工作区路由](../app/api/workspace/%5Baction%5D/route.ts)、[状态与提交](../lib/store.ts)、[基础权限](../lib/domain.ts)、[业务组投影](../lib/business-team-scope.ts)。不同动作使用的具体保护并不完全相同，不能把“已有通用链路”当成所有 374 项均已通过越权/幂等验收。
+对应源码：[原生入口](../standalone/server.mjs)、[会话](../standalone/auth.mjs)、[工作区路由](../app/api/workspace/%5Baction%5D/route.ts)、[状态与提交](../lib/store.ts)、[基础权限](../lib/domain.ts)、[业务组投影](../lib/business-team-scope.ts)。不同动作使用的具体保护并不完全相同，不能把“已有通用链路”当成所有 376 项均已通过越权/幂等验收。
 
 | 形态 | 已发现情况 | 下一步工具适配需要保留 |
 | --- | --- | --- |

@@ -210,6 +210,7 @@ const modules=[
  ['PMC 核单','lib/pmc-api.ts','access、订单/生产范围；核对轮次与版本'],
  ['成品供应商协作','lib/finished-supplier-api.ts','authenticated、employee、供应商身份及任务分配；阶段分别校验'],
  ['金蝶待核对','lib/kingdee-pending-api.ts','读取范围与维护角色；原表下载和导入权限'],
+ ['金蝶采购只读查询','lib/kingdee-readonly-api.ts','有效PMC/管理员、全表范围；只读外部API查询，零业务写入'],
  ['部门流程记录','lib/process-workspace-api.ts','requestTeam、canWriteProcessKind、canEditProcessRecord；客户/订单关联'],
  ['采购变更人工确认','lib/purchase-change-api.ts','本人权限、完整载荷、版本、来源与数量效果绑定；五种动作复用原采购执行规则'],
  ['流程变更人工确认','lib/process-change-api.ts','本人身份、同源、完整预览摘要、来源/规则版本及有效期；复用原流程保存校验'],

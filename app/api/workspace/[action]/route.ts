@@ -44,6 +44,7 @@ import {arCustomerProfilesGet,arCustomerProfilesPost} from '@/lib/ar-customer-pr
 import {arMasterLedgerGet,arMasterLedgerPost} from '@/lib/ar-master-ledger-api';
 import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
+import {kingdeeReadonlyGet} from '@/lib/kingdee-readonly-api';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
@@ -91,6 +92,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const kingdeeQuery=await kingdeeReadonlyGet(action,req,m);if(kingdeeQuery)return kingdeeQuery;
  const pendingPurchase=await kingdeePendingGet(action,req,s,m);if(pendingPurchase)return pendingPurchase;
  const handoffBusiness=await handoffBusinessGet(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkGet(action,req,s,m);if(framework)return framework;

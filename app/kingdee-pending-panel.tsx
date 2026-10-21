@@ -10,6 +10,7 @@ import {dateValue,today} from '@/lib/ledger';
 import {supplierWorkspaceSpaces} from '@/lib/supplier-workspace';
 import type {WorkspaceNavigate} from '@/lib/handoff-navigation';
 import './supplier-workspace.css';
+import {KingdeeReadonlyDialog} from './kingdee-readonly-dialog';
 
 type SourceRow={sourceRow:number;values:(string|number|boolean|null)[];displayValues:string[];rowType:'data'|'summary'|'blank'};
 type Metadata={filename:string;sourceAsOf:string;sourceFilter:string;sourceSheet:string;sourceAccount?:string;importedAt:string;rowCount:number;orderCount:number;supplierCount:number;quantityMeaning:string;scope?:'all'|'authorized'};
@@ -44,7 +45,7 @@ export function KingdeePendingPanel({overview=false,onNavigate,onDirtyChange}:{o
  function openImport(){setImportOpen(true);setPreview(null);setFile(null);setMessage('');setError('');}
  const reset=()=>{setQ('');setSupplier('');setBuyer('');setPeriod('all');setPage(0);};
  return <div className="supplier-workspace">
-  <section className="supplier-source-hero"><div><span className="supplier-eyebrow">DOON · 供应商管理</span><h2>{overview?'从未上货到齐料交付':'采购未上货订单总表'}</h2><p>以金蝶导出记录为依据，集中查看供应商、采购物料与交期。</p><div className="supplier-source-badges"><span>{metadata?'金蝶文件已同步':'等待首次同步'}</span><span>来源截至 {metadata?.sourceAsOf||'—'}</span><span>{metadata?.scope==='authorized'?'当前授权范围明细':'保留原表全部明细'}</span></div></div><div className="supplier-source-actions"><a className="supplier-source-link" href={sourceUrl} target="_blank" rel="noreferrer">打开金蝶 <ArrowUpRight size={16}/></a>{query.data?.canImport&&<Button onClick={openImport}><Upload size={16}/>更新金蝶总表</Button>}</div></section>
+  <section className="supplier-source-hero"><div><span className="supplier-eyebrow">DOON · 供应商管理</span><h2>{overview?'从未上货到齐料交付':'采购未上货订单总表'}</h2><p>以金蝶导出记录为依据，集中查看供应商、采购物料与交期。</p><div className="supplier-source-badges"><span>{metadata?'金蝶文件已同步':'等待首次同步'}</span><span>来源截至 {metadata?.sourceAsOf||'—'}</span><span>{metadata?.scope==='authorized'?'当前授权范围明细':'保留原表全部明细'}</span></div></div><div className="supplier-source-actions"><a className="supplier-source-link" href={sourceUrl} target="_blank" rel="noreferrer">打开金蝶 <ArrowUpRight size={16}/></a>{query.data?.canImport&&<><Button onClick={openImport}><Upload size={16}/>更新金蝶总表</Button><KingdeeReadonlyDialog/></>}</div></section>
   {query.isError&&<div className="error notice" role="alert">金蝶来源数据读取失败：{(query.error as Error).message}<Button variant="outline" onClick={()=>void query.refetch()}>重试</Button></div>}
   <div className="supplier-source-metrics">{[[ClipboardList,'未上货明细',sourceRows.length],[Package,'采购订单',new Set(sourceRows.map(row=>cell(row,'单据编号'))).size],[Truck,'供应商',suppliers.length],[Clock3,'原交期已过',sourceRows.filter(late).length]].map(([Icon,label,count])=>{const MetricIcon=Icon as typeof Package;return <div key={String(label)}><MetricIcon size={20}/><span>{String(label)}</span><strong>{Number(count).toLocaleString('zh-CN')}</strong></div>;})}</div>
   {overview&&<section className="supplier-space-grid" aria-label="供应商二级空间">{supplierWorkspaceSpaces.map((space,i)=><button key={space.id} onClick={()=>onNavigate(space.id)}><span>{String(i+1).padStart(2,'0')}</span><h3>{space.label}</h3><p>{space.detail}</p><ArrowUpRight size={18}/></button>)}</section>}

@@ -13,6 +13,7 @@
     "lib/pmc-api.ts": ["planning"],
     "lib/finished-supplier-api.ts": ["purchasing"],
     "lib/kingdee-pending-api.ts": ["purchasing"],
+    "lib/kingdee-readonly-api.ts": ["purchasing"],
     "lib/process-workspace-api.ts": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"],
     "lib/process-change-api.ts": ["sales", "service", "engineering", "planning", "warehouse", "quality", "finance"],
     "lib/planning-control-api.ts": ["planning"],

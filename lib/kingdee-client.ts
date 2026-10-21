@@ -1,0 +1,97 @@
+import {env} from 'cloudflare:workers';
+import {AppError} from './store';
+
+type Json=Record<string,unknown>;
+export type KingdeeConfig={clientId:string;clientSecret:string;instanceId:string;accountId:string};
+const gateway='https://api.kingdee.com';
+const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail'} as const;
+const encoder=new TextEncoder();
+export function kingdeeConfig():KingdeeConfig|null{
+ const settings=env as unknown as Record<string,unknown>;
+ if(settings.DOON_KINGDEE_READONLY_ENABLED!=='1')return null;
+ const values=['CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>settings['DOON_KINGDEE_'+key]);
+ if(values.some(value=>typeof value!=='string'||!value.trim()))return null;
+ const [clientId,clientSecret,instanceId,accountId]=values as string[];
+ if(![clientId,instanceId,accountId].every(value=>/^[A-Za-z0-9_-]{1,100}$/.test(value)))return null;
+ return {clientId,clientSecret,instanceId,accountId};
+}
+export async function hmacBase64Hex(key:string,message:string){
+ const imported=await crypto.subtle.importKey('raw',encoder.encode(key),{name:'HMAC',hash:'SHA-256'},false,['sign']);
+ const digest=await crypto.subtle.sign('HMAC',imported,encoder.encode(message));
+ return btoa(Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,'0')).join(''));
+}
+export async function kingdeeSignature(config:KingdeeConfig,method:string,path:string,query:Record<string,string>,timestamp=String(Date.now()),nonce=String(crypto.getRandomValues(new Uint32Array(1))[0]%2147483646+1)){
+ const names=Object.keys(query).sort(),actualQuery=names.map(key=>key+'='+encodeURIComponent(query[key])).join('&');
+ const signedQuery=names.map(key=>key+'='+encodeURIComponent(encodeURIComponent(query[key]))).join('&');
+ const canonical=[method,encodeURIComponent(path),signedQuery,'x-api-nonce:'+nonce,'x-api-timestamp:'+timestamp,''].join('\n');
+ return {actualQuery,headers:{'Content-Type':'application/json','X-Api-ClientID':config.clientId,'X-Api-Auth-Version':'2.0','X-Api-TimeStamp':timestamp,'X-Api-Nonce':nonce,'X-Api-SignHeaders':'X-Api-TimeStamp,X-Api-Nonce','X-Api-Signature':await hmacBase64Hex(config.clientSecret,canonical)}};
+}
+export function object(value:unknown):Json{
+ if(!value||typeof value!=='object'||Array.isArray(value))throw new AppError('金蝶返回格式不完整，本次查询未完成。',502);
+ return value as Json;
+}
+export function sourceText(value:unknown){
+ if(value===undefined||value===null)return '';
+ if(typeof value==='string')return value;
+ if(typeof value==='number'&&Number.isFinite(value))return String(value);
+ throw new AppError('金蝶返回字段格式异常，本次查询未完成。',502);
+}
+export function sourceId(value:unknown){
+ if(typeof value!=='string'||!value||value.length>100)throw new AppError('金蝶返回标识缺失或不精确，本次查询未完成。',502);
+ return value;
+}
+// Only these four fixed operations exist. POST is used solely for obtaining authorization;
+// both business endpoints are GET. No save/audit/delete API or arbitrary destination.
+async function gatewayRequest(config:KingdeeConfig,operation:keyof typeof paths,query:Record<string,string>,signal:AbortSignal,auth?:{token:string;domain:string}){
+ const method=operation==='authorize'?'POST':'GET',path=paths[operation];
+ const signed=await kingdeeSignature(config,method,path,query);
+ try{
+  const response=await fetch(gateway+path+'?'+signed.actualQuery,{method,headers:{...signed.headers,...(auth?{'app-token':auth.token,'X-GW-Router-Addr':auth.domain}:{})},redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(15000)])});
+  if(!response.ok)throw new AppError(response.status===429?'金蝶请求限流，请稍后重新查询。':`金蝶连接失败（HTTP ${response.status}），本次查询未完成。`,response.status===429?429:502);
+  // Bound untrusted response bodies before parsing. Never log upstream URLs, headers or bodies.
+  const reader=response.body?.getReader();if(!reader)throw new AppError('金蝶未返回数据。',502);
+  const chunks:Uint8Array[]=[];let size=0;
+  while(true){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.byteLength;if(size>4*1024*1024){await reader.cancel();throw new AppError('金蝶单次响应过大，请缩小查询日期范围。',502);}chunks.push(chunk.value);}
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  const result=object(JSON.parse(new TextDecoder().decode(bytes)));
+  if(operation==='authorize'?result.code!==200:result.errcode!==0){
+   const code=operation==='authorize'?result.code:result.errcode;
+   throw new AppError(`金蝶${operation==='authorize'?'授权':operation==='token'?'令牌':'采购查询'}失败（代码 ${typeof code==='number'&&Number.isSafeInteger(code)?code:'未知'}），请核对接口权限和授权有效期。`,502);
+  }
+  return result.data;
+ }catch(error){
+  if(error instanceof AppError)throw error;
+  throw new AppError(signal.aborted?'金蝶查询已取消或超时，请重新查询。':'金蝶网络连接超时或响应无效，请稍后重试。',502);
+ }
+}
+type Authorization={token:string;domain:string;expiresAt:number};
+let cached:{key:string;value:Authorization}|undefined;
+let inFlight:{key:string;promise:Promise<Authorization>}|undefined;
+let lastAttempt:{key:string;at:number}|undefined;
+async function authorization(config:KingdeeConfig){
+ // Include credential rotation in the fingerprint without retaining plaintext in cache keys.
+ const hash=await crypto.subtle.digest('SHA-256',encoder.encode(JSON.stringify(config)));
+ const key=Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');
+ if(cached?.key===key&&cached.value.expiresAt>Date.now())return cached.value;
+ if(inFlight?.key===key)return inFlight.promise;
+ if(lastAttempt?.key===key&&Date.now()-lastAttempt.at<31000)throw new AppError('金蝶授权刚刚请求过，请稍后重试，避免令牌接口限流。',429);
+ lastAttempt={key,at:Date.now()};
+ const promise=(async()=>{
+  const signal=AbortSignal.timeout(30000),data=await gatewayRequest(config,'authorize',{outerInstanceId:config.instanceId},signal);
+  if(!Array.isArray(data))throw new AppError('金蝶企业授权返回格式异常。',502);
+  const matches=data.map(object).filter(item=>sourceText(item.clientId)===config.clientId&&sourceText(item.outerInstanceId)===config.instanceId&&sourceText(item.accountId)===config.accountId&&String(item.status)==='1');
+  if(matches.length!==1)throw new AppError('金蝶授权与指定应用、实例或账套不一致，请管理员核对私有配置。',502);
+  const selected=matches[0],appKey=sourceText(selected.appKey),appSecret=sourceText(selected.appSecret),domain=sourceText(selected.domain);
+  let route:URL;try{route=new URL(domain);}catch{throw new AppError('金蝶授权路由无效。',502);}
+  if(!appKey||!appSecret||route.protocol!=='https:'||!route.hostname.endsWith('.jdy.com')||route.port||route.username||route.password||route.pathname!=='/'||route.search||route.hash)throw new AppError('金蝶授权材料或路由无效。',502);
+  const tokenData=object(await gatewayRequest(config,'token',{app_key:appKey,app_signature:await hmacBase64Hex(appSecret,appKey)},signal));
+  const token=sourceText(tokenData['app-token']);if(!token)throw new AppError('金蝶没有返回有效令牌。',502);
+  const value={token,domain,expiresAt:Date.now()+23*60*60*1000};cached={key,value};return value;
+ })();inFlight={key,promise};
+ try{return await promise;}finally{if(inFlight?.promise===promise)inFlight=undefined;}
+}
+export async function kingdeeRead(config:KingdeeConfig,operation:'list'|'detail',query:Record<string,string>,signal:AbortSignal){
+ const auth=await authorization(config);
+ try{return object(await gatewayRequest(config,operation,query,signal,auth));}
+ catch(error){if(error instanceof AppError&&error.status===502)cached=undefined;throw error;}
+}
