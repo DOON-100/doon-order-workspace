@@ -78,7 +78,9 @@ function Start-OwnedService {
 function Assert-Healthy {
  for ($attempt=0;$attempt -lt 30;$attempt++) {
   try {
-   $health=Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+   # Windows PowerShell 5 defaults JSON without charset to a legacy encoding.
+   $healthResponse=Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2
+   $health=[Text.Encoding]::UTF8.GetString($healthResponse.RawContentStream.ToArray()) | ConvertFrom-Json
    if ($health.ok -and $health.service -eq '度昂订单协作中台·内网版') {
     Assert-Owners
     $page=Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:8787'+$SmokePath) -TimeoutSec 5
