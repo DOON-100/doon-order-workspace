@@ -5,7 +5,7 @@
   "sourceFiles": [
     {
       "path": "app/api/workspace/[action]/route.ts",
-      "sha256": "a8c9634f1b70620756f6500a8574a83c69b4f5d4687f3d246c1d320014327553"
+      "sha256": "9e151e34fc96e07d0cc8487b336ef92002ef483c9fcca515ad786262d45f2cea"
     },
     {
       "path": "lib/ar-customer-profiles-api.ts",
@@ -184,6 +184,10 @@
       "sha256": "5c34ed8c0f8342b98514023f0c9b26bf1dd82778b57ca5decfcdd5ca6bad3f74"
     },
     {
+      "path": "lib/sales-color-fields-api.ts",
+      "sha256": "817573fbdf75808d8235d2f79b6ff36de274e22e64315e3dde89bc32afce7d05"
+    },
+    {
       "path": "lib/service-workspace-api.ts",
       "sha256": "aa32fa485b4aa13d9a6d17c334c7df9cc5a5c57aaea267241bbe039ea82e9700"
     },
@@ -200,8 +204,8 @@
       "sha256": "ac62bce271f9c2acd40b9cdd5121ecae8d92591681f6e79a539de32a68b9d500"
     }
   ],
-  "handlerCount": 90,
-  "endpointCount": 356,
+  "handlerCount": 92,
+  "endpointCount": 358,
   "unresolved": [],
   "unmatchedClientPaths": [],
   "dynamicClientPrefixes": [
@@ -1228,7 +1232,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 194,
+          "line": 198,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -1237,7 +1241,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 197,
+          "line": 201,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1261,7 +1265,7 @@
         },
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 37
+          "line": 39
         },
         {
           "file": "app/handoff-business-panel.tsx",
@@ -1286,7 +1290,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 126,
+          "line": 128,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -1325,7 +1329,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 159,
+          "line": 162,
           "handler": "workspaceRead",
           "kind": "comparison",
           "chain": [
@@ -1359,7 +1363,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 227,
+          "line": 231,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1396,7 +1400,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 215,
+          "line": 219,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1425,7 +1429,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 258,
+          "line": 262,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5507,7 +5511,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 114,
+          "line": 116,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -5940,7 +5944,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 216,
+          "line": 220,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5969,7 +5973,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 165,
+          "line": 168,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6014,7 +6018,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 193,
+          "line": 197,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6023,7 +6027,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 268,
+          "line": 272,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6064,7 +6068,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 34
+          "line": 36
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6091,7 +6095,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 28
+          "line": 29
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6118,7 +6122,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 32
+          "line": 34
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6147,7 +6151,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 33
+          "line": 35
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6174,7 +6178,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 21
+          "line": 22
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6201,7 +6205,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 21
+          "line": 22
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6230,7 +6234,7 @@
       "references": [
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 20
+          "line": 21
         }
       ],
       "module": "客户主档、工厂订单与金蝶模板",
@@ -6267,7 +6271,7 @@
         },
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 19
+          "line": 20
         },
         {
           "file": "app/process-workspace-panel.tsx",
@@ -6300,7 +6304,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 116,
+          "line": 118,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -6430,15 +6434,15 @@
         },
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 21
+          "line": 22
         },
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 32
+          "line": 34
         },
         {
           "file": "app/factory-order-panel.tsx",
-          "line": 37
+          "line": 39
         },
         {
           "file": "app/fixed-data-tools-panel.tsx",
@@ -9461,7 +9465,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 194,
+          "line": 198,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9470,7 +9474,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 207,
+          "line": 211,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9523,7 +9527,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 115,
+          "line": 117,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -9615,7 +9619,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 136,
+          "line": 138,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -9788,7 +9792,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 132,
+          "line": 134,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -9823,7 +9827,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 132,
+          "line": 134,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -9862,7 +9866,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 164,
+          "line": 167,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9988,7 +9992,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 192,
+          "line": 196,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10107,7 +10111,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 192,
+          "line": 196,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10226,7 +10230,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 253,
+          "line": 257,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10259,7 +10263,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 234,
+          "line": 238,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10449,7 +10453,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 192,
+          "line": 196,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -11185,7 +11189,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 194,
+          "line": 198,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -11194,7 +11198,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 206,
+          "line": 210,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -13355,7 +13359,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 131,
+          "line": 133,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -13440,7 +13444,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 262,
+          "line": 266,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -13481,6 +13485,54 @@
       ],
       "module": "订单总表、导入、附件与成员",
       "actionIndex": "专用业务动作"
+    },
+    {
+      "method": "GET",
+      "action": "sales-color-fields-data",
+      "path": "/api/workspace/sales-color-fields-data",
+      "evidence": [
+        {
+          "file": "lib/sales-color-fields-api.ts",
+          "line": 33,
+          "handler": "salesColorFieldsGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/sales-color-fields-api.ts#salesColorFieldsGet"
+          ]
+        }
+      ],
+      "owner": "lib/sales-color-fields-api.ts",
+      "references": [
+        {
+          "file": "app/sales-color-fields-panel.tsx",
+          "line": 42
+        }
+      ],
+      "module": "销售颜色字段库",
+      "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "POST",
+      "action": "sales-color-fields-save",
+      "path": "/api/workspace/sales-color-fields-save",
+      "evidence": [
+        {
+          "file": "lib/sales-color-fields-api.ts",
+          "line": 44,
+          "handler": "salesColorFieldsPost",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST",
+            "lib/sales-color-fields-api.ts#salesColorFieldsPost"
+          ]
+        }
+      ],
+      "owner": "lib/sales-color-fields-api.ts",
+      "references": [],
+      "module": "销售颜色字段库",
+      "actionIndex": "保存（具体新增/修改见实现）"
     },
     {
       "method": "POST",
@@ -14420,7 +14472,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 231,
+          "line": 235,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -14449,7 +14501,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 122,
+          "line": 124,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [

@@ -4,17 +4,17 @@
 
 ## 1. 清点结论
 
-以 `204450f` 业务源码及本次金蝶采购只读查询与仅新增同步接口为基线，清点到 **378 项规范接口动作**：
+以 `ad0ea2f` 业务源码及本次销售颜色字段库接口为基线，清点到 **381 项规范接口动作**：
 
 | 范围 | 数量 | 说明 |
 | --- | ---: | --- |
-| `/api/workspace/{action}` | 355 | GET 117、POST 238，覆盖 47 个处理器文件分组 |
+| `/api/workspace/{action}` | 358 | GET 119、POST 239，覆盖 48 个处理器文件分组 |
 | `/api/auth/*` | 11 | 登录、会话、账号及维护 |
 | `/api/agent-schedules/*` | 10 | 本人调度授权及后台只读桥 |
 | `/health`、`/api/review-mode` | 2 | 运行状态、验收副本标识 |
-| 合计 | **378** | 按规范方法 + 路径去重；不另计 HEAD 兼容行为 |
+| 合计 | **381** | 按规范方法 + 路径去重；不另计 HEAD 兼容行为 |
 
-**47 是处理器文件分组数，不是页面数或独立业务模块数；238 个 POST 也不等于 237 个通用写接口。** 导入、上传、预览、审批、状态流转、授权配置都包含其中。
+**48 是处理器文件分组数，不是页面数或独立业务模块数；239 个 POST 也不等于 239 个通用写接口。** 导入、上传、预览、审批、状态流转、授权配置都包含其中。
 
 完整逐项表见 **[工作区接口清单](api-inventory/workspace-endpoints.md)**；机器可读证据见 **[接口索引 JSON](api-inventory/workspace-endpoints.json)**。每项都有方法、action、动作索引、处理器位置、分发链及可找到的页面引用。
 
@@ -32,6 +32,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 订单总表、原表工序 | `data`、`job`、`read-version` | `preview → commit-import`、`ledger-preview → ledger-commit` | `edit-order`、`ledger-edit`、`drawing-correction` | `ledger-lifecycle` 归档/恢复；无通用物理删除入口 | `review`、`workflow`、`pack`、`match`、`ledger-assign` |
 | 客户主档、工厂订单 | `customer-master-capabilities`、`factory-orders` | `customer-save`、`customer-import`、工厂订单保存/表格导入 | `customer-save`、`factory-order-save` | 通过既有状态/保存规则；无独立通用删除入口 | 模板上传、表格预览/提交、金蝶导出 |
+| 销售颜色字段库 | `sales-color-fields-data` | 管理员 `sales-color-fields-save` | 追加独立配置版本 | 保留版本与幂等回执；无删除入口 | 客户规则按现有权限过滤，不修改订单明细 |
 | 供应商、外协、收货 | `data` 聚合、供应商导出/报价文件 | `supplier-save`、`outsource-create`、`receipt-photo → receipt-confirm` | `supplier-save`、`outsource-update`、报价保存 | `outsource-cancel` | `outsource-approve`；收货数量/工序联动 |
 | 采购跟单 | `purchase-data/history/export/held` | `purchase-preview → purchase-commit` | `purchase-save`、`purchase-receipt` | `purchase-archive`；无通用物理删除 | 来源版本、分批导入、收货/退货核算 |
 | PMC 核单 | `pmc-data` | `pmc-round` | `pmc-save` | 无独立删除入口 | `pmc-review` |

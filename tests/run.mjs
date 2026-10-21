@@ -143,4 +143,5 @@ await import('./fixed-data-tools.mjs');
 await import('./workspace-loading.mjs');
 await import('./process-change.mjs');
 await import('./purchase-change.mjs');
+await import('./sales-color-fields.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

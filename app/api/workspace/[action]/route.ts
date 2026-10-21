@@ -48,6 +48,7 @@ import {kingdeeReadonlyGet} from '@/lib/kingdee-readonly-api';
 import {kingdeeSyncGet,kingdeeSyncPost} from '@/lib/kingdee-sync-api';
 import {kingdeeSyncState} from '@/lib/kingdee-sync-state';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
+import {salesColorFieldsGet,salesColorFieldsPost} from '@/lib/sales-color-fields-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -59,6 +60,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  // Process snapshots are available only through their responsibility-scoped history.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_color_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('ar_')||v.kind.startsWith('payment_term'))))return false;
  // Engineering has an independent, scoped history endpoint. Never expose its
  // source emails or snapshots through the broad production audit feed.
@@ -146,6 +148,7 @@ export async function GET(req:Request,ctx:Context){try{
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
 }catch(e){return failure(e);}}
 async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Member){
+ const colorFields=await salesColorFieldsGet(action,req,s,m);if(colorFields)return colorFields;
  const purchaseChange=await purchaseChangeGet(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangeGet(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
@@ -164,6 +167,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;

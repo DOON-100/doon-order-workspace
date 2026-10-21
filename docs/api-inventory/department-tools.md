@@ -6,11 +6,11 @@
 
 ## 范围与组织方式
 
-共 379 个去重接口，其中工作区 356 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
+共 381 个去重接口，其中工作区 358 个、基础接口 23 个。严格使用左侧除“工作总览”之外的 10 组。共用接口只登记一次，通过 groups 在多组展示，各组数量不可相加当作接口总数。
 
 - 分组帮助 Agent 找到业务能力，不是角色或授权列表。账号能否操作，由原中台逐请求、逐记录、逐字段校验。
 - 同一 Agent 可以使用多个分组；进入某组、创建 Agent 或勾选工具都不增加权限。
-- 按业务对象生成具体动作工具，共用执行层；不会将 356 个接口全部作为独立工具一次塞给模型。
+- 按业务对象生成具体动作工具，共用执行层；不会将 358 个接口全部作为独立工具一次塞给模型。
 - 通用流程按 14 种 type 固定各自字段与规则；模型不能任意切换 type、直接更新状态绕过专用动作。
 - 账号、密码、会话、服务身份和调度属于系统管理清点范围，其中应用内/后台专用入口不能作为普通模型工具。
 - 管理组只是目录归属：human-admin-flow 不表示所有动作都必须是 admin，仍采用原角色/负责人规则。
@@ -18,16 +18,16 @@
 
 | 分组 | 接口关联数（含共用） | 所含业务流程类型 |
 | --- | ---: | --- |
-| [业务部](#sales) | 116 | 询价与需求评估 |
-| [客服与单证](#service) | 121 | 客诉与复盘 |
+| [业务部](#sales) | 117 | 询价与需求评估 |
+| [客服与单证](#service) | 122 | 客诉与复盘 |
 | [工程部](#engineering) | 61 | 样品与签样、工程变更 |
-| [PMC 计划](#planning) | 71 | 配套齐料 |
+| [PMC 计划](#planning) | 72 | 配套齐料 |
 | [采购与外协](#purchasing) | 57 | 使用已有专用业务动作 |
 | [仓储物流](#warehouse) | 45 | 仓库流转、包装核对 |
 | [生产车间](#production) | 28 | 使用已有专用业务动作 |
 | [品质部](#quality) | 17 | 来料检验、首件确认、过程检验、外协检验、成品检验、出货放行记录 |
 | [财务部](#finance) | 93 | 供应商对账 |
-| [系统管理](#management) | 65 | 使用已有专用业务动作 |
+| [系统管理](#management) | 66 | 使用已有专用业务动作 |
 
 <a id="sales"></a>
 
@@ -58,11 +58,12 @@
 | 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目跨部门协作 | `project-collaboration-data` | `project-collaboration-acknowledge`、`project-collaboration-cancel`、`project-collaboration-complete`、`project-collaboration-followup`、`project-collaboration-save` | [project-collaboration-api.ts](../../lib/project-collaboration-api.ts) |
+| 销售颜色字段库 | `sales-color-fields-data` | 此对象未登记 POST 动作 | [sales-color-fields-api.ts](../../lib/sales-color-fields-api.ts) |
 | 人工沟通草稿 | `unified-communication-data`、`unified-communication-history` | `unified-communication-complete-review`、`unified-communication-return`、`unified-communication-save`、`unified-communication-submit` | [unified-communication-api.ts](../../lib/unified-communication-api.ts) |
 
 本组接入边界：
 
-- 读取候选，待核验返回字段及副作用：43 项。
+- 读取候选，待核验返回字段及副作用：44 项。
 - 业务动作，按具体内容确认后执行：67 项。
 - 文件生成/归档，非纯读取：1 项。
 - 应用内流程，不交模型凭据：5 项。
@@ -102,6 +103,7 @@
 | 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
 | 项目跨部门协作 | `project-collaboration-data` | `project-collaboration-acknowledge`、`project-collaboration-cancel`、`project-collaboration-complete`、`project-collaboration-followup`、`project-collaboration-save` | [project-collaboration-api.ts](../../lib/project-collaboration-api.ts) |
+| 销售颜色字段库 | `sales-color-fields-data` | 此对象未登记 POST 动作 | [sales-color-fields-api.ts](../../lib/sales-color-fields-api.ts) |
 | 客服业务 | `service-data`、`service-file`、`service-history` | `service-attachment`、`service-save` | [service-workspace-api.ts](../../lib/service-workspace-api.ts) |
 | 客服业务收款及冲销 | 由关联视图/专用入口读取，未另造查询 | `service-receipt`、`service-receipt-reverse` | [service-workspace-api.ts](../../lib/service-workspace-api.ts) |
 | 人工沟通草稿 | `unified-communication-data`、`unified-communication-history` | `unified-communication-complete-review`、`unified-communication-return`、`unified-communication-save`、`unified-communication-submit` | [unified-communication-api.ts](../../lib/unified-communication-api.ts) |
@@ -109,7 +111,7 @@
 本组接入边界：
 
 - 业务动作，按具体内容确认后执行：73 项。
-- 读取候选，待核验返回字段及副作用：43 项。
+- 读取候选，待核验返回字段及副作用：44 项。
 - 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
@@ -194,11 +196,12 @@
 | PMC 核单 | `pmc-data` | `pmc-review`、`pmc-round`、`pmc-save` | [pmc-api.ts](../../lib/pmc-api.ts) |
 | 流程变更人工预览、确认与执行回读 | `process-change`、`process-change-contract` | `process-change-cancel`、`process-change-confirm`、`process-change-preview` | [process-change-api.ts](../../lib/process-change-api.ts) |
 | 部门流程记录 | `process-data`、`process-history` | `process-save` | [process-workspace-api.ts](../../lib/process-workspace-api.ts) |
+| 销售颜色字段库 | `sales-color-fields-data` | 此对象未登记 POST 动作 | [sales-color-fields-api.ts](../../lib/sales-color-fields-api.ts) |
 
 本组接入边界：
 
 - 业务动作，按具体内容确认后执行：41 项。
-- 读取候选，待核验返回字段及副作用：25 项。
+- 读取候选，待核验返回字段及副作用：26 项。
 - 应用内流程，不交模型凭据：5 项。
 
 本组流程字段（以下仅列 details；公共字段见后文）：
@@ -418,6 +421,7 @@
 | 交接服务配置 | 由关联视图/专用入口读取，未另造查询 | `handoff-business-service-config` | [handoff-business-settings.ts](../../lib/handoff-business-settings.ts) |
 | 金蝶订单导出与模板 | `kingdee-export` | `kingdee-template` | [collaboration-api.ts](../../lib/collaboration-api.ts) |
 | 原版工作簿导入 | 由关联视图/专用入口读取，未另造查询 | `ledger-commit`、`ledger-preview` | [operations.ts](../../lib/operations.ts) |
+| 销售字段目录及客户对应配置 | 由关联视图/专用入口读取，未另造查询 | `sales-color-fields-save` | [sales-color-fields-api.ts](../../lib/sales-color-fields-api.ts) |
 | 会话摘要 | `/api/auth/session` | 此对象未登记 POST 动作 | [server.mjs](../../standalone/server.mjs) |
 | 登录 | 由关联视图/专用入口读取，未另造查询 | `/api/auth/login` | [server.mjs](../../standalone/server.mjs) |
 | 注销 | 由关联视图/专用入口读取，未另造查询 | `/api/auth/logout` | [server.mjs](../../standalone/server.mjs) |
@@ -444,7 +448,7 @@
 
 本组接入边界：
 
-- 管理/敏感入口，保留原授权及人工操作：22 项。
+- 管理/敏感入口，保留原授权及人工操作：23 项。
 - 读取候选，待核验返回字段及副作用：12 项。
 - 业务动作，按具体内容确认后执行：14 项。
 - 应用内流程，不交模型凭据：10 项。
@@ -469,7 +473,7 @@
 
 ## 当前交付与待实施项
 
-- 已完成：10 组与页面导航对应；379 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
+- 已完成：10 组与页面导航对应；381 项接口全部有组别；跨部门共用关系；14 类流程及其业务明细字段；12 类业务资料/单据与 6 类客服记录的分组；字段/schema 来源索引；应用内/后台专用边界。
 - 字段来源索引是文件级导航，不是已完成的每个动作输入/输出契约。JSON 的 contractStatus 明确为 source-located-not-adapted。
 - 下一步实施：从原 schema 提取动作精确入参和返回投影，建立公共执行层及变更确认入口，再逐组接入 Studio 并做权限/业务回归。
 - 原表导入预览、固定工具结果和报价模板导出可能落盘，不能仅用 GET/POST 或名称决定副作用。
