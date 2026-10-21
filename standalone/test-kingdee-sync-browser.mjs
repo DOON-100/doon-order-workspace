@@ -26,9 +26,15 @@ try{
  await page.goto(origin+'/supplier-pending');await preparation;
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
  await page.getByRole('button',{name:'更新金蝶总表',exact:true}).waitFor();
+ await page.clock.install();
+ const syncButton=page.getByRole('button',{name:'同步金蝶总表',exact:true}),toast=page.locator('.kingdee-sync-toast');
+ const bounds=()=>syncButton.boundingBox(),baseline=await bounds();
+ async function stationary(expected=baseline){const actual=await bounds();for(const key of ['x','y','width','height'])assert(Math.abs(actual[key]-expected[key])<.5,`Button ${key} changed`);assert.equal(await page.locator('.kingdee-sync-action p').count(),0);}
+ async function topToast(){assert.equal(await toast.count(),1);const box=await toast.boundingBox(),view=page.viewportSize();assert(box.y>=0&&box.y<=24&&box.x>=0&&box.x+box.width<=view.width);assert.equal(await toast.evaluate(node=>node.parentElement===document.body),true);}
+ async function expires(){await page.clock.fastForward(4000);assert(await toast.isVisible());await page.clock.fastForward(1100);assert.equal(await toast.count(),0);}
  await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();
  await page.getByRole('alert').filter({hasText:'金蝶连接尚未配置'}).waitFor();
- assert.equal(await page.getByRole('dialog').count(),0);
+ await stationary();await topToast();await expires();assert.equal(await page.getByRole('dialog').count(),0);
  let mode='ok',runs=0,checks=0,release,keys=[];
  const receipt={inserted:1,skipped:29,held:0,selected:30,excludedComplete:0};
  await page.route('**/api/workspace/kingdee-sync-run',async route=>{
@@ -39,17 +45,18 @@ try{
  });
  await page.route('**/api/workspace/kingdee-sync-result?*',async route=>{checks++;return route.fulfill({json:mode==='lost'?{status:'complete',receipt}:{status:'not-completed'}});});
  mode='slow';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();
- await page.getByRole('button',{name:'正在同步…',exact:true}).waitFor();assert(await page.getByRole('button',{name:'正在同步…',exact:true}).isDisabled());
+ assert(await syncButton.isDisabled());assert.equal(await syncButton.getAttribute('aria-busy'),'true');await stationary();await topToast();
  for(let i=0;i<50&&!release;i++)await new Promise(r=>setTimeout(r,20));assert(release);release();
- await page.getByRole('status').filter({hasText:'本次新增 1 条，已有跳过 29 条，待核查 0 条'}).waitFor();assert.equal(runs,1);assert.equal(await page.getByRole('dialog').count(),0);assert.match(await page.getByRole('status').innerText(),/仅同步最新 30 条，历史记录保留/);assert.doesNotMatch(await page.getByRole('status').innerText(),/下一页|继续|1263/);
- await page.screenshot({path:path.join(dir,'kingdee-sync-desktop.png'),fullPage:true});
+ await page.getByRole('status').filter({hasText:'本次新增 1 条，已有跳过 29 条，待核查 0 条'}).waitFor();assert.equal(runs,1);assert.equal(await page.getByRole('dialog').count(),0);assert.match(await page.getByRole('status').innerText(),/仅同步最新 30 条未上货明细，历史记录保留/);assert.doesNotMatch(await page.getByRole('status').innerText(),/下一页|继续|1263/);
+ await stationary();await topToast();await page.screenshot({path:path.join(dir,'kingdee-sync-desktop.png'),fullPage:true});await expires();await stationary();
  mode='lost';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();
  await page.getByRole('status').filter({hasText:'本次新增 1 条'}).waitFor();assert.equal(runs,2);assert(checks>=1);
- mode='failure';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();await page.getByRole('alert').filter({hasText:'先核查本批结果'}).waitFor();assert.equal(runs,3);
+ mode='failure';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();await page.getByRole('alert').filter({hasText:'先核查本批结果'}).waitFor();assert.equal(runs,3);await topToast();await expires();await stationary();
  mode='ok';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();await page.getByRole('status').filter({hasText:'本次新增 1 条'}).waitFor();assert.equal(runs,4);assert.equal(keys[2],keys[3]);assert.notEqual(keys[0],keys[1]);
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'同步金蝶总表',exact:true}).scrollIntoViewIfNeeded();
  const box=await page.locator('.kingdee-sync-action').boundingBox();assert(box&&box.width<=390&&box.x>=0&&box.x+box.width<=390);
- await page.screenshot({path:path.join(dir,'kingdee-sync-mobile.png')});
+ const mobileBaseline=await bounds();await syncButton.click();await toast.filter({hasText:'本次新增 1 条'}).waitFor();await stationary(mobileBaseline);await topToast();
+ await page.screenshot({path:path.join(dir,'kingdee-sync-mobile.png')});await expires();await stationary(mobileBaseline);
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
- assert.deepEqual(errors,[]);console.log('PASS 一键无预览、未配置提示、运行中禁用、响应丢失先查回执、重试沿用批次及手机布局');console.log('Synthetic screenshots: '+dir);
+ assert.deepEqual(errors,[]);console.log('PASS 一键无预览、桌面手机按钮位置尺寸不变、顶部 Toast 5 秒消失、运行中禁用、断线回执及提示消失后仍沿用批次重试');console.log('Synthetic screenshots: '+dir);
 }finally{await browser?.close();server.kill();}

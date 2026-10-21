@@ -141,7 +141,7 @@
     },
     {
       "path": "lib/kingdee-sync-api.ts",
-      "sha256": "d136bf5005e78edd96e390cf8f167714b53193ed2b8c6eb3509c73a001be7db0"
+      "sha256": "6f660c599e3e775aefb31cfd08177e3f5a31e6ec3d5b1b28ce694b8398d607e9"
     },
     {
       "path": "lib/loss-api.ts",
@@ -9804,7 +9804,7 @@
       "references": [
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 15
+          "line": 16
         }
       ],
       "module": "金蝶采购仅新增同步",
@@ -9839,11 +9839,11 @@
       "references": [
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 22
+          "line": 24
         },
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 28
+          "line": 30
         }
       ],
       "module": "金蝶采购仅新增同步",
@@ -9878,7 +9878,7 @@
       "references": [
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 25
+          "line": 27
         }
       ],
       "module": "金蝶采购仅新增同步",

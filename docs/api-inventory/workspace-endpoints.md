@@ -253,9 +253,9 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| GET | `kingdee-sync-ready` | 查询/历史/能力 | [kingdeeSyncGet:27](../../lib/kingdee-sync-api.ts#L27) | [app/kingdee-sync-button.tsx:15](../../app/kingdee-sync-button.tsx#L15) |
-| GET | `kingdee-sync-result` | 查询/历史/能力 | [kingdeeSyncGet:31](../../lib/kingdee-sync-api.ts#L31) | [app/kingdee-sync-button.tsx:22](../../app/kingdee-sync-button.tsx#L22) |
-| POST | `kingdee-sync-run` | 专用业务动作 | [kingdeeSyncPost:41](../../lib/kingdee-sync-api.ts#L41) | [app/kingdee-sync-button.tsx:25](../../app/kingdee-sync-button.tsx#L25) |
+| GET | `kingdee-sync-ready` | 查询/历史/能力 | [kingdeeSyncGet:27](../../lib/kingdee-sync-api.ts#L27) | [app/kingdee-sync-button.tsx:16](../../app/kingdee-sync-button.tsx#L16) |
+| GET | `kingdee-sync-result` | 查询/历史/能力 | [kingdeeSyncGet:31](../../lib/kingdee-sync-api.ts#L31) | [app/kingdee-sync-button.tsx:24](../../app/kingdee-sync-button.tsx#L24) |
+| POST | `kingdee-sync-run` | 专用业务动作 | [kingdeeSyncPost:41](../../lib/kingdee-sync-api.ts#L41) | [app/kingdee-sync-button.tsx:27](../../app/kingdee-sync-button.tsx#L27) |
 
 <a id="module-12"></a>
 
