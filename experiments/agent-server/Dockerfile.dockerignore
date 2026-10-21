@@ -43,6 +43,7 @@
 !mastra-studio/locale-zh.mjs
 !mastra-studio/widgets-zh.mjs
 !mastra-studio/deepseek.mjs
+!mastra-studio/model-scheduler.mjs
 !mastra-studio/offline-model.mjs
 !mastra-studio/postgres.mjs
 !mastra-studio/brand.css
