@@ -6,11 +6,13 @@ import {clientId} from '@/lib/client-id';
 import {request} from './ui';
 import {getBusinessTeamScope} from './business-team-client';
 
-type Result={inserted:number;skipped:number;held:number;deferred:number;page:number;pages:number;nextPage:number};
+type Result={inserted:number;skipped:number;held:number;selected?:number;excludedComplete?:number};
 export function KingdeeSyncButton({onSynchronized}:{onSynchronized:()=>void}){
  const [busy,setBusy]=useState(false),[error,setError]=useState(''),[result,setResult]=useState<Result|null>(null);
  const pending=useRef(''),running=useRef(false),generation=useRef(0),scope=getBusinessTeamScope();
  useEffect(()=>{generation.current++;pending.current='';setResult(null);setError('');return()=>{generation.current++;};},[scope]);
+ // Prepare the shared token when the button appears; synchronization still requires a click.
+ useEffect(()=>{if(!scope)void request('kingdee-sync-ready').catch(()=>{});},[scope]);
  async function synchronize(){
   if(running.current)return;running.current=true;setBusy(true);setError('');setResult(null);
   const current=generation.current;
@@ -29,8 +31,8 @@ export function KingdeeSyncButton({onSynchronized}:{onSynchronized:()=>void}){
  }
  return <div className="kingdee-sync-action">
   <Button variant="outline" disabled={busy} onClick={()=>void synchronize()}><RefreshCw size={16} className={busy?'animate-spin':undefined}/>{busy?'正在同步…':'同步金蝶总表'}</Button>
-  {busy&&<p role="status">正在读取金蝶并去重新增，每次最多 30 条…</p>}
-  {result&&<p role="status">本次新增 {result.inserted} 条，已有跳过 {result.skipped} 条，待核查 {result.held} 条。{result.deferred>0?`本页还有 ${result.deferred} 条待同步，再次点击继续。`:result.nextPage>1?'再次点击继续下一页。':'本轮已读取到末页。'}（第 {result.page} / {Math.max(1,result.pages)} 页）</p>}
+  {busy&&<p role="status">正在读取最新 30 条，已有记录自动跳过…</p>}
+  {result&&<p role="status">本次新增 {result.inserted} 条，已有跳过 {result.skipped} 条，待核查 {result.held} 条。{result.excludedComplete?`已入库排除 ${result.excludedComplete} 条。`:''}仅同步最新 {result.selected??30} 条，历史记录保留。</p>}
   {error&&<p className="error" role="alert">{error}</p>}
  </div>;
 }

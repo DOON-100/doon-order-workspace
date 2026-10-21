@@ -1,7 +1,7 @@
 import {broad,strictDate,type Member} from './domain';
 import {AppError,json} from './store';
 import {businessTeamHeader} from './business-team-scope';
-import {kingdeeConfig,kingdeeRead,object,sourceId,sourceText} from './kingdee-client';
+import {kingdeeConfig,kingdeeRead,kingdeeDetails,object,sourceId,sourceText,type KingdeeConfig} from './kingdee-client';
 import type {KingdeeQueryPage,KingdeeQueryRow} from './kingdee-readonly-types';
 
 const pageSize=5;
@@ -40,6 +40,25 @@ export function kingdeeDetailRows(detail:Record<string,unknown>,orderId:string){
  return {rows,excludedComplete,unknown};
 }
 
+/** Capture each order once. Optional page verification is for read-only diagnostics. */
+export async function readKingdeePurchasePage(config:KingdeeConfig,page:number,signal:AbortSignal,options:{start?:string;end?:string;verifyPage?:boolean}={}):Promise<KingdeeQueryPage>{
+ const startedAt=new Date().toISOString();
+ const query={page:String(page),page_size:String(pageSize),bill_status:'C',...(options.start?{start_bill_date:options.start}:{}),...(options.end?{end_bill_date:options.end}:{})};
+ const data=await kingdeeRead(config,'list',query,signal);
+ const first=pagination(data,page),details=await kingdeeDetails(config,first.ids,signal);
+ const rows:KingdeeQueryRow[]=[];let excludedComplete=0,unknown=0;
+ for(let index=0;index<first.rows.length;index++){
+  const summary=first.rows[index],orderId=first.ids[index],detail=details[index];
+  if(sourceId(detail.id)!==orderId||detail.bill_status!=='C'||['bill_no','supplier_id','bill_close_state'].some(key=>sourceText(detail[key])!==sourceText(summary[key])))throw new AppError('金蝶订单身份或审核状态与列表不一致，本次未同步。',409);
+  const mapped=kingdeeDetailRows(detail,orderId);rows.push(...mapped.rows);excludedComplete+=mapped.excludedComplete;unknown+=mapped.unknown;
+ }
+ if(options.verifyPage){
+  const check=pagination(await kingdeeRead(config,'list',query,signal),page);
+  if(check.count!==first.count||check.pages!==first.pages||fingerprint(first.rows)!==fingerprint(check.rows))throw new AppError('金蝶分页在查询期间发生变化，请重新查询。',409);
+ }
+ return {readOnly:true,page,pages:first.pages,count:first.count,orderIds:first.ids,rows,excludedComplete,unknown,startedAt,finishedAt:new Date().toISOString()};
+}
+
 /** Live read only: no commit(), bucket writes, audit records, import batches or timers. */
 export async function kingdeeReadonlyGet(action:string,req:Request,m:Member):Promise<Response|null>{
  if(!['kingdee-readonly-status','kingdee-readonly-query'].includes(action))return null;
@@ -59,19 +78,7 @@ export async function kingdeeReadonlyGet(action:string,req:Request,m:Member):Pro
  if(busy.has(m.id)||busy.size>=2)throw new AppError('已有金蝶查询正在进行，请稍后重试。',429);
  busy.add(m.id);
  try{
-  const startedAt=new Date().toISOString(),signal=AbortSignal.any([req.signal,AbortSignal.timeout(60000)]);
-  const query={page:String(page),page_size:String(pageSize),bill_status:'C',...(start?{start_bill_date:start}:{}),...(end?{end_bill_date:end}:{})};
-  const first=pagination(await kingdeeRead(config,'list',query,signal),page);
-  const rows:KingdeeQueryRow[]=[];let excludedComplete=0,unknown=0;
-  for(const summary of first.rows){
-   const orderId=sourceId(summary.id),detail=await kingdeeRead(config,'detail',{id:orderId},signal);
-   if(sourceId(detail.id)!==orderId||detail.bill_status!=='C'||['bill_no','supplier_id','bill_close_state'].some(key=>sourceText(detail[key])!==sourceText(summary[key])))throw new AppError('金蝶订单在查询期间发生变化，请重新查询。',409);
-   const mapped=kingdeeDetailRows(detail,orderId);rows.push(...mapped.rows);excludedComplete+=mapped.excludedComplete;unknown+=mapped.unknown;
-  }
-  // Reject an incomplete/changed page, rather than showing it as a successful empty result.
-  const check=pagination(await kingdeeRead(config,'list',query,signal),page);
-  if(check.count!==first.count||check.pages!==first.pages||fingerprint(first.rows)!==fingerprint(check.rows))throw new AppError('金蝶分页在查询期间发生变化，请重新查询。',409);
-  const result:KingdeeQueryPage={readOnly:true,page,pages:first.pages,count:first.count,orderIds:first.ids,rows,excludedComplete,unknown,startedAt,finishedAt:new Date().toISOString()};
-  return json(result);
+  const signal=AbortSignal.any([req.signal,AbortSignal.timeout(60000)]);
+  return json(await readKingdeePurchasePage(config,page,signal,{start,end,verifyPage:true}));
  }finally{busy.delete(m.id);}
 }

@@ -46,6 +46,7 @@ import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {kingdeeReadonlyGet} from '@/lib/kingdee-readonly-api';
 import {kingdeeSyncGet,kingdeeSyncPost} from '@/lib/kingdee-sync-api';
+import {kingdeeSyncState} from '@/lib/kingdee-sync-state';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
@@ -128,6 +129,18 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params;
  if(action==='read-version')return json(await readVersion());
+ if(action==='kingdee-sync-result'||action==='kingdee-sync-ready'){
+  const s=await kingdeeSyncState(),m=await actor(s),response=(await kingdeeSyncGet(action,req,s,m))!;
+  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
+ }
+ if(action==='kingdee-pending-data'&&!req.headers.get('X-Workspace-Team')?.trim()){
+  const s=await kingdeeSyncState(),m=await actor(s);
+  // Only full-table roles can render this view without customer/group relations.
+  if(broad(m)||readsAllOrders(m)){
+   const response=(await kingdeePendingGet(action,req,s,m))!;
+   response.headers.set('X-Workspace-Revision',String(s.revision));return response;
+  }
+ }
  const s=indexReadState(await snapshot()),m=await actor(s);
  const response=await workspaceRead(req,ctx,action,s,m);
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
@@ -148,7 +161,7 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  return await scopeBusinessTeamResponse(action,req,s,m,response);
 }
 export async function POST(req:Request,ctx:Context){try{
- sameOrigin(req);const {action}=await ctx.params;let s=await snapshot();
+ sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;

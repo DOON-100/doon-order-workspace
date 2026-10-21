@@ -5,7 +5,7 @@
   "sourceFiles": [
     {
       "path": "app/api/workspace/[action]/route.ts",
-      "sha256": "698ed9fe87bd7d5c2b589ab4de899f44feeb69ca1c73c1dbaf816a39fb543f92"
+      "sha256": "a8c9634f1b70620756f6500a8574a83c69b4f5d4687f3d246c1d320014327553"
     },
     {
       "path": "lib/ar-customer-profiles-api.ts",
@@ -137,11 +137,11 @@
     },
     {
       "path": "lib/kingdee-readonly-api.ts",
-      "sha256": "4f136fa6cc570968cfdebf02f1dedcffcf7514563f1bd85fd3a57331f5854620"
+      "sha256": "f6a037bf9ae6386f0003590f162e5bca9cf8d72e51b85a253b25f99414c71db3"
     },
     {
       "path": "lib/kingdee-sync-api.ts",
-      "sha256": "398b2251a30eadd9796b19175fa7cdcd83523c315c31797d4c4f9c561041e5f7"
+      "sha256": "d136bf5005e78edd96e390cf8f167714b53193ed2b8c6eb3509c73a001be7db0"
     },
     {
       "path": "lib/loss-api.ts",
@@ -201,7 +201,7 @@
     }
   ],
   "handlerCount": 90,
-  "endpointCount": 355,
+  "endpointCount": 356,
   "unresolved": [],
   "unmatchedClientPaths": [],
   "dynamicClientPrefixes": [
@@ -1228,7 +1228,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 181,
+          "line": 194,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -1237,7 +1237,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 184,
+          "line": 197,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1286,7 +1286,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 125,
+          "line": 126,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -1325,7 +1325,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 146,
+          "line": 159,
           "handler": "workspaceRead",
           "kind": "comparison",
           "chain": [
@@ -1359,7 +1359,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 214,
+          "line": 227,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1396,7 +1396,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 202,
+          "line": 215,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -1425,7 +1425,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 245,
+          "line": 258,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5507,7 +5507,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 113,
+          "line": 114,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -5940,7 +5940,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 203,
+          "line": 216,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -5969,7 +5969,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 152,
+          "line": 165,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6014,7 +6014,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 180,
+          "line": 193,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6023,7 +6023,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 255,
+          "line": 268,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -6300,7 +6300,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 115,
+          "line": 116,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -9461,7 +9461,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 181,
+          "line": 194,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -9470,7 +9470,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 194,
+          "line": 207,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -9523,7 +9523,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 114,
+          "line": 115,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [
@@ -9610,9 +9610,16 @@
           "kind": "allowlist",
           "chain": [
             "app/api/workspace/[action]/route.ts#GET",
-            "app/api/workspace/[action]/route.ts#workspaceRead",
-            "app/api/workspace/[action]/route.ts#workspaceGet",
             "lib/kingdee-pending-api.ts#kingdeePendingGet"
+          ]
+        },
+        {
+          "file": "app/api/workspace/[action]/route.ts",
+          "line": 136,
+          "handler": "GET",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET"
           ]
         }
       ],
@@ -9646,8 +9653,6 @@
           "kind": "allowlist",
           "chain": [
             "app/api/workspace/[action]/route.ts#GET",
-            "app/api/workspace/[action]/route.ts#workspaceRead",
-            "app/api/workspace/[action]/route.ts#workspaceGet",
             "lib/kingdee-pending-api.ts#kingdeePendingGet"
           ]
         },
@@ -9658,8 +9663,6 @@
           "kind": "comparison",
           "chain": [
             "app/api/workspace/[action]/route.ts#GET",
-            "app/api/workspace/[action]/route.ts#workspaceRead",
-            "app/api/workspace/[action]/route.ts#workspaceGet",
             "lib/kingdee-pending-api.ts#kingdeePendingGet"
           ]
         }
@@ -9717,7 +9720,7 @@
       "evidence": [
         {
           "file": "lib/kingdee-readonly-api.ts",
-          "line": 45,
+          "line": 64,
           "handler": "kingdeeReadonlyGet",
           "kind": "allowlist",
           "chain": [
@@ -9740,7 +9743,7 @@
       "evidence": [
         {
           "file": "lib/kingdee-readonly-api.ts",
-          "line": 45,
+          "line": 64,
           "handler": "kingdeeReadonlyGet",
           "kind": "allowlist",
           "chain": [
@@ -9752,7 +9755,7 @@
         },
         {
           "file": "lib/kingdee-readonly-api.ts",
-          "line": 51,
+          "line": 70,
           "handler": "kingdeeReadonlyGet",
           "kind": "comparison",
           "chain": [
@@ -9770,8 +9773,8 @@
     },
     {
       "method": "GET",
-      "action": "kingdee-sync-result",
-      "path": "/api/workspace/kingdee-sync-result",
+      "action": "kingdee-sync-ready",
+      "path": "/api/workspace/kingdee-sync-ready",
       "evidence": [
         {
           "file": "lib/kingdee-sync-api.ts",
@@ -9780,9 +9783,16 @@
           "kind": "comparison",
           "chain": [
             "app/api/workspace/[action]/route.ts#GET",
-            "app/api/workspace/[action]/route.ts#workspaceRead",
-            "app/api/workspace/[action]/route.ts#workspaceGet",
             "lib/kingdee-sync-api.ts#kingdeeSyncGet"
+          ]
+        },
+        {
+          "file": "app/api/workspace/[action]/route.ts",
+          "line": 132,
+          "handler": "GET",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET"
           ]
         }
       ],
@@ -9790,11 +9800,46 @@
       "references": [
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 20
+          "line": 15
+        }
+      ],
+      "module": "金蝶采购仅新增同步",
+      "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "GET",
+      "action": "kingdee-sync-result",
+      "path": "/api/workspace/kingdee-sync-result",
+      "evidence": [
+        {
+          "file": "lib/kingdee-sync-api.ts",
+          "line": 31,
+          "handler": "kingdeeSyncGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "lib/kingdee-sync-api.ts#kingdeeSyncGet"
+          ]
+        },
+        {
+          "file": "app/api/workspace/[action]/route.ts",
+          "line": 132,
+          "handler": "GET",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET"
+          ]
+        }
+      ],
+      "owner": "lib/kingdee-sync-api.ts",
+      "references": [
+        {
+          "file": "app/kingdee-sync-button.tsx",
+          "line": 22
         },
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 26
+          "line": 28
         }
       ],
       "module": "金蝶采购仅新增同步",
@@ -9807,12 +9852,21 @@
       "evidence": [
         {
           "file": "lib/kingdee-sync-api.ts",
-          "line": 37,
+          "line": 41,
           "handler": "kingdeeSyncPost",
           "kind": "comparison",
           "chain": [
             "app/api/workspace/[action]/route.ts#POST",
             "lib/kingdee-sync-api.ts#kingdeeSyncPost"
+          ]
+        },
+        {
+          "file": "app/api/workspace/[action]/route.ts",
+          "line": 164,
+          "handler": "POST",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#POST"
           ]
         }
       ],
@@ -9820,7 +9874,7 @@
       "references": [
         {
           "file": "app/kingdee-sync-button.tsx",
-          "line": 23
+          "line": 25
         }
       ],
       "module": "金蝶采购仅新增同步",
@@ -9934,7 +9988,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 179,
+          "line": 192,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10053,7 +10107,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 179,
+          "line": 192,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -10172,7 +10226,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 240,
+          "line": 253,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10205,7 +10259,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 221,
+          "line": 234,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -10395,7 +10449,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 179,
+          "line": 192,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -11131,7 +11185,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 181,
+          "line": 194,
           "handler": "POST",
           "kind": "allowlist",
           "chain": [
@@ -11140,7 +11194,7 @@
         },
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 193,
+          "line": 206,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -13301,7 +13355,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 130,
+          "line": 131,
           "handler": "GET",
           "kind": "comparison",
           "chain": [
@@ -13386,7 +13440,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 249,
+          "line": 262,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -14366,7 +14420,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 218,
+          "line": 231,
           "handler": "POST",
           "kind": "comparison",
           "chain": [
@@ -14395,7 +14449,7 @@
       "evidence": [
         {
           "file": "app/api/workspace/[action]/route.ts",
-          "line": 121,
+          "line": 122,
           "handler": "workspaceGet",
           "kind": "comparison",
           "chain": [

@@ -90,8 +90,22 @@ async function authorization(config:KingdeeConfig){
  })();inFlight={key,promise};
  try{return await promise;}finally{if(inFlight?.promise===promise)inFlight=undefined;}
 }
+/** Prepare only the cached connection; never fetch or write business records. */
+export async function prepareKingdeeConnection(config:KingdeeConfig){await authorization(config);}
 export async function kingdeeRead(config:KingdeeConfig,operation:'list'|'detail',query:Record<string,string>,signal:AbortSignal){
  const auth=await authorization(config);
  try{return object(await gatewayRequest(config,operation,query,signal,auth));}
  catch(error){if(error instanceof AppError&&error.status===502)cached=undefined;throw error;}
+}
+
+/** Independent detail GETs, at most three in flight; drain a wave before failing. */
+export async function kingdeeDetails(config:KingdeeConfig,ids:string[],signal:AbortSignal){
+ const details:Json[]=[];
+ for(let offset=0;offset<ids.length;offset+=3){
+  const wave=await Promise.allSettled(ids.slice(offset,offset+3).map(id=>kingdeeRead(config,'detail',{id},signal)));
+  const failure=wave.find((result):result is PromiseRejectedResult=>result.status==='rejected');
+  if(failure)throw failure.reason;
+  for(const result of wave)if(result.status==='fulfilled')details.push(result.value);
+ }
+ return details;
 }
