@@ -23,6 +23,23 @@ function pagination(data:Record<string,unknown>,page:number){
 }
 function fingerprint(rows:Record<string,unknown>[]){return JSON.stringify(rows.map(row=>Object.fromEntries(Object.keys(row).sort().map(key=>[key,row[key]]))));}
 
+export function kingdeeDetailRows(detail:Record<string,unknown>,orderId:string){
+ if(sourceId(detail.id)!==orderId||detail.bill_status!=='C')throw new AppError('金蝶订单身份或审核状态已变化，请重新同步。',409);
+ const rows:KingdeeQueryRow[]=[];let excludedComplete=0,unknown=0;
+ if(!Array.isArray(detail.material_entity)||!detail.material_entity.length||detail.material_entity.length>2000)throw new AppError('金蝶商品行缺失或数量异常，本次查询未完成。',502);
+ const lineIds=new Set<string>();
+ for(const raw of detail.material_entity){
+  const line=object(raw),lineId=sourceId(line.id);if(lineIds.has(lineId))throw new AppError('金蝶商品行标识重复，本次查询未完成。',409);lineIds.add(lineId);
+  if(line.entry_realio_status==='C'){excludedComplete++;continue;}
+  const uncertain=!['A','Z'].includes(sourceText(line.entry_realio_status));if(uncertain)unknown++;
+  // qty is the source order quantity, never inferred as remaining quantity.
+  // due_date is a settlement date; only delivery_date is shown as delivery date.
+  const values=[text(detail.bill_no),text(detail.bill_date),text(detail.supplier_name),text(detail.emp_name),label(detail.bill_close_state,closeLabels),text(line.material_number),text(line.material_name),text(line.material_model),text(line.unit_name),text(line.qty),text(line.delivery_date),label(line.entry_realio_status,stateLabels),label(line.close_state,lineCloseLabels),text(line.comment),orderId,lineId];
+  rows.push({id:orderId+':'+lineId,values,uncertain});
+ }
+ return {rows,excludedComplete,unknown};
+}
+
 /** Live read only: no commit(), bucket writes, audit records, import batches or timers. */
 export async function kingdeeReadonlyGet(action:string,req:Request,m:Member):Promise<Response|null>{
  if(!['kingdee-readonly-status','kingdee-readonly-query'].includes(action))return null;
@@ -49,17 +66,7 @@ export async function kingdeeReadonlyGet(action:string,req:Request,m:Member):Pro
   for(const summary of first.rows){
    const orderId=sourceId(summary.id),detail=await kingdeeRead(config,'detail',{id:orderId},signal);
    if(sourceId(detail.id)!==orderId||detail.bill_status!=='C'||['bill_no','supplier_id','bill_close_state'].some(key=>sourceText(detail[key])!==sourceText(summary[key])))throw new AppError('金蝶订单在查询期间发生变化，请重新查询。',409);
-   if(!Array.isArray(detail.material_entity)||!detail.material_entity.length||detail.material_entity.length>2000)throw new AppError('金蝶商品行缺失或数量异常，本次查询未完成。',502);
-   const lineIds=new Set<string>();
-   for(const raw of detail.material_entity){
-    const line=object(raw),lineId=sourceId(line.id);if(lineIds.has(lineId))throw new AppError('金蝶商品行标识重复，本次查询未完成。',409);lineIds.add(lineId);
-    if(line.entry_realio_status==='C'){excludedComplete++;continue;}
-    const uncertain=!['A','Z'].includes(sourceText(line.entry_realio_status));if(uncertain)unknown++;
-    // qty is the source order quantity, never inferred as remaining quantity.
-    // due_date is a settlement date; only delivery_date is shown as delivery date.
-    const values=[text(detail.bill_no),text(detail.bill_date),text(detail.supplier_name),text(detail.emp_name),label(detail.bill_close_state,closeLabels),text(line.material_number),text(line.material_name),text(line.material_model),text(line.unit_name),text(line.qty),text(line.delivery_date),label(line.entry_realio_status,stateLabels),label(line.close_state,lineCloseLabels),text(line.comment),orderId,lineId];
-    rows.push({id:orderId+':'+lineId,values,uncertain});
-   }
+   const mapped=kingdeeDetailRows(detail,orderId);rows.push(...mapped.rows);excludedComplete+=mapped.excludedComplete;unknown+=mapped.unknown;
   }
   // Reject an incomplete/changed page, rather than showing it as a successful empty result.
   const check=pagination(await kingdeeRead(config,'list',query,signal),page);

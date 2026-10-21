@@ -8,7 +8,7 @@ import {filterBusinessTeamRows} from './business-team-scope';
 export const KINGDEE_PENDING_QUANTITY_MEANING='原表数量，未推定剩余未上货数量';
 export type KingdeePendingValue=string|number|boolean|null;
 export type KingdeePendingRow={sourceRow:number;values:KingdeePendingValue[];displayValues:string[];rowType:'data'|'summary'|'blank'};
-export type KingdeePendingMetadata={filename:string;hash:string;sourceAsOf:string;sourceFilter:string;sourceAccount:string;sourceSheet:string;headerRow:number;importedAt:string;importedBy:string;rowCount:number;sourceRowCount:number;orderCount:number;supplierCount:number;quantityMeaning:string;scope?:'all'|'authorized'};
+export type KingdeePendingMetadata={filename:string;hash:string;sourceAsOf:string;sourceFilter:string;sourceAccount:string;sourceSheet:string;headerRow:number;importedAt:string;importedBy:string;rowCount:number;sourceRowCount:number;orderCount:number;supplierCount:number;quantityMeaning:string;scope?:'all'|'authorized';apiAddedCount?:number};
 export type KingdeePendingSnapshot=Entity&{kind:'kingdee_pending_snapshot';headers:string[];metadata:KingdeePendingMetadata;hash:string;rowsHash:string;rowsKey:string;fileKey:string;committedRevision:number;createdAt:string};
 export type KingdeePendingImport=Entity&{kind:'kingdee_pending_import';headers:string[];metadata:KingdeePendingMetadata;hash:string;rowsHash:string;rowsKey:string;fileKey:string;sample:KingdeePendingRow[];status:'待确认'|'已完成';snapshotId?:string;createdAt:string};
 
@@ -68,5 +68,5 @@ export function visibleKingdeePending(s:State,m:Member,headers:string[],rows:Kin
 
 export function pendingMetadata(metadata:KingdeePendingMetadata,headers:string[],rows:KingdeePendingRow[],full:boolean):KingdeePendingMetadata{
  if(full)return {...metadata,scope:'all'};
- return {...metadata,filename:'金蝶采购未上货表（授权范围）',sourceFilter:'仅显示当前授权及小组范围的明细，源表合计和筛选说明不在此范围展示。',importedBy:'',...pendingCounts(headers,rows),scope:'authorized'};
+ return {...metadata,apiAddedCount:undefined,filename:'金蝶采购未上货表（授权范围）',sourceFilter:'仅显示当前授权及小组范围的明细，源表合计和筛选说明不在此范围展示。',importedBy:'',...pendingCounts(headers,rows),scope:'authorized'};
 }

@@ -3,15 +3,12 @@ import {AppError,bucket,commit,json} from './store';
 import {businessTeamHeader} from './business-team-scope';
 import {requestedExportBusinessTeam} from './business-team-export';
 import {sha} from './workbooks';
+import {savedKingdeeRows,apiRecords,appendKingdeeView} from './kingdee-sync-records';
 import {KINGDEE_PENDING_QUANTITY_MEANING,orderedKingdeePendingSnapshots,parseKingdeePending,pendingMetadata,visibleKingdeePending,type KingdeePendingImport,type KingdeePendingRow,type KingdeePendingSnapshot} from './kingdee-pending';
 
 function manage(m:Member){if(!m.active||!broad(m))throw new AppError('仅现有 PMC / 采购和管理员可同步金蝶采购源表。',403);}
 function publicJob(job:KingdeePendingImport){return {id:job.id,status:job.status,hash:job.hash,headers:job.headers,metadata:job.metadata,sample:job.sample,...(job.snapshotId?{snapshotId:job.snapshotId}:{})};}
-async function readRows(snapshot:KingdeePendingSnapshot|KingdeePendingImport){
- const blob=await bucket().get(snapshot.rowsKey);if(!blob)throw new AppError('金蝶源表快照暂不可用，请重试。',503);
- const text=await new Response(blob.body).text();if(await sha(text)!==snapshot.rowsHash)throw new AppError('金蝶源表明细校验未通过，请保留原文件并联系管理员。',409);
- return JSON.parse(text) as KingdeePendingRow[];
-}
+const readRows=savedKingdeeRows;
 
 export async function kingdeePendingGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['kingdee-pending-data','kingdee-pending-file'].includes(action))return null;
@@ -24,6 +21,11 @@ export async function kingdeePendingGet(action:string,req:Request,s:State,m:Memb
   if(teamId||!readsAllOrders(m)&&!broad(m))throw new AppError('原件包含全表，仅全部采购范围的授权人员可下载；分组查看请使用授权明细。',403);
   const source=await bucket().get(selected.fileKey);if(!source)throw new AppError('金蝶原始文件暂不可用。',503);
   return new Response(source.body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(selected.metadata.filename)}`,'Cache-Control':'no-store','Vary':businessTeamHeader,'X-Content-Type-Options':'nosniff'}});
+ }
+ if(!id&&apiRecords(s).length){
+  const combined=appendKingdeeView(s,selected,selected?await readRows(selected):[]),visible=visibleKingdeePending(s,m,combined.headers,combined.rows,teamId);
+  const response=json({snapshot:{...combined,rows:visible.rows,metadata:pendingMetadata(combined.metadata,combined.headers,visible.rows,visible.full)},canImport:broad(m),canDownloadOriginal:!!selected&&visible.full,history:visible.full?history.map(snapshot=>({id:snapshot.id,metadata:snapshot.metadata})):[]});
+  response.headers.set('Vary',businessTeamHeader);return response;
  }
  if(!selected)return json({snapshot:null,canImport:broad(m),canDownloadOriginal:false,history:[]});
  const visible=visibleKingdeePending(s,m,selected.headers,await readRows(selected),teamId);
