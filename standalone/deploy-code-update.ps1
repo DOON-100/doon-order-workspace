@@ -67,7 +67,14 @@ function Stop-OwnedService {
  Disable-ScheduledTask -TaskName $taskName | Out-Null
  Stop-ScheduledTask -TaskName $taskName
  foreach ($process in @(Get-CimInstance Win32_Process -Filter "Name = 'node.exe'" -ErrorAction Stop)) {
-  if ((Test-ScriptProcess $process $hostScript) -or (Test-ScriptProcess $process $serverScript)) { Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }
+  if ((Test-ScriptProcess $process $hostScript) -or (Test-ScriptProcess $process $serverScript)) {
+   try { Stop-Process -Id $process.ProcessId -Force -ErrorAction Stop }
+   catch {
+    # Stopping the host can finish its child before this captured row is reached.
+    # A process that still exists is a real failure, not an ignored stop error.
+    if (Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue) { throw }
+   }
+  }
  }
  Wait-Stopped
 }
