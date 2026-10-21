@@ -1,7 +1,7 @@
 import {createStudio} from '../mastra-studio/server.mjs';
 import {createStudioAssets} from '../mastra-studio/assets.mjs';
 import {createCloudStorage} from '../mastra-studio/postgres.mjs';
-import {createSessionChecker} from './session.mjs';
+import {createSessionChecker,sessionCheckOptions} from './session.mjs';
 import {createAgentServer} from './http-server.mjs';
 import {createBusinessReader,createBusinessAccess,withBusinessAccess} from './business-api.mjs';
 import {createRuntimePool} from './runtime-pool.mjs';
@@ -11,7 +11,10 @@ import {processModelScheduler} from '../mastra-studio/model-scheduler.mjs';
 import {createProcessChangeClient,createProcessChangeSession} from './process-change-client.mjs';
 
 const publicOrigin=process.env.DOON_AGENT_PUBLIC_ORIGIN;
-const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'});
+const authenticate=createSessionChecker({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal',...sessionCheckOptions(process.env)});
+// Aggregate counters only; no cookies, their hashes, identities or upstream responses.
+let lastAuthSummary='';
+const authMetrics=setInterval(()=>{const summary=authenticate.stats(),serialized=JSON.stringify(summary);if(summary.requests&&serialized!==lastAuthSummary){lastAuthSummary=serialized;console.log(JSON.stringify({event:'session-check-summary',...summary}));}},60000);authMetrics.unref();
 const live=process.env.DOON_AGENT_DATA_MODE==='live-readonly';
 const pool=live?createRuntimePool({create:async(user,schema)=>{
  const storage=await createCloudStorage(process.env,{schemaName:schema});
@@ -29,4 +32,4 @@ const server=createAgentServer({publicOrigin,studio,staticStudio,authenticate,sy
 await staticStudio.warm();
 scheduleWorker?.start();
 server.listen(8799,'0.0.0.0',()=>console.log(JSON.stringify({event:'ready',service:'agent-studio',syntheticOnly:!live,model:process.env.DOON_STUDIO_MODEL||'offline'})));
-for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void processModelScheduler.close();void scheduleWorker?.close();server.close(async()=>{await processModelScheduler.close();await scheduleWorker?.close();await(pool||studio).close();process.exit(0);});});
+for(const signal of ['SIGTERM','SIGINT'])process.once(signal,()=>{void processModelScheduler.close();void scheduleWorker?.close();server.close(async()=>{await processModelScheduler.close();await scheduleWorker?.close();await(pool||studio).close();clearInterval(authMetrics);authenticate.close();process.exit(0);});});

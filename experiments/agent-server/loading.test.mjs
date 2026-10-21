@@ -13,6 +13,9 @@ test('Studio packaged UI loads without creating user storage; gzip, ETag, HEAD a
  await assets.warm();
  const call=(route,headers={},method='GET')=>assets.handle(new Request('https://synthetic.test/studio/'+route,{headers,method}));
  const html=await(await call('')).text();assert.match(html,/真实业务只读/);assert(!html.includes('%%'));
+ for(const route of ['','manage/','workflow-manager/','workflow-preview/','workflow-schedules/','process-change/','purchase-change/']){
+  const page=await(await call(route)).text();assert.match(page,/<head[^>]*><script>\/\/ Observe failures/);assert.equal(page.split("banner.id='doon-auth-status'").length,2,route+' installs one observer before app scripts');
+ }
  const root=path.join(path.dirname(fileURLToPath(import.meta.resolve('../mastra-studio/node_modules/mastra/package.json'))),'dist/studio/assets');
  const files=await fs.readdir(root),script='assets/'+files.find(file=>/^main-.*\.js$/.test(file));
  const identity=await call(script),plain=Buffer.from(await identity.arrayBuffer());

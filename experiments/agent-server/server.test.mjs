@@ -2,10 +2,35 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import {createAgentServer} from './http-server.mjs';
-import {parsePublicOrigin,sessionCookie,canEnterStudio} from './session.mjs';
+import {parsePublicOrigin,sessionCookie,canEnterStudio,SessionCheckError} from './session.mjs';
 
 const client=(port,path,{method='GET',headers={},body}={})=>new Promise((resolve,reject)=>{
  const request=http.request({hostname:'127.0.0.1',port,path,method,headers},response=>{const chunks=[];response.on('data',chunk=>chunks.push(chunk));response.on('end',()=>resolve(new Response(Buffer.concat(chunks),{status:response.statusCode,headers:response.headers})));response.on('error',reject);});request.on('error',reject);request.end(body);
+});
+
+test('auth failures distinguish temporary, expired and forbidden without invoking or replaying actions',async()=>{
+ let mode='AUTH_TIMEOUT',actions=0;
+ const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async()=>{if(mode==='expired')return null;if(mode==='verified')return{username:'SYN',role:'admin',personnelType:'internal',mustChange:false};throw new SessionCheckError(mode);},studio:{handle:async()=>{actions++;return Response.json({ok:true});}}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const port=server.address().port;
+ const call=(path,options={})=>client(port,path,{...options,headers:{Host:'example.test',Origin:'https://example.test',...options.headers}});
+ try{
+  for(mode of ['AUTH_TIMEOUT','AUTH_UNAVAILABLE','AUTH_BUSY']){
+   const response=await call('/studio/api/save',{method:'POST',body:'SYN'});assert.equal(response.status,503);assert.equal(response.headers.get('X-Doon-Auth-Status'),'temporary');assert.equal(response.headers.get('location'),null);assert.equal((await response.json()).code,mode);
+   const page=await call('/studio/',{headers:{Accept:'text/html'}});assert.equal(page.status,503);assert.equal(page.headers.get('cache-control'),'no-store');assert.match(await page.text(),/重新检查并打开工作台/);assert.equal(page.headers.get('location'),null);
+  }
+  mode='AUTH_FORBIDDEN';const denied=await call('/studio/api/save',{method:'POST'});assert.equal(denied.status,403);assert.equal(denied.headers.get('X-Doon-Auth-Status'),'forbidden');
+  mode='expired';const expired=await call('/studio/api/save',{method:'POST'});assert.equal(expired.status,401);assert.equal((await expired.json()).code,'AUTH_EXPIRED');assert.equal(expired.headers.get('X-Doon-Auth-Status'),'expired');assert.equal(actions,0);
+  mode='verified';const accepted=await call('/studio/api/save',{method:'POST',body:'SYN'});assert.equal(accepted.status,200);assert.equal(accepted.headers.get('X-Doon-Auth-Status'),'verified');assert.equal(actions,1);
+ }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test('disconnect during gateway authentication cancels its waiter before Studio is invoked',async()=>{
+ let entered,cancelled,actions=0;const started=new Promise(resolve=>entered=resolve),aborted=new Promise(resolve=>cancelled=resolve);
+ const server=createAgentServer({publicOrigin:'https://example.test',authenticate:async(_cookie,{signal})=>{entered();return new Promise((_,reject)=>signal.addEventListener('abort',()=>{cancelled();reject(new SessionCheckError('AUTH_CANCELLED'));},{once:true}));},studio:{handle:()=>{actions++;return Response.json({ok:true});}}});
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const request=http.get({hostname:'127.0.0.1',port:server.address().port,path:'/studio/api/agents',headers:{Host:'example.test'}});request.on('error',()=>{});
+ try{await started;request.destroy();await Promise.race([aborted,new Promise((_,reject)=>{const timer=setTimeout(()=>reject(Error('authentication was not cancelled')),1000);timer.unref();})]);assert.equal(actions,0);}
+ finally{request.destroy();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });
 
 test('HTTPS origin、会话筛选和角色策略拒绝不明确的授权',()=>{

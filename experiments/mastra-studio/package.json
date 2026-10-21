@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs model-scheduler.test.mjs observability.test.mjs business.test.mjs department-tools.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs",
+    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs model-scheduler.test.mjs observability.test.mjs business.test.mjs department-tools.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs ../agent-server/session.test.mjs ../agent-server/server.test.mjs",
     "test:departments": "node --test department-tools.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/schedule-worker.test.mjs",
     "test:purchases": "node ../agent-server/purchase-change.integration.mjs",
     "test:process-changes": "node ../agent-server/process-change.integration.mjs",
@@ -17,7 +17,8 @@
     "test:autonomy": "node --test autonomy/engine.test.mjs autonomy/http.test.mjs autonomy/chain.test.mjs autonomy/multi-user.test.mjs",
     "start:autonomy": "node autonomy/start.mjs",
     "start:chain": "node autonomy/start-chain.mjs",
-    "test:locale": "node --test localization.test.mjs"
+    "test:locale": "node --test localization.test.mjs",
+    "test:auth": "node --test ../agent-server/session.test.mjs ../agent-server/server.test.mjs ../agent-server/loading.test.mjs auth-status.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",

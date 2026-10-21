@@ -12,7 +12,10 @@ const brandStyles=new URL('./brand.css',import.meta.url);
 const localizedScripts=new Map();
 const csp="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
 const zip=promisify(gzip),compressed=new Map();
+const authStatusScript=await fs.readFile(new URL('./auth-status.js',import.meta.url),'utf8');
 async function assetResponse(bytes,type,request){
+ // Install before the app starts, without another authenticated script request.
+ if(type.startsWith('text/html'))bytes=Buffer.from(bytes.toString().replace(/<head(?:\s[^>]*)?>/i,head=>head+'<script>'+authStatusScript+'</script>'));
  const hash=createHash('sha256').update(bytes).digest('hex');
  const accepts=request.headers.get('accept-encoding')||'';
  const compress=bytes.length>=1024&&(type.startsWith('text/')||type.startsWith('image/svg'))&&accepts.split(',').some(value=>/^\s*gzip\s*(?:;\s*q=(0(?:\.\d+)?|1(?:\.0+)?))?\s*$/.test(value)&&!/[;]\s*q=0(?:\.0*)?\s*$/.test(value));
@@ -65,6 +68,7 @@ export function createStudioAssets({cloud=false,businessFacts=false,liveModel=fa
     const [file,type]=managerFiles[url.pathname];
     return assetResponse(await fs.readFile(new URL('./'+file,import.meta.url)),type,request);
    }
+   if(url.pathname==='/studio/auth-status.js')return assetResponse(await fs.readFile(new URL('./auth-status.js',import.meta.url)),'text/javascript; charset=utf-8',request);
    if(url.pathname==='/studio/provider-status.js')return assetResponse(await fs.readFile(new URL('./provider-status.js',import.meta.url)),'text/javascript; charset=utf-8',request);
    if(url.pathname==='/studio/deepseek.svg')return assetResponse(await fs.readFile(new URL('./assets/deepseek.svg',import.meta.url)),'image/svg+xml',request);
    if(url.pathname==='/studio/brand.css')return assetResponse(await fs.readFile(brandStyles),'text/css; charset=utf-8',request);

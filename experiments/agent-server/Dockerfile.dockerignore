@@ -48,6 +48,7 @@
 !mastra-studio/postgres.mjs
 !mastra-studio/brand.css
 !mastra-studio/provider-status.js
+!mastra-studio/auth-status.js
 !mastra-studio/assets/
 !mastra-studio/assets/deepseek.svg
 !agent-server/
