@@ -2,7 +2,7 @@
 
 由 `node scripts/audit-api-inventory.mjs` 静态生成；不要手改。总体结论、原生认证/调度接口和范围说明见[清点报告](../api-inventory.md)。
 
-按 HTTP 方法 + action 去重，共 **358 项**，其中 GET 119、POST 239。所有 action 的路径前缀为 `/api/workspace/`。
+按 HTTP 方法 + action 去重，共 **360 项**，其中 GET 120、POST 240。所有 action 的路径前缀为 `/api/workspace/`。
 
 “动作索引”仅帮助检索，不是 CRUD 授权声明；保存可能仅更新或兼有新增，取消/退回/退货不是物理删除。GET 不自动证明零副作用。权限说明为模块入口摘要，完整判定仍需沿处理器及其调用的规则函数核对。页面引用仅证明存在字符串引用，不证明请求方法、页面可见性或执行成功。
 
@@ -67,27 +67,27 @@
 
 | 方法 | action | 动作索引 | 处理器证据 | 页面引用示例 |
 | --- | --- | --- | --- | --- |
-| POST | `attachment` | 新增/登记/上传 | [POST:198](../../app/api/workspace/%5Baction%5D/route.ts#L198) | [app/customer-project-entry-forms.ts:32](../../app/customer-project-entry-forms.ts#L32) |
-| GET | `backup` | 查询/历史/能力 | [workspaceGet:128](../../app/api/workspace/%5Baction%5D/route.ts#L128) | [app/support-panels.tsx:37](../../app/support-panels.tsx#L37) |
-| GET | `business-team-data` | 查询/历史/能力 | [workspaceRead:162](../../app/api/workspace/%5Baction%5D/route.ts#L162) | [app/workspace-read-queue.ts:20](../../app/workspace-read-queue.ts#L20) |
-| POST | `comment` | 新增/登记/上传 | [POST:231](../../app/api/workspace/%5Baction%5D/route.ts#L231) | [app/customer-project-panel.tsx:252](../../app/customer-project-panel.tsx#L252) |
-| POST | `commit-import` | 解析/预览/导入（不能假定无副作用） | [POST:219](../../app/api/workspace/%5Baction%5D/route.ts#L219) | [app/import-panel.tsx:26](../../app/import-panel.tsx#L26) |
-| POST | `correction` | 修改/关联/指派 | [POST:262](../../app/api/workspace/%5Baction%5D/route.ts#L262) | [app/purchase-panel.tsx:35](../../app/purchase-panel.tsx#L35) |
-| GET | `data` | 查询/历史/能力 | [workspaceGet:116](../../app/api/workspace/%5Baction%5D/route.ts#L116) | [app/customer-directory-panel.tsx:104](../../app/customer-directory-panel.tsx#L104) |
-| POST | `edit-order` | 修改/关联/指派 | [POST:220](../../app/api/workspace/%5Baction%5D/route.ts#L220) | [app/detail-panel.tsx:21](../../app/detail-panel.tsx#L21) |
-| POST | `enroll` | 专用业务动作 | [POST:168](../../app/api/workspace/%5Baction%5D/route.ts#L168) | [app/assignment-panel.tsx:16](../../app/assignment-panel.tsx#L16) |
-| POST | `export` | 专用业务动作 | [POST:197](../../app/api/workspace/%5Baction%5D/route.ts#L197) | [app/workspace.tsx:130](../../app/workspace.tsx#L130) |
-| GET | `file` | 读取/文件/导出 | [workspaceGet:118](../../app/api/workspace/%5Baction%5D/route.ts#L118) | [app/ar-invoice-ledger-panel.tsx:112](../../app/ar-invoice-ledger-panel.tsx#L112) |
-| POST | `inspect` | 解析/预览/导入（不能假定无副作用） | [POST:198](../../app/api/workspace/%5Baction%5D/route.ts#L198) | [app/fixed-data-tools-panel.tsx:21](../../app/fixed-data-tools-panel.tsx#L21) |
-| GET | `job` | 查询/历史/能力 | [workspaceGet:117](../../app/api/workspace/%5Baction%5D/route.ts#L117) | [app/import-panel.tsx:27](../../app/import-panel.tsx#L27) |
-| POST | `match` | 修改/关联/指派 | [POST:257](../../app/api/workspace/%5Baction%5D/route.ts#L257) | [app/support-panels.tsx:18](../../app/support-panels.tsx#L18) |
-| POST | `member` | 保存（具体新增/修改见实现） | [POST:238](../../app/api/workspace/%5Baction%5D/route.ts#L238) | [app/support-panels.tsx:36](../../app/support-panels.tsx#L36) |
-| POST | `pack` | 专用业务动作 | [POST:196](../../app/api/workspace/%5Baction%5D/route.ts#L196) | 未找到精确静态引用；不能据此认定未使用 |
-| POST | `preview` | 解析/预览/导入（不能假定无副作用） | [POST:198](../../app/api/workspace/%5Baction%5D/route.ts#L198) | [app/import-panel.tsx:25](../../app/import-panel.tsx#L25) |
-| GET | `read-version` | 查询/历史/能力 | [GET:133](../../app/api/workspace/%5Baction%5D/route.ts#L133) | [app/workspace-read-queue.ts:104](../../app/workspace-read-queue.ts#L104) |
-| POST | `review` | 专用业务动作 | [POST:266](../../app/api/workspace/%5Baction%5D/route.ts#L266) | [app/customer-quote-panel.tsx:229](../../app/customer-quote-panel.tsx#L229) |
-| POST | `task` | 专用业务动作 | [POST:235](../../app/api/workspace/%5Baction%5D/route.ts#L235) | [app/customer-project-entry-forms.ts:31](../../app/customer-project-entry-forms.ts#L31) |
-| GET | `template` | 读取/文件/导出 | [workspaceGet:124](../../app/api/workspace/%5Baction%5D/route.ts#L124) | [app/handoff-framework-panel.tsx:56](../../app/handoff-framework-panel.tsx#L56) |
+| POST | `attachment` | 新增/登记/上传 | [POST:202](../../app/api/workspace/%5Baction%5D/route.ts#L202) | [app/customer-project-entry-forms.ts:32](../../app/customer-project-entry-forms.ts#L32) |
+| GET | `backup` | 查询/历史/能力 | [workspaceGet:130](../../app/api/workspace/%5Baction%5D/route.ts#L130) | [app/support-panels.tsx:37](../../app/support-panels.tsx#L37) |
+| GET | `business-team-data` | 查询/历史/能力 | [workspaceRead:165](../../app/api/workspace/%5Baction%5D/route.ts#L165) | [app/workspace-read-queue.ts:20](../../app/workspace-read-queue.ts#L20) |
+| POST | `comment` | 新增/登记/上传 | [POST:235](../../app/api/workspace/%5Baction%5D/route.ts#L235) | [app/customer-project-panel.tsx:252](../../app/customer-project-panel.tsx#L252) |
+| POST | `commit-import` | 解析/预览/导入（不能假定无副作用） | [POST:223](../../app/api/workspace/%5Baction%5D/route.ts#L223) | [app/import-panel.tsx:26](../../app/import-panel.tsx#L26) |
+| POST | `correction` | 修改/关联/指派 | [POST:266](../../app/api/workspace/%5Baction%5D/route.ts#L266) | [app/purchase-panel.tsx:35](../../app/purchase-panel.tsx#L35) |
+| GET | `data` | 查询/历史/能力 | [workspaceGet:118](../../app/api/workspace/%5Baction%5D/route.ts#L118) | [app/customer-directory-panel.tsx:104](../../app/customer-directory-panel.tsx#L104) |
+| POST | `edit-order` | 修改/关联/指派 | [POST:224](../../app/api/workspace/%5Baction%5D/route.ts#L224) | [app/detail-panel.tsx:21](../../app/detail-panel.tsx#L21) |
+| POST | `enroll` | 专用业务动作 | [POST:171](../../app/api/workspace/%5Baction%5D/route.ts#L171) | [app/assignment-panel.tsx:16](../../app/assignment-panel.tsx#L16) |
+| POST | `export` | 专用业务动作 | [POST:201](../../app/api/workspace/%5Baction%5D/route.ts#L201) | [app/workspace.tsx:130](../../app/workspace.tsx#L130) |
+| GET | `file` | 读取/文件/导出 | [workspaceGet:120](../../app/api/workspace/%5Baction%5D/route.ts#L120) | [app/ar-invoice-ledger-panel.tsx:112](../../app/ar-invoice-ledger-panel.tsx#L112) |
+| POST | `inspect` | 解析/预览/导入（不能假定无副作用） | [POST:202](../../app/api/workspace/%5Baction%5D/route.ts#L202) | [app/fixed-data-tools-panel.tsx:21](../../app/fixed-data-tools-panel.tsx#L21) |
+| GET | `job` | 查询/历史/能力 | [workspaceGet:119](../../app/api/workspace/%5Baction%5D/route.ts#L119) | [app/import-panel.tsx:27](../../app/import-panel.tsx#L27) |
+| POST | `match` | 修改/关联/指派 | [POST:261](../../app/api/workspace/%5Baction%5D/route.ts#L261) | [app/support-panels.tsx:18](../../app/support-panels.tsx#L18) |
+| POST | `member` | 保存（具体新增/修改见实现） | [POST:242](../../app/api/workspace/%5Baction%5D/route.ts#L242) | [app/support-panels.tsx:36](../../app/support-panels.tsx#L36) |
+| POST | `pack` | 专用业务动作 | [POST:200](../../app/api/workspace/%5Baction%5D/route.ts#L200) | 未找到精确静态引用；不能据此认定未使用 |
+| POST | `preview` | 解析/预览/导入（不能假定无副作用） | [POST:202](../../app/api/workspace/%5Baction%5D/route.ts#L202) | [app/import-panel.tsx:25](../../app/import-panel.tsx#L25) |
+| GET | `read-version` | 查询/历史/能力 | [GET:135](../../app/api/workspace/%5Baction%5D/route.ts#L135) | [app/workspace-read-queue.ts:104](../../app/workspace-read-queue.ts#L104) |
+| POST | `review` | 专用业务动作 | [POST:270](../../app/api/workspace/%5Baction%5D/route.ts#L270) | [app/customer-quote-panel.tsx:229](../../app/customer-quote-panel.tsx#L229) |
+| POST | `task` | 专用业务动作 | [POST:239](../../app/api/workspace/%5Baction%5D/route.ts#L239) | [app/customer-project-entry-forms.ts:31](../../app/customer-project-entry-forms.ts#L31) |
+| GET | `template` | 读取/文件/导出 | [workspaceGet:126](../../app/api/workspace/%5Baction%5D/route.ts#L126) | [app/handoff-framework-panel.tsx:56](../../app/handoff-framework-panel.tsx#L56) |
 
 <a id="module-2"></a>
 
@@ -121,13 +121,13 @@
 | GET | `customer-master-capabilities` | 查询/历史/能力 | [collaborationGet:69](../../lib/collaboration-api.ts#L69) | [app/customer-directory-panel.tsx:66](../../app/customer-directory-panel.tsx#L66) |
 | POST | `customer-save` | 保存（具体新增/修改见实现） | [collaborationPost:157](../../lib/collaboration-api.ts#L157) | [app/customer-directory-panel.tsx:97](../../app/customer-directory-panel.tsx#L97) |
 | GET | `customer-template` | 读取/文件/导出 | [collaborationGet:83](../../lib/collaboration-api.ts#L83) | [app/customer-directory-panel.tsx:139](../../app/customer-directory-panel.tsx#L139) |
-| GET | `factory-order-export` | 读取/文件/导出 | [collaborationGet:90](../../lib/collaboration-api.ts#L90) | [app/factory-order-panel.tsx:36](../../app/factory-order-panel.tsx#L36) |
-| POST | `factory-order-save` | 保存（具体新增/修改见实现） | [collaborationPost:180](../../lib/collaboration-api.ts#L180) | [app/factory-order-panel.tsx:29](../../app/factory-order-panel.tsx#L29) |
-| POST | `factory-order-table-commit` | 解析/预览/导入（不能假定无副作用） | [collaborationPost:124](../../lib/collaboration-api.ts#L124) | [app/factory-order-panel.tsx:34](../../app/factory-order-panel.tsx#L34) |
-| GET | `factory-order-table-export` | 读取/文件/导出 | [collaborationGet:71](../../lib/collaboration-api.ts#L71) | [app/factory-order-panel.tsx:35](../../app/factory-order-panel.tsx#L35) |
-| POST | `factory-order-table-preview` | 解析/预览/导入（不能假定无副作用） | [collaborationPost:103](../../lib/collaboration-api.ts#L103) | [app/factory-order-panel.tsx:22](../../app/factory-order-panel.tsx#L22) |
-| POST | `factory-order-template` | 专用业务动作 | [collaborationPost:97](../../lib/collaboration-api.ts#L97) | [app/factory-order-panel.tsx:22](../../app/factory-order-panel.tsx#L22) |
-| GET | `factory-order-templates` | 读取/文件/导出 | [collaborationGet:81](../../lib/collaboration-api.ts#L81) | [app/factory-order-panel.tsx:21](../../app/factory-order-panel.tsx#L21) |
+| GET | `factory-order-export` | 读取/文件/导出 | [collaborationGet:90](../../lib/collaboration-api.ts#L90) | [app/factory-order-panel.tsx:38](../../app/factory-order-panel.tsx#L38) |
+| POST | `factory-order-save` | 保存（具体新增/修改见实现） | [collaborationPost:180](../../lib/collaboration-api.ts#L180) | [app/factory-order-panel.tsx:30](../../app/factory-order-panel.tsx#L30) |
+| POST | `factory-order-table-commit` | 解析/预览/导入（不能假定无副作用） | [collaborationPost:124](../../lib/collaboration-api.ts#L124) | [app/factory-order-panel.tsx:36](../../app/factory-order-panel.tsx#L36) |
+| GET | `factory-order-table-export` | 读取/文件/导出 | [collaborationGet:71](../../lib/collaboration-api.ts#L71) | [app/factory-order-panel.tsx:37](../../app/factory-order-panel.tsx#L37) |
+| POST | `factory-order-table-preview` | 解析/预览/导入（不能假定无副作用） | [collaborationPost:103](../../lib/collaboration-api.ts#L103) | [app/factory-order-panel.tsx:23](../../app/factory-order-panel.tsx#L23) |
+| POST | `factory-order-template` | 专用业务动作 | [collaborationPost:97](../../lib/collaboration-api.ts#L97) | [app/factory-order-panel.tsx:23](../../app/factory-order-panel.tsx#L23) |
+| GET | `factory-order-templates` | 读取/文件/导出 | [collaborationGet:81](../../lib/collaboration-api.ts#L81) | [app/factory-order-panel.tsx:22](../../app/factory-order-panel.tsx#L22) |
 | GET | `factory-orders` | 查询/历史/能力 | [collaborationGet:82](../../lib/collaboration-api.ts#L82) | [app/business-process-panel.tsx:16](../../app/business-process-panel.tsx#L16) |
 | GET | `kingdee-export` | 读取/文件/导出 | [collaborationGet:84](../../lib/collaboration-api.ts#L84) | [app/customer-directory-panel.tsx:139](../../app/customer-directory-panel.tsx#L139) |
 | POST | `kingdee-template` | 专用业务动作 | [collaborationPost:154](../../lib/collaboration-api.ts#L154) | [app/customer-directory-panel.tsx:118](../../app/customer-directory-panel.tsx#L118) |
@@ -851,7 +851,7 @@
 
 ## 静态核对
 
-- 追踪 92 个方法/处理器组合；支持字面量、允许列表、前缀拼接、后缀分发、schema 键和动作映射。
+- 追踪 94 个方法/处理器组合；支持字面量、允许列表、前缀拼接、后缀分发、schema 键和动作映射。
 - 无法解析的允许列表：0；页面直接工作区 URL 未匹配项：0。
 - 另有 4 组页面动态拼接前缀，已单列到 JSON 的 dynamicClientPrefixes；它们不计为未匹配完整路径，也不构成逐参数运行验收。
 - 完整分发链、全部证据和引用位置、参与扫描文件的 SHA-256 见同目录 JSON。源码按 UTF-8、CRLF 统一为 LF 后计算哈希，不含业务记录。

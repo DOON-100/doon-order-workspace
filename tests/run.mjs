@@ -144,4 +144,5 @@ await import('./workspace-loading.mjs');
 await import('./process-change.mjs');
 await import('./purchase-change.mjs');
 await import('./sales-color-fields.mjs');
+const {testSalesOrderSources}=await import('./sales-order-sources-cases.mjs');await testSalesOrderSources({api,identity,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(row=>JSON.parse(row.data)),rawInsert:record=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
