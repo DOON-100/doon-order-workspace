@@ -4,6 +4,9 @@ import {EventEmitter} from 'node:events';
 import {departmentGroups,departmentActions,departmentCatalog,processPayloadSchema} from './department-contracts.mjs';
 import {executeDepartment} from './department-executor.mjs';
 import {createDepartmentTools} from './department-tools.mjs';
+import {Agent} from '@mastra/core/agent';
+import {createDeepSeekStatus} from './deepseek.mjs';
+import {createWorkflowTools} from './workflow-tools.mjs';
 import {createBusinessAccess,createBusinessReader,withBusinessAccess,currentBusinessAccess} from '../agent-server/business-api.mjs';
 
 const user={username:'SYN-user',role:'admin',personnelType:'internal',mustChange:false,identity:{id:'SYN-A'}};
@@ -22,6 +25,45 @@ function setup(){
 const basis={sources:[{field:'title',reference:'合成用户请求',location:'本轮指令'}],unknowns:['关联及负责人需人工核对'],conflicts:[]};
 const run=(fixture,group,operation,action,args)=>executeDepartment(group,{operation,...(action?{action}:{}),...(args?{arguments:operation==='prepare'?{basis,...args}:args}:{})},fixture.access);
 const createFields={title:'合成记录',orderId:'SYN-O'};
+
+test('实际 SDK 的部门工具请求符合 DeepSeek 对象契约，流式及非流式均能完成工具回合',async()=>{
+ for(const streaming of [false,true]){
+  let calls=0;
+  const model=await createDeepSeekStatus({env:{DOON_STUDIO_MODEL:'deepseek-flash',DEEPSEEK_API_KEY:'synthetic-only'},fetchImpl:async(url,init)=>{
+   const body=JSON.parse(init.body);calls++;
+   assert.equal(body.thinking.type,'disabled');
+   for(const tool of body.tools){
+    assert.equal(tool.function.parameters.type,'object',tool.function.name+' needs a root object');
+    assert(!tool.function.parameters.oneOf&&!tool.function.parameters.anyOf,'root union is not accepted');
+   }
+   const done=body.messages.some(message=>message.role==='tool');
+   if(done){const catalog=JSON.parse(body.messages.find(message=>message.role==='tool').content);assert.equal(catalog.department.id,'sales');}
+   const tool_calls=[{id:'SYN-call',type:'function',function:{name:'departmentSales',arguments:'{"operation":"list"}'}}];
+   const message=done?{role:'assistant',content:'SYN completed'}:{role:'assistant',content:'',tool_calls};
+   const finish_reason=done?'stop':'tool_calls';
+   if(body.stream){
+    const delta=done?message:{...message,tool_calls:tool_calls.map(call=>({index:0,...call}))};
+    return new Response('data: '+JSON.stringify({id:'SYN',object:'chat.completion.chunk',created:1,model:body.model,choices:[{index:0,delta,finish_reason}]})+'\n\ndata: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}});
+   }
+   return Response.json({id:'SYN',object:'chat.completion',created:1,model:body.model,choices:[{index:0,message,finish_reason}],usage:{prompt_tokens:1,completion_tokens:1,total_tokens:2}});
+  }}).model();
+  const agent=new Agent({id:'SYN-schema',name:'SYN schema',instructions:'Synthetic tool check',model,tools:{...createDepartmentTools(),...createWorkflowTools(()=>undefined)},defaultOptions:{maxSteps:2,modelSettings:{maxRetries:0},providerOptions:{deepseek:{thinking:{type:'disabled'}}}}});
+  const f=setup();
+  await withBusinessAccess(f.access,async()=>{
+   const result=streaming?await agent.stream('SYN list'):await agent.generate('SYN list');
+   assert.equal(await result.text,'SYN completed');
+  });
+  assert.equal(calls,2);assert.equal(f.reads,0,'list does not read business records');
+ }
+});
+
+test('模型入口保持逐动作严格校验，缺少字段和额外字段在业务读取之前拒绝',async()=>{
+ const f=setup(),tool=createDepartmentTools().departmentSales;
+ for(const input of [{operation:'query'},{operation:'query',action:'customer-data'},{operation:'inspect'},{operation:'list',action:'customer-data'},{operation:'list',arguments:{}},{operation:'prepare',action:'prepare-process-rfq'}]){
+  await withBusinessAccess(f.access,async()=>assert.rejects(()=>tool.execute(input,{}),/参数/));
+ }
+ assert.equal(f.reads,0);
+});
 
 test('十组共享固定执行器；每组均能发现契约并按现有登录读取',async()=>{
  const f=setup(),tools=createDepartmentTools();
