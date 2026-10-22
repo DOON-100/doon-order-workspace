@@ -1,0 +1,47 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import {inventory, verifyPackage} from '../scripts/package-native-release.mjs';
+
+const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doon-release-test-'));
+try {
+  await fs.mkdir(path.join(root, 'lan-dist'));
+  await fs.writeFile(path.join(root, 'lan-dist/server.mjs'), '// Synthetic runtime only\n');
+  await fs.writeFile(path.join(root, 'package.json'), '{"private":true}\n');
+  await fs.writeFile(path.join(root, 'release.json'), JSON.stringify({format: 'doon-native-release-v1', files: await inventory(root)}));
+  await verifyPackage(root);
+  await fs.appendFile(path.join(root, 'lan-dist/server.mjs'), '// changed\n');
+  await assert.rejects(verifyPackage(root), /integrity mismatch/);
+  await fs.writeFile(path.join(root, 'lan-dist/server.mjs'), '// Synthetic runtime only\n');
+  await fs.unlink(path.join(root, 'package.json'));
+  await assert.rejects(verifyPackage(root), /integrity mismatch/);
+  await fs.writeFile(path.join(root, 'package.json'), '{"private":true}\n');
+  await fs.writeFile(path.join(root, 'lan-dist/auth.mjs'), '// unexpected extra file\n');
+  await assert.rejects(verifyPackage(root), /integrity mismatch/);
+  await fs.unlink(path.join(root, 'lan-dist/auth.mjs'));
+  await verifyPackage(root);
+  await fs.writeFile(path.join(root, '.env'), 'SYNTHETIC=not-a-secret');
+  await assert.rejects(inventory(root), /Unexpected package path/);
+  await fs.unlink(path.join(root, '.env'));
+  await fs.mkdir(path.join(root, 'lan-data'));
+  await assert.rejects(inventory(root), /Unexpected package path/);
+  await fs.rmdir(path.join(root, 'lan-data'));
+  await fs.writeFile(path.join(root, 'lan-dist/workspace.sqlite'), 'synthetic');
+  await assert.rejects(inventory(root), /Unexpected runtime file/);
+  await fs.unlink(path.join(root, 'lan-dist/workspace.sqlite'));
+  if (process.platform !== 'win32') {
+    await fs.mkdir(path.join(root, 'node_modules'));
+    await fs.symlink('../../', path.join(root, 'node_modules/escape'));
+    await assert.rejects(inventory(root), /Unsafe package link/);
+    await fs.unlink(path.join(root, 'node_modules/escape'));
+    await fs.symlink('../package.json', path.join(root, 'node_modules/safe'));
+    assert.equal((await inventory(root))['node_modules/safe'].type, 'symlink');
+  }
+  console.log('PASS release hashes reject tampering; package allowlist excludes configuration, data and unsafe links');
+} finally {
+  const resolved = await fs.realpath(root), tempRoot = await fs.realpath(os.tmpdir());
+  assert.equal(path.dirname(resolved), tempRoot);
+  assert(path.basename(resolved).startsWith('doon-release-test-'));
+  await fs.rm(resolved, {recursive: true, force: true});
+}

@@ -4,6 +4,8 @@ Agent 的目标能力、Mastra 前期验证、架构、触发、上下文、Memo
 
 第一阶段按“固定程序优先、LLM 按需辅助、人工确认关键判断”推进，职责、脚本使用场景、任务顺序与验收门槛见 [第一阶段实施清单](docs/phase-one-implementation-checklist.md)。固定业务保持主线，Agent 功能使用测试分支；文档与代码提交不触发 8787 正式服务部署。
 
+中台 `main` 的自动测试与 Linux 运行包说明见 [中台 CI](docs/native-ci.md)：成功后生成带文件哈希的下载包，保留 30 天；服务器安装、数据备份和回退仍属于独立发布流程。
+
 T01 已完成 [19 项脚本操作登记及首批封装范围](docs/data-tools-operation-register.md)。首批三个固定功能已实现：业务工具页中的 XLSX 检查/提取、指定客户归属导出、单张草稿费用预览与人工确认；访问范围、任务回执及阿里云迁移注意事项见 [首批固定程序工具](docs/fixed-data-tools.md)。代码交付不代表正式服务已部署。
 
 本轮整理的可复用 Excel 与数据维护工具统一放在 [scripts/data-tools](scripts/data-tools/README.md)，按需运行，不接入网站启动流程。客户原表、图片、任务配置与结果保存在私有目录，和代码分开管理。
