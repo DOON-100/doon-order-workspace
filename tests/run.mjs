@@ -145,4 +145,5 @@ await import('./process-change.mjs');
 await import('./purchase-change.mjs');
 await import('./sales-color-fields.mjs');
 const {testSalesOrderSources}=await import('./sales-order-sources-cases.mjs');await testSalesOrderSources({api,identity,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(row=>JSON.parse(row.data)),rawInsert:record=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
+const {testKingdeeSales}=await import('./kingdee-sales-cases.mjs');await testKingdeeSales({api,identity,admin,files,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(row=>JSON.parse(row.data)),rawPut:record=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(record.id,record.kind,JSON.stringify(record))});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

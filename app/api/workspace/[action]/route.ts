@@ -50,6 +50,7 @@ import {kingdeeSyncState} from '@/lib/kingdee-sync-state';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 import {salesColorFieldsGet,salesColorFieldsPost} from '@/lib/sales-color-fields-api';
 import {salesOrderSourcesGet,salesOrderSourcesPost} from '@/lib/sales-order-sources-api';
+import {kingdeeSalesGet,kingdeeSalesPost} from '@/lib/kingdee-sales-api';
 export const dynamic='force-dynamic';
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -63,6 +64,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_color_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_order_source')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('kingdee_sales_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('ar_')||v.kind.startsWith('payment_term'))))return false;
  // Engineering has an independent, scoped history endpoint. Never expose its
  // source emails or snapshots through the broad production audit feed.
@@ -98,6 +100,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
+ const kingdeeSales=await kingdeeSalesGet(action,req,s,m);if(kingdeeSales)return kingdeeSales;
  const kingdeeSync=await kingdeeSyncGet(action,req,s,m);if(kingdeeSync)return kingdeeSync;
  const kingdeeQuery=await kingdeeReadonlyGet(action,req,m);if(kingdeeQuery)return kingdeeQuery;
  const pendingPurchase=await kingdeePendingGet(action,req,s,m);if(pendingPurchase)return pendingPurchase;
@@ -170,6 +173,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const kingdeeSales=await kingdeeSalesPost(action,req,s,m);if(kingdeeSales)return kingdeeSales;
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;

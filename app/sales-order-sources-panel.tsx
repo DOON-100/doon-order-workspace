@@ -98,12 +98,12 @@ function SourceDetailsDialog({line,order,labels,onClose}:{line:SourceLine;order:
  </dialog>;
 }
 
-export function SalesOrderSourcesPanel({data}:{data:Data}){
+export function SalesOrderSourcesPanel({data,onKingdeeOrder}:{data:Data;onKingdeeOrder?:(sourceId:string)=>void}){
  const teamId=useBusinessTeamScope()?.teamId||'';
- return <SalesOrderSourcesWorkspace key={JSON.stringify([data.me.id,data.me.role,teamId])} revision={data.revision}/>;
+ return <SalesOrderSourcesWorkspace key={JSON.stringify([data.me.id,data.me.role,teamId])} revision={data.revision} onKingdeeOrder={onKingdeeOrder}/>;
 }
 
-function SalesOrderSourcesWorkspace({revision}:{revision:number}){
+function SalesOrderSourcesWorkspace({revision,onKingdeeOrder}:{revision:number;onKingdeeOrder?:(sourceId:string)=>void}){
  const [loaded,setLoaded]=useState<LoadedSources|null>(null),[failure,setFailure]=useState<{key:string;message:string}|null>(null),[retry,setRetry]=useState(0);
  const [selectedId,setSelectedId]=useState(''),[query,setQuery]=useState(''),[detailId,setDetailId]=useState(''),[showOriginalHeaders,setShowOriginalHeaders]=useState(false),[focusMode,setFocusMode]=useState(false);
  const [exportState,setExportState]=useState<ExportState|null>(null);
@@ -187,7 +187,7 @@ function SalesOrderSourcesWorkspace({revision}:{revision:number}){
  };
 
  return <section ref={panelRef} id="sales-order-sources" className={'panel mt-4 sales-order-sources'+(focusMode?' sales-source-focus':'')} role={focusMode?'dialog':undefined} aria-modal={focusMode||undefined} aria-label="已导入销售原单" data-testid="sales-order-sources-panel">
-  <header className="sales-source-header"><div className="sales-source-title"><FileSpreadsheet size={25}/><div><h3>已导入销售原单</h3><p>中英订单明细总表 · 基本信息、颜色、数量及价格同表核对</p></div></div><div className="sales-source-header-actions"><span className="sales-source-review-badge">待核对资料 · 本次未下达生产 / ERP</span><Button type="button" variant="outline" disabled={!selected||activeExport?.busy} aria-busy={activeExport?.busy||undefined} title="导出当前选定的整张订单，自动去掉全空列" onClick={()=>void exportOrder()}><Download size={15}/><span>{activeExport?.busy?'正在导出…':'导出 Excel'}</span></Button><Button type="button" variant="outline" aria-pressed={focusMode} onClick={()=>setFocusMode(value=>!value)}>{focusMode?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{focusMode?'退出专注':'专注表格'}</span></Button><Button type="button" variant="outline" aria-label="刷新已导入销售原单" onClick={()=>setRetry(value=>value+1)}><RefreshCw size={15}/>刷新</Button></div></header>
+  <header className="sales-source-header"><div className="sales-source-title"><FileSpreadsheet size={25}/><div><h3>已导入销售原单</h3><p>中英订单明细总表 · 基本信息、颜色、数量及价格同表核对</p></div></div><div className="sales-source-header-actions">{onKingdeeOrder&&<Button type="button" variant="outline" disabled={!selected} onClick={()=>selected&&onKingdeeOrder(selected.id)}>生成金蝶销售订单</Button>}<span className="sales-source-review-badge">待核对资料 · 本次未下达生产 / ERP</span><Button type="button" variant="outline" disabled={!selected||activeExport?.busy} aria-busy={activeExport?.busy||undefined} title="导出当前选定的整张订单，自动去掉全空列" onClick={()=>void exportOrder()}><Download size={15}/><span>{activeExport?.busy?'正在导出…':'导出 Excel'}</span></Button><Button type="button" variant="outline" aria-pressed={focusMode} onClick={()=>setFocusMode(value=>!value)}>{focusMode?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{focusMode?'退出专注':'专注表格'}</span></Button><Button type="button" variant="outline" aria-label="刷新已导入销售原单" onClick={()=>setRetry(value=>value+1)}><RefreshCw size={15}/>刷新</Button></div></header>
   {!response&&!error&&<p className="sales-source-empty" role="status">正在读取当前授权范围的销售原单…</p>}
   {error&&<div className="sales-source-error" role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={()=>setRetry(value=>value+1)}>重新读取销售原单</Button></div>}
   {response&&!items.length&&<div className="sales-source-empty"><h4>当前范围暂无已导入销售原单</h4><p>导入的客户原单会在这里按订单展示，供核对款号、色号、数量和颜色资料。</p></div>}

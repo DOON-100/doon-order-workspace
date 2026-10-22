@@ -55,6 +55,7 @@ import './handoff-shell.css';
 import {DocumentCenterPanel,ChannelPendingPanel} from './document-center-panel';
 import {UnifiedCommunicationPanel} from './unified-communication-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
+import {KingdeeSalesPanel} from './kingdee-sales-panel';
 import {CustomerQuotePanel} from './customer-quote-panel';
 import {CustomerPriceArchivePanel} from './customer-price-archive-panel';
 import {lossBalance,type LossRecord} from '@/lib/losses';
@@ -175,7 +176,8 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='service-receivables'&&<ServiceWorkspacePanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty} initialContext={navigationContext} embedded initialQueue="receivable" allowedQueues={['receivable']} allowedTypes={['receivable']}/>}
  {view==='engineering-drawings'&&<EngineeringDepartmentPanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='customer-projects'&&<CustomerProjectPanel data={data} openOrder={setSelected} onOpenProjectInTeam={openProjectInTeam} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
- {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
+ {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy} onDirtyChange={setPmcDirty} initialContext={navigationContext} onNavigate={setView}/>}
+ {view==='kingdee-sales'&&<KingdeeSalesPanel data={data} onDirtyChange={setPmcDirty} initialSourceId={navigationContext.recordId}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy} onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='pmc-handoff'&&<CollaborationPanel side="pmc" data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='finished-outsourcing'&&<div className="space-y-6"><FinishedSupplierPanel data={data} onDirtyChange={setSupplierDirty}/><PmcPanel productionScope="external" data={data} openOrder={setSelected} onDirtyChange={setSupplierScheduleDirty}/></div>}

@@ -37,7 +37,7 @@ export function auditLocal(member,action,target){return {id:'audit_'+randomUUID(
 const objectDir=path.join(dataDir,'files');mkdirSync(objectDir,{recursive:true});
 function objectPath(key){return path.join(objectDir,createHash('sha256').update(String(key)).digest('hex'));}
 // Server-only credentials: never included in the browser build or stored in business records.
-const kingdeeReadonlyEnv=Object.fromEntries(['READONLY_ENABLED','CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>['DOON_KINGDEE_'+key,process.env['DOON_KINGDEE_'+key]]));
+const kingdeeReadonlyEnv=Object.fromEntries(['READONLY_ENABLED','SALES_WRITE_ENABLED','CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>['DOON_KINGDEE_'+key,process.env['DOON_KINGDEE_'+key]]));
 export const env={...kingdeeReadonlyEnv,DB:{prepare:sql=>new Statement(sql),batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
  async put(key,value){const target=objectPath(key),temp=target+'.'+randomUUID()+'.tmp';const bytes=typeof value==='string'?Buffer.from(value):Buffer.from(value);await fs.writeFile(temp,bytes);await fs.rename(temp,target);},
  async get(key){try{const body=await fs.readFile(objectPath(key));return {body,json:async()=>JSON.parse(body.toString())};}catch(e){if(e.code==='ENOENT')return null;throw e;}}

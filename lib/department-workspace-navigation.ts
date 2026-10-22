@@ -28,7 +28,7 @@ export type WorkspaceDepartmentId=typeof departmentWorkspaceGroups[number]['id']
 const departmentRouteOrder:Record<WorkspaceDepartmentId,readonly string[]>={
  overview:['workbench','business-process','personal-tasks','dashboard','reports'],
  sales:['customers','customer-projects','process-rfq','sales','customer-quotes','customer-price-archive','mail','whatsapp','communications'],
- service:['service','service-workspace','service-followups','order-confirmations','factory-orders','production-orders','documents','process-complaint','completed'],
+ service:['service','service-workspace','service-followups','order-confirmations','factory-orders','kingdee-sales','production-orders','documents','process-complaint','completed'],
  engineering:['engineering-materials','engineering-drawings','process-sample','process-engineering-change'],
  planning:['production-planning','pmc-handoff','process-material-kit','pmc','planning-control','orders','mine'],
  purchasing:['supplier-workspace','supplier-pending','supplier-followup','supplier-samples','supplier-kit','supplier-outsourcing','finished-outsourcing','supplier-risk'],

@@ -5,10 +5,17 @@ type Json=Record<string,unknown>;
 export type KingdeeConfig={clientId:string;clientSecret:string;instanceId:string;accountId:string};
 const gateway='https://api.kingdee.com';
 const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail'} as const;
+const salesPaths={customer:'/jdy/v2/bd/customer_detail',material:'/jdy/v2/bd/material_detail',unit:'/jdy/v2/bd/measure_unit',currency:'/jdy/v2/bd/currency',employee:'/jdy/v2/bd/emp',salesList:'/jdy/v2/scm/sal_order',salesSave:'/jdy/v2/scm/sal_order',salesDetail:'/jdy/v2/scm/sal_order_detail'} as const;
 const encoder=new TextEncoder();
 export function kingdeeConfig():KingdeeConfig|null{
  const settings=env as unknown as Record<string,unknown>;
  if(settings.DOON_KINGDEE_READONLY_ENABLED!=='1')return null;
+ return kingdeeSalesConfig();
+}
+/** Sales writes have their own opt-in. Procurement read access never enables it. */
+export function kingdeeSalesWriteEnabled(){return (env as unknown as Record<string,unknown>).DOON_KINGDEE_SALES_WRITE_ENABLED==='1';}
+export function kingdeeSalesConfig():KingdeeConfig|null{
+ const settings=env as unknown as Record<string,unknown>;
  const values=['CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>settings['DOON_KINGDEE_'+key]);
  if(values.some(value=>typeof value!=='string'||!value.trim()))return null;
  const [clientId,clientSecret,instanceId,accountId]=values as string[];
@@ -92,6 +99,19 @@ async function authorization(config:KingdeeConfig){
 }
 /** Prepare only the cached connection; never fetch or write business records. */
 export async function prepareKingdeeConnection(config:KingdeeConfig){await authorization(config);}
+export async function kingdeeSalesRequest(config:KingdeeConfig,operation:keyof typeof salesPaths,query:Record<string,string>,signal:AbortSignal,body?:Record<string,unknown>){
+ if(operation==='salesSave'&&!kingdeeSalesWriteEnabled())throw new AppError('金蝶销售订单写入开关尚未启用。',503);
+ const auth=await authorization(config),method=operation==='salesSave'?'POST':'GET',path=salesPaths[operation],signed=await kingdeeSignature(config,method,path,query);
+ try{
+  const response=await fetch(gateway+path+(signed.actualQuery?'?'+signed.actualQuery:''),{method,headers:{...signed.headers,'app-token':auth.token,'X-GW-Router-Addr':auth.domain},...(body?{body:JSON.stringify(body)}:{}),redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(20000)])});
+  if(!response.ok)throw new AppError(`金蝶销售接口未完成（HTTP ${response.status}），请核查原操作。`,502);
+  const reader=response.body?.getReader();if(!reader)throw new AppError('金蝶销售接口未返回结果。',502);
+  const chunks:Uint8Array[]=[];let size=0;while(true){const next=await reader.read();if(next.done)break;size+=next.value.byteLength;if(size>4*1024*1024){await reader.cancel();throw new AppError('金蝶销售接口响应超过上限。',502);}chunks.push(next.value);}
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  const result=object(JSON.parse(new TextDecoder().decode(bytes)));if(result.errcode!==0)throw new AppError(`金蝶销售接口返回错误（代码 ${typeof result.errcode==='number'&&Number.isSafeInteger(result.errcode)?result.errcode:'未知'}），请核查原操作。`,502);
+  return object(result.data);
+ }catch(error){if(error instanceof AppError)throw error;throw new AppError('金蝶销售接口连接中断或响应无效；上传结果须核查，不能重复提交。',502);}
+}
 export async function kingdeeRead(config:KingdeeConfig,operation:'list'|'detail',query:Record<string,string>,signal:AbortSignal){
  const auth=await authorization(config);
  try{return object(await gatewayRequest(config,operation,query,signal,auth));}
