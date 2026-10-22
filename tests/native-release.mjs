@@ -4,6 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import {inventory, verifyPackage} from '../scripts/package-native-release.mjs';
 
+// npm ci accepts stale dev flags, but --omit=dev then silently drops a runtime dependency.
+const pkg = JSON.parse(await fs.readFile(new URL('../package.json', import.meta.url), 'utf8'));
+const lock = JSON.parse(await fs.readFile(new URL('../package-lock.json', import.meta.url), 'utf8'));
+for (const [name, range] of Object.entries(pkg.dependencies)) {
+  assert.equal(lock.packages[''].dependencies[name], range, 'Stale dependency range: ' + name);
+  const entry = lock.packages['node_modules/' + name];
+  assert(entry && !entry.dev && !entry.devOptional, 'Runtime dependency omitted by production install: ' + name);
+}
+
 const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doon-release-test-'));
 try {
   await fs.mkdir(path.join(root, 'lan-dist'));
