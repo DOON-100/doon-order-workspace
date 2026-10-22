@@ -1,7 +1,7 @@
 'use client';
 
 import {useEffect,useRef,useState} from 'react';
-import {ArrowRight,FileSpreadsheet,Maximize2,Minimize2,RefreshCw,Search,X} from 'lucide-react';
+import {ArrowRight,Download,FileSpreadsheet,Maximize2,Minimize2,RefreshCw,Search,X} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import type {SalesOrderSource,SalesOrderSourceRecord} from '@/lib/sales-order-sources';
 import {businessTeamFetch} from './business-team-client';
@@ -17,6 +17,7 @@ type FieldLabels=Record<string,FieldLabel>;
 type SourceResponse={items:SalesOrderSourceRecord[];canImport:boolean;fieldLabels?:FieldLabels;fieldLabelsVersion?:string;error?:string};
 type LoadedSources={key:string;response:SourceResponse};
 type ColorColumn={key:string;field:ColorField};
+type ExportState={key:string;busy:boolean;message:string;error:boolean};
 const mappingLabels={adopted:'已对应',pending:'待匹配',composite:'组合栏目'};
 const normalized=(value:string)=>value.normalize('NFKC').trim().toLocaleLowerCase();
 const numberText=(value:number)=>value.toLocaleString('zh-CN',{maximumFractionDigits:8});
@@ -24,6 +25,16 @@ const basicLabels:Record<string,FieldLabel>={orderNo:{zh:'订单号',en:'Order N
 const basicColumns=[{key:'sourceRow',width:60},{key:'drawing',width:140},{key:'color',width:95},{key:'orderNo',width:170},{key:'customer',width:110},{key:'customerPO',width:220},{key:'model',width:140},{key:'sku',width:170},{key:'deliveryText',width:230}];
 const quantityColumns=[{key:'quantity',width:120},{key:'unit',width:90},{key:'sampleQuantity',width:120},{key:'unitPrice',width:135},{key:'sourceAmount',width:145}];
 const colorWidth=190;
+
+function exportFilename(disposition:string|null,orderNo:string){
+ const fallback=`销售原单_${orderNo}.xlsx`;
+ const encoded=disposition?.match(/filename\*=UTF-8''([^;]+)/i)?.[1];
+ const plain=disposition?.match(/filename="([^"]+)"/i)?.[1];
+ let filename=fallback;
+ try{filename=encoded?decodeURIComponent(encoded):plain||fallback;}catch{/* Keep the selected order's fallback filename. */}
+ const safe=filename.replace(/[\x00-\x1f\x7f<>:"/\\|?*]/g,'_').trim().replace(/\.+$/,'').slice(0,180);
+ return (safe.replace(/\.xlsx$/i,'')||'销售原单')+'.xlsx';
+}
 
 function quantitySummary(lines:SourceLine[],field:'quantity'|'sampleQuantity'){
  const totals=new Map<string,number>();let unknown=0;
@@ -95,9 +106,19 @@ export function SalesOrderSourcesPanel({data}:{data:Data}){
 function SalesOrderSourcesWorkspace({revision}:{revision:number}){
  const [loaded,setLoaded]=useState<LoadedSources|null>(null),[failure,setFailure]=useState<{key:string;message:string}|null>(null),[retry,setRetry]=useState(0);
  const [selectedId,setSelectedId]=useState(''),[query,setQuery]=useState(''),[detailId,setDetailId]=useState(''),[showOriginalHeaders,setShowOriginalHeaders]=useState(false),[focusMode,setFocusMode]=useState(false);
+ const [exportState,setExportState]=useState<ExportState|null>(null);
+ const exportRequest=useRef<{key:string;controller:AbortController}|null>(null),currentExportKey=useRef('');
  const sequenceRef=useRef(0),scroller=useRef<HTMLDivElement>(null),panelRef=useRef<HTMLElement>(null),requestKey=`${revision}:${retry}`;
  const response=loaded?.key===requestKey?loaded.response:null,error=failure?.key===requestKey?failure.message:'';
  const items=response?.items||[],selected=items.find(item=>item.id===selectedId)||null,order=selected?.source,labels=response?.fieldLabels;
+ const exportKey=`${requestKey}:${selected?.id||''}`,activeExport=exportState?.key===exportKey?exportState:null;
+ currentExportKey.current=exportKey;
+
+ useEffect(()=>()=>{exportRequest.current?.controller.abort();exportRequest.current=null;},[]);
+ useEffect(()=>{
+  if(exportRequest.current&&exportRequest.current.key!==exportKey){exportRequest.current.controller.abort();exportRequest.current=null;}
+  setExportState(current=>current?.key===exportKey?current:null);
+ },[exportKey]);
 
  useEffect(()=>{
   const controller=new AbortController(),sequence=++sequenceRef.current;
@@ -140,15 +161,40 @@ function SalesOrderSourcesWorkspace({revision}:{revision:number}){
   const left=section==='basic'?0:basicWidth+(section==='quantity'?colors.length*colorWidth:0)-frozenWidth;
   scroller.current?.scrollTo({left,behavior:'smooth'});
  };
+ const exportOrder=async()=>{
+  if(!selected||!order||exportRequest.current)return;
+  const target={id:selected.id,orderNo:order.orderNo,lineCount:order.lines.length},key=exportKey,controller=new AbortController();
+  exportRequest.current={key,controller};setExportState({key,busy:true,message:'正在生成整张订单的 Excel…',error:false});
+  const isCurrent=()=>!controller.signal.aborted&&exportRequest.current?.controller===controller&&currentExportKey.current===key;
+  try{
+   const result=await businessTeamFetch('/api/workspace/sales-order-sources-export?id='+encodeURIComponent(target.id),{cache:'no-store',credentials:'same-origin',signal:controller.signal});
+   if(!result.ok){
+    const value=await result.json().catch(()=>null) as {error?:string}|null;
+    throw new Error(value?.error||(result.status===401?'登录已失效，请重新登录。':result.status===403?'当前账号无权导出这张订单。':'订单导出失败，请重试。'));
+   }
+   if(result.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()!=='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')throw new Error('服务器未返回 Excel 文件，请重新导出。');
+   const blob=await result.blob();
+   if(!isCurrent())return;
+   if(!blob.size)throw new Error('导出文件为空，请重试。');
+   const objectUrl=URL.createObjectURL(blob),anchor=document.createElement('a');
+   try{
+    anchor.href=objectUrl;anchor.download=exportFilename(result.headers.get('Content-Disposition'),target.orderNo);
+    document.body.appendChild(anchor);anchor.click();
+   }finally{anchor.remove();setTimeout(()=>URL.revokeObjectURL(objectUrl),1000);}
+   setExportState({key,busy:false,message:`${target.orderNo} 已生成，已发起下载（${target.lineCount} 条明细）。`,error:false});
+  }catch(cause){if(isCurrent())setExportState({key,busy:false,message:cause instanceof Error?cause.message:'订单导出失败，请重试。',error:true});}
+  finally{if(exportRequest.current?.controller===controller)exportRequest.current=null;}
+ };
 
  return <section ref={panelRef} id="sales-order-sources" className={'panel mt-4 sales-order-sources'+(focusMode?' sales-source-focus':'')} role={focusMode?'dialog':undefined} aria-modal={focusMode||undefined} aria-label="已导入销售原单" data-testid="sales-order-sources-panel">
-  <header className="sales-source-header"><div className="sales-source-title"><FileSpreadsheet size={25}/><div><h3>已导入销售原单</h3><p>中英订单明细总表 · 基本信息、颜色、数量及价格同表核对</p></div></div><div className="sales-source-header-actions"><span className="sales-source-review-badge">待核对资料 · 本次未下达生产 / ERP</span><Button type="button" variant="outline" aria-pressed={focusMode} onClick={()=>setFocusMode(value=>!value)}>{focusMode?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{focusMode?'退出专注':'专注表格'}</span></Button><Button type="button" variant="outline" aria-label="刷新已导入销售原单" onClick={()=>setRetry(value=>value+1)}><RefreshCw size={15}/>刷新</Button></div></header>
+  <header className="sales-source-header"><div className="sales-source-title"><FileSpreadsheet size={25}/><div><h3>已导入销售原单</h3><p>中英订单明细总表 · 基本信息、颜色、数量及价格同表核对</p></div></div><div className="sales-source-header-actions"><span className="sales-source-review-badge">待核对资料 · 本次未下达生产 / ERP</span><Button type="button" variant="outline" disabled={!selected||activeExport?.busy} aria-busy={activeExport?.busy||undefined} title="导出当前选定的整张订单，自动去掉全空列" onClick={()=>void exportOrder()}><Download size={15}/><span>{activeExport?.busy?'正在导出…':'导出 Excel'}</span></Button><Button type="button" variant="outline" aria-pressed={focusMode} onClick={()=>setFocusMode(value=>!value)}>{focusMode?<Minimize2 size={15}/>:<Maximize2 size={15}/>}<span>{focusMode?'退出专注':'专注表格'}</span></Button><Button type="button" variant="outline" aria-label="刷新已导入销售原单" onClick={()=>setRetry(value=>value+1)}><RefreshCw size={15}/>刷新</Button></div></header>
   {!response&&!error&&<p className="sales-source-empty" role="status">正在读取当前授权范围的销售原单…</p>}
   {error&&<div className="sales-source-error" role="alert"><p>{error}</p><Button type="button" variant="outline" onClick={()=>setRetry(value=>value+1)}>重新读取销售原单</Button></div>}
   {response&&!items.length&&<div className="sales-source-empty"><h4>当前范围暂无已导入销售原单</h4><p>导入的客户原单会在这里按订单展示，供核对款号、色号、数量和颜色资料。</p></div>}
   {!!items.length&&<>
    <div className="sales-source-order-cards" aria-label="选择已导入销售原单">{items.map(item=><button type="button" key={item.id} className={'sales-source-order-card'+(selectedId===item.id?' selected':'')} aria-pressed={selectedId===item.id} aria-label={`查看销售原单 ${item.source.orderNo}`} onClick={()=>selectOrder(item.id)}><span className="sales-source-card-top"><strong>{item.source.orderNo}</strong><small>{item.status}</small></span><span>{item.source.customer} · {item.source.productType}</span><span>{item.source.lines.length} 条明细 · 数量 {quantitySummary(item.source.lines,'quantity')}</span><small>样办：{quantitySummary(item.source.lines,'sampleQuantity')}</small></button>)}</div>
    {order&&<div className="sales-source-selected-order">
+    <div className="sales-source-export-note"><span>导出整张订单，自动去掉全空列；搜索仅影响页面显示。</span>{activeExport?.message&&<span className={activeExport.error?'sales-source-export-error':''} role={activeExport.error?'alert':'status'} aria-live={activeExport.error?'assertive':'polite'}>{activeExport.message}</span>}</div>
     <div className="sales-source-order-heading"><div><h4>{order.orderNo}</h4><p>{order.documentType} · {fieldLabel('customer',labels).zh} {order.customer} · {order.productType}</p><p>{fieldLabel('customerPO',labels).zh} / Customer PO：{order.customerPO||'原表未填写'}</p></div><label className="sales-source-search"><span>查找本单明细</span><div><Search size={16}/><Input aria-label="搜索销售原单款号色号SKU" value={query} maxLength={300} placeholder="搜索款号、色号、SKU 或颜色原文" onChange={event=>{setQuery(event.target.value);setDetailId('');scroller.current?.scrollTo({top:0});}}/></div></label></div>
     <div className="sales-source-evidence"><span>来源：{order.source.filename} · {order.source.sheet} · {order.source.detailRange}</span>{response?.fieldLabelsVersion&&<span>当前字段清单：{response.fieldLabelsVersion}</span>}<details><summary>来源版本与指纹</summary>{order.dictionaryVersion&&<span>导入时字段规则：{order.dictionaryVersion}</span>}<code>{order.source.sha256}</code></details></div>
     {order.warnings.length>0&&<details className="sales-source-warnings"><summary>待核对 {order.warnings.length} 项 <span>展开查看数量口径、交期及原模板提醒</span></summary><ul>{order.warnings.map((warning,index)=><li key={index}>{warning}</li>)}</ul></details>}

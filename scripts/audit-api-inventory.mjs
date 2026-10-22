@@ -205,6 +205,7 @@ const modules=[
  ['订单工序、外发收货与原表','lib/operations.ts','canRead、departmentColumns、mayReceive、canCreateOutsource、PMC 范围及生产闸门'],
  ['客户主档、工厂订单与金蝶模板','lib/collaboration-api.ts','客户主档能力、客户责任、roles、订单/工厂范围和模板权限'],
  ['销售颜色字段库','lib/sales-color-fields-api.ts','在职内部成员读取标准标题；客户规则按既有客户/订单及业务组范围；配置仅管理员、版本与幂等校验'],
+ ['销售原单明细与导出','lib/sales-order-sources-api.ts','在职内部管理员或唯一客户业务/客服责任；当前业务组范围；导出重新校验；导入仅管理员'],
  ['供应商与外协','lib/supplier-api.ts','managesSuppliers、canSeeSupplierPrice、订单/工序权限及审批责任'],
  ['损耗','lib/loss-api.ts','订单可见性、部门损耗确认权限及来源版本'],
  ['采购跟单','lib/purchase-api.ts','visiblePurchases；维护 manage/broad；来源、数量、归档条件校验'],

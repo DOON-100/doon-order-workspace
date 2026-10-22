@@ -189,7 +189,7 @@
     },
     {
       "path": "lib/sales-order-sources-api.ts",
-      "sha256": "5e759887a3f4024b401cb8e3beea2a8a4eeb96e5eb1929cc2bf4c8ec0ddefc5e"
+      "sha256": "88a5fb268850ac14e1b0e1ba6e6d3eac63d6cd9e2e9747ca216d410729af8b12"
     },
     {
       "path": "lib/service-workspace-api.ts",
@@ -209,7 +209,7 @@
     }
   ],
   "handlerCount": 94,
-  "endpointCount": 360,
+  "endpointCount": 361,
   "unresolved": [],
   "unmatchedClientPaths": [],
   "dynamicClientPrefixes": [
@@ -13545,7 +13545,7 @@
       "evidence": [
         {
           "file": "lib/sales-order-sources-api.ts",
-          "line": 25,
+          "line": 26,
           "handler": "salesOrderSourcesGet",
           "kind": "comparison",
           "chain": [
@@ -13559,11 +13559,49 @@
       "references": [
         {
           "file": "app/sales-order-sources-panel.tsx",
-          "line": 107
+          "line": 128
         }
       ],
-      "module": "lib/sales-order-sources-api.ts",
+      "module": "销售原单明细与导出",
       "actionIndex": "查询/历史/能力"
+    },
+    {
+      "method": "GET",
+      "action": "sales-order-sources-export",
+      "path": "/api/workspace/sales-order-sources-export",
+      "evidence": [
+        {
+          "file": "lib/sales-order-sources-api.ts",
+          "line": 26,
+          "handler": "salesOrderSourcesGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/sales-order-sources-api.ts#salesOrderSourcesGet"
+          ]
+        },
+        {
+          "file": "lib/sales-order-sources-api.ts",
+          "line": 32,
+          "handler": "salesOrderSourcesGet",
+          "kind": "comparison",
+          "chain": [
+            "app/api/workspace/[action]/route.ts#GET",
+            "app/api/workspace/[action]/route.ts#workspaceRead",
+            "lib/sales-order-sources-api.ts#salesOrderSourcesGet"
+          ]
+        }
+      ],
+      "owner": "lib/sales-order-sources-api.ts",
+      "references": [
+        {
+          "file": "app/sales-order-sources-panel.tsx",
+          "line": 170
+        }
+      ],
+      "module": "销售原单明细与导出",
+      "actionIndex": "读取/文件/导出"
     },
     {
       "method": "POST",
@@ -13572,7 +13610,7 @@
       "evidence": [
         {
           "file": "lib/sales-order-sources-api.ts",
-          "line": 36,
+          "line": 49,
           "handler": "salesOrderSourcesPost",
           "kind": "comparison",
           "chain": [
@@ -13583,7 +13621,7 @@
       ],
       "owner": "lib/sales-order-sources-api.ts",
       "references": [],
-      "module": "lib/sales-order-sources-api.ts",
+      "module": "销售原单明细与导出",
       "actionIndex": "解析/预览/导入（不能假定无副作用）"
     },
     {

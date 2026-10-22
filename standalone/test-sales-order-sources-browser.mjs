@@ -4,6 +4,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
 import {pathToFileURL} from 'node:url';
+import * as XLSX from 'xlsx';
 const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
 const dist=path.resolve(process.env.DOON_BUILD_DIR||'test-output/sales-order-sources-build');
 await fs.mkdir(path.resolve('test-output'),{recursive:true});
@@ -51,9 +52,18 @@ try{
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-proxy-server']});
  const context=await browser.newContext({viewport:{width:1440,height:1000}}),split=cookie.indexOf('=');
  await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin}]);
- const page=await context.newPage(),errors=[],writes=[];let mode='empty',reads=0;
+ const page=await context.newPage(),errors=[],writes=[],downloadRequests=[],downloads=[];let mode='empty',reads=0,downloadMode='ready';
  page.on('pageerror',error=>errors.push(error.message));
  page.on('request',request=>{if(request.url().includes('/api/workspace/')&&request.method()!=='GET')writes.push(request.url());});
+ page.on('download',download=>downloads.push(download));
+ await page.route('**/api/workspace/sales-order-sources-export?**',route=>{
+  const request=route.request(),url=new URL(request.url());assert.equal(request.method(),'GET');assert.deepEqual([...url.searchParams.keys()],['id']);
+  const selected=items.find(item=>item.id===url.searchParams.get('id'));assert(selected);downloadRequests.push(selected.id);
+  if(downloadMode==='error')return route.fulfill({status:403,json:{error:'合成导出权限已失效'}});
+  if(downloadMode==='wrong-type')return route.fulfill({contentType:'text/html',body:'<p>Synthetic login required</p>'});
+  const workbook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet([['原表行','图纸','数量'],...selected.source.lines.map(line=>[line.sourceRow,line.drawing,line.quantity])]),'Synthetic Export');
+  return route.fulfill({headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent('合成-'+selected.orderNo+'.xlsx')}`},body:Buffer.from(XLSX.write(workbook,{type:'array',bookType:'xlsx'}))});
+ });
  await page.route('**/api/workspace/sales-order-sources-data',route=>{
   reads++;assert.equal(route.request().method(),'GET');
   if(mode==='error')return route.fulfill({status:403,json:{error:'合成原单范围读取失败'}});
@@ -64,6 +74,7 @@ try{
  const enrolled=await startupEnrollment;assert.equal(enrolled.status(),200);await enrolled.finished();
  const panel=page.getByTestId('sales-order-sources-panel');
  await panel.getByRole('heading',{name:'当前范围暂无已导入销售原单'}).waitFor();assert.equal(reads,1);
+ assert(await panel.getByRole('button',{name:'导出 Excel',exact:true}).isDisabled());
  assert.equal(await panel.getAttribute('id'),'sales-order-sources');
  await page.goto(origin+'/factory-orders#sales-order-sources');
  await page.waitForFunction(()=>{const panel=document.getElementById('sales-order-sources');return panel&&panel.getBoundingClientRect().top>=-1&&panel.getBoundingClientRect().top<120;});
@@ -98,6 +109,12 @@ try{
  await page.screenshot({path:path.join(dir,'sales-order-sources-focus.png'),fullPage:false});await page.keyboard.press('Escape');assert.doesNotMatch(await panel.getAttribute('class'),/sales-source-focus/);assert(await panel.getByRole('button',{name:'专注表格',exact:true}).evaluate(element=>element===document.activeElement),'Exiting focus mode restores the trigger');
  const search=panel.getByRole('textbox',{name:'搜索销售原单款号色号SKU'});
  await search.fill('SKU-001');assert.equal(await tableRows.count(),1);assert.equal(await tableRows.locator('td').nth(2).innerText(),'001');assert.match(await tableRows.innerText(),/未填写/);assert.match(await tableRows.innerText(),/0\.00/);assert.equal(await headers.locator('[data-color-column]').count(),5);
+ const firstDownload=page.waitForEvent('download');await panel.getByRole('button',{name:'导出 Excel',exact:true}).click();const exported=await firstDownload;
+ assert.equal(exported.suggestedFilename(),'合成-DEMO-ORDER-A.xlsx');assert.equal(await exported.failure(),null);
+ const exportedBook=XLSX.read(await fs.readFile(await exported.path()));assert.equal(XLSX.utils.sheet_to_json(exportedBook.Sheets['Synthetic Export']).length,21,'Search showing one row must still download the selected complete order.');
+ await panel.getByRole('status').filter({hasText:'DEMO-ORDER-A 已生成，已发起下载（21 条明细）'}).waitFor();assert.deepEqual(downloadRequests,['demo_source_a']);assert.equal(await tableRows.count(),1);
+ downloadMode='error';await panel.getByRole('button',{name:'导出 Excel',exact:true}).click();await panel.getByRole('alert').filter({hasText:'合成导出权限已失效'}).waitFor();assert.equal(downloads.length,1);assert(await panel.getByRole('button',{name:'导出 Excel',exact:true}).isEnabled());
+ downloadMode='wrong-type';await panel.getByRole('button',{name:'导出 Excel',exact:true}).click();await panel.getByRole('alert').filter({hasText:'服务器未返回 Excel 文件'}).waitFor();assert.equal(downloads.length,1);downloadMode='ready';
  await panel.getByRole('button',{name:'查看原单第 10 行来源',exact:true}).click();
  const detail=panel.getByTestId('sales-order-source-line-details');await detail.waitFor();
  assert.equal(await detail.locator('tr[data-mapping-status="adopted"]').count(),2);assert.equal(await detail.locator('tr[data-mapping-status="pending"]').count(),1);assert.equal(await detail.locator('tr[data-mapping-status="composite"]').count(),1);
@@ -109,6 +126,9 @@ try{
  await panel.locator('.sales-source-lines-table').evaluate(element=>{element.scrollLeft=0;});
  await panel.screenshot({path:path.join(dir,'sales-order-sources-desktop.png')});
  await panel.getByRole('button',{name:'查看销售原单 DEMO-ORDER-B',exact:true}).click();assert.equal(await search.inputValue(),'');assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);assert.equal(await tableRows.count(),1);assert.match(await tableRows.innerText(),/DEMO-OTHER-001/);assert.doesNotMatch(await tableRows.innerText(),/DEMO-DRAWING/);assert.equal(await tableRows.locator('[data-field-key="quantity"]').innerText(),'10');assert.equal(await tableRows.locator('[data-field-key="unit"]').innerText(),'副');
+ assert.equal(await panel.getByRole('alert').filter({hasText:'服务器未返回 Excel 文件'}).count(),0,'Download error belongs only to the order that failed.');
+ const secondDownload=page.waitForEvent('download');await panel.getByRole('button',{name:'导出 Excel',exact:true}).click();const exportedB=await secondDownload;
+ assert.equal(exportedB.suggestedFilename(),'合成-DEMO-ORDER-B.xlsx');assert.equal(await exportedB.failure(),null);assert.equal(XLSX.utils.sheet_to_json(XLSX.read(await fs.readFile(await exportedB.path())).Sheets['Synthetic Export']).length,1);assert.deepEqual(downloadRequests,['demo_source_a','demo_source_a','demo_source_a','demo_source_b']);
  assert.equal(await headers.locator('[data-color-column="N"] > strong').innerText(),'quantity','A color named like a basic field must retain its original title');
  assert.equal(await tableRows.locator('.sales-source-delivery').innerText(),'有效交期待确认');
  await page.setViewportSize({width:390,height:844});await panel.scrollIntoViewIfNeeded();
@@ -118,6 +138,6 @@ try{
  await page.screenshot({path:path.join(dir,'sales-order-sources-mobile.png'),fullPage:true});
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);assert(reads>=3);
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
- console.log('PASS 全部行连续表格、颜色平铺不合并、双语最新字段名、冻结列/表头、专注/Esc、金额缓存/零/空白/歧义、搜索、前导零、颜色候选/组合、来源侧栏、切换无残留、手机布局、空/错误/重试、零业务写入');
+ console.log('PASS 全部行连续表格、颜色平铺不合并、双语最新字段名、冻结列/表头、专注/Esc、金额缓存/零/空白/歧义、搜索、前导零、颜色候选/组合、来源侧栏、整单Excel下载不受搜索影响、下载权限/错误类型拒绝和换单重试、切换无残留、手机布局、空/错误/重试、零业务写入');
  console.log('Synthetic screenshots: '+dir);
 }finally{await browser?.close();server.kill();}

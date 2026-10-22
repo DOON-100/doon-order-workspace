@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {testSalesOrderSourceExports} from './sales-order-source-export-cases.mjs';
 
 export async function testSalesOrderSources({api,identity,admin,rawRecords,rawInsert,pass}){
  const at='2026-01-02T03:04:05.000Z',prefix='synthetic_source_cases_',id=name=>prefix+name;
@@ -86,6 +87,7 @@ export async function testSalesOrderSources({api,identity,admin,rawRecords,rawIn
  }
  pass('请求上限按UTF-8字节执行，ASCII和多字节超限均在解析前拒绝');
 
+ await testSalesOrderSourceExports({request,source,payload,post,users,admin,id,snapshot,saved,savedB,savedU,pass});
  const finalRecords=rawRecords(),finalById=new Map(finalRecords.map(row=>[row.id,JSON.stringify(row)]));
  for(const [recordId,bytes] of initialById)assert.equal(finalById.get(recordId),bytes,'Existing record changed: '+recordId);
  const appended=finalRecords.filter(row=>!initialById.has(row.id));assert(appended.every(row=>['sales_order_source','sales_order_source_request','audit'].includes(row.kind)));

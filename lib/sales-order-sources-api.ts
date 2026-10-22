@@ -7,6 +7,7 @@ import {requestedExportBusinessTeam} from './business-team-export';
 import {parseSalesOrderSource,SalesOrderSourceError,type SalesOrderSourceRecord} from './sales-order-sources';
 import {latestSalesColorCatalog} from './sales-color-fields-api';
 import {salesOrderDisplayLabels} from './sales-order-field-labels';
+import {salesOrderSourceWorkbook} from './sales-order-source-export';
 
 const importSchema=z.object({token:z.string().uuid(),source:z.unknown()}).strict();
 const key=(value:string)=>clean(value).toLocaleLowerCase();
@@ -22,12 +23,24 @@ function readable(s:State,m:Member,customer:string){
  return !!accounts[0]&&assignedServiceCustomer(s,m,accounts[0]);
 }
 export async function salesOrderSourcesGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(action!=='sales-order-sources-data')return null;internal(m);
+ if(action!=='sales-order-sources-data'&&action!=='sales-order-sources-export')return null;internal(m);
  const teamId=requestedExportBusinessTeam(s,m,req);
  const permitted=(all(s,'sales_order_source') as SalesOrderSourceRecord[]).filter(record=>readable(s,m,record.customer));
  // An id-less wrapper avoids treating source ids as existing order links.
  const items=filterBusinessTeamRows(s,permitted.map(record=>({customer:record.customer,record})),teamId).map(row=>row.record);
  const currentCatalog=latestSalesColorCatalog(s);
+ if(action==='sales-order-sources-export'){
+  const ids=new URL(req.url).searchParams.getAll('id'),id=ids[0];
+  if(ids.length!==1||!id||id.length>160||id!==id.trim())throw new AppError('请选择一张有效的销售原单后再导出。');
+  // Resolve the ID only within the freshly authorized customer/team scope. The
+  // browser selection or an earlier list response never grants download access.
+  const item=items.find(record=>record.id===id);
+  if(!item)throw new AppError('此销售原单不存在或已不在当前授权范围，请刷新后重试。',404);
+  const labels=salesOrderDisplayLabels(currentCatalog?.catalog||null,[item]);
+  const bytes=salesOrderSourceWorkbook(item,labels,currentCatalog?.catalog.dictionaryVersion);
+  const safeName=Array.from(item.source.orderNo.replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g,'_')).slice(0,160).join('');
+  return new Response(bytes,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent('中英销售订单_'+safeName+'.xlsx')}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':businessTeamHeader}});
+ }
  const fieldLabels=salesOrderDisplayLabels(currentCatalog?.catalog||null,items);
  const response=json({items,status:'待核对',canImport:m.role==='admin',fieldLabels,...(currentCatalog?{fieldLabelsVersion:currentCatalog.catalog.dictionaryVersion}:{})});response.headers.set('Vary',businessTeamHeader);return response;
 }
