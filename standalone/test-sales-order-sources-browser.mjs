@@ -80,6 +80,7 @@ try{
  await panel.locator('.sales-source-lines-table').evaluate(element=>{element.scrollLeft=0;});
  await page.screenshot({path:path.join(dir,'sales-order-sources-desktop.png'),fullPage:true});
  await panel.getByRole('button',{name:'查看销售原单 DEMO-ORDER-B',exact:true}).click();assert.equal(await search.inputValue(),'');assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);assert.equal(await tableRows.count(),1);assert.match(await tableRows.innerText(),/DEMO-OTHER-001/);assert.doesNotMatch(await tableRows.innerText(),/DEMO-DRAWING/);assert.match(await tableRows.innerText(),/10 副/);
+ assert.equal(await tableRows.locator('.sales-source-delivery').innerText(),'有效交期待确认');
  await page.setViewportSize({width:390,height:844});await panel.scrollIntoViewIfNeeded();
  const box=await panel.boundingBox();assert(box&&box.x>=0&&box.width<=390&&box.x+box.width<=391,'Source panel must fit narrow viewport');
  assert(await panel.locator('.sales-source-lines-table').evaluate(element=>element.scrollWidth>element.clientWidth),'Source line table must scroll inside panel');
