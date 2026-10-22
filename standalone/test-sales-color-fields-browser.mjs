@@ -79,8 +79,16 @@ try{
  const scrollArea=panel.locator('.sales-color-fields-table');assert(await scrollArea.evaluate(element=>element.scrollWidth>element.clientWidth),'Mapping table must scroll inside its own area');
  await page.screenshot({path:path.join(dir,'sales-color-fields-mobile.png'),fullPage:true});
  await toggle.click();assert.equal(await panel.locator('#sales-color-fields-content').count(),0);
+ catalog.dictionaryVersion='demo-v2';
+ catalog.orderFields=[{key:'quantity',labelZh:'合成金蝶数量',labelEn:'Demo ERP Quantity',originalLabelZh:'原订单数量',originalLabelEn:'Original Quantity',sourceRef:'Demo source!A1',kingdee:{label:'合成金蝶数量',column:'J',sourceRef:'Demo ERP!J3',basis:'same-meaning'},notes:'只统一标题；测试单位保持原样。'}];
+ fields[0]={...fields[0],originalLabelZh:'测试框体色',originalLabelEn:'Demo Frame Color',labelZh:'新框体色',labelEn:'New Demo Frame Color',aliases:['测试框体色','Demo Frame Color']};
+ await toggle.click();await panel.getByTestId('sales-color-fields-kingdee').waitFor();
+ assert.match(await panel.getByTestId('sales-color-fields-kingdee').innerText(),/J 列 · 合成金蝶数量/);assert.match(await panel.getByTestId('sales-color-fields-kingdee').innerText(),/0 个已有同义金蝶字段对应/);
+ await profiles.selectOption('');await search.fill('测试框体色');
+ const standardTable=panel.getByRole('table',{name:'标准颜色字段',exact:true});assert.equal(await standardTable.locator('tbody tr').count(),1);assert.match(await standardTable.innerText(),/新框体色/);assert.match(await standardTable.innerText(),/测试框体色/);assert.match(await standardTable.innerText(),/无同义字段 · 保留原名/);
+ await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:path.join(dir,'sales-color-fields-kingdee.png'),fullPage:true});
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
- console.log('PASS 颜色字段库折叠、空配置、读取失败重试、分页、近似与别名搜索、候选/组合、模板隔离、复制成功/回退、手机布局及只读数据保全');
+ console.log('PASS 颜色字段库折叠、空配置、读取失败重试、分页、近似与历史别名搜索、候选/组合、金蝶字段对照、模板隔离、复制成功/回退、手机布局及只读数据保全');
  console.log('Synthetic screenshots: '+dir);
 }finally{await browser?.close();server.kill();}

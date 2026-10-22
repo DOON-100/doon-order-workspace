@@ -4,7 +4,15 @@ import {z} from 'zod';
 // private data imported through the authenticated configuration endpoint.
 const id=z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,159}$/);
 const label=(max:number)=>z.string().min(1).max(max).refine(value=>value.trim().length>0,'名称不能全为空白');
-const fieldSchema=z.object({id,labelZh:label(300),labelEn:label(300),sourceRef:label(500)}).strict();
+const kingdeeFieldSchema=z.object({label:label(300),column:z.string().regex(/^[A-Z]{1,3}$/),sourceRef:label(500),basis:z.literal('same-meaning')}).strict();
+const fieldNames={
+ labelZh:label(300),labelEn:label(300),sourceRef:label(500),
+ originalLabelZh:label(300).optional(),originalLabelEn:label(300).optional(),
+ aliases:z.array(label(300)).max(50).optional(),kingdee:kingdeeFieldSchema.optional(),
+};
+const fieldSchema=z.object({id,...fieldNames}).strict();
+export const salesOrderFieldKeys=['customer','orderNo','customerPO','drawing','model','sku','color','quantity','unit','sampleQuantity','unitPrice','deliveryText'] as const;
+const orderFieldSchema=z.object({key:z.enum(salesOrderFieldKeys),...fieldNames,notes:z.string().max(2000).optional()}).strict();
 const slotSchema=z.object({
  id,sourceColumn:z.string().regex(/^[A-Z]{1,3}$/),sourceLabel:label(600),
  fieldId:id.nullable(),status:z.enum(['adopted','pending','composite']),
@@ -18,10 +26,17 @@ export const salesColorCatalogSchema=z.object({
  schemaVersion:z.literal(1),title:label(300),dictionaryVersion:label(160),
  sourceSha256:z.string().regex(/^[a-fA-F0-9]{64}$/),
  fields:z.array(fieldSchema).min(1).max(1000),profiles:z.array(profileSchema).max(500),
+ orderFields:z.array(orderFieldSchema).max(salesOrderFieldKeys.length).optional(),
 }).strict().superRefine((catalog,ctx)=>{
  const issue=(path:(string|number)[],message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,path,message});
  const fieldIds=new Set<string>();
  catalog.fields.forEach((field,i)=>{if(fieldIds.has(field.id))issue(['fields',i,'id'],'标准字段ID重复');fieldIds.add(field.id);});
+ const orderKeys=new Set<string>();
+ catalog.orderFields?.forEach((field,i)=>{if(orderKeys.has(field.key))issue(['orderFields',i,'key'],'订单基本字段重复');orderKeys.add(field.key);});
+ for(const group of ['fields','orderFields'] as const)(catalog[group]||[]).forEach((field,i)=>{
+  if(field.kingdee&&field.labelZh!==field.kingdee.label)issue([group,i,'kingdee','label'],'已确认同义的中文标题必须与金蝶模板标题一致');
+  if((field.originalLabelZh===undefined)!==(field.originalLabelEn===undefined))issue([group,i,'originalLabelZh'],'原字典中英文标题须同时保留');
+ });
  const profileIds=new Set<string>();
  catalog.profiles.forEach((profile,i)=>{
   if(profileIds.has(profile.id))issue(['profiles',i,'id'],'客户对应规则ID重复');profileIds.add(profile.id);
@@ -44,6 +59,7 @@ export type SalesColorCatalog=z.infer<typeof salesColorCatalogSchema>;
 export type SalesColorField=SalesColorCatalog['fields'][number];
 export type SalesColorProfile=SalesColorCatalog['profiles'][number];
 export type SalesColorSlot=SalesColorProfile['slots'][number];
+export type SalesOrderFieldLabel=NonNullable<SalesColorCatalog['orderFields']>[number];
 export class SalesColorCatalogError extends Error{}
 export function parseSalesColorCatalog(value:unknown):SalesColorCatalog{
  const result=salesColorCatalogSchema.safeParse(value);
@@ -59,6 +75,7 @@ export type SalesColorMatch={
 };
 // Title lookup only; original labels and all business values stay untouched.
 const nameKey=(value:string)=>value.normalize('NFKC').replace(/圏/g,'圈').trim().replace(/\s+/g,' ').toLowerCase();
+export const salesColorFieldNames=(field:Pick<SalesColorField,'labelZh'|'labelEn'|'originalLabelZh'|'originalLabelEn'|'aliases'>)=>[field.labelZh,field.labelEn,field.originalLabelZh,field.originalLabelEn,...(field.aliases||[])].filter((value):value is string=>!!value);
 const sourceNames=(value:string)=>new Set([value,...value.split(/\r\n?|\n/)].map(nameKey).filter(Boolean));
 const compact=(value:string)=>nameKey(value).replace(/[\s\p{P}\p{S}]/gu,'');
 function similar(a:string,b:string){
@@ -85,7 +102,7 @@ export function matchSalesColorField(catalog:SalesColorCatalog,label:string,cont
    const slot=profile.slots.find(item=>item.sourceColumn===context.sourceColumn);
    if(!slot)return unknown;
    const field=slot.fieldId?fields.get(slot.fieldId):undefined;
-   if(!sourceNames(slot.sourceLabel).has(key)&&(!field||![field.labelZh,field.labelEn].some(value=>nameKey(value)===key)))return unknown;
+   if(!sourceNames(slot.sourceLabel).has(key)&&(!field||!salesColorFieldNames(field).some(value=>nameKey(value)===key)))return unknown;
    slots=[slot];
   }else slots=profile.slots.filter(slot=>sourceNames(slot.sourceLabel).has(key));
   if(slots.length){
@@ -95,9 +112,9 @@ export function matchSalesColorField(catalog:SalesColorCatalog,label:string,cont
    return {status:slot.status==='adopted'?'matched':slot.status,fieldId:field?.id||null,...(field?{field}:{}),candidateFieldIds,sourceSlotIds,profileId:profile.id,basis:context.sourceColumn?'profile-slot':'profile-alias'};
   }
  }
- const exact=catalog.fields.filter(field=>[field.labelZh,field.labelEn].some(value=>nameKey(value)===key));
+ const exact=catalog.fields.filter(field=>salesColorFieldNames(field).some(value=>nameKey(value)===key));
  if(exact.length===1)return {status:'matched',fieldId:exact[0].id,field:exact[0],candidateFieldIds:[exact[0].id],sourceSlotIds:[],basis:'dictionary-exact'};
  if(exact.length>1)return {status:'candidates',fieldId:null,candidateFieldIds:exact.map(field=>field.id),sourceSlotIds:[],basis:'dictionary-exact'};
- const candidates=catalog.fields.filter(field=>[field.labelZh,field.labelEn].some(value=>similar(label,value)));
+ const candidates=catalog.fields.filter(field=>salesColorFieldNames(field).some(value=>similar(label,value)));
  return candidates.length?{status:'candidates',fieldId:null,candidateFieldIds:candidates.map(field=>field.id),sourceSlotIds:[],basis:'dictionary-similar'}:unknown;
 }

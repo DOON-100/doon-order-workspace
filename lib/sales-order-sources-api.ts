@@ -5,6 +5,8 @@ import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-worksp
 import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
 import {requestedExportBusinessTeam} from './business-team-export';
 import {parseSalesOrderSource,SalesOrderSourceError,type SalesOrderSourceRecord} from './sales-order-sources';
+import {latestSalesColorCatalog} from './sales-color-fields-api';
+import {salesOrderDisplayLabels} from './sales-order-field-labels';
 
 const importSchema=z.object({token:z.string().uuid(),source:z.unknown()}).strict();
 const key=(value:string)=>clean(value).toLocaleLowerCase();
@@ -25,7 +27,9 @@ export async function salesOrderSourcesGet(action:string,req:Request,s:State,m:M
  const permitted=(all(s,'sales_order_source') as SalesOrderSourceRecord[]).filter(record=>readable(s,m,record.customer));
  // An id-less wrapper avoids treating source ids as existing order links.
  const items=filterBusinessTeamRows(s,permitted.map(record=>({customer:record.customer,record})),teamId).map(row=>row.record);
- const response=json({items,status:'待核对',canImport:m.role==='admin'});response.headers.set('Vary',businessTeamHeader);return response;
+ const currentCatalog=latestSalesColorCatalog(s);
+ const fieldLabels=salesOrderDisplayLabels(currentCatalog?.catalog||null,items);
+ const response=json({items,status:'待核对',canImport:m.role==='admin',fieldLabels,...(currentCatalog?{fieldLabelsVersion:currentCatalog.catalog.dictionaryVersion}:{})});response.headers.set('Vary',businessTeamHeader);return response;
 }
 async function fingerprint(value:unknown){return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value))))).map(value=>value.toString(16).padStart(2,'0')).join('');}
 export async function salesOrderSourcesPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{

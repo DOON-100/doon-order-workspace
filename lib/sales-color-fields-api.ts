@@ -4,12 +4,12 @@ import {AppError,audit,commit,json} from './store';
 import {assignedServiceCustomer,serviceOrderCustomerKeys} from './service-workspace';
 import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
 import {requestedExportBusinessTeam} from './business-team-export';
-import {parseSalesColorCatalog,SalesColorCatalogError,type SalesColorCatalog,type SalesColorProfile} from './sales-color-fields';
+import {parseSalesColorCatalog,salesColorFieldNames,SalesColorCatalogError,type SalesColorCatalog,type SalesColorProfile} from './sales-color-fields';
 
 export type SalesColorCatalogRecord=Entity&{kind:'sales_color_field_catalog';version:number;previousId:string;catalog:SalesColorCatalog;createdAt:string;createdById:string};
 const saveSchema=z.object({version:z.number().int().nonnegative(),token:z.string().uuid(),catalog:z.unknown()}).strict();
 function internal(m:Member){if(!m.active||m.role==='supplier')throw new AppError('仅在职内部成员可读取颜色字段库。',403);}
-function latest(s:State):SalesColorCatalogRecord|null{
+export function latestSalesColorCatalog(s:State):SalesColorCatalogRecord|null{
  const rows=(all(s,'sales_color_field_catalog') as SalesColorCatalogRecord[]).sort((a,b)=>b.version-a.version);
  if(rows.length>1&&rows[0].version===rows[1].version)throw new AppError('字段库版本存在冲突，请由管理员核对。',409);
  return rows[0]||null;
@@ -31,7 +31,7 @@ function profileReadable(s:State,m:Member,profile:SalesColorProfile){
 }
 export async function salesColorFieldsGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(action!=='sales-color-fields-data')return null;internal(m);
- const teamId=requestedExportBusinessTeam(s,m,req),current=latest(s);
+ const teamId=requestedExportBusinessTeam(s,m,req),current=latestSalesColorCatalog(s);
  // Filter wrappers without a profile id, which must never be resolved as a
  // coincidentally same-named business record by the shared team association.
  const permitted=current?.catalog.profiles.filter(profile=>profileReadable(s,m,profile))||[];
@@ -51,9 +51,19 @@ export async function salesColorFieldsPost(action:string,req:Request,s:State,m:M
  const fp=await fingerprint({version:input.version,token:input.token,catalog});
  const requestId='sales_color_field_request_'+input.token,prior=all(s,'sales_color_field_request').find(row=>row.id===requestId);
  if(prior){if(prior.actorId!==m.id||prior.action!==action||prior.fingerprint!==fp)throw new AppError('请求标识已用于不同内容或人员。',409);return json({...prior.result,idempotent:true});}
- const before=latest(s);if((before?.version||0)!==input.version)throw new AppError('字段库已更新，请读取最新版本后重新保存。',409);
+ const before=latestSalesColorCatalog(s);if((before?.version||0)!==input.version)throw new AppError('字段库已更新，请读取最新版本后重新保存。',409);
  const nextIds=new Set(catalog.fields.map(field=>field.id));
  if(before?.catalog.fields.some(field=>!nextIds.has(field.id)))throw new AppError('已有标准字段ID必须保留；不能通过全量保存静默删除历史字段。');
+ for(const previous of before?.catalog.fields||[]){
+  const next=catalog.fields.find(field=>field.id===previous.id)!;
+  if(next.sourceRef!==previous.sourceRef)throw new AppError('已有颜色字段的原始来源位置必须保留。');
+  if(salesColorFieldNames(previous).some(name=>!salesColorFieldNames(next).includes(name)))throw new AppError('改名时须保留旧中英标题及全部历史别名，以便原订单继续查找。');
+  if(previous.originalLabelZh&&next.originalLabelZh!==previous.originalLabelZh||previous.originalLabelEn&&next.originalLabelEn!==previous.originalLabelEn)throw new AppError('已保存的原字典中英标题必须保持不变。');
+ }
+ for(const previous of before?.catalog.orderFields||[]){
+  const next=catalog.orderFields?.find(field=>field.key===previous.key);
+  if(!next||next.sourceRef!==previous.sourceRef||salesColorFieldNames(previous).some(name=>!salesColorFieldNames(next).includes(name)))throw new AppError('已有订单基本字段、来源及历史标题必须保留。');
+ }
  for(const profile of before?.catalog.profiles||[]){
   const next=catalog.profiles.find(value=>value.id===profile.id);
   if(!next||profile.slots.some(slot=>!next.slots.some(value=>value.id===slot.id)))throw new AppError('已有客户规则及来源栏目ID必须保留；请上传完整配置，不能保存经过客户或业务组筛选的局部目录。');

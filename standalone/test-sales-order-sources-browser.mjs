@@ -29,7 +29,8 @@ function syntheticLine(index,second=false){
    {sourceColumn:'M',sourceLabel:'合成组合原栏',sourceCell:`M${sourceRow}`,value:'甲 / 乙组合原文',status:'composite',standardZh:'',standardEn:'',qualifier:'未拆值的组合',candidates:['合成部件色','合成附件色']},
   ],
   rawFields:[
-   {column:'Z',label:'合成金额原栏',cell:`Z${sourceRow}`,value:'12.50',sourceAnchor:'Z9',sourceRange:'Z9:Z30',formula:'=B9*2',cachedValue:'12.50',hidden:true},
+   ...(index===4?[{column:'Y',label:'Amount',cell:`Y${sourceRow}`,value:'7.00'}]:[]),
+   {column:'Z',label:index===5?'合成非金额原栏':'Item Net',cell:`Z${sourceRow}`,value:index===1?'0':index===2?null:'=B9*2',sourceAnchor:'Z9',sourceRange:'Z9:Z30',formula:index===1||index===2?null:'=B9*2',cachedValue:index===3?null:'12.50',hidden:true},
    {column:'J',label:'合成斜杠原栏',cell:`J${sourceRow}`,value:'/'},
    {column:'L',label:'合成空白原栏',cell:`L${sourceRow}`,value:null},
   ],notes:['合成逐行核对说明'],
@@ -40,6 +41,9 @@ function item(second=false){
  return {id:second?'demo_source_b':'demo_source_a',kind:'sales_order_source',version:1,status:'待核对',customer:source.customer,orderNo,source,contentFingerprint:(second?'d':'e').repeat(64),createdAt:'2026-01-01T00:00:00Z',createdById:'synthetic_admin'};
 }
 const items=[item(),item(true)];
+items[0].source.lines[20].colorFields.push({sourceColumn:'N',sourceLabel:'合成原始保留栏',sourceCell:'N30',value:'raw-prototype-name',status:'adopted',standardZh:'constructor',standardEn:'Original Constructor Label',qualifier:'不得误读对象原型',candidates:[]});
+items[1].source.lines[0].colorFields.push({sourceColumn:'N',sourceLabel:'合成同名颜色栏',sourceCell:'N10',value:'raw-reserved-name',status:'adopted',standardZh:'quantity',standardEn:'Original Color Quantity Label',qualifier:'不得误读基础字段命名空间',candidates:[]});
+const fieldLabels={orderNo:{zh:'单据编号',en:'Document No.'},customer:{zh:'客户.编码',en:'Customer Code',notes:'合成名称对应，不代表编码已验证'},customerPO:{zh:'客户订单号',en:'Customer PO'},quantity:{zh:'数量',en:'Quantity'},unit:{zh:'单位.名称',en:'Unit Name'},unitPrice:{zh:'单价',en:'Unit Price'},合成部件色:{zh:'合成标准部件颜色',en:'Synthetic Standard Part Color'}};
 try{
  let healthy=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){healthy=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,100));}
  assert(healthy,'Temporary server did not start');
@@ -53,7 +57,7 @@ try{
  await page.route('**/api/workspace/sales-order-sources-data',route=>{
   reads++;assert.equal(route.request().method(),'GET');
   if(mode==='error')return route.fulfill({status:403,json:{error:'合成原单范围读取失败'}});
-  return route.fulfill({json:{items:mode==='empty'?[]:items,canImport:true}});
+  return route.fulfill({json:{items:mode==='empty'?[]:items,canImport:true,fieldLabels,fieldLabelsVersion:'synthetic-current-v2'}});
  });
  const startupEnrollment=page.waitForResponse(response=>response.url()===origin+'/api/workspace/enroll'&&response.request().method()==='POST');
  await page.goto(origin+'/factory-orders');
@@ -69,17 +73,43 @@ try{
  assert.equal(await panel.getByRole('button',{name:'查看销售原单 DEMO-ORDER-A',exact:true}).getAttribute('aria-pressed'),'true');
  assert.match(await panel.innerText(),/231 PCS/);assert.match(await panel.innerText(),/10 副/);assert.match(await panel.innerText(),/40 PCS（1 行未填写）/);assert.doesNotMatch(await panel.innerText(),/241 PCS|271 PCS/);
  const tableRows=panel.locator('.sales-source-lines-table > table > tbody > tr[data-source-line-id]');
- assert.equal(await tableRows.count(),20);await panel.getByRole('button',{name:'下一页',exact:true}).click();assert.equal(await tableRows.count(),1);assert.match(await tableRows.innerText(),/DEMO-DRAWING-021/);
+ const sheet=panel.locator('.sales-source-lines-table'),headers=sheet.locator('.sales-source-column-header');
+ assert.equal(await tableRows.count(),21);assert.equal(await panel.getByRole('button',{name:'下一页',exact:true}).count(),0);
+ assert.equal(await headers.locator('[data-color-column]').count(),5);assert.equal(await headers.locator('[data-color-column]').filter({hasText:'合成标准部件颜色'}).count(),2);
+ assert.match(await headers.locator('[data-color-column="N"]').innerText(),/constructor/);
+ assert.match(await headers.locator('[data-field-key="orderNo"]').innerText(),/单据编号/);assert.match(await headers.locator('[data-field-key="customer"]').innerText(),/客户\.编码/);
+ assert.match(await headers.locator('[data-field-key="customerPO"]').innerText(),/客户订单号/);assert.match(await headers.locator('[data-field-key="unit"]').innerText(),/单位\.名称/);
+ assert.match(await headers.locator('[data-field-key="unitPrice"]').innerText(),/单价/);assert.doesNotMatch(await headers.locator('[data-field-key="sku"]').innerText(),/商品/);
+ assert.equal(await panel.locator('.sales-source-warnings').getAttribute('open'),null);assert.match(await panel.innerText(),/synthetic-current-v2/);
+ assert.equal(await tableRows.nth(0).locator('[data-color-column="J"]').innerText(),'/');assert.match(await tableRows.nth(0).locator('[data-color-column="J"]').getAttribute('title'),/原文斜杠/);
+ assert.equal(await tableRows.nth(0).locator('[data-color-column="K"]').innerText(),'001-RAW');assert.equal(await tableRows.nth(0).locator('[data-color-column="L"]').innerText(),'—');assert.match(await tableRows.nth(0).locator('[data-color-column="L"]').getAttribute('title'),/源表未填写/);
+ assert.equal(await tableRows.nth(0).locator('[data-color-column="M"]').innerText(),'甲 / 乙组合原文');assert.equal(await tableRows.nth(0).locator('[data-color-column="N"]').innerText(),'本行无此栏目');
+ assert.deepEqual(await tableRows.locator('[data-field-key="sourceAmount"]').allInnerTexts().then(values=>values.slice(0,6)),['12.50','0','—','公式缓存未提供','多个金额栏待核对','原表未提供']);
+ assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);assert.equal(await sheet.locator('tbody tr').count(),21);
+ const beforeScroll=await tableRows.first().locator('.sales-source-freeze-2').boundingBox();
+ await panel.getByRole('button',{name:'颜色信息（5 列）',exact:true}).click();await page.waitForFunction(()=>document.querySelector('.sales-source-lines-table').scrollLeft>500);
+ const afterScroll=await tableRows.first().locator('.sales-source-freeze-2').boundingBox();assert(Math.abs(beforeScroll.x-afterScroll.x)<1,'Drawing column remains frozen during horizontal scrolling');
+ await sheet.evaluate(element=>{element.scrollTop=250;});
+ const headerBox=await headers.locator('[data-field-key="drawing"]').boundingBox(),sheetBox=await sheet.boundingBox();assert(Math.abs(headerBox.y-sheetBox.y-35)<3,'Column headers remain below the frozen group header');
+ await sheet.evaluate(element=>{element.scrollTop=0;});
+ await panel.getByRole('checkbox',{name:'显示原字段标题'}).check();assert.match(await headers.locator('[data-color-column="J"]').innerText(),/原：合成前部原栏/);
+ await panel.getByRole('button',{name:'专注表格',exact:true}).click();assert.match(await panel.getAttribute('class'),/sales-source-focus/);assert.equal(await tableRows.count(),21);assert.equal(await panel.getAttribute('role'),'dialog');assert.equal(await panel.getAttribute('aria-modal'),'true');
+ await panel.getByRole('button',{name:'退出专注',exact:true}).focus();await page.keyboard.press('Shift+Tab');assert(await panel.evaluate(element=>element.contains(document.activeElement)),'Focus remains in the focused sheet');
+ await page.screenshot({path:path.join(dir,'sales-order-sources-focus.png'),fullPage:false});await page.keyboard.press('Escape');assert.doesNotMatch(await panel.getAttribute('class'),/sales-source-focus/);assert(await panel.getByRole('button',{name:'专注表格',exact:true}).evaluate(element=>element===document.activeElement),'Exiting focus mode restores the trigger');
  const search=panel.getByRole('textbox',{name:'搜索销售原单款号色号SKU'});
- await search.fill('SKU-001');assert.equal(await tableRows.count(),1);assert.equal(await tableRows.locator('td').nth(4).innerText(),'001');assert.match(await tableRows.innerText(),/未填写/);assert.match(await tableRows.innerText(),/0\.00/);
- await panel.getByRole('button',{name:'查看原单第 10 行颜色与来源',exact:true}).click();
+ await search.fill('SKU-001');assert.equal(await tableRows.count(),1);assert.equal(await tableRows.locator('td').nth(2).innerText(),'001');assert.match(await tableRows.innerText(),/未填写/);assert.match(await tableRows.innerText(),/0\.00/);assert.equal(await headers.locator('[data-color-column]').count(),5);
+ await panel.getByRole('button',{name:'查看原单第 10 行来源',exact:true}).click();
  const detail=panel.getByTestId('sales-order-source-line-details');await detail.waitFor();
  assert.equal(await detail.locator('tr[data-mapping-status="adopted"]').count(),2);assert.equal(await detail.locator('tr[data-mapping-status="pending"]').count(),1);assert.equal(await detail.locator('tr[data-mapping-status="composite"]').count(),1);
  assert.match(await detail.innerText(),/空白（源表未填写）/);assert.match(await detail.innerText(),/原文斜杠，保持原样/);assert.match(await detail.innerText(),/001-RAW/);assert.match(await detail.innerText(),/前部位置独立保留/);assert.match(await detail.innerText(),/后部位置独立保留/);assert.match(await detail.innerText(),/甲 \/ 乙组合原文/);
  await detail.locator('summary').click();assert.match(await detail.innerText(),/取值锚点：Z9/);assert.match(await detail.innerText(),/来源范围：Z9:Z30/);assert.match(await detail.innerText(),/原公式：=B9\*2/);assert.match(await detail.innerText(),/缓存值：12.50/);assert.match(await detail.innerText(),/原表隐藏栏目/);
+ assert.equal(await sheet.locator('tbody tr').count(),1,'Source details must never add expandable rows to the order sheet');
+ await panel.getByRole('button',{name:'关闭原单来源核对',exact:true}).click();assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);
+ await search.fill('001-RAW');assert.equal(await tableRows.count(),21);await search.fill('');
  await panel.locator('.sales-source-lines-table').evaluate(element=>{element.scrollLeft=0;});
- await page.screenshot({path:path.join(dir,'sales-order-sources-desktop.png'),fullPage:true});
- await panel.getByRole('button',{name:'查看销售原单 DEMO-ORDER-B',exact:true}).click();assert.equal(await search.inputValue(),'');assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);assert.equal(await tableRows.count(),1);assert.match(await tableRows.innerText(),/DEMO-OTHER-001/);assert.doesNotMatch(await tableRows.innerText(),/DEMO-DRAWING/);assert.match(await tableRows.innerText(),/10 副/);
+ await panel.screenshot({path:path.join(dir,'sales-order-sources-desktop.png')});
+ await panel.getByRole('button',{name:'查看销售原单 DEMO-ORDER-B',exact:true}).click();assert.equal(await search.inputValue(),'');assert.equal(await panel.getByTestId('sales-order-source-line-details').count(),0);assert.equal(await tableRows.count(),1);assert.match(await tableRows.innerText(),/DEMO-OTHER-001/);assert.doesNotMatch(await tableRows.innerText(),/DEMO-DRAWING/);assert.equal(await tableRows.locator('[data-field-key="quantity"]').innerText(),'10');assert.equal(await tableRows.locator('[data-field-key="unit"]').innerText(),'副');
+ assert.equal(await headers.locator('[data-color-column="N"] > strong').innerText(),'quantity','A color named like a basic field must retain its original title');
  assert.equal(await tableRows.locator('.sales-source-delivery').innerText(),'有效交期待确认');
  await page.setViewportSize({width:390,height:844});await panel.scrollIntoViewIfNeeded();
  const box=await panel.boundingBox();assert(box&&box.x>=0&&box.width<=390&&box.x+box.width<=391,'Source panel must fit narrow viewport');
@@ -88,6 +118,6 @@ try{
  await page.screenshot({path:path.join(dir,'sales-order-sources-mobile.png'),fullPage:true});
  assert.deepEqual(writes,[]);assert.deepEqual(errors,[]);assert(reads>=3);
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
- console.log('PASS 原单默认展开、空/错误/重试、按原单位数量/样办、分页搜索、前导零、颜色/候选/组合、空白与斜杠、来源合并/公式、切换无残留、手机布局、零业务写入');
+ console.log('PASS 全部行连续表格、颜色平铺不合并、双语最新字段名、冻结列/表头、专注/Esc、金额缓存/零/空白/歧义、搜索、前导零、颜色候选/组合、来源侧栏、切换无残留、手机布局、空/错误/重试、零业务写入');
  console.log('Synthetic screenshots: '+dir);
 }finally{await browser?.close();server.kill();}
