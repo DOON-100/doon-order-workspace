@@ -180,7 +180,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='kingdee-sales'&&<KingdeeSalesPanel data={data} onDirtyChange={setPmcDirty} initialSourceId={navigationContext.recordId}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy} onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='pmc-handoff'&&<CollaborationPanel side="pmc" data={data} act={action} busy={busy} openOrder={setSelected}/>}
- {view==='finished-outsourcing'&&<div className="space-y-6"><FinishedSupplierPanel data={data} onDirtyChange={setSupplierDirty}/><PmcPanel productionScope="external" data={data} openOrder={setSelected} onDirtyChange={setSupplierScheduleDirty}/></div>}
+ {view==='finished-outsourcing'&&<div className="space-y-6"><FinishedSupplierPanel data={data} initialOrderId={navigationContext.orderId} onDirtyChange={setSupplierDirty}/><PmcPanel productionScope="external" data={data} openOrder={setSelected} onDirtyChange={setSupplierScheduleDirty}/></div>}
  {view==='pmc'&&<PmcPanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty}/>}
  {view==='completed'&&<ArchivePanel data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='department'&&<DepartmentPanel data={data} act={action} busy={busy} openOrder={setSelected}/>}

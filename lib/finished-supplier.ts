@@ -14,6 +14,7 @@ export const finishedTemplates=[{id:'metal',label:'钛架／金属架',steps:met
 export const isSupplierMember=(m:Member)=>String(m.role)==='supplier';
 export const supplierMemberId=(m:Member)=>String((m as Member&{supplierId?:string}).supplierId||'');
 export const canOperateFinished=(m:Member)=>!isSupplierMember(m)&&(broad(m)||m.role==='production'||(m.role==='clerk'&&!!m.departments?.includes('finished')));
+export const canCloseFinished=(m:Member)=>broad(m)||(m.active&&m.role==='clerk'&&!!m.departments?.includes('finished'));
 export const finishedTasks=(s:State)=>all(s,'finished_supplier_task') as FinishedTask[];
 export const finishedShipments=(s:State,id:string)=>(all(s,'finished_supplier_shipment') as FinishedShipment[]).filter(x=>x.taskId===id);
 export const finishedReworks=(s:State,id:string)=>(all(s,'finished_supplier_rework') as FinishedRework[]).filter(x=>x.taskId===id);

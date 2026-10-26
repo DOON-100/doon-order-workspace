@@ -1,10 +1,10 @@
 import {z} from 'zod';
 import {all,broad,canRead,clean,newId,now,strictDate,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
-import {countValue,colLabels,today} from './ledger';
+import {countValue,colLabels,dateValue,today} from './ledger';
 import {factoryName,isFinishedOutsource} from './manufacturing';
 import {assertHandoffProductionGate,hasRecordedProduction} from './handoff-production-gate';
-import {canOperateFinished,canReadFinished,finishedBalance,finishedData,finishedReworks,finishedShipments,finishedTasks,isSupplierMember,pendingFinishedBaseline,publicFinishedAttachment,publicFinishedRework,publicFinishedShipment,publicFinishedTask,reworkComplete,supplierMemberId,type FinishedAttachment,type FinishedEvent,type FinishedRework,type FinishedShipment,type FinishedTask} from './finished-supplier';
+import {canCloseFinished,canOperateFinished,canReadFinished,finishedBalance,finishedData,finishedReworks,finishedShipments,finishedTasks,isSupplierMember,pendingFinishedBaseline,publicFinishedAttachment,publicFinishedRework,publicFinishedShipment,publicFinishedTask,reworkComplete,supplierMemberId,type FinishedAttachment,type FinishedEvent,type FinishedRework,type FinishedShipment,type FinishedTask} from './finished-supplier';
 
 const qty=z.number().int().min(0).max(10000000),positive=qty.refine(n=>n>0,'数量必须大于零');
 const base=z.object({taskId:z.string().min(1),version:z.number().int().positive(),token:z.string().uuid()});
@@ -103,7 +103,7 @@ export async function finishedSupplierPost(action:string,req:Request,s:State,m:M
   const updates:Entity[]=[updated,next,...baselineEntities(next,p.baseline),e,audit(m,updated,o,'核定成品外发期初入仓',p.note),audit(m,next,t,'核定成品外发完整期初基线',p.note)];await commit(s.revision,updates);return json({ok:true,task:publicFinishedTask(changed(s,updates),next)});
  }
  const schema=schemas[name as keyof typeof schemas] as z.ZodType<any>,p=parse(schema,await req.json()),t=readTask(s,m,p.taskId),fingerprint=await hash(stable({action,...p})),retry=repeated(s,m,p.token,name,fingerprint);if(retry)return retry;
- const supplierActions=['accept','progress','promise','exception','shipment','rework-confirm'];if(supplierActions.includes(name))supplier(m);else employee(m,['baseline-stage','close'].includes(name));
+ const supplierActions=['accept','progress','promise','exception','shipment','rework-confirm'];if(supplierActions.includes(name))supplier(m);else if(name==='close'){if(!canCloseFinished(m))throw new AppError('仅 PMC、管理员或成品部门文员可核对足量并结单。',403);}else employee(m,name==='baseline-stage');
  live(s,t);if(t.version!==p.version)throw new AppError('任务已被其他人更新，本次未写入，请刷新核对。',409);if(pendingFinishedBaseline(t)&&!['accept','promise','exception'].includes(name))throw new AppError('期初数量仍待公司核定，当前仅可接单、回复交期和填写异常说明。',409);p.date=actualDate(p.date,t);
  if(name!=='accept'&&name!=='baseline-stage'&&!t.acceptedAt)throw new AppError('供应商尚未确认接单，请先接单。');
  const next:FinishedTask={...t,stages:t.stages.map(x=>({...x})),version:t.version+1,updatedAt:now()},updates:Entity[]=[],timestamp=now();let item:FinishedShipment|FinishedRework|undefined;
@@ -142,7 +142,7 @@ export async function finishedSupplierPost(action:string,req:Request,s:State,m:M
  }else if(name==='rework-confirm'){
   const r=getRework(s,t,p.reworkId);if(r.confirmedAt||reworkComplete(r)||p.date<r.date)throw new AppError('返工已确认／完成，或确认日期早于返工单日期。');item={...r,confirmedAt:timestamp,confirmedDate:p.date,updatedAt:timestamp};updates.push(item);
  }else if(name==='close'){
-  if(p.note.length<3)throw new AppError('请填写 PMC 结单依据。');const o=freshOrder(s,t,p.orderVersion),b=knownBalance(s,t);if(b.remaining!==0||b.inTransit||b.pendingInspection||b.pendingStock||b.openRework)throw new AppError('尚有订单欠数、在途、待检、待入仓或返工未结，不能正常结单。');next.closedAt=timestamp;
+  if(p.note.length<3)throw new AppError('请填写结单依据。');const o=freshOrder(s,t,p.orderVersion),b=knownBalance(s,t);if(b.remaining!==0||b.inTransit||b.pendingInspection||b.pendingStock||b.openRework)throw new AppError('尚有订单欠数、在途、待检、待入仓或返工未结，不能正常结单。');if(!broad(m)){const stockDate=dateValue(o.ledger?.columns.BG);if(!Number.isSafeInteger(o.quantity)||o.quantity<=0||!stockDate||p.date<stockDate)throw new AppError('请核对有效订单数量及包装入仓日期，结单日期不得早于入仓日期。');}next.closedAt=timestamp;
   const c={...o.ledger!.columns,BH:p.date},updated={...o,lifecycle:'archived' as const,closedDate:p.date,archivedAt:timestamp,archiveReason:p.note,ledger:{...o.ledger!,columns:c},extra:{...o.extra,['BH · '+colLabels.BH]:p.date},version:o.version+1,updatedAt:timestamp,updatedBy:m.name};updates.push(updated,audit(m,updated,o,'成品外发任务履约结单',p.note));
  }
  const e=event(name,next,m,p,fingerprint);updates.push(next,e,audit(m,next,t,'成品外发协作 · '+name,p.note||'供应商协作'));await commit(s.revision,updates);const final=changed(s,updates);

@@ -1,5 +1,5 @@
 import {assertHandoffProductionGate,requiresProductionGate,hasRecordedProduction} from './handoff-production-gate';
-import {departmentColumns,mayReceive} from './departments';
+import {canCloseLedgerOrder,departmentColumns,mayReceive} from './departments';
 import {metricExport} from './metric-export';
 import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
 import {requestedExportBusinessTeam} from './business-team-export';
@@ -7,7 +7,7 @@ import {z} from 'zod';
 import {AppError,audit,bucket,commit,json} from './store';
 import {all,allowedFields,broad,canRead,clean,newId,now,productTypeOf,strictDate,type State,type Member,type Order,type Entity} from './domain';
 import {parseLedger} from './ledger-import';
-import {active,automaticDates,countValue,colLabels,dateCols,dateValue,editableCols,numeric,outstanding,stageDefs,stageNumbers,issues} from './ledger';
+import {active,automaticDates,countValue,colLabels,dateCols,dateValue,editableCols,numeric,outstanding,stageDefs,stageNumbers,issues,today} from './ledger';
 import {makeWorkbook,sha} from './workbooks';
 import {supplierGet,supplierPost} from './supplier-api';
 import {lossGet,lossPost} from './loss-api';
@@ -76,9 +76,15 @@ export async function operationPost(action:string,req:Request,s:State,m:Member):
   const next=applyLedgerPatch(o,m,input.patch);if(requiresProductionGate(o,next))assertHandoffProductionGate(s,m,o);await commit(s.revision,[next,audit(m,next,o,'更新原表工序',input.reason)]);return json({ok:true});
  }
  if(action==='ledger-lifecycle'){
-  pmc(m);const input=z.object({id:z.string(),version:z.number().int(),mode:z.enum(['active','archived']),reason:z.string().trim().min(3).max(1000),closedDate:z.string().default('')}).parse(await req.json()),o=getOrder(s,m,input.id);if(o.version!==input.version)throw new AppError('明细版本已改变，请刷新。',409);if((o.lifecycle||'active')===input.mode)return json({ok:true});
-  if(input.mode==='active'&&o.quantity<=0)throw new AppError('原表调整行数量非正，须先核对源单，不能恢复为生产订单。');if(input.mode==='archived'&&!input.closedDate)throw new AppError('请填写实际结单日期。');if(input.closedDate)strictDate(input.closedDate);
-  const next={...o,lifecycle:input.mode,closedDate:input.mode==='archived'?input.closedDate:o.closedDate,archiveReason:input.reason,archivedAt:input.mode==='archived'?now():o.archivedAt,version:o.version+1,updatedAt:now(),updatedBy:m.name};await commit(s.revision,[next,audit(m,next,o,input.mode==='archived'?'结单归档':'恢复在制',input.reason)]);return json({ok:true});
+  const input=z.object({id:z.string(),version:z.number().int(),mode:z.enum(['active','archived']),reason:z.string().trim().min(3).max(1000),closedDate:z.string().default('')}).parse(await req.json()),o=getOrder(s,m,input.id);
+  if(!canCloseLedgerOrder(m,o)||(!broad(m)&&input.mode!=='archived'))throw new AppError('仅 PMC / 管理员可办理恢复或特殊结单；成品部门文员只可办理足量入仓后的正常结单。',403);
+  if(o.version!==input.version)throw new AppError('明细版本已改变，请刷新。',409);if((o.lifecycle||'active')===input.mode)return json({ok:true});
+  if(input.mode==='active'&&o.quantity<=0)throw new AppError('原表调整行数量非正，须先核对源单，不能恢复为生产订单。');let closedDate='';try{closedDate=strictDate(input.closedDate);}catch(e){throw new AppError('结单日期：'+(e as Error).message);}if(input.mode==='archived'&&!closedDate)throw new AppError('请填写实际结单日期。');
+  if(!broad(m)){
+   if(!Number.isSafeInteger(o.quantity)||o.quantity<=0||countValue(o.ledger?.columns.BF)!==o.quantity)throw new AppError('成品部门文员须核对包装入仓数量恰好等于有效订单数量后，才可正常结单。');
+   const stockDate=dateValue(o.ledger?.columns.BG);if(!stockDate)throw new AppError('请先登记有效的包装入仓日期，再办理结单。');if(closedDate>today()||closedDate<stockDate)throw new AppError('实际结单日期不得晚于今天，也不得早于包装入仓日期。');
+  }
+  const next={...o,lifecycle:input.mode,closedDate:input.mode==='archived'?closedDate:o.closedDate,archiveReason:input.reason,archivedAt:input.mode==='archived'?now():o.archivedAt,...(input.mode==='archived'&&o.ledger?{ledger:{...o.ledger,columns:{...o.ledger.columns,BH:closedDate}},extra:{...o.extra,['BH · '+colLabels.BH]:closedDate}}:{}),version:o.version+1,updatedAt:now(),updatedBy:m.name};await commit(s.revision,[next,audit(m,next,o,input.mode==='archived'?'结单归档':'恢复在制',input.reason)]);return json({ok:true});
  }
  if(action==='ledger-assign'){
   pmc(m);const input=z.object({ownerName:z.string().min(1),email:z.string().email()}).parse(await req.json());if(!all(s,'member').some(u=>u.email===input.email&&u.active))throw new AppError('请先添加有效成员。');
