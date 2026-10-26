@@ -1,4 +1,6 @@
 import {z} from 'zod';
+import {adoptIeInput,adoptCustomerQuoteIe,assertCustomerQuoteIeApproval,latestReleasedIeQuotes} from './customer-quote-ie';
+import {canFinalApproveIeSales} from './ie-quote-access';
 import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
@@ -29,12 +31,13 @@ async function persist(s:State,m:Member,q:CustomerQuote,before:CustomerQuote|nul
 }
 
 export async function customerQuoteGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed','customer-quote-templates','customer-quote-template-export','customer-quote-template-output-file','customer-quote-completed-export','customer-quote-version','customer-quote-media-file'].includes(action))return null;
+ if(!['customer-quote-ie-candidates','customer-quotes','customer-quote-file','customer-quote-access','customer-quote-completed','customer-quote-templates','customer-quote-template-export','customer-quote-template-output-file','customer-quote-completed-export','customer-quote-version','customer-quote-media-file'].includes(action))return null;
  if(action==='customer-quote-access'){
   if(!isCustomerQuoteAdministrator(m,s))throw new AppError('仅管理员可查看客户报价授权配置。',403);
   return json({policy:customerQuoteAccessPolicy(s)});
  }
- if(!canReadCustomerQuoteHistory(s,m))throw new AppError('没有客户对客报价历史查看权限。',403);
+ if(!canReadCustomerQuoteHistory(s,m)&&!canFinalApproveIeSales(s,m))throw new AppError('没有客户对客报价历史查看权限。',403);
+ if(action==='customer-quote-ie-candidates'){const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');if(!canReadCustomerQuote(s,m,q))throw new AppError('无权查看该客户工程依据。',403);return json({quotes:q.customerAccountId?latestReleasedIeQuotes(s,m,q.customerAccountId):[]});}
  const templateResponse=await customerQuoteTemplateGet(action,req,s,m);if(templateResponse)return templateResponse;
  if(action==='customer-quote-version'){
   const url=new URL(req.url),q=archiveVersion(s,m,url.searchParams.get('quoteId'),url.searchParams.get('quoteVersion'));
@@ -51,7 +54,14 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
   return new Response(object.body,{headers:{'Content-Type':media.contentType,'Content-Disposition':`${url.searchParams.get('download')==='1'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(media.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'; frame-ancestors 'self'",'Cross-Origin-Resource-Policy':'same-origin','Referrer-Policy':'no-referrer'}});
  }
  if(action==='customer-quote-completed')return json({rows:visibleCompletedCustomerQuotes(s,m)});
- if(action==='customer-quotes')return json({quotes:(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicCustomerQuote(s,m,q)),customers:readableCustomerQuoteAccounts(s,m).map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode,canWrite:canMaintainCustomerQuoteAccount(s,m,a),canSeeInternal:canSeeCustomerQuoteInternal(s,m,a),canSeeReviewDetails:!customerQuoteServiceLimited(s,m,a)})),canUse:canReadCustomerQuoteHistory(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
+ if(action==='customer-quotes'){
+  const quotes=(all(s,'customer_quote') as CustomerQuote[]).filter(q=>canReadCustomerQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+  const accounts=new Map(readableCustomerQuoteAccounts(s,m).map(a=>[a.id,a]));
+  // The IE approver may review linked customer prices without inheriting the
+  // sales write grant or gaining access to unrelated historical quotations.
+  if(canFinalApproveIeSales(s,m))for(const q of quotes.filter(q=>q.ieSource)){const a=quoteAccount(s,q.customerAccountId);if(a)accounts.set(a.id,a);}
+  return json({quotes:quotes.map(q=>publicCustomerQuote(s,m,q)),customers:[...accounts.values()].map(a=>({id:a.id,customer:a.customer,customerCode:a.customerCode,canWrite:canMaintainCustomerQuoteAccount(s,m,a),canSeeInternal:canSeeCustomerQuoteInternal(s,m,a),canSeeReviewDetails:!customerQuoteServiceLimited(s,m,a)})),canUse:canReadCustomerQuoteHistory(s,m)||canFinalApproveIeSales(s,m),canCreate:canCreateCustomerQuote(s,m),canSeeInternal:canSeeCustomerQuoteInternal(s,m),canUseUnbound:isCustomerQuoteAdministrator(m,s)});
+ }
  const q=quoteFor(s,new URL(req.url).searchParams.get('id')||'');
  if(!canReadCustomerQuote(s,m,q))throw new AppError('无权读取该客户报价的原附件。',403);
  if(!isCustomerQuoteAdministrator(m,s))throw new AppError('原附件可能含内部核价或多客户资料，仅报价管理员可读取。',403);
@@ -61,15 +71,20 @@ export async function customerQuoteGet(action:string,req:Request,s:State,m:Membe
 }
 
 export async function customerQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise','customer-quote-template-register','customer-quote-template-apply','customer-quote-template-archive','customer-quote-media-upload','customer-quote-record-sent'].includes(action))return null;
- allowed(s,m);
+ if(!['customer-quote-adopt-ie','customer-quote-save','customer-quote-upload','customer-quote-confirm','customer-quote-revise','customer-quote-template-register','customer-quote-template-apply','customer-quote-template-archive','customer-quote-media-upload','customer-quote-record-sent'].includes(action))return null;
+ if(!(action==='customer-quote-confirm'&&canFinalApproveIeSales(s,m)))allowed(s,m);
  const templateResponse=await customerQuoteTemplatePost(action,req,s,m,persist);if(templateResponse)return templateResponse;
  if(action==='customer-quote-media-upload')return uploadQuoteMedia(req,s,m);
  if(action==='customer-quote-record-sent')return recordQuoteSent(req,s,m);
+ if(action==='customer-quote-adopt-ie'){
+  const input=parse(adoptIeInput,await req.json()),before=quoteFor(s,input.id);editable(s,m,before);current(before,input.version);
+  const ieSource=adoptCustomerQuoteIe(s,m,before,input),at=now(),quote:CustomerQuote={...before,ieSource,version:before.version+1,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  return persist(s,m,quote,before,'明确采用已发布工程核价版本');
+ }
  if(action==='customer-quote-confirm'){
-  if(!isCustomerQuoteAdministrator(m,s))throw new AppError('最终英文报价须由管理员明确确认，业务成员可先修改并保存草稿。',403);
   const input=parse(z.object({id:z.string().trim().min(1).max(100),version:z.number().int().positive(),acknowledgeEnglish:z.literal(true)}).strict(),await req.json()),before=quoteFor(s,input.id);
-  editable(s,m,before);current(before,input.version);assertCustomerQuoteConfirmable(before);assertQuoteTemplateMapping(before);
+  if(before.ieSource){assertCustomerQuoteIeApproval(s,m,before);if(before.status!=='draft')throw new AppError('已确认报价不可重复批准，请刷新核对。',409);}else{if(!isCustomerQuoteAdministrator(m,s))throw new AppError('最终英文报价须由管理员明确确认，业务成员可先修改并保存草稿。',403);editable(s,m,before);}
+  current(before,input.version);assertCustomerQuoteConfirmable(before);assertQuoteTemplateMapping(before);
   if(all(s,'customer_quote_completed').some(row=>row.quoteId===before.id&&row.quoteVersion===before.version+1))throw new AppError('该确认版本已存在归档，请刷新核对。',409);
   const at=now(),quote:CustomerQuote={...before,status:'confirmed',version:before.version+1,confirmedAt:at,confirmedBy:m.name,confirmedById:m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   // Confirmation and immutable completed rows commit atomically under one

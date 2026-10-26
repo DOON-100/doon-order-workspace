@@ -1,0 +1,27 @@
+// Focused real-handler / SQLite suite, isolated from every running service.
+import {build} from 'esbuild';
+import {DatabaseSync} from 'node:sqlite';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+await fs.mkdir('test-output',{recursive:true});
+const db=new DatabaseSync(':memory:');
+for(const name of (await fs.readdir('drizzle')).filter(n=>n.endsWith('.sql')).sort())db.exec(await fs.readFile('drizzle/'+name,'utf8'));
+class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:db.prepare(this.sql).all(...this.args)};}async run(){return db.prepare(this.sql).run(...this.args);}}
+const files=new Map(),identity=new AsyncLocalStorage();globalThis.__ieSuiteIdentity=identity;
+globalThis.__ieSuiteEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=[];for(const s of statements)results.push(db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key),json:async()=>JSON.parse(files.get(key))}:null}};
+await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:'test-output/ie-combined-api-test.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'ie-only-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'cloudflare',namespace:'ie-test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'ie-test'}));b.onLoad({filter:/.*/,namespace:'ie-test'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return globalThis.__ieSuiteIdentity.getStore()||null}':'export const env=globalThis.__ieSuiteEnv;'}));}}]});
+const api=await import('../test-output/ie-combined-api-test.mjs'),admin={userId:'ie_suite_admin',email:'admin@test.invalid',displayName:'合成管理员',fullName:'合成管理员'};
+const call=(action,body,user=admin)=>identity.run(user,()=>api[body===undefined?'GET':'POST'](new Request('https://test.invalid/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:body instanceof FormData?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)}),{params:Promise.resolve({action:action.split('?')[0]})}));
+const ok=async(...args)=>{const r=await call(...args),b=await r.json();assert.equal(r.status,200,JSON.stringify(b));return b;};
+const rawRecords=()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert=record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record));
+await ok('enroll',{});
+rawInsert({id:'ie_suite_sales',kind:'member',userId:'ie_suite_sales',email:'sales@test.invalid',name:'合成范围业务',role:'sales',customers:[],active:true,createdAt:'2026-10-01'});
+rawInsert({id:'ie_suite_sales_policy',kind:'customer_quote_access',memberIds:['ie_suite_sales'],aliasesByMember:{}});
+const harness={ok,call,pass:console.log,rawRecords,rawInsert,files};
+const {testIeQuotes,testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeQuotes(harness);await testIeToolingChargeSources(harness);
+const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(harness);
+const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(harness);
+const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass:console.log});
+const {testIeQuoteNotifications}=await import('./ie-quote-notification-cases.mjs');await testIeQuoteNotifications(harness);
+db.close();console.log('IE focused SQLite API suite passed.');

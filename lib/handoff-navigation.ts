@@ -28,6 +28,7 @@ export const directWorkspaceNavigation = [
  {id:'customer-price-archive',label:'历史报价档案',icon:'text'},
  {id:'service-workspace',label:'客服工作台',icon:'support'},
  {id:'engineering-drawings',label:'工程画图部门',icon:'production'},
+ {id:'ie-quotes',label:'IE 工程报价',icon:'engineering'},
  {id:'factory-orders',label:'中英内部订单',icon:'languages'},
  {id:'kingdee-sales',label:'金蝶销售订单',icon:'upload'},
  {id:'customers',label:'客户责任清单',icon:'customer'},

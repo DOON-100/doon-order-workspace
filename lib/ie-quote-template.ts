@@ -1,0 +1,7 @@
+import {all,type Entity,type Member,type State} from './domain';
+import {canConfigureIeQuotes} from './ie-quote-access';
+import type {IeQuote} from './ie-quotes';
+export type IeQuoteTemplate=Entity & {kind:'ie_quote_template';quoteId:string;quoteRevision:number;quoteVersion:number;version:number;customerAccountId:string;fingerprint:string;sheetBindings:{sheetName:string;lineId:string}[];sourceFileKey:string;preparedFileKey:string;sourceSha256:string;preparedSha256:string;filename:string;registeredAt:string;registeredBy:string;removedSheetCount:number};
+export function ieTemplateFingerprint(q:IeQuote){return JSON.stringify({customerAccountId:q.customerAccountId,customerCode:q.customerCode,lines:q.lines.map(l=>({id:l.id,model:l.model,color:l.color,drawingNo:l.drawingNo,drawingRevision:l.drawingRevision}))});}
+export function ieQuoteTemplate(s:State,q:IeQuote){return (all(s,'ie_quote_template') as IeQuoteTemplate[]).filter(t=>t.quoteId===q.id&&t.quoteRevision===q.revision&&t.customerAccountId===q.customerAccountId&&t.fingerprint===ieTemplateFingerprint(q)&&t.quoteVersion<=q.version).sort((a,b)=>b.version-a.version)[0]||null;}
+export function ieTemplateStatus(s:State,m:Member,q:IeQuote){const t=ieQuoteTemplate(s,q);return {configured:!!t,verified:!!t,templateId:t?.id||'',sheetBindings:t?.sheetBindings||[],canRegister:canConfigureIeQuotes(m),message:t?'已登记并核验此客户、款色和图纸版本的原 Excel 打印模板；导出会重新核验文件哈希与容量。':'此客户、款色、图纸版本尚未绑定原 Excel 打印模板，请管理员上传原表并逐款映射。'};}
