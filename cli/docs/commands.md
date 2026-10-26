@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.3.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.4.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -42,6 +42,18 @@
 | `doon service production-orders list` | 查询生产交接资料（不代表已下达生产） | business-read-and-session-last-seen |
 | `doon service production-orders show <id>` | 查看生产交接字段和原订单行引用 | business-read-and-session-last-seen |
 | `doon service production-orders history <id>` | 查询生产交接资料历史摘要 | business-read-and-session-last-seen |
+| `doon engineering drawings list` | 查询工程画图需求 | business-read-and-session-last-seen |
+| `doon engineering drawings show <id>` | 查看画图需求 | business-read-and-session-last-seen |
+| `doon engineering drawings history <id>` | 查询画图历史摘要 | business-read-and-session-last-seen |
+| `doon engineering sops list` | 查询SOP与MES跟进 | business-read-and-session-last-seen |
+| `doon engineering sops show <id>` | 查看SOP任务 | business-read-and-session-last-seen |
+| `doon engineering sops history <id>` | 查询SOP历史摘要 | business-read-and-session-last-seen |
+| `doon engineering samples list` | 查询授权样品 | business-read-and-session-last-seen |
+| `doon engineering samples show <id>` | 查看样品详情 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes list` | 查询授权IE报价 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes show <id>` | 查看工程报价与成本 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes history <id>` | 查询工程报价历史目录 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes version <id> <version>` | 查看指定工程报价版本 | business-read-and-session-last-seen |
 
 ## 业务栏目
 
@@ -50,7 +62,7 @@
 | 工作总览 | overview | pending |
 | 业务部 | sales | partial |
 | 客服与单证 | service | partial |
-| 工程部 | engineering | pending |
+| 工程部 | engineering | partial |
 | PMC 计划 | planning | pending |
 | 采购与外协 | purchasing | pending |
 | 仓储物流 | warehouse | pending |
@@ -59,4 +71,4 @@
 | 财务部 | finance | pending |
 | 系统管理 | management | pending |
 
-批次 2 共接入 31 个业务查询/导出命令。查询支持业务组和客户端分页；列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md) 和 [订单/单据说明](orders.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+批次 3 共接入 43 个业务查询/导出命令。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 和 [工程说明](engineering.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

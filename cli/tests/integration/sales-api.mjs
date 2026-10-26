@@ -20,7 +20,7 @@ await build({absWorkingDir:root,entryPoints:['app/api/workspace/[action]/route.t
 await fs.writeFile(path.join(runtime,'seed.mjs'), `
 import fs from 'node:fs/promises';import path from 'node:path';import {db,saveRecords,dataDir} from './runtime.mjs';import {createAccount} from './auth.mjs';
 const at='2026-10-20T00:00:00.000Z',a=await createAccount({username:'sales_a',name:'Synthetic Sales A',role:'sales',password:'Synthetic-Only-2026!'},null),b=await createAccount({username:'sales_b',name:'Synthetic Sales B',role:'sales',password:'Synthetic-Only-2026!'},null);
-await createAccount({username:'broad',name:'Synthetic Broad Reader',role:'viewer',orderScope:'all',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
+await createAccount({username:'broad',name:'Synthetic Broad Reader',role:'viewer',orderScope:'all',password:'Synthetic-Only-2026!'},null);await createAccount({username:'unassigned',name:'Synthetic Unassigned',role:'sales',orderScope:'assigned',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
 const customer=(id,name,memberIds)=>({id,kind:'customer_account',customer:name,customerCode:id.toUpperCase(),salesName:'',serviceName:'',pmcName:'',salesMemberIds:memberIds,serviceMemberIds:[],quoteMemberIds:memberIds,active:true,notes:'',version:1,createdAt:at,updatedAt:at});
 const quote=(id,cid)=>({id,kind:'customer_quote',version:2,status:'draft',customerAccountId:cid,customerName:cid,customerCode:cid.toUpperCase(),companyEn:'Synthetic Co',companyZh:'合成公司',collectionEn:'Frames',collectionZh:'镜架',quoteNo:'TEST-'+id,quoteDate:'2026-10-20',validUntil:'2026-12-31',currency:'EUR',contactName:'Synthetic',businessType:'frame',quoteMode:'order',pricingBasis:'row_item',currencyReviewed:true,lines:[{id:'line_'+id,model:'SYNTH-'+id,descriptionZh:'合成产品',descriptionEn:'Synthetic product',quantity:10,unitPrice:0,toolingFee:0,unit:'pair',supplyStage:'finished',productType:'frame',scopeReviewed:true,sourceFormula:'SYNTHETIC_INTERNAL_FORMULA'}],terms:[{id:'term_'+id,labelZh:'条款',labelEn:'Terms',zh:'待核查',en:'Check',needsReview:true}],reviewNotes:['待核查'],internalNotesZh:'SYNTHETIC_INTERNAL_COST',internalCosts:[],customerCharges:[],createdAt:at,createdBy:'Synthetic',updatedAt:at,updatedBy:'Synthetic'});
 const q1=quote('q1','c1'),q2=quote('q2','c2'),snap=q=>({...q,version:1,status:'confirmed',terms:q.terms.map(t=>({...t,needsReview:false})),reviewNotes:[],confirmedAt:at,confirmedBy:'Synthetic',confirmedById:a.memberId});
@@ -46,6 +46,15 @@ const members=db.prepare("SELECT data FROM records WHERE kind='member'").all().m
 saveRecords([...members,order('o1','C1'),order('o2','C2'),source('source1','C1'),source('source2','C2'),po,pi,invoice,production,doc('pi2','pi','c2','o2'),
 ...([pi,invoice,production].map(row=>({id:'hist-'+row.id,kind:'handoff_business_history',recordId:row.id,customerId:row.customerId,version:1,action:'合成保存',actor:'Synthetic',createdAt:at,snapshot:{...row,version:1,status:'draft'}})))
 ]);
+const drawing=(id,cid)=>({id,kind:'engineering_drawing',version:2,customerId:cid,customerCode:cid.toUpperCase(),drawingType:'2d',requestedDate:'2026-10-20',newCount:0,revisionCount:null,requester:'Synthetic',modelNo:'MODEL',drawingNotes:'',assigneeId:'',assignee:'',deadline:'',completedDate:'',approval:'待审核',status:'待分配',upstreamDepartment:'',priority:'普通',requirement:'待核对',downstream:'',deliveredDate:'',deliveryNote:'',source:{rawColumns:{private:'SYNTHETIC_SOURCE_SECRET'}},legacyNeedsReview:true,approvalNote:'',approvalBy:'',approvalAt:'',createdAt:at,updatedAt:at,updatedBy:'Synthetic',createdBy:'Synthetic'});
+const d1=drawing('drawing1','c1'),d2=drawing('drawing2','c2');
+const sop={id:'sop1',kind:'engineering_sop',version:2,drawingRecordId:'drawing1',customerId:'c1',modelNo:'MODEL',targetVersion:'V2',currentVersion:'V1',status:'待更新SOP',mode:'change_instruction',requirement:'待核对',isCurrent:true,predecessorId:'',sourceEventId:'',sopFileId:'',preparedVersion:'',latestUploadId:'',targetNote:'',confirmationNote:'',confirmedBy:'',confirmedAt:'',createdBy:'Synthetic',createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+const sample={id:'sample1',kind:'customer_project_sample',version:1,projectId:'p1',customerId:'c1',roundId:'',sampleNo:'SAMPLE-1',purpose:'development',scope:[{itemId:'item1',quantity:0}],drawingIds:[],quoteLinkId:'',ownerId:a.memberId,requiredDate:'',plannedDate:'',promisedDate:'',promiseNote:'',status:'pending',note:'待核对',paymentSnapshot:{secret:'SYNTHETIC_PAYMENT_SECRET'},itemSnapshot:[],createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+const ie={id:'ie1',kind:'ie_quote',version:2,revision:1,customerAccountId:'c1',quoteNo:'IE-1',quoteDate:'2026-10-20',validUntil:'2026-12-31',batchId:'B1',exchangeRateCnyPerUsd:null,exchangeRateDate:'',exchangeRateSource:'',notes:'待核对',status:'draft',customerName:'Synthetic Alpha',customerCode:'C1',preparedByIds:[a.memberId],policyVersion:1,requiredReviewMemberId:'',lines:[{id:'ieline',model:'MODEL',customerModel:'',color:'Black',drawingNo:'DRAW',drawingRevision:'V1',quantityMin:null,quantityMax:10,structureNotes:'',scopeNotes:'',materials:[],processes:[],outsourcing:[]}],tooling:[],createdAt:at,createdBy:'Synthetic',createdById:a.memberId,updatedAt:at,updatedBy:'Synthetic',updatedById:a.memberId};
+saveRecords([d1,d2,sop,sample,ie,{id:'drawing-history1',kind:'engineering_drawing_revision',recordId:'drawing1',customerId:'c1',version:1,action:'保存',actor:'Synthetic',createdAt:at,snapshot:{...d1,version:1}},
+{id:'sop-history1',kind:'engineering_sop_revision',sopId:'sop1',customerId:'c1',version:1,action:'保存',actor:'Synthetic',createdAt:at,snapshot:{...sop,version:1}},
+{id:'ie-history1',kind:'ie_quote_revision',quoteId:'ie1',version:1,revision:1,action:'保存',updatedAt:at,updatedBy:'Synthetic',snapshot:{...ie,version:1}},
+{id:'ie-policy',kind:'ie_quote_policy',version:1,engineerMemberId:a.memberId,reviewerMemberId:b.memberId,finalApproverMemberId:members.find(m=>m.role==='viewer').id,updatedAt:at,updatedBy:'Synthetic'}]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
@@ -60,7 +69,7 @@ let checks=0;const pass=()=>checks++;const testedCommands=[];
 try{
   let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}assert(ready,'Native server starts');
   const services={};
-  for(const username of ['sales_a','sales_b','broad','initial']){
+  for(const username of ['sales_a','sales_b','broad','unassigned','initial']){
     const state=new StateStore(path.join(dir,username),testCodec());await state.setup(origin,true);const f=new FoundationService(state);await f.login(async()=>({username,password:'Synthetic-Only-2026!'}));services[username]={foundation:f,sales:f.sales(),state};
   }
   // Authentication audit may advance the workspace revision; establish all test sessions before the read-only baseline.
@@ -70,6 +79,12 @@ try{
   }
   const before=snapshot(),original=await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin'));
   const a=services.sales_a.sales,b=services.sales_b.sales;
+  const eng=services.sales_a.foundation.engineering(),otherEng=services.sales_b.foundation.engineering();
+  assert.equal((await eng.execute('drawings','list',{team:'t1'})).page.total,1);assert.equal((await eng.execute('drawings','show',{},'drawing1')).record.newCount,0);assert.equal((await eng.execute('drawings','history',{},'drawing1')).page.total,1);await assert.rejects(otherEng.execute('drawings','show',{},'drawing1'),{code:'NOT_IN_SCOPE'});pass();
+  assert.equal((await eng.execute('sops','list',{team:'t1'})).page.total,1);assert.equal((await eng.execute('sops','show',{},'sop1')).record.targetVersion,'V2');assert.equal((await eng.execute('sops','history',{},'sop1')).page.total,1);pass();
+  assert.equal((await eng.execute('samples','show',{team:'t1',project:'p1'},'sample1')).items.rows[0].quantity,0);assert.equal((await eng.execute('samples','list',{})).page.total,1);pass();
+  assert.equal((await eng.execute('ie-quotes','list',{})).page.total,1);assert.equal((await eng.execute('ie-quotes','show',{},'ie1')).record.exchangeRateCnyPerUsd,null);assert.equal((await eng.execute('ie-quotes','history',{},'ie1')).page.total,1);assert.equal((await eng.execute('ie-quotes','version',{},'ie1','1')).record.version,1);await assert.rejects(eng.execute('ie-quotes','list',{team:'t1'}),{code:'INVALID_ARGUMENT'});pass();
+  const unassigned=services.unassigned.foundation.engineering();assert.equal((await unassigned.execute('drawings','list')).page.total,0);await assert.rejects(unassigned.execute('ie-quotes','list'),{code:'FORBIDDEN'});pass();
   const orders=services.sales_a.foundation.orders(),otherOrders=services.sales_b.foundation.orders();
   assert.equal((await orders.execute('orders','list',{team:'t1'})).page.total,1);assert.equal((await orders.execute('orders','show',{},'o1')).record.customer,'C1');await assert.rejects(otherOrders.execute('orders','show',{},'o1'),{code:'NOT_IN_SCOPE'});pass();
   assert.equal((await orders.execute('sources','list',{team:'t1'})).page.total,1);assert.equal((await orders.execute('sources','show',{},'source1')).lines.rows[0].sampleQuantity,null);pass();
@@ -97,7 +112,7 @@ try{
     const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
     const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
-    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1'};
+    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
     for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
@@ -107,7 +122,7 @@ try{
         if(!['list','export-completed'].includes(action))args.push(ids[resource]);
         if(action==='version')args.push('1');
         if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
-        args.push('--team','t1');
+        if(resource!=='ie-quotes')args.push('--team','t1');
       }
       const value=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args,'--json'],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
       assert.equal(value.ok,true,spec.name);assert.equal(value.command,spec.name);testedCommands.push(spec.name);

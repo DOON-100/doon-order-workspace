@@ -1,7 +1,8 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, orderCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
+import type {EngineeringResource, EngineeringAction} from './engineering.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -20,7 +21,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
-      else if (command.startsWith('sales ') || command.startsWith('service ')) {
+      else if (command.startsWith('sales ') || command.startsWith('service ') || command.startsWith('engineering ')) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
@@ -98,6 +99,18 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
         if (spec.action === 'version') command.argument('<version>', '正整数版本号');
         command.action(async (...args: any[]) => result(spec.name, await foundation().orders().execute(resource as OrderResource, spec.action as OrderAction, command.opts(), spec.action === 'list' ? undefined : args[0], spec.action === 'version' ? args[1] : undefined)));
       }
+    }
+  }
+  const engineering=program.command('engineering').description('工程：图纸、SOP、样品和IE报价查询');
+  for(const resource of ['drawings','sops','samples','ie-quotes'] as const){
+    const group=engineering.command(resource);
+    for(const spec of engineeringCommands.filter(c=>c.resource===resource)){
+      const command=group.command(spec.action).description(spec.description).option('--customer <id>','精确客户档案编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
+      if(resource!=='ie-quotes')command.option('--team <id>','业务组编号');
+      if(resource==='samples')command.option('--project <id>','精确项目编号');
+      if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
+      if(spec.action==='version')command.argument('<version>','正整数版本号');
+      command.action(async(...args:any[])=>result(spec.name,await foundation().engineering().execute(resource as EngineeringResource,spec.action as EngineeringAction,command.opts(),spec.action==='list'?undefined:args[0],spec.action==='version'?args[1]:undefined)));
     }
   }
   try {
