@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import net from 'node:net';
+import {spawn, execFileSync} from 'node:child_process';
+import {StateStore} from '../dist/state.js';
+import {FoundationService} from '../dist/service.js';
+import {temporary, root, testCodec} from './helpers.mjs';
+
+test('existing native auth: login reuse, initial-password state, logout and disabled-account revocation', async t => {
+  const dir = await temporary(), build = path.join(dir, 'runtime'); await fs.mkdir(path.join(build, 'client'), {recursive: true});
+  for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
+  await fs.cp(path.join(root, 'standalone/schedule-engine'), path.join(build, 'schedule-engine'), {recursive: true});
+  await fs.writeFile(path.join(build, 'client/index.html'), 'Synthetic CLI auth test');
+  await fs.writeFile(path.join(build, 'workspace-api.mjs'), "export async function GET(){throw Error('Business API must not be called');} export const POST=GET;\n");
+  await fs.writeFile(path.join(build, 'seed.mjs'), `import {db,saveRecords} from './runtime.mjs';import {createAccount} from './auth.mjs';await createAccount({username:'synthetic',name:'Synthetic CLI Employee',role:'viewer',password:'Synthetic-Only-2026!'},null,{owner:true});db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'viewer',password:'Synthetic-Only-2026!'},null);saveRecords([{id:'synthetic_business',kind:'synthetic_fixture',value:'unchanged'}]);db.close();`);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('DOON_')));
+  Object.assign(env, {DOON_DATA_DIR: path.join(dir, 'data'), DOON_HOST: '127.0.0.1', DOON_NO_AUTO_BACKUP: '1', DOON_SYNTHETIC_ONLY: '1'});
+  execFileSync(process.execPath, [path.join(build, 'seed.mjs')], {env, windowsHide: true, stdio: 'pipe'});
+  const port = await new Promise(resolve => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
+  const origin = `http://127.0.0.1:${port}`;
+  const child = spawn(process.execPath, [path.join(build, 'server.mjs')], {env: {...env, DOON_PORT: String(port)}, windowsHide: true, stdio: 'pipe'});
+  let exited = false; const done = new Promise(resolve => child.once('exit', () => { exited = true; resolve(); }));
+  t.after(async () => { if (!exited) child.kill(); await done; });
+  let ready = false;
+  for (let i = 0; i < 80; i++) { try { if ((await fetch(origin + '/health')).ok) { ready = true; break; } } catch {} await new Promise(r => setTimeout(r, 100)); }
+  assert(ready, 'Synthetic native server starts on its own port');
+  const state = new StateStore(path.join(dir, 'client'), testCodec()); await state.setup(origin, true);
+  const service = new FoundationService(state);
+  const login = await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only-2026!'})); assert.equal(login.user.role, 'viewer');
+  assert.equal((await service.login(async () => { throw Error('Must reuse'); })).reused, true);
+  const doctor = await service.doctor(); assert(doctor.authenticated); assert(doctor.syntheticOnly); assert.equal(doctor.serverBuild, null);
+  assert.equal((await service.logout()).serverRevoked, true);
+  await assert.rejects(service.whoami(), {code: 'AUTH_REQUIRED'});
+  const initial = await service.login(async () => ({username: 'initial', password: 'Synthetic-Only-2026!'})); assert(initial.user.mustChange);
+  assert((await service.doctor()).mustChange); await service.logout();
+  await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only-2026!'}));
+  await fs.writeFile(path.join(build, 'disable.mjs'), `import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='synthetic'").get();const r=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...r,active:false}),a.member_id);if(JSON.parse(db.prepare("SELECT data FROM records WHERE id='synthetic_business'").get().data).value!=='unchanged')throw Error('Business fixture changed');db.close();`);
+  execFileSync(process.execPath, [path.join(build, 'disable.mjs')], {env, windowsHide: true, stdio: 'pipe'});
+  await assert.rejects(service.whoami(), {code: 'AUTH_REQUIRED'}); assert.equal(await state.hasSession(), false);
+});

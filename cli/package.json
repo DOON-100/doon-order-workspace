@@ -1,0 +1,20 @@
+{
+  "name": "@doon/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "度昂员工命令行客户端",
+  "type": "module",
+  "engines": {"node": ">=22.13.0"},
+  "bin": {"doon": "dist/index.js"},
+  "files": ["dist", "README.md", "docs/commands.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "docs": "npm run build && node scripts/command-docs.mjs",
+    "docs:check": "node scripts/command-docs.mjs --check",
+    "package:windows": "npm run build && npm run docs:check && node scripts/package-windows.mjs"
+  },
+  "dependencies": {"commander": "15.0.0"},
+  "devDependencies": {"@types/node": "22.19.19", "typescript": "5.9.3"}
+}

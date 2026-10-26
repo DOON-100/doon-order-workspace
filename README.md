@@ -1,5 +1,7 @@
 # 度昂订单协作中台
 
+员工 CLI 的批次范围、当前状态和验收记录见 [CLI 实施计划](docs/cli-implementation-plan.md) 与 [执行记录](docs/cli-execution-log.md)。客户端使用独立 `cli/` 包，按中台栏目和订单流程逐步接入。
+
 Agent 的目标能力、Mastra 前期验证、架构、触发、上下文、Memory、权限及实施验收方案见 [Agent 系统设计构想](docs/agent-system-design.md)。该文档是待分阶段实施的设计基线，不代表功能已上线。
 
 第一阶段按“固定程序优先、LLM 按需辅助、人工确认关键判断”推进，职责、脚本使用场景、任务顺序与验收门槛见 [第一阶段实施清单](docs/phase-one-implementation-checklist.md)。固定业务保持主线，Agent 功能使用测试分支；文档与代码提交不触发 8787 正式服务部署。

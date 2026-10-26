@@ -1,0 +1,45 @@
+name: Employee CLI CI
+on:
+  push:
+    branches: [main]
+    paths: ['cli/**', 'docs/cli-*.md', '.github/workflows/cli-ci.yml']
+  pull_request:
+    branches: [main]
+    paths: ['cli/**', '.github/workflows/cli-ci.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: employee-cli-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows-cli:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.14.0'
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm run docs:check
+      - run: npm run package:windows
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        with:
+          name: doon-cli-windows-x64-${{ github.sha }}
+          path: |
+            cli/artifacts/doon-cli-*.zip
+            cli/artifacts/SHA256SUMS
+            cli/artifacts/release.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
