@@ -34,6 +34,10 @@ jobs:
         run: node tests/run.mjs
       - name: TypeScript
         run: node node_modules/typescript/bin/tsc --noEmit
+      - name: CLI real business API integration (synthetic)
+        run: |
+          npm --prefix cli ci --ignore-scripts --no-audit --no-fund
+          npm --prefix cli run test:integration
       - name: Package integrity tests
         run: node tests/native-release.mjs
       - name: Build in an isolated directory

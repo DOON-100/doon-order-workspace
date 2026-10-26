@@ -1,5 +1,6 @@
 import {Command, CommanderError} from 'commander';
-import {commands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, modules, outputSchema, version} from './catalog.js';
+import type {Action, Resource} from './sales.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -12,13 +13,22 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   const foundation = () => service ||= new FoundationService();
   let emitted = false;
   function result(command: string, data: unknown) {
+    if (Buffer.byteLength(machineJson({schema: outputSchema, ok: true, command, data}), 'utf8') > 512 * 1024) throw new CliError('OUTPUT_TOO_LARGE', '输出超过 512 KiB，请缩小 limit 或查询范围。', 2);
     emitted = true;
     if (json) process.stdout.write(machineJson({schema: outputSchema, ok: true, command, data}));
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
-      else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t待接入\n`);
+      else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
+      else if (command.startsWith('sales ')) {
+        const value = data as any;
+        process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || '全部获授权客户')}\n`);
+        if (value.page) {
+          process.stdout.write(`匹配 ${value.page.total} 条，本页 ${value.page.rows.length} 条；下一偏移 ${value.page.nextOffset ?? '无'}（客户端分页）\n`);
+          for (const row of value.page.rows) process.stdout.write(Object.entries(row).map(([k,v]) => `${k}: ${clean(v !== null && typeof v === 'object' ? JSON.stringify(v) : v)}`).join('  ') + '\n');
+        } else process.stdout.write(JSON.stringify(value, null, 2) + '\n');
+      }
       else {
-        const labels: Record<string, string> = {origin: '服务器', localTest: '本机测试', username: '账号', role: '角色', mustChange: '需在网页改初始密码', personnelType: '人员类型', id: '成员编号', name: '姓名', email: '登录身份邮箱', reused: '复用已有登录', reachable: '连接成功', readOnly: '只读验收环境', syntheticOnly: '合成环境', authenticated: '已登录', credentialStorage: '凭据存储', serverBuild: '服务器版本', compatibility: '接口探测', businessCommandsAvailable: '已接业务命令', localCleared: '本机会话已清除', serverRevoked: '服务器会话已撤销', alreadySignedOut: '此前已退出'};
+        const labels: Record<string, string> = {origin: '服务器', localTest: '本机测试', username: '账号', role: '角色', mustChange: '需在网页改初始密码', personnelType: '人员类型', id: '成员编号', name: '姓名', email: '登录身份邮箱', reused: '复用已有登录', reachable: '连接成功', readOnly: '只读验收环境', syntheticOnly: '合成环境', authenticated: '已登录', credentialStorage: '凭据存储', serverBuild: '服务器版本', compatibility: '接口探测', businessCommandsAvailable: '业务接口可用性', installedBusinessCommands: '本机业务命令数', localCleared: '本机会话已清除', serverRevoked: '服务器会话已撤销', alreadySignedOut: '此前已退出'};
         function rows(value: any) {
           for (const [key, item] of Object.entries(value || {})) {
             if (item && typeof item === 'object' && !Array.isArray(item)) rows(item);
@@ -29,11 +39,11 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       }
     }
   }
-  const program = new Command().name('doon').description('度昂员工 CLI；批次 0 基础命令').version(version)
+  const program = new Command().name('doon').description('度昂员工 CLI；基础命令与业务部查询').version(version)
     .option('--json', '输出稳定 JSON；日志与提示写入 stderr')
     .showHelpAfterError().exitOverride()
     .configureOutput({writeOut: text => { if (!json) process.stdout.write(text); }, writeErr: text => { if (!json) process.stderr.write(text); }});
-  const describe = (name: string) => commands.find(c => c.name === name)!.description;
+  const describe = (name: string) => foundationCommands.find(c => c.name === name)!.description;
   program.command('setup').description(describe('setup')).requiredOption('--server <origin>', '公司 HTTPS Origin')
     .option('--allow-local-http', '仅允许本机 HTTP 合成测试').action(async options => result('setup', await foundation().store.setup(options.server, !!options.allowLocalHttp)));
   program.command('login').description(describe('login')).option('--username <name>', '员工登录名；密码由本人交互输入')
@@ -47,6 +57,26 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   program.command('doctor').description(describe('doctor')).action(async () => result('doctor', await foundation().doctor()));
   program.command('commands').description(describe('commands')).action(() => result('commands', commands));
   program.command('modules').description(describe('modules')).action(() => result('modules', modules));
+  const sales = program.command('sales').description('业务部：客户、项目、询价与报价查询');
+  for (const resource of ['teams','customers','projects','inquiries','quotes'] as const) {
+    const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',inquiries:'询价评估',quotes:'客户报价'}[resource]);
+    for (const spec of salesCommands.filter(c => c.resource === resource)) {
+      const command = group.command(spec.action).description(spec.description).option('--team <id>', '业务组编号；不填表示全部获授权范围');
+      if (spec.action === 'export-completed') command.requiredOption('--output <file.xlsx>', '新输出文件，已有文件拒绝覆盖');
+      else {
+        command.option('--customer <id>', '精确客户编号').option('--limit <number>', '客户端每页 1–100 条', '20').option('--offset <number>', '客户端起始偏移', '0');
+        if (spec.action === 'list') command.option('--search <text>', '按当前资源的摘要字段搜索');
+        else command.argument('<id>', '记录编号');
+        if (spec.action === 'version') command.argument('<version>', '报价正整数版本号');
+      }
+      command.action(async (...args: any[]) => {
+        const options = command.opts();
+        const id = spec.action !== 'list' && spec.action !== 'export-completed' ? args[0] : undefined;
+        const quoteVersion = spec.action === 'version' ? args[1] : undefined;
+        result(spec.name, await foundation().sales().execute(resource as Resource, spec.action as Action, options, id, quoteVersion));
+      });
+    }
+  }
   try {
     await program.parseAsync(argv, {from: 'user'});
     if (json && !emitted) result('help', {version, commands});

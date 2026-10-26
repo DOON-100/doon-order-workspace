@@ -1,0 +1,16 @@
+export const routes = {
+  '/health': {method: 'GET'}, '/api/review-mode': {method: 'GET'},
+  '/api/auth/login': {method: 'POST'}, '/api/auth/session': {method: 'GET'}, '/api/auth/logout': {method: 'POST'},
+  '/api/workspace/business-team-data': {method: 'GET', business: true},
+  '/api/workspace/customer-workflow-data': {method: 'GET', business: true, query: ['customerId']},
+  '/api/workspace/customer-workflow-history': {method: 'GET', business: true, query: ['customerId']},
+  '/api/workspace/customer-project-data': {method: 'GET', business: true},
+  '/api/workspace/customer-project-history': {method: 'GET', business: true, query: ['projectId']},
+  '/api/workspace/process-data': {method: 'GET', business: true, query: ['type']},
+  '/api/workspace/process-history': {method: 'GET', business: true, query: ['id']},
+  '/api/workspace/customer-quotes': {method: 'GET', business: true},
+  '/api/workspace/customer-quote-version': {method: 'GET', business: true, query: ['quoteId', 'quoteVersion']},
+  '/api/workspace/customer-quote-completed-export': {method: 'GET', business: true, binary: true},
+} as const;
+export type Route = keyof typeof routes;
+export type RequestOptions = {query?: Record<string, string>; team?: string};

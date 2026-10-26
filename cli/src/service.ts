@@ -1,6 +1,8 @@
 import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
+import {SalesService} from './sales.js';
+import {salesCommands} from './catalog.js';
 
 function userFrom(data: any) {
   const u = data?.user;
@@ -14,6 +16,7 @@ function userFrom(data: any) {
 
 export class FoundationService {
   constructor(public store = new StateStore(), private transport: typeof fetch = fetch) {}
+  sales() { return new SalesService(this.store, this.transport); }
 
   async whoami() {
     const config = await this.store.config(), saved = await this.store.session(config);
@@ -77,6 +80,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      businessCommandsAvailable: false};
+      installedBusinessCommands: salesCommands.length, businessCommandsAvailable: null};
   }
 }

@@ -13,13 +13,29 @@ async function invoke(args, env = {}) {
   catch (error) { return {code: error.code, stdout: error.stdout, stderr: error.stderr}; }
 }
 
-test('machine command and module catalogs are honest, stable JSON and have no business commands', async () => {
+test('machine catalogs report implemented sales queries and keep other modules pending', async () => {
   const result = await invoke(['commands', '--json']); assert.equal(result.code, 0); assert.equal(result.stderr, '');
   const parsed = JSON.parse(result.stdout); assert.equal(parsed.schema, 'doon-cli-output-v1'); assert(parsed.ok);
-  assert.deepEqual(parsed.data.map(row => row.name), ['setup', 'login', 'logout', 'whoami', 'doctor', 'commands', 'modules']);
+  assert.deepEqual(parsed.data.slice(0,7).map(row => row.name), ['setup', 'login', 'logout', 'whoami', 'doctor', 'commands', 'modules']);
+  assert.equal(parsed.data.length, 22); assert(parsed.data.some(row => row.name === 'sales quotes version'));
   const groups = JSON.parse((await invoke(['modules', '--json'])).stdout).data;
-  assert.equal(groups.length, 11); assert(groups.every(row => row.status === 'pending' && row.commands.length === 0));
+  assert.equal(groups.length, 11); assert.equal(groups.find(row => row.id === 'sales').status, 'partial');
+  assert(groups.filter(row => row.id !== 'sales').every(row => row.status === 'pending' && row.commands.length === 0));
   assert.equal(groups[0].label, '工作总览'); assert(!/[^\x00-\x7f]/.test(result.stdout));
+});
+
+test('sales argument validation and help work before login without accepting writes or fake filters', async () => {
+  for (const args of [['sales','projects','list','--limit','0','--json'], ['sales','quotes','version','q1','0','--json'], ['sales','customers','save','--json'], ['sales','quotes','export-completed','--customer','c1','--output','new.xlsx','--json'], ['sales','customers','list','--mine','--json']]) {
+    const result = await invoke(args); assert.equal(result.code, 2); assert.equal(JSON.parse(result.stdout).ok, false);
+  }
+  const help = await invoke(['sales','quotes','version','--help']); assert.equal(help.code, 0); assert(help.stdout.includes('<id> <version>'));
+});
+
+test('escaped business output budget returns one error without partial business data', async () => {
+  const script = `import {main} from ${JSON.stringify(new URL('../dist/program.js', import.meta.url).href)};process.exitCode=await main(['sales','customers','list','--json'],{sales:()=>({execute:async()=>({privateMarker:'DO_NOT_EMIT_PARTIAL',text:'中'.repeat(100000)})})});`;
+  let result;try { await exec(process.execPath,['--input-type=module','-e',script],{windowsHide:true});assert.fail('Expected nonzero exit'); }
+  catch(error) { result=error; }
+  assert.equal(result.code,2);assert.equal(JSON.parse(result.stdout).error.code,'OUTPUT_TOO_LARGE');assert(!result.stdout.includes('DO_NOT_EMIT_PARTIAL'));assert.equal(result.stderr,'');
 });
 
 test('invalid commands/options and missing setup return structured nonzero errors without stack traces', async () => {

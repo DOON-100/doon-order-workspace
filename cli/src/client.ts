@@ -1,24 +1,36 @@
 import {CliError} from './errors.js';
 import {version} from './catalog.js';
 import type {Config, SavedSession} from './state.js';
-
-type Route = '/health' | '/api/review-mode' | '/api/auth/login' | '/api/auth/session' | '/api/auth/logout';
-const methods: Record<Route, string> = {'/health': 'GET', '/api/review-mode': 'GET', '/api/auth/login': 'POST', '/api/auth/session': 'GET', '/api/auth/logout': 'POST'};
+import {routes, type Route, type RequestOptions} from './routes.js';
 
 export class ApiClient {
   private tail: Promise<unknown> = Promise.resolve();
   constructor(private config: Config, private transport: typeof fetch = fetch, private timeout = 15000) {}
 
-  request(route: Route, session?: SavedSession | null, body?: unknown): Promise<{data: any; headers: Headers}> {
+  request(route: Route, session?: SavedSession | null, body?: unknown, options: RequestOptions = {}): Promise<{data: any; headers: Headers}> {
     // Bound requests from one invocation; no background polling or automatic POST retry.
-    const result = this.tail.then(() => this.perform(route, session, body));
+    const result = this.tail.then(() => this.perform(route, session, body, options));
     this.tail = result.catch(() => {});
     return result;
   }
 
-  private async perform(route: Route, session?: SavedSession | null, body?: unknown) {
-    if (!Object.hasOwn(methods, route)) throw new CliError('UNSUPPORTED_OPERATION', '该操作尚未接入客户端。', 2);
-    const method = methods[route], headers: Record<string, string> = {'Accept': 'application/json', 'User-Agent': 'doon-cli/' + version};
+  private async perform(route: Route, session: SavedSession | null | undefined, body: unknown, options: RequestOptions) {
+    if (!Object.hasOwn(routes, route)) throw new CliError('UNSUPPORTED_OPERATION', '该操作尚未接入客户端。', 2);
+    const spec = routes[route] as {method: string; business?: boolean; query?: readonly string[]; binary?: boolean};
+    const method = spec.method, headers: Record<string, string> = {'Accept': spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
+    if (spec.business && !session) throw new CliError('AUTH_REQUIRED', '请先运行 doon login。', 4);
+    if (spec.business && body !== undefined) throw new CliError('UNSUPPORTED_OPERATION', '本批业务命令只接受查询。', 2);
+    if (options.team) {
+      if (!spec.business || options.team.length > 160 || /[\u0000-\u001f\u007f]/.test(options.team)) throw new CliError('INVALID_SCOPE', '业务组编号无效。', 2);
+      headers['X-Workspace-Team'] = options.team;
+    }
+    const url = new URL(this.config.origin + route);
+    for (const [key, value] of Object.entries(options.query || {})) {
+      if (!spec.query?.includes(key) || typeof value !== 'string' || value.length > 160 || /[\u0000-\u001f\u007f]/.test(value)) throw new CliError('INVALID_QUERY', '该接口不接受此查询参数。', 2);
+      if (route === '/api/workspace/process-data' && (key !== 'type' || value !== 'rfq')) throw new CliError('UNSUPPORTED_OPERATION', '当前只开放询价流程查询。', 2);
+      url.searchParams.set(key, value);
+    }
+    if (route === '/api/workspace/process-data' && url.searchParams.get('type') !== 'rfq') throw new CliError('INVALID_QUERY', '询价查询必须限定 rfq。', 2);
     if (session) {
       const name = this.config.localHttp ? 'doon_session' : 'doon_employee_session';
       if (session.origin !== this.config.origin || !new RegExp('^' + name + '=[\\w-]{43}$').test(session.cookie)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);
@@ -27,7 +39,7 @@ export class ApiClient {
     if (method === 'POST') { headers.Origin = this.config.origin; headers['Content-Type'] = 'application/json'; }
     const signal = AbortSignal.timeout(this.timeout);
     try {
-      const response = await this.transport(this.config.origin + route, {method, headers, body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined, redirect: 'manual', signal});
+      const response = await this.transport(url.href, {method, headers, body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined, redirect: 'manual', signal});
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5); }
       if (!response.ok) {
         await response.body?.cancel();
@@ -35,21 +47,28 @@ export class ApiClient {
         const seconds = retry && /^\d+$/.test(retry) ? Math.min(300, Number(retry)) : undefined;
         if (status === 401) throw new CliError('AUTH_REQUIRED', '登录已失效或账号密码不正确，请重新登录。', 4, {status});
         if (status === 403) throw new CliError('FORBIDDEN', '服务器拒绝此操作，请核对员工权限或先在网页修改初始密码。', 4, {status});
+        if (status === 404) throw new CliError('NOT_FOUND', '记录或接口不存在，请核对编号和服务器版本。', 7, {status});
         if (status === 429) throw new CliError('RATE_LIMITED', '服务器当前繁忙或请求过于频繁，请稍后再试。', 6, {status, retryable: true, ...(seconds !== undefined ? {retryAfterSeconds: seconds} : {})});
         throw new CliError(status >= 500 ? 'SERVER_UNAVAILABLE' : 'REQUEST_REJECTED', status >= 500 ? '服务器暂时无法完成操作。' : '服务器未接受请求，请核对配置与客户端版本。', status >= 500 ? 5 : 2, {status, retryable: method === 'GET' && status >= 500, ...(method === 'POST' && status >= 500 ? {outcomeUnknown: true} : {})});
       }
-      if (!response.headers.get('content-type')?.toLowerCase().includes('application/json')) { await response.body?.cancel(); throw new CliError('INVALID_RESPONSE', '服务地址未返回预期接口，请检查配置。', 5); }
+      const expectedType = spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json';
+      if (!response.headers.get('content-type')?.toLowerCase().includes(expectedType)) { await response.body?.cancel(); throw new CliError('INVALID_RESPONSE', '服务地址未返回预期接口，请检查配置。', 5); }
       const reader = response.body?.getReader();
       if (!reader) throw new CliError('INVALID_RESPONSE', '服务器响应为空。', 5);
       let size = 0; const chunks: Uint8Array[] = [];
       while (true) {
         const {value, done} = await reader.read(); if (done) break;
         size += value.byteLength;
-        if (size > 65536) { await reader.cancel(); throw new CliError('RESPONSE_TOO_LARGE', '基础接口响应超过限制，请核对服务地址。', 5); }
+        if (size > (spec.business ? 32 * 1024 * 1024 : 65536)) { await reader.cancel(); throw new CliError('RESPONSE_TOO_LARGE', spec.business ? '业务响应超过 32 MiB，需后续接入服务端分页；本次未输出部分结果。' : '基础接口响应超过限制，请核对服务地址。', 5); }
         chunks.push(value);
       }
+      const bytes = Buffer.concat(chunks);
+      if (spec.binary) {
+        if (bytes.length < 4 || bytes.subarray(0, 4).toString('hex') !== '504b0304') throw new CliError('INVALID_RESPONSE', '导出文件不符合 XLSX 格式。', 5);
+        return {data: bytes, headers: response.headers};
+      }
       let data: any;
-      try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+      try { data = JSON.parse(bytes.toString('utf8')); }
       catch { throw new CliError('INVALID_RESPONSE', '服务器返回格式无效。', 5); }
       return {data, headers: response.headers};
     } catch (error) {
