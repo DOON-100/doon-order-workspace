@@ -20,7 +20,7 @@ export async function testIeQuoteNotifications({ok,call,pass,rawRecords}){
   assert.equal(rawRecords().find(r=>r.id===engineer.id).email,engineer.email);
   const payloads=[],transport={configured:true,from:engineer.id+'@synthetic.example.com',workspaceBaseUrl:'https://synthetic-workspace.example.com',send:async payload=>{payloads.push(payload);return {status:'sent',providerMessageId:'synthetic-message-1'};}};env.IE_MAIL=transport;
   let preview=(await ok(query(),undefined,user(engineer))).preview;assert.equal(preview.ready,true,preview.blockers.join(';'));assert(preview.body.includes('?recordId='));
-  const stale=push(preview);await ok('ie-quote-notification-mailbox',{memberId:reviewer.id,email:'reviewer-updated@synthetic.example.com',expectedVersion:1,confirmed:true});
+  const stale=push(preview);await ok('member-notification-mailbox',{memberId:reviewer.id,email:'reviewer-updated@synthetic.example.com',expectedVersion:1,confirmed:true});
   assert.equal((await call('ie-quote-notification-push',stale,user(engineer))).status,409);assert.equal(payloads.length,0);
   preview=(await ok(query(),undefined,user(engineer))).preview;const same=(await ok(query(),undefined,user(reviewer))).preview;assert.equal(preview.fingerprint,same.fingerprint);
   const request=push(preview),delivery=(await ok('ie-quote-notification-push',request,user(engineer))).delivery;assert.equal(delivery.status,'sent');assert.equal(payloads.length,1);assert.equal(payloads[0].to[0],'reviewer-updated@synthetic.example.com');assert.equal(payloads[0].attachments.length,1);assert.equal(payloads[0].attachments[0].sha256,preview.attachment.sha256);assert.equal(createHash('sha256').update(payloads[0].attachments[0].bytes).digest('hex'),preview.attachment.sha256);

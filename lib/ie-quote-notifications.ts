@@ -4,14 +4,15 @@ import {matchesCustomerResponsibility} from './customer-responsibility';
 import {canConfigureIeQuotes,canReadIeQuote,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember} from './ie-quote-access';
 import {currentIeQuote,ieQuoteVersion,type IeQuote} from './ie-quotes';
 import {canReadCustomerQuote,mayChangeQuoteCustomer,type CustomerQuote} from './customer-quotes';
+import {memberNotificationMailbox,validMemberNotificationEmail,type MemberNotificationMailbox} from './member-notification-mailboxes';
 
-export type IeNotificationMailbox=Entity & {kind:'ie_quote_notification_mailbox';memberId:string;email:string;version:number;confirmed:boolean;updatedAt:string;updatedBy:string};
+export type IeNotificationMailbox=MemberNotificationMailbox;
 export type IeNotificationAttachment={filename:string;contentType:string;bytes:Uint8Array;sha256:string;size:number;templateId:string;templateSha256:string};
 export type IeNotificationDelivery=Entity & {kind:'ie_quote_notification_delivery';quoteId:string;quoteVersion:number;salesQuoteId?:string;salesQuoteVersion?:number;customerAccountId:string;fingerprint:string;idempotencyKey:string;status:'sending'|'sent'|'failed'|'unknown';createdAt:string;createdBy:string;createdById:string;updatedAt:string;subject:string;body:string;to:{memberId:string;name:string;email:string}[];cc:{memberId:string;name:string;email:string}[];attachment:{filename:string;sha256:string;size:number};providerMessageId:string;message:string};
 export type IeNotificationTransport={configured:boolean;from:string;workspaceBaseUrl:string;send:(payload:{subject:string;body:string;to:string[];cc:string[];attachments:{filename:string;contentType:string;bytes:Uint8Array;sha256:string}[];idempotencyKey:string})=>Promise<{status:'sent'|'failed'|'unknown';providerMessageId?:string;message?:string}>};
-export const validIeNotificationEmail=(email:string)=>/^[^\s@<>\r\n]+@[^\s@<>\r\n]+\.[^\s@<>\r\n]+$/.test(email)&&!/(?:^|[.@])(?:localhost|local|invalid|test|example)$/i.test(email)&&email.length<=254;
+export const validIeNotificationEmail=validMemberNotificationEmail;
 export const canPushIeNotification=(s:State,m:Member)=>m.active&&(canConfigureIeQuotes(m)||isIeEngineeringMember(s,m)||isIeApprover(s,m));
-export function ieNotificationMailbox(s:State,memberId:string){const rows=all(s,'ie_quote_notification_mailbox').filter(r=>r.memberId===memberId);return rows.length===1?rows[0] as IeNotificationMailbox:null;}
+export const ieNotificationMailbox=memberNotificationMailbox;
 export function ieNotificationCandidates(s:State,q:IeQuote){
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId) as CustomerAccount|undefined;
  const roleIds=new Map((['engineer','reviewer','finalApprover'] as const).map(role=>[iePolicyMember(s,role)?.id,role==='engineer'?'工程主管':role==='reviewer'?'生产副总':'总经理']));

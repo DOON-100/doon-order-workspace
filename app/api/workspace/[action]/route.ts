@@ -88,6 +88,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
   return parts.every(v=>v.kind==='service_record'?canReadServiceRecord(s,m,v):v.kind==='service_revision'?!!v.snapshot&&canReadServiceRecord(s,m,v.snapshot):!v.customerId||canReadServiceRecord(s,m,{...serviceRecord,customerId:v.customerId}));
  }
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('ie_quote')))return false;
+ if(parts.some(v=>v.kind==='member_notification_mailbox'))return m.role==='admin';
  if(!parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('customer_quote')))return broad(m)||orderIds.has(record.lineId);
  if(m.role==='admin')return true;
  if(parts.some(v=>v.kind==='customer_quote_access'))return false;

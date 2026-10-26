@@ -3,6 +3,7 @@ import {all,newId,now,strictDate,type CustomerAccount,type Entity,type Member,ty
 import {AppError,audit,commit,json} from './store';
 import {ieWorkbookGet,ieWorkbookPost} from './ie-quote-workbook-api';
 import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notification-api';
+import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
 import {canConfigureIeQuotes,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
 import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
 
@@ -34,6 +35,7 @@ function validateCatalog(s:State,fields:IeQuoteFields){
 function publicTooling(t:IeTooling){const {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy}=t;return {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy};}
 
 export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise<Response|null>{
+ const memberMailbox=memberNotificationMailboxGet(action,s,m);if(memberMailbox)return memberMailbox;
  const notification=await ieQuoteNotificationGet(action,url,s,m);if(notification)return notification;
  const workbook=await ieWorkbookGet(action,url,s,m);if(workbook)return workbook;
  if(!['ie-quotes','ie-quote','ie-quote-policy'].includes(action))return null;allowed(s,m);
@@ -53,6 +55,7 @@ export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise
  });
 }
 export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ const memberMailbox=await memberNotificationMailboxPost(action,req,s,m);if(memberMailbox)return memberMailbox;
  const notification=await ieQuoteNotificationPost(action,req,s,m);if(notification)return notification;
  const workbook=await ieWorkbookPost(action,req,s,m);if(workbook)return workbook;
  if(!['ie-quote-save','ie-quote-submit','ie-quote-review','ie-quote-revise','ie-quote-policy','ie-quote-tooling-register','ie-quote-catalog-save','ie-quote-process-preset-save'].includes(action))return null;allowed(s,m);

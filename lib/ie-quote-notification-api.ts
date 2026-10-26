@@ -2,8 +2,9 @@ import {z} from 'zod';
 import {env} from 'cloudflare:workers';
 import {all,newId,now,type Member,type State} from './domain';
 import {AppError,audit,commit,json,snapshot} from './store';
-import {canConfigureIeQuotes,iePolicyMember} from './ie-quote-access';
-import {buildIeNotificationPreview,ieNotificationHistory,ieNotificationMailbox,publicIeNotificationDelivery,validIeNotificationEmail,type IeNotificationDelivery,type IeNotificationMailbox,type IeNotificationTransport} from './ie-quote-notifications';
+import {iePolicyMember} from './ie-quote-access';
+import {buildIeNotificationPreview,ieNotificationHistory,publicIeNotificationDelivery,type IeNotificationDelivery,type IeNotificationTransport} from './ie-quote-notifications';
+import {memberNotificationMailboxPost} from './member-notification-mailboxes';
 import {canReadIeQuote} from './ie-quote-access';
 import {ieQuoteVersion,releasedIeSnapshot} from './ie-quotes';
 import {buildIeQuoteWorkbookAttachment} from './ie-quote-workbook-api';
@@ -37,15 +38,8 @@ export async function ieQuoteNotificationGet(action:string,url:URL,s:State,m:Mem
  return json({preview,history:ieNotificationHistory(s,m,quoteId,target)});
 }
 export async function ieQuoteNotificationPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['ie-quote-notification-push','ie-quote-notification-mailbox'].includes(action))return null;
- if(action==='ie-quote-notification-mailbox'){
-  if(!canConfigureIeQuotes(m))throw new AppError('仅管理员可以确认真实通知邮箱；不会修改登录账号。',403);
-  const input=parse(z.object({memberId:id,email:z.string().trim().email().max(254),expectedVersion:z.number().int().nonnegative(),confirmed:z.literal(true)}).strict(),await req.json());
-  if(!validIeNotificationEmail(input.email))throw new AppError('请填写真实通知邮箱，不能使用 .local / .invalid / localhost 等占位地址。');
-  if(!all(s,'member').some(v=>v.id===input.memberId&&v.active&&v.role!=='supplier'))throw new AppError('只能为有效内部成员绑定通知邮箱。');
-  const before=ieNotificationMailbox(s,input.memberId);if(all(s,'ie_quote_notification_mailbox').filter(v=>v.memberId===input.memberId).length>1)throw new AppError('通知邮箱记录重复，请核查。',409);if((before?.version||0)!==input.expectedVersion)throw new AppError('通知邮箱已更新，请刷新。',409);
-  const mailbox:IeNotificationMailbox={id:before?.id||newId('ie_quote_notification_mailbox'),kind:'ie_quote_notification_mailbox',memberId:input.memberId,email:input.email,version:(before?.version||0)+1,confirmed:true,updatedAt:now(),updatedBy:m.name};await commit(s.revision,[mailbox,audit(m,mailbox,before,'确认内部通知邮箱','IE 工程报价',mailbox)]);return json({ok:true,mailbox:{memberId:mailbox.memberId,email:mailbox.email,version:mailbox.version}});
- }
+ const mailbox=await memberNotificationMailboxPost(action,req,s,m);if(mailbox)return mailbox;
+ if(action!=='ie-quote-notification-push')return null;
  return pushIeQuoteNotification(s,m,parse(ieNotificationPushInput,await req.json()),configuredTransport());
 }
 export async function pushIeQuoteNotification(s:State,m:Member,input:z.infer<typeof ieNotificationPushInput>,transport:IeNotificationTransport|null){

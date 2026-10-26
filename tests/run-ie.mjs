@@ -19,6 +19,7 @@ await ok('enroll',{});
 rawInsert({id:'ie_suite_sales',kind:'member',userId:'ie_suite_sales',email:'sales@test.invalid',name:'合成范围业务',role:'sales',customers:[],active:true,createdAt:'2026-10-01'});
 rawInsert({id:'ie_suite_sales_policy',kind:'customer_quote_access',memberIds:['ie_suite_sales'],aliasesByMember:{}});
 const harness={ok,call,pass:console.log,rawRecords,rawInsert,files};
+const {testMemberNotificationMailboxes}=await import('./member-notification-mailbox-cases.mjs');await testMemberNotificationMailboxes(harness);
 const {testIeQuotes,testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeQuotes(harness);await testIeToolingChargeSources(harness);
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(harness);
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(harness);
