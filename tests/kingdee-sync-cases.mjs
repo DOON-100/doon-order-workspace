@@ -68,7 +68,13 @@ export async function testKingdeeSync({call,ok,api,identity,admin,clerk,files,ra
   for(const failure of ['unordered','bad-detail']){mode=failure;const before=JSON.stringify(rawRecords());assert.equal((await call('kingdee-sync-run',uuid())).status,409);assert.equal(JSON.stringify(rawRecords()),before);assert.equal(active,0);}
   mode='retry-new';let before=JSON.stringify(rawRecords());settings.DB.batch=async statements=>{await oldBatch([oldPrepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'")]);return oldBatch(statements);};assert.equal((await call('kingdee-sync-run',uuid())).status,409);assert.equal(JSON.stringify(rawRecords()),before);settings.DB.batch=oldBatch;
   settings.DB.batch=async statements=>oldBatch([...statements,oldPrepare('INSERT INTO transaction_guards (id,valid) VALUES (?,0)').bind('synthetic-failure')]);const failedKey=uuid();assert.equal((await call('kingdee-sync-run',failedKey)).status,409);assert.equal(JSON.stringify(rawRecords()),before);assert.equal((await ok('kingdee-sync-result?requestId='+failedKey.requestId)).status,'not-completed');settings.DB.batch=oldBatch;
-  const race=await Promise.all([call('kingdee-sync-run',failedKey),call('kingdee-sync-run',uuid())]);assert.deepEqual(race.map(r=>r.status).sort(),[200,429]);assert.equal((await ok('kingdee-sync-result?requestId='+failedKey.requestId)).receipt.inserted,1);
+  // Receipt IDs are hashed asynchronously before the account lock: either request may win.
+  const raceKeys=[failedKey,uuid()],race=await Promise.all(raceKeys.map(key=>call('kingdee-sync-run',key)));assert.deepEqual(race.map(r=>r.status).sort(),[200,429]);
+  const winner=race.findIndex(r=>r.status===200),loser=1-winner,won=await race[winner].json();assert.equal(won.inserted,1);
+  assert.deepEqual((await ok('kingdee-sync-result?requestId='+raceKeys[winner].requestId)).receipt,won);
+  assert.equal((await ok('kingdee-sync-result?requestId='+raceKeys[loser].requestId)).status,'not-completed');
+  const afterRace=JSON.stringify(rawRecords()),afterRaceCalls=calls.length;assert.deepEqual(await ok('kingdee-sync-run',raceKeys[winner]),won);assert.equal(calls.length,afterRaceCalls);assert.equal(JSON.stringify(rawRecords()),afterRace);
+  const afterRaceRows=JSON.stringify(saved()),retried=await ok('kingdee-sync-run',raceKeys[loser]);assert.equal(retried.inserted,0);assert.equal(JSON.stringify(saved()),afterRaceRows);assert.deepEqual((await ok('kingdee-sync-result?requestId='+raceKeys[loser].requestId)).receipt,retried);
   pass('源标识或时间顺序异常零写入；并发修订、存储失败整批回滚，重复请求查原回执，同账套并发只执行一个');
   before=JSON.stringify(rawRecords());mode='network';assert((await call('kingdee-sync-run',uuid())).status>=400);assert.equal(JSON.stringify(rawRecords()),before);
   const afterRecords=new Map(rawRecords().map(record=>[record.id,record]));for(const original of originals)assert.deepEqual(afterRecords.get(original.id),original);assert.deepEqual(files,beforeFiles);
