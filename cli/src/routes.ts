@@ -11,6 +11,11 @@ export const routes = {
   '/api/workspace/customer-quotes': {method: 'GET', business: true},
   '/api/workspace/customer-quote-version': {method: 'GET', business: true, query: ['quoteId', 'quoteVersion']},
   '/api/workspace/customer-quote-completed-export': {method: 'GET', business: true, binary: true},
+  '/api/workspace/data': {method: 'GET', business: true},
+  '/api/workspace/sales-order-sources-data': {method: 'GET', business: true},
+  '/api/workspace/sales-order-sources-export': {method: 'GET', business: true, query: ['id'], binary: true},
+  '/api/workspace/handoff-business-data': {method: 'GET', business: true},
+  '/api/workspace/handoff-business-history': {method: 'GET', business: true, query: ['id']},
 } as const;
 export type Route = keyof typeof routes;
 export type RequestOptions = {query?: Record<string, string>; team?: string};

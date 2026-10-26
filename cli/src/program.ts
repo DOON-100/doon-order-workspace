@@ -1,6 +1,7 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, orderCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
+import type {OrderResource, OrderAction} from './orders.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -19,9 +20,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
-      else if (command.startsWith('sales ')) {
+      else if (command.startsWith('sales ') || command.startsWith('service ')) {
         const value = data as any;
-        process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || '全部获授权客户')}\n`);
+        process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
           process.stdout.write(`匹配 ${value.page.total} 条，本页 ${value.page.rows.length} 条；下一偏移 ${value.page.nextOffset ?? '无'}（客户端分页）\n`);
           for (const row of value.page.rows) process.stdout.write(Object.entries(row).map(([k,v]) => `${k}: ${clean(v !== null && typeof v === 'object' ? JSON.stringify(v) : v)}`).join('  ') + '\n');
@@ -39,7 +40,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       }
     }
   }
-  const program = new Command().name('doon').description('度昂员工 CLI；基础命令与业务部查询').version(version)
+  const program = new Command().name('doon').description('度昂员工 CLI；业务部与客服单据查询').version(version)
     .option('--json', '输出稳定 JSON；日志与提示写入 stderr')
     .showHelpAfterError().exitOverride()
     .configureOutput({writeOut: text => { if (!json) process.stdout.write(text); }, writeErr: text => { if (!json) process.stderr.write(text); }});
@@ -57,7 +58,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   program.command('doctor').description(describe('doctor')).action(async () => result('doctor', await foundation().doctor()));
   program.command('commands').description(describe('commands')).action(() => result('commands', commands));
   program.command('modules').description(describe('modules')).action(() => result('modules', modules));
-  const sales = program.command('sales').description('业务部：客户、项目、询价与报价查询');
+  const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
   for (const resource of ['teams','customers','projects','inquiries','quotes'] as const) {
     const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',inquiries:'询价评估',quotes:'客户报价'}[resource]);
     for (const spec of salesCommands.filter(c => c.resource === resource)) {
@@ -75,6 +76,28 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
         const quoteVersion = spec.action === 'version' ? args[1] : undefined;
         result(spec.name, await foundation().sales().execute(resource as Resource, spec.action as Action, options, id, quoteVersion));
       });
+    }
+  }
+  const namespaces = {sales, service: program.command('service').description('客服与单证：PI、业务单据、生产交接资料查询')};
+  for (const namespace of ['sales','service'] as const) {
+    for (const resource of [...new Set(orderCommands.filter(c => c.namespace === namespace).map(c => c.resource))]) {
+      const group = namespaces[namespace].command(resource);
+      for (const spec of orderCommands.filter(c => c.namespace === namespace && c.resource === resource)) {
+        const command = group.command(spec.action).description(spec.description).option('--team <id>', '业务组编号；不填表示全部获授权范围');
+        if (namespace === 'sales') command.option('--customer-code <value>', '精确匹配原记录 customer 原值；不推测客户ID');
+        else {
+          command.option('--customer <id>', '精确客户档案编号').option('--order <id>', '精确关联订单明细编号');
+          if (resource === 'documents') command.option('--type <type>', 'pi/invoice/packing/waybill/paymentrequest');
+        }
+        if (spec.action === 'export') command.requiredOption('--output <file.xlsx>', '新输出文件，已有文件拒绝覆盖');
+        else {
+          command.option('--limit <number>', '客户端每页 1–100 条', '20').option('--offset <number>', '客户端起始偏移', '0');
+          if (spec.action === 'list') command.option('--search <text>', '按摘要字段搜索');
+        }
+        if (spec.action !== 'list') command.argument('<id>', '记录编号');
+        if (spec.action === 'version') command.argument('<version>', '正整数版本号');
+        command.action(async (...args: any[]) => result(spec.name, await foundation().orders().execute(resource as OrderResource, spec.action as OrderAction, command.opts(), spec.action === 'list' ? undefined : args[0], spec.action === 'version' ? args[1] : undefined)));
+      }
     }
   }
   try {

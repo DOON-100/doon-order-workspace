@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.2.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.3.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -26,6 +26,22 @@
 | `doon sales quotes history <id>` | 查询报价版本目录 | business-read-and-session-last-seen |
 | `doon sales quotes version <id> <version>` | 读取指定报价历史版本 | business-read-and-session-last-seen |
 | `doon sales quotes export-completed --output <file.xlsx>` | 导出当前业务组或全部有权查看的已完成报价总表 | local-file-and-session-last-seen |
+| `doon sales orders list` | 查询获授权的订单明细 | business-read-and-session-last-seen |
+| `doon sales orders show <id>` | 查看订单明细、跟进和附件目录 | business-read-and-session-last-seen |
+| `doon sales sources list` | 查询销售原单证据 | business-read-and-session-last-seen |
+| `doon sales sources show <id>` | 查看原单逐行字段与来源位置 | business-read-and-session-last-seen |
+| `doon sales sources export <id> --output <file.xlsx>` | 导出单张获授权销售原单 XLSX | local-file-and-session-last-seen |
+| `doon service pi list` | 查询 PI 草稿和已核对记录 | business-read-and-session-last-seen |
+| `doon service pi show <id>` | 查看 PI 当前字段与来源变化标记 | business-read-and-session-last-seen |
+| `doon service pi history <id>` | 查询 PI 历史版本目录 | business-read-and-session-last-seen |
+| `doon service pi version <id> <version>` | 查看 PI 指定历史版本 | business-read-and-session-last-seen |
+| `doon service documents list` | 查询现有业务单据 | business-read-and-session-last-seen |
+| `doon service documents show <id>` | 查看业务单据内容 | business-read-and-session-last-seen |
+| `doon service documents history <id>` | 查询业务单据版本目录 | business-read-and-session-last-seen |
+| `doon service documents version <id> <version>` | 查看业务单据指定版本 | business-read-and-session-last-seen |
+| `doon service production-orders list` | 查询生产交接资料（不代表已下达生产） | business-read-and-session-last-seen |
+| `doon service production-orders show <id>` | 查看生产交接字段和原订单行引用 | business-read-and-session-last-seen |
+| `doon service production-orders history <id>` | 查询生产交接资料历史摘要 | business-read-and-session-last-seen |
 
 ## 业务栏目
 
@@ -33,7 +49,7 @@
 | --- | --- | --- |
 | 工作总览 | overview | pending |
 | 业务部 | sales | partial |
-| 客服与单证 | service | pending |
+| 客服与单证 | service | partial |
 | 工程部 | engineering | pending |
 | PMC 计划 | planning | pending |
 | 采购与外协 | purchasing | pending |
@@ -43,4 +59,4 @@
 | 财务部 | finance | pending |
 | 系统管理 | management | pending |
 
-批次 1 已接入业务部 15 个查询/导出命令。查询支持业务组、精确客户编号和客户端分页；列表额外支持搜索。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+批次 2 共接入 31 个业务查询/导出命令。查询支持业务组和客户端分页；列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md) 和 [订单/单据说明](orders.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

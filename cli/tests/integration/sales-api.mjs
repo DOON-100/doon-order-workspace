@@ -9,6 +9,7 @@ import {build} from 'esbuild';
 import * as XLSX from 'xlsx';
 import {StateStore, windowsCodec} from '../../dist/state.js';
 import {FoundationService} from '../../dist/service.js';
+import {commands} from '../../dist/catalog.js';
 import {temporary, root, testCodec} from '../helpers.mjs';
 
 const dir=await temporary(), runtime=path.join(dir,'runtime');await fs.mkdir(path.join(runtime,'client'),{recursive:true});
@@ -19,7 +20,7 @@ await build({absWorkingDir:root,entryPoints:['app/api/workspace/[action]/route.t
 await fs.writeFile(path.join(runtime,'seed.mjs'), `
 import fs from 'node:fs/promises';import path from 'node:path';import {db,saveRecords,dataDir} from './runtime.mjs';import {createAccount} from './auth.mjs';
 const at='2026-10-20T00:00:00.000Z',a=await createAccount({username:'sales_a',name:'Synthetic Sales A',role:'sales',password:'Synthetic-Only-2026!'},null),b=await createAccount({username:'sales_b',name:'Synthetic Sales B',role:'sales',password:'Synthetic-Only-2026!'},null);
-db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
+await createAccount({username:'broad',name:'Synthetic Broad Reader',role:'viewer',orderScope:'all',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
 const customer=(id,name,memberIds)=>({id,kind:'customer_account',customer:name,customerCode:id.toUpperCase(),salesName:'',serviceName:'',pmcName:'',salesMemberIds:memberIds,serviceMemberIds:[],quoteMemberIds:memberIds,active:true,notes:'',version:1,createdAt:at,updatedAt:at});
 const quote=(id,cid)=>({id,kind:'customer_quote',version:2,status:'draft',customerAccountId:cid,customerName:cid,customerCode:cid.toUpperCase(),companyEn:'Synthetic Co',companyZh:'合成公司',collectionEn:'Frames',collectionZh:'镜架',quoteNo:'TEST-'+id,quoteDate:'2026-10-20',validUntil:'2026-12-31',currency:'EUR',contactName:'Synthetic',businessType:'frame',quoteMode:'order',pricingBasis:'row_item',currencyReviewed:true,lines:[{id:'line_'+id,model:'SYNTH-'+id,descriptionZh:'合成产品',descriptionEn:'Synthetic product',quantity:10,unitPrice:0,toolingFee:0,unit:'pair',supplyStage:'finished',productType:'frame',scopeReviewed:true,sourceFormula:'SYNTHETIC_INTERNAL_FORMULA'}],terms:[{id:'term_'+id,labelZh:'条款',labelEn:'Terms',zh:'待核查',en:'Check',needsReview:true}],reviewNotes:['待核查'],internalNotesZh:'SYNTHETIC_INTERNAL_COST',internalCosts:[],customerCharges:[],createdAt:at,createdBy:'Synthetic',updatedAt:at,updatedBy:'Synthetic'});
 const q1=quote('q1','c1'),q2=quote('q2','c2'),snap=q=>({...q,version:1,status:'confirmed',terms:q.terms.map(t=>({...t,needsReview:false})),reviewNotes:[],confirmedAt:at,confirmedBy:'Synthetic',confirmedById:a.memberId});
@@ -36,6 +37,15 @@ saveRecords([customer('c1','Synthetic Alpha',[a.memberId]),customer('c2','Synthe
 ...([q1,q2].map(q=>({id:'rev_'+q.id,kind:'customer_quote_revision',quoteId:q.id,version:1,snapshot:snap(q),action:'确认',updatedAt:at,updatedBy:'Synthetic'}))),
 ...([q1,q2].map(q=>({id:'completed_'+q.id,kind:'customer_quote_completed',quoteId:q.id,quoteVersion:1,lineId:q.lines[0].id,...q.lines[0],id:'completed_'+q.id,kind:'customer_quote_completed',customerAccountId:q.customerAccountId,customerName:q.customerName,customerCode:q.customerCode,quoteNo:q.quoteNo,currency:'EUR',quoteDate:q.quoteDate,validUntil:q.validUntil,confirmedAt:at,confirmedBy:'Synthetic',customerCharges:[]})))
 ]);
+const order=(id,customer)=>({id,kind:'order',version:1,createdAt:at,updatedAt:at,updatedBy:'Synthetic',source:'synthetic',orderNo:'SO-'+id,customer,customerPO:'PO-'+id,drawing:'DRAW-'+id,color:'Black',lens:'Clear',batch:'1',quantity:10,requestedDate:'2026-11-01',ownerEmail:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',workflowStatus:'业务待提交'});
+const source=(id,customer)=>({id,kind:'sales_order_source',version:1,status:'待核对',customer,orderNo:'SOURCE-'+id,contentFingerprint:'b'.repeat(64),createdAt:at,createdById:a.memberId,source:{schemaVersion:1,orderNo:'SOURCE-'+id,customer,productType:'frame',customerPO:'SYNTHETIC-PO',documentType:'Sales Order Confirmation',source:{filename:'synthetic.xlsx',sha256:'a'.repeat(64),sheet:'Sales',detailRange:'A1:C2'},warnings:['Synthetic pending value'],lines:[{id:'source-line-'+id,sourceRow:2,drawing:'DRAW',model:'MODEL',color:'Black',sku:'',quantity:10,unit:'pair',sampleQuantity:null,unitPrice:'0',deliveryText:'TBD',colorFields:[{sourceColumn:'A',sourceLabel:'色号',sourceCell:'A2',value:null,status:'pending',standardZh:'',standardEn:'',qualifier:'',candidates:[]}],rawFields:[{column:'B',label:'数量',cell:'B2',value:'10'}],notes:[]}]}});
+const doc=(id,type,cid,oid,kind='handoff_business_document')=>({id,kind,type,customerId:cid,projectId:'',orderId:oid,version:2,number:'SYNTHETIC-'+id,status:'draft',fields:{date:'2026-10-20',currency:'EUR',buyer:'Synthetic buyer',seller:'Synthetic seller',billingAddress:'Synthetic billing',shippingAddress:'Synthetic shipping',paymentTerms:'TBD',depositPercent:'',tradeTerms:'TBD',paymentDueDate:'',delivery:'TBD',reference:'',notes:'',templateLabel:'',manualBasis:'',courierAccount:'SYNTHETIC_COURIER_PRIVATE',path:'SYNTHETIC_PRIVATE_PATH',materialState:'未开始',purchaseState:'未开始'},lines:[{orderLineId:oid,description:'Synthetic product',quantity:10,unitPrice:'0'}],sourceRefs:[],sourceSnapshots:[],originRefs:[],originSnapshots:[],attachmentRefs:[],createdAt:at,createdById:a.memberId,updatedAt:at,updatedBy:'Synthetic'});
+const po=doc('po1','po','c1','o1','handoff_business_source'),pi=doc('pi1','pi','c1','o1'),invoice=doc('invoice1','invoice','c1','o1'),production=doc('production1','production_order','c1','o1','handoff_business_source');
+pi.sourceRefs=[{id:'po1',version:2}];pi.sourceSnapshots=[po];
+const members=db.prepare("SELECT data FROM records WHERE kind='member'").all().map(row=>JSON.parse(row.data)).map(row=>({...row,orderScope:row.role==='viewer'?'all':'assigned',customers:row.id===a.memberId?['C1','C2']:row.id===b.memberId?['C2']:[]}));
+saveRecords([...members,order('o1','C1'),order('o2','C2'),source('source1','C1'),source('source2','C2'),po,pi,invoice,production,doc('pi2','pi','c2','o2'),
+...([pi,invoice,production].map(row=>({id:'hist-'+row.id,kind:'handoff_business_history',recordId:row.id,customerId:row.customerId,version:1,action:'合成保存',actor:'Synthetic',createdAt:at,snapshot:{...row,version:1,status:'draft'}})))
+]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
@@ -46,11 +56,11 @@ const origin='http://127.0.0.1:'+port;
 const child=spawn(process.execPath,[path.join(runtime,'server.mjs')],{env:{...env,DOON_PORT:String(port)},windowsHide:true,stdio:['ignore','ignore','pipe']});
 let logs='';child.stderr.on('data',b=>logs+=b);let exited=false;const done=new Promise(resolve=>child.once('exit',()=>{exited=true;resolve();}));
 function snapshot(){const db=new DatabaseSync(path.join(env.DOON_DATA_DIR,'workspace.sqlite'),{readOnly:true});try{return {records:db.prepare("SELECT id,kind,data FROM records WHERE kind!='auth_event' ORDER BY id").all(),revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get().revision};}finally{db.close();}}
-let checks=0;const pass=()=>checks++;
+let checks=0;const pass=()=>checks++;const testedCommands=[];
 try{
   let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}assert(ready,'Native server starts');
   const services={};
-  for(const username of ['sales_a','sales_b','initial']){
+  for(const username of ['sales_a','sales_b','broad','initial']){
     const state=new StateStore(path.join(dir,username),testCodec());await state.setup(origin,true);const f=new FoundationService(state);await f.login(async()=>({username,password:'Synthetic-Only-2026!'}));services[username]={foundation:f,sales:f.sales(),state};
   }
   // Authentication audit may advance the workspace revision; establish all test sessions before the read-only baseline.
@@ -60,6 +70,16 @@ try{
   }
   const before=snapshot(),original=await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin'));
   const a=services.sales_a.sales,b=services.sales_b.sales;
+  const orders=services.sales_a.foundation.orders(),otherOrders=services.sales_b.foundation.orders();
+  assert.equal((await orders.execute('orders','list',{team:'t1'})).page.total,1);assert.equal((await orders.execute('orders','show',{},'o1')).record.customer,'C1');await assert.rejects(otherOrders.execute('orders','show',{},'o1'),{code:'NOT_IN_SCOPE'});pass();
+  assert.equal((await orders.execute('sources','list',{team:'t1'})).page.total,1);assert.equal((await orders.execute('sources','show',{},'source1')).lines.rows[0].sampleQuantity,null);pass();
+  const broad=services.broad.foundation.orders();assert.equal((await broad.execute('orders','list')).page.total,2);assert.equal((await broad.execute('sources','list')).page.total,0);assert.equal((await broad.execute('pi','list')).page.total,0);pass();
+  const sourceOutput=path.join(dir,'source.xlsx');await orders.execute('sources','export',{team:'t1',output:sourceOutput},'source1');assert(XLSX.read(await fs.readFile(sourceOutput),{type:'buffer'}).SheetNames.length>0);pass();
+  for(const resource of ['pi','documents','production-orders']){
+    const id=resource==='production-orders'?'production1':'pi1';assert((await orders.execute(resource,'list',{team:'t1'})).page.total>0);const shown=await orders.execute(resource,'show',{team:'t1'},id);assert.equal(shown.record.customerId,'c1');assert(!JSON.stringify(shown).includes('SYNTHETIC_COURIER_PRIVATE'));assert(!JSON.stringify(shown).includes('SYNTHETIC_PRIVATE_PATH'));assert.equal((await orders.execute(resource,'history',{team:'t1'},id)).page.rows[0].version,1);
+    if(resource!=='production-orders')assert.equal((await orders.execute(resource,'version',{team:'t1'},id,'1')).record.version,1);pass();
+  }
+  await assert.rejects(otherOrders.execute('pi','show',{},'pi1'),{code:'NOT_IN_SCOPE'});await assert.rejects(orders.execute('pi','history',{team:'t2'},'pi1'),{code:'NOT_IN_SCOPE'});pass();
   assert.deepEqual((await a.execute('teams','list')).page.rows.map(row=>row.id).sort(),['t1','t2']);pass();
   assert.equal((await a.execute('customers','list')).page.total,2);assert.equal((await b.execute('customers','list')).page.total,1);pass();
   const detail=await a.execute('customers','show',{team:'t1'},'c1');assert.equal(detail.record.customer.customer,'Synthetic Alpha');assert(!JSON.stringify(detail).includes('SYNTHETIC_BANK_PRIVATE'));pass();
@@ -74,10 +94,36 @@ try{
   assert.deepEqual(snapshot(),before);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();
   if(processState){
     // The server is another process, so synchronous child CLI calls cannot deadlock it.
-    const result=JSON.parse(execFileSync(process.execPath,[path.join(root,'cli/dist/index.js'),'sales','quotes','version','q1','1','--team','t1','--json'],{env:{...process.env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8'}));assert.equal(result.data.record.version,1);assert.equal(result.data.scope.teamId,'t1');await processState.clearSession();pass();
+    const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
+    const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
+    const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
+    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1'};
+    // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
+    for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
+      const parts=spec.name.split(' ');let args=[...parts];
+      if(parts.length===1)args.push(...argumentsFor[spec.name]);
+      else{
+        const [,resource,action]=parts;
+        if(!['list','export-completed'].includes(action))args.push(ids[resource]);
+        if(action==='version')args.push('1');
+        if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
+        args.push('--team','t1');
+      }
+      const value=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args,'--json'],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
+      assert.equal(value.ok,true,spec.name);assert.equal(value.command,spec.name);testedCommands.push(spec.name);
+      if(spec.name==='commands')assert.deepEqual(value.data.map(c=>c.name),commands.map(c=>c.name));
+      if(spec.name==='logout')assert.equal(value.data.serverRevoked,true);
+      else assert.deepEqual(snapshot(),before,'Business calls must preserve records and revision: '+spec.name);
+    }
+    assert.equal(testedCommands.length,commands.length);assert.equal(await processState.hasSession(),false);pass();
   }
-  assert.deepEqual(snapshot(),before);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
+  assert.deepEqual(snapshot().records,before.records);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
-  console.log(JSON.stringify({passed:checks,syntheticOnly:true,businessRecordsAndOriginalBytesPreserved:true}));
-}catch(error){console.error(logs.slice(-2000));throw error;}finally{if(!exited)child.kill();await done;}
+}catch(error){console.error(logs.slice(-2000));throw error;}finally{
+  if(!exited)child.kill();await done;
+  const base=path.resolve(root,'test-output'),target=path.resolve(dir);
+  if(path.dirname(target)!==base||!path.basename(target).startsWith('cli-test-'))throw Error('Refusing cleanup outside the generated test directory');
+  await fs.rm(target,{recursive:true,force:true});assert.equal(await fs.stat(target).then(()=>true,()=>false),false);
+}
+console.log(JSON.stringify({passed:checks,syntheticOnly:true,productionRequests:0,businessRecordsAndOriginalBytesPreserved:true,testDirectoryRemoved:true,testedCommands}));
