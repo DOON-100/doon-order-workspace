@@ -17,8 +17,18 @@ const root = await fs.mkdtemp(path.join(os.tmpdir(), 'doon-release-test-'));
 try {
   await fs.mkdir(path.join(root, 'lan-dist'));
   await fs.writeFile(path.join(root, 'lan-dist/server.mjs'), '// Synthetic runtime only\n');
+  const mailModule = path.join(root, 'lan-dist/ie-mail.mjs');
+  const mailSource = 'export const configured = false; // Synthetic mail adapter; never sends\n';
+  await fs.writeFile(mailModule, mailSource);
   await fs.writeFile(path.join(root, 'package.json'), '{"private":true}\n');
   await fs.writeFile(path.join(root, 'release.json'), JSON.stringify({format: 'doon-native-release-v1', files: await inventory(root)}));
+  const packaged = await verifyPackage(root);
+  assert.equal(packaged.files['lan-dist/ie-mail.mjs'].type, 'file');
+  await fs.appendFile(mailModule, '// changed\n');
+  await assert.rejects(verifyPackage(root), /integrity mismatch/);
+  await fs.unlink(mailModule);
+  await assert.rejects(verifyPackage(root), /integrity mismatch/);
+  await fs.writeFile(mailModule, mailSource);
   await verifyPackage(root);
   await fs.appendFile(path.join(root, 'lan-dist/server.mjs'), '// changed\n');
   await assert.rejects(verifyPackage(root), /integrity mismatch/);

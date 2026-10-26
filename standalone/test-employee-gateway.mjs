@@ -15,7 +15,7 @@ assert.throws(()=>employeeEndpoint(config,'198.51.100.1',headers));
 for(const changed of [{host:'attacker.test'},{'x-forwarded-host':'attacker.test'},{'x-forwarded-proto':'http'},{'x-forwarded-for':'198.51.100.9, 127.0.0.1'},{'x-forwarded-for':''},{forwarded:'for=127.0.0.1'}])assert.throws(()=>employeeEndpoint(config,'127.0.0.1',{...headers,...changed}));
 console.log('PASS gateway requires loopback, exact HTTPS origin and one valid forwarded client IP');
 await fs.mkdir('test-output',{recursive:true});const dir=await fs.mkdtemp(path.resolve('test-output/employee-test-')),build=path.join(dir,'build');await fs.mkdir(build,{recursive:true});await fs.mkdir(path.join(build,'client'));
-for(const file of ['runtime.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.join('standalone',file),path.join(build,file));
+for(const file of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.join('standalone',file),path.join(build,file));
 await fs.cp(path.resolve('standalone/schedule-engine'),path.join(build,'schedule-engine'),{recursive:true});
 await fs.writeFile(path.join(build,'client','index.html'),'<html>synthetic employee test</html>');
 await fs.writeFile(path.join(build,'workspace-api.mjs'),`export async function GET(){return Response.json({ok:true});}export async function POST(){return Response.json({ok:true});}`);

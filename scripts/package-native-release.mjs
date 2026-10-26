@@ -9,7 +9,7 @@ import {fileURLToPath} from 'node:url';
 import {verifyCustomerPriceBuildEvidence} from './customer-price-build-evidence.mjs';
 
 const allowedRoots = new Set(['lan-dist', 'node_modules', 'package.json', 'package-lock.json']);
-const distFiles = new Set(['workspace-api.mjs', 'agent-schedules.mjs', 'runtime.mjs', 'auth.mjs',
+const distFiles = new Set(['workspace-api.mjs', 'agent-schedules.mjs', 'runtime.mjs', 'ie-mail.mjs', 'auth.mjs',
   'personnel.mjs', 'server.mjs', 'manage.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs',
   'customer-price-build-evidence.json']);
 
