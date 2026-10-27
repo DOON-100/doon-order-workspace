@@ -20,6 +20,7 @@ import {makeWorkbook,openWorkbook,previewOrders,previewReports,sha,sheetRows,sug
 import {canSeeSupplierPrice} from '@/lib/suppliers';
 import {customerQuoteGet,customerQuotePost} from '@/lib/customer-quote-api';
 import {ieQuoteGet,ieQuotePost} from '@/lib/ie-quote-api';
+import {ieMaterialNamesGet,ieMaterialNamesPost} from '@/lib/ie-material-names-api';
 import {canUseIeQuotes,canFinalApproveIeSales} from '@/lib/ie-quote-access';
 import {customerPriceArchiveGet,customerPriceArchivePost} from '@/lib/customer-price-archive-api';
 import {customerQuotePolicyPost} from '@/lib/customer-quote-policy-api';
@@ -119,6 +120,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const collaboration=projectCollaborationGet(action,req,s,m);if(collaboration)return collaboration;
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
+ const materialNames=ieMaterialNamesGet(action,url,s,m);if(materialNames)return materialNames;
  const ieQuotation=await ieQuoteGet(action,url,s,m);if(ieQuotation)return ieQuotation;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
  const service=await serviceWorkspaceGet(action,req,s,m);if(service)return service;
@@ -181,6 +183,7 @@ export async function POST(req:Request,ctx:Context){try{
  const kingdeeSales=await kingdeeSalesPost(action,req,s,m);if(kingdeeSales)return kingdeeSales;
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
+ const materialNames=await ieMaterialNamesPost(action,req,s,m);if(materialNames)return materialNames;
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;

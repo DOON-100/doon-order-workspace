@@ -1,6 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { IeQuote } from './ie-quotes';
-import { calculateIeQuote, ieCalculationVersion, ieCostMultiply, ieCostSum, ieCostRoundCents, type IeFormulaVersion } from './ie-quote-calculation';
+import { calculateIeQuote, ieCalculationVersion, ieCostMultiply, ieCostSum, ieCostRoundCents, ieAdjustmentTargets, type IeLineAdjustmentKey, type IeFormulaVersion } from './ie-quote-calculation';
 
 /** This is an INTERNAL cost workbook. Customer quotations use a separate exporter.
  * Never use a historical multi-customer workbook as a reusable blank template.
@@ -504,9 +504,19 @@ function genericDraftTemplate(quote: IeQuote) {
   return { entries, mappings };
 }
 
-/** Incomplete, explicitly UNREVIEWED filling copy. It never authorizes approval,
- * release, customer pricing or mail. Blank inputs yield blank formula results. */
-export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: { issues: string[]; template?: { bytes: Uint8Array; expectedSha256: string; sheetBindings: { sheetName: string; lineId: string }[] } }) {
+type IeEditableWorkbookOptions = { issues: string[]; purpose?: 'draft' | 'internal'; template?: { bytes: Uint8Array; expectedSha256: string; sheetBindings: { sheetName: string; lineId: string }[] } };
+
+/** The same detail schedules feed both the unreviewed filling copy and the
+ * internal approved export. Manual values are explicit inputs with reasons;
+ * automatic and effective amounts remain separate, linked Excel formulas. */
+export async function exportIeQuoteInternalWorkbook(quote: IeQuote, options: IeEditableWorkbookOptions & { template: NonNullable<IeEditableWorkbookOptions['template']> }) {
+  if (options.issues.length || calculateIeQuote(quote).adjustmentCells.some(c => c.stale)) fail('内部报价导出前请补全并核对所有明细和人工调整', 'IE_EXPORT_INPUT');
+  return exportIeQuoteDraftWorkbook(quote, { ...options, purpose: 'internal' });
+}
+
+/** Incomplete, explicitly UNREVIEWED filling copy. Downloading or editing it
+ * never authorizes release, customer pricing, mail, or a write back to the app. */
+export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: IeEditableWorkbookOptions) {
   let entries: Record<string, Uint8Array>, mappings: { sheetName: string; lineId: string; path: string }[];
   if (options.template) {
     const inspected = await inspectArchive(options.template.bytes);
@@ -517,69 +527,116 @@ export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: { issu
     mappings = binding.map(b => { const sheet = inspected.inspection.sheets.find(s=>s.name===b.sheetName), line = quote.lines.find(l=>l.id===b.lineId); if (!sheet || !line || normalize(sheet.customerCode)!==normalize(quote.customerCode) || normalize(sheet.model)!==normalize(line.model)) fail('草稿模板的客户、款式绑定不一致', 'IE_TEMPLATE_BINDING'); return {...b,path:sheet.path}; });
     entries = inspected.entries;
   } else ({ entries, mappings } = genericDraftTemplate(quote));
-  const formulaVersion = ieCalculationVersion(quote), excel = formulaVersion === 'ie-cost-v3-excel', costs = calculateIeQuote(quote);
-  const materialRows: GridRow[] = [['款式行编号','款式','材料名称','规格','单位（可选）','未税基价','用量','系数','本项总损耗率','材料金额（公式）','损耗金额（公式）','不适用=1 / 适用=0','备注','额外损耗原因','价格依据','正常损耗率','额外百分点']];
-  const processRows: GridRow[] = [['款式行编号','款式','工序名称','上级工序编号','顺序','工价基价','难度系数','工价金额（公式）','标准秒数（可选）','不适用=1 / 适用=0','备注','价格依据']];
-  const outsourceRows: GridRow[] = [['款式行编号','款式','类别','名称','未税单价','不适用=1 / 适用=0','金额（公式）','备注','价格依据']];
-  const brief: GridRow[] = [['未审 Excel 填报草稿','仅供内部核对；不是已复核报价，也不是给客户的报价'],['工程报价编号',quote.quoteNo],['来源版本',`R${quote.revision} V${quote.version} / ${quote.status}`],['计算规则',formulaVersion],['1 USD = CNY（手填）',quote.exchangeRateCnyPerUsd],['汇率日期',quote.exchangeRateDate],['汇率来源',quote.exchangeRateSource],['打印模板',options.template?'保留本次绑定原模板的打印区域、版式与原模板照片；照片不代表新上传图纸':'通用同类格式；无原客户模板照片，未宣称与原模板打印完全一致'],['填写方法','在材料填报、工序填报、外发填报输入页填写；STYLE 按公式汇总。空白金额不当作 0。修改 Excel 不会自动回写或触发中台审核。'],['材料损耗','正常 10% + 指定单项额外百分点 = 本项总损耗率；其他材料仍为 10%。在材料填报 I 列录入总比例，Q 列显示额外百分点。'],['单价范围','全部未税；间接费用固定 13.70 元/副；生产成本 × 1.3 为出厂价；业务另行定客价，曲艳红批准。模具等费用全部单列。'],['完整性',options.issues.length?`${options.issues.length} 项待核验；数值完整只代表可计算，不代表已批准。`:'数值与必填检查完整；本文件仍是未审填报副本。'],['原格容量','超过原表材料 29 行或外发 8 行时，末行汇总其余项目；全量输入和金额保留在对应填报页。'],['内部备注',quote.notes]];
-  const short = (s: string, length: number, fallback: string) => textWidth(s) <= length && !/[\r\n]/.test(s) ? s : fallback;
-  const textRef = (sheet: string, cell: string, value: string, max: number, fallback: string):CellValue => ({formula:`IF(LEN(${ref(sheet,cell)})<=${Math.floor(max/2)},${ref(sheet,cell)}&"","${fallback}")`,value:value.length<=Math.floor(max/2)?value:fallback});
-  const guardedSum = (sheet: string, column: string, first: number, last: number, value: number|null, digits=6) => draftFormula(`IF(COUNT(${ref(sheet,`${column}${first}:${column}${last}`)})=${last-first+1},ROUND(SUM(${ref(sheet,`${column}${first}:${column}${last}`)}),${digits}),"")`,value);
-  for (const mapping of mappings) {
-    const line = quote.lines.find(l=>l.id===mapping.lineId)!, cost = costs.lines.find(c=>c.lineId===line.id)!;
-    const mStart=materialRows.length+1,pStart=processRows.length+1,oStart=outsourceRows.length+1;
-    const materials = line.materials.length ? line.materials : [{id:'',name:'',specification:'',unit:'',basePrice:null,usage:null,coefficient:null,lossRate:.1,notApplicable:false,notes:'请列明材料或明确不适用',lossAdjustmentReason:'',priceSource:''}];
-    for (const m of materials) {
-      const r=materialRows.length+1, net=m.notApplicable?0:m.basePrice===null||m.usage===null||m.coefficient===null?null:ieCostMultiply([m.basePrice,m.usage,m.coefficient],excel?2:6), loss=net===null?null:m.notApplicable?0:ieCostMultiply(excel?[net,m.lossRate??.1]:[m.basePrice!,m.usage!,m.coefficient!,m.lossRate??.1]);
-      materialRows.push([line.id,line.model,m.name,m.specification,m.unit,m.basePrice,m.usage,m.coefficient,m.lossRate??.1,draftFormula(`IF(L${r}=1,0,IF(COUNT(F${r}:H${r})=3,ROUND(F${r}*G${r}*H${r},${excel?2:6}),""))`,net),draftFormula(`IF(L${r}=1,0,IF(AND(ISNUMBER(J${r}),ISNUMBER(I${r})),ROUND(${excel?`J${r}`:`F${r}*G${r}*H${r}`}*I${r},6),""))`,loss),m.notApplicable?1:0,m.notes,m.lossAdjustmentReason,m.priceSource,.1,draftFormula(`IF(ISNUMBER(I${r}),ROUND((I${r}-P${r})*100,6),"")`,round(((m.lossRate??.1)-.1)*100))]);
+  const internal=options.purpose==='internal', formulaVersion=ieCalculationVersion(quote), excel=formulaVersion!=='ie-cost-v2-line-loss', costs=calculateIeQuote(quote);
+  const materialRows: GridRow[] = [['款式行编号','款式','材料名称','规格','单位（可选）','未税基价','用量','系数','本项总损耗率','材料金额（公式）','损耗金额（公式）','不适用=1 / 适用=0','备注','额外损耗原因','价格依据','正常损耗率','额外百分点','自动材料金额（公式）']];
+  const processRows: GridRow[] = [['款式行编号','款式','直接人工工艺 / 工序名称','上级工序编号','顺序','工价基价','难度系数','人工金额 / 副（公式）','标准秒数（可选）','不适用=1 / 适用=0','备注','价格依据','用量 / 次数（每副）']];
+  const outsourceHeader: GridRow=['款式行编号','款式','类别','工序 / 电镀名称','未税单价','不适用=1 / 适用=0','金额 / 副（公式）','备注','价格依据','具体部位','用量 / 次数（每副）'];
+  const platingRows: GridRow[]=[outsourceHeader], outsourceRows: GridRow[]=[outsourceHeader];
+  const indirectRows: GridRow[]=[['款式行编号','款式','间接费用项目','默认金额 / 副','有效金额 / 副（公式）']];
+  const adjustmentRows: GridRow[]=[['计算节点','项目 / 款式','自动金额（公式）','人工金额（可清空恢复自动）','调整原因（人工金额必填）','有效金额（公式）','导出时状态','当前来源签名','失效人工金额（仅追溯）','提交时来源签名']];
+  const adjustmentRowByTarget=new Map<string,number>(), calculationByTarget=new Map(costs.adjustmentCells.map(c=>[c.target,c]));
+  const cache=(value:CellValue):number|null=>typeof value==='number'?value:typeof value==='object'&&value!==null&&typeof value.value==='number'?value.value:null;
+  const expression=(value:CellValue)=>typeof value==='object'&&value!==null?value.formula:typeof value==='number'?String(value):'""';
+  const adjusted=(target:string,automatic:CellValue):CellValue=>{
+    const cell=calculationByTarget.get(target); if(!cell)return automatic;
+    let row=adjustmentRowByTarget.get(target);
+    if(!row){row=adjustmentRows.length+1;adjustmentRowByTarget.set(target,row);adjustmentRows.push([target,cell.label,draftFormula(expression(automatic),cell.automaticValue),cell.applied?cell.adjustment!.value:null,cell.adjustment?.reason||'',draftFormula(`IF(ISNUMBER(D${row}),IF(LEN(TRIM(E${row}))>0,D${row},""),IF(ISNUMBER(C${row}),C${row},""))`,cell.effectiveValue),cell.stale?'来源已变更，人工值未采用':cell.applied?'已采用人工调整':'自动计算',cell.sourceSignature,cell.stale?cell.adjustment!.value:null,cell.adjustment?.sourceSignature||'']);}
+    return draftFormula(`IF(ISNUMBER(${ref('人工调整',`F${row}`)}),${ref('人工调整',`F${row}`)},"")`,cell.effectiveValue);
+  };
+  const effectiveRef=(target:string)=>ref('人工调整',`F${adjustmentRowByTarget.get(target)!}`);
+  const guardedSum=(sheet:string,column:string,first:number,last:number,value:number|null,digits=6)=>draftFormula(`IF(COUNT(${ref(sheet,`${column}${first}:${column}${last}`)})=${last-first+1},ROUND(SUM(${ref(sheet,`${column}${first}:${column}${last}`)}),${digits}),"")`,value);
+  const sumCells=(refs:string[],value:number|null,digits=6)=>draftFormula(`IF(COUNT(${refs.join(',')})=${refs.length},ROUND(SUM(${refs.join(',')}),${digits}),"")`,value);
+  const short=(s:string,length:number,fallback:string)=>textWidth(s)<=length&&!/[\r\n]/.test(s)?s:fallback;
+  const textRef=(sheet:string,cell:string,value:string,max:number,fallback:string):CellValue=>({formula:`IF(LEN(${ref(sheet,cell)})<=${Math.floor(max/2)},${ref(sheet,cell)}&"","${fallback}")`,value:value.length<=Math.floor(max/2)?value:fallback});
+  const brief:GridRow[]=[
+    [internal?'内部工程核价明细':'未审 Excel 填报草稿',internal&&quote.status==='released'?'已复核内部工程价；业务最终客价另行审批':'仅供内部核对；不是已复核报价，也不是给客户的报价'],
+    ['工程报价编号',quote.quoteNo],['来源版本',`R${quote.revision} V${quote.version} / ${quote.status}`],['计算规则',formulaVersion],['1 USD = CNY（手填）',quote.exchangeRateCnyPerUsd],['汇率日期',quote.exchangeRateDate],['汇率来源',quote.exchangeRateSource],
+    ['打印模板',options.template?'保留绑定原模板的打印区域、版式与照片；照片不代表新上传图纸':'通用同类格式；无原客户模板照片'],
+    ['填写方法','材料、电镀、外发、工序（直接人工）子表逐项填写，汇总金额自动进入 STYLE 总表。空白金额不当作 0。用量 / 次数均为每副，不乘报价批量。'],
+    ['材料损耗','正常 10% + 指定单项额外百分点 = 本项总损耗率；其他材料仍为 10%。材料填报 I 列录入总比例，Q 列显示额外百分点。'],
+    ['单价范围','全部未税；间接费默认 13.70 元/副并允许逐项调整；生产成本 × 1.3 为出厂价。业务另行定客价，模具等费用全部单列。'],
+    ['完整性',options.issues.length?`${options.issues.length} 项待核验；数值完整不代表已批准。`:internal?'本文件绑定明确工程版本；审批状态见来源版本。':'数值检查完整，本文件仍是未审填报副本。'],
+    ['原格容量','超过原表材料 29 行或外发 8 行时，末行汇总其余项目；全量输入和金额保留在对应子表。'],['内部备注',quote.notes],
+    ['人工改价','人工调整页 D 列填数值、E 列填原因；清空 D 恢复自动。0 是有效人工金额。失效的原人工值保留在 I 列，未参与当前核价。'],
+    ['离线修改','Excel 中修改不会写入中台、生成中台修改日志或触发审批。正式使用前须将修改回填中台，重新保存版本并由对应人员审核。来源签名只记录导出时依据。']
+  ];
+  for(const mapping of mappings){
+    const line=quote.lines.find(l=>l.id===mapping.lineId)!,cost=costs.lines.find(c=>c.lineId===line.id)!, target=(key:IeLineAdjustmentKey)=>ieAdjustmentTargets.line(line.id,key);
+    const mStart=materialRows.length+1,pStart=processRows.length+1,plStart=platingRows.length+1,oStart=outsourceRows.length+1,indStart=indirectRows.length+1;
+    const materials=line.materials.length?line.materials:[{id:'',name:'',specification:'',unit:'',basePrice:null,usage:null,coefficient:null,lossRate:.1,notApplicable:false,notes:'请列明材料或明确不适用',lossAdjustmentReason:'',priceSource:''}];
+    for(const m of materials){
+      const r=materialRows.length+1,raw=m.notApplicable?0:m.basePrice===null||m.usage===null||m.coefficient===null?null:ieCostMultiply([m.basePrice,m.usage,m.coefficient],excel?2:6);
+      const rawFormula=draftFormula(`IF(L${r}=1,0,IF(COUNT(F${r}:H${r})=3,ROUND(F${r}*G${r}*H${r},${excel?2:6}),""))`,raw);
+      const amountCell=adjusted(ieAdjustmentTargets.material(line.id,m.id),draftFormula(`IF(ISNUMBER(${ref('材料填报',`R${r}`)}),${ref('材料填报',`R${r}`)},"")`,raw));
+      const net=cache(amountCell),loss=net===null?null:m.notApplicable?0:ieCostMultiply(excel?[net,m.lossRate??.1]:[m.basePrice!,m.usage!,m.coefficient!,m.lossRate??.1]);
+      materialRows.push([line.id,line.model,m.name,m.specification,m.unit,m.basePrice,m.usage,m.coefficient,m.lossRate??.1,amountCell,draftFormula(`IF(L${r}=1,0,IF(AND(ISNUMBER(J${r}),ISNUMBER(I${r})),ROUND(${excel?`J${r}`:`F${r}*G${r}*H${r}`}*I${r},6),""))`,loss),m.notApplicable?1:0,m.notes,m.lossAdjustmentReason,m.priceSource,.1,draftFormula(`IF(ISNUMBER(I${r}),ROUND((I${r}-P${r})*100,6),"")`,round(((m.lossRate??.1)-.1)*100)),rawFormula]);
     }
-    const processes = line.processes.length?line.processes:[{name:'',parentId:'',sequence:0,basePrice:null,difficulty:null,standardSeconds:null,notApplicable:false,notes:'请列明工序或明确不适用',priceSource:''}];
-    for (const p of processes) { const r=processRows.length+1, value=p.notApplicable?0:p.basePrice===null||p.difficulty===null?null:ieCostMultiply([p.basePrice,p.difficulty]);processRows.push([line.id,line.model,p.name,p.parentId,p.sequence,p.basePrice,p.difficulty,draftFormula(`IF(J${r}=1,0,IF(COUNT(F${r}:G${r})=2,ROUND(F${r}*G${r},6),""))`,value),p.standardSeconds,p.notApplicable?1:0,p.notes,p.priceSource]); }
-    const outsourced = [...line.outsourcing];
-    for (const category of ['plating','general'] as const) if (!outsourced.some(o=>o.category===category)) outsourced.push({id:'',category,name:'',unitPrice:null,notApplicable:false,notes:'请列明或明确不适用',priceSource:'',catalogId:'',catalogVersion:null});
-    for (const o of outsourced) { const r=outsourceRows.length+1;outsourceRows.push([line.id,line.model,o.category==='plating'?'电镀':'一般外发',o.name,o.unitPrice,o.notApplicable?1:0,draftFormula(`IF(F${r}=1,0,IF(ISNUMBER(E${r}),E${r},""))`,o.notApplicable?0:o.unitPrice),o.notes,o.priceSource]); }
-    const mEnd=materialRows.length,pEnd=processRows.length,oEnd=outsourceRows.length;
-    const cells: Cells = {C3:short(quote.customerCode,24,'详见填报说明'),E3:short(line.model,24,'详见填报说明'),G3:short(line.drawingNo,24,'详见填报说明'),H3:'报价编号',I3:short(quote.quoteNo,24,'详见填报说明'),I2:'人民币',B4:'未审填报草稿',C4:'待核对',D4:`R${quote.revision} V${quote.version}`,E4:null,F4:quote.exchangeRateCnyPerUsd===null?'汇率待填':String(quote.exchangeRateCnyPerUsd),G4:null,H4:'成本加价30%',I4:null,G38:'分项',L4:draftFormula(`IF(ISNUMBER(${ref('填报说明','B5')}),${ref('填报说明','B5')},"")`,quote.exchangeRateCnyPerUsd)};
-    cells.F4={formula:`IF(AND(ISNUMBER(${ref('填报说明','B5')}),${ref('填报说明','B5')}>0),TEXT(${ref('填报说明','B5')},"0.######"),"汇率待填")`,value:quote.exchangeRateCnyPerUsd&&quote.exchangeRateCnyPerUsd>0?String(quote.exchangeRateCnyPerUsd):'汇率待填'};
-    const cache = (value: CellValue):number|null => typeof value==='number'?value:typeof value==='object'&&value!==null&&typeof value.value==='number'?value.value:null;
-    for (let i=0;i<29;i++) {
-      const row=7+i, m=materials[i], src=mStart+i;
-      for (const c of 'CDEFGHI') cells[`${c}${row}`]=null;
-      if (!m) continue;
-      if (i===28 && materials.length>29) { cells[`D${row}`]=`其余 ${materials.length-28} 项见材料填报`;cells[`H${row}`]=guardedSum('材料填报','J',src,mEnd,materialRows.slice(src-1,mEnd).some(v=>cache(v[9])===null)?null:ieCostSum(materialRows.slice(src-1,mEnd).map(v=>cache(v[9])!)));continue; }
-      cells[`D${row}`]=short(m.name,24,`材料填报第${src}行`);cells[`E${row}`]=short(m.specification,28,`见材料填报第${src}行`);cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`G${src}`)}),${ref('材料填报',`G${src}`)},"")`,m.usage);cells[`G${row}`]=draftFormula(`IF(COUNT(${ref('材料填报',`F${src}`)},${ref('材料填报',`H${src}`)})=2,${ref('材料填报',`F${src}`)}*${ref('材料填报',`H${src}`)},"")`,m.basePrice===null||m.coefficient===null?null:m.basePrice*m.coefficient);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`J${src}`)}),${ref('材料填报',`J${src}`)},"")`,cache(materialRows[src-1][9]));cells[`I${row}`]=m.notApplicable?'不适用（见附页）':`${round((m.lossRate??.1)*100)}% 详见附页`;
-      cells[`D${row}`]=textRef('材料填报',`C${src}`,m.name,24,`材料填报第${src}行`);cells[`E${row}`]=textRef('材料填报',`D${src}`,m.specification,28,`见材料填报第${src}行`);
-      cells[`I${row}`]={formula:`IF(${ref('材料填报',`L${src}`)}=1,"不适用见附页",IF(ISNUMBER(${ref('材料填报',`I${src}`)}),TEXT(${ref('材料填报',`I${src}`)}*100,"0.######")&"%详见附页","损耗待填"))`,value:m.notApplicable?'不适用见附页':`${round((m.lossRate??.1)*100)}%详见附页`};
-    }
-    for (let i=0;i<8;i++) {
-      const row=42+i,o=outsourced[i],src=oStart+i;for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!o)continue;
-      if(i===7&&outsourced.length>8){cells[`C${row}`]=`其余 ${outsourced.length-7} 项见外发填报`;cells[`H${row}`]=guardedSum('外发填报','G',src,oEnd,outsourceRows.slice(src-1,oEnd).some(v=>cache(v[6])===null)?null:ieCostSum(outsourceRows.slice(src-1,oEnd).map(v=>cache(v[6])!)));continue;}
-      cells[`C${row}`]=short(o.name,20,`外发填报第${src}行`);cells[`F${row}`]=1;cells[`G${row}`]=draftFormula(`IF(ISNUMBER(${ref('外发填报',`E${src}`)}),${ref('外发填报',`E${src}`)},"")`,o.unitPrice);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('外发填报',`G${src}`)}),${ref('外发填报',`G${src}`)},"")`,cache(outsourceRows[src-1][6]));cells[`I${row}`]=o.notApplicable?'不适用（见附页）':short(o.notes,26,'详见外发填报');
-      cells[`C${row}`]=textRef('外发填报',`D${src}`,o.name,20,`外发填报第${src}行`);cells[`I${row}`]={formula:`IF(${ref('外发填报',`F${src}`)}=1,"不适用见附页","详见外发填报")`,value:o.notApplicable?'不适用见附页':'详见外发填报'};
-    }
-    const outside=cost.plating===null||cost.outsourcing===null?null:ieCostSum([cost.plating,cost.outsourcing]), materialTotal=cost.material===null||cost.materialLoss===null?null:ieCostSum([cost.material,cost.materialLoss]),labor=cost.process===null?null:ieCostSum([cost.process,13.7]);
-    Object.assign(cells,{H37:guardedSum('材料填报','J',mStart,mEnd,cost.material),H38:guardedSum('材料填报','K',mStart,mEnd,cost.materialLoss,excel?2:6),H39:draftFormula('IF(COUNT(H37:H38)=2,ROUND(SUM(H37:H38),6),"")',materialTotal),H50:guardedSum('外发填报','G',oStart,oEnd,outside),F53:1,G53:guardedSum('工序填报','H',pStart,pEnd,cost.process),H53:draftFormula('IF(ISNUMBER(G53),G53,"")',cost.process),H61:draftFormula('IF(COUNT(H53:H59)=7,ROUND(SUM(H53:H59),6),"")',labor),H62:draftFormula('IF(COUNT(H39,H50,H61)=3,ROUND(SUM(H39,H50,H61),6),"")',cost.productionCost),H63:draftFormula('IF(AND(ISNUMBER(H62),ISNUMBER($L$4),$L$4>0),ROUND(H62/$L$4,6),"")',cost.productionCost===null||!quote.exchangeRateCnyPerUsd?null:round(cost.productionCost/quote.exchangeRateCnyPerUsd)),H66:'成本×1.3出厂价',I66:draftFormula('IF(ISNUMBER(H62),ROUND(H62*1.3,6),"")',cost.factoryPriceCny),H67:'出厂价USD/副',I67:draftFormula('IF(AND(ISNUMBER(I66),ISNUMBER($L$4),$L$4>0),ROUND(I66/$L$4,6),"")',cost.factoryPriceUsd),H68:'销售毛利率',I68:draftFormula('IF(AND(ISNUMBER(I66),I66>0),(I66-H62)/I66,"")',cost.factoryPriceCny?round((cost.factoryPriceCny-cost.productionCost!)/cost.factoryPriceCny):null)});
+    const processes=line.processes.length?line.processes:[{id:'',name:'',parentId:'',sequence:0,basePrice:null,difficulty:null,usage:1,standardSeconds:null,notApplicable:false,notes:'请列明工序或明确不适用',priceSource:''}];
+    for(const p of processes){const r=processRows.length+1,usage=p.usage===undefined?1:p.usage,raw=p.notApplicable?0:p.basePrice===null||p.difficulty===null||usage===null?null:ieCostMultiply([p.basePrice,p.difficulty,usage]);processRows.push([line.id,line.model,p.name,p.parentId,p.sequence,p.basePrice,p.difficulty,adjusted(ieAdjustmentTargets.process(line.id,p.id),draftFormula(`IF(${ref('工序填报',`J${r}`)}=1,0,IF(COUNT(${ref('工序填报',`F${r}:G${r}`)},${ref('工序填报',`M${r}`)})=3,ROUND(${ref('工序填报',`F${r}`)}*${ref('工序填报',`G${r}`)}*${ref('工序填报',`M${r}`)},6),""))`,raw)),p.standardSeconds,p.notApplicable?1:0,p.notes,p.priceSource,usage]);}
+    const outsourced=[...line.outsourcing];for(const category of ['plating','general'] as const)if(!outsourced.some(o=>o.category===category))outsourced.push({id:'',category,name:'',part:'',usage:1,unitPrice:null,notApplicable:false,notes:'请列明或明确不适用',priceSource:'',catalogId:'',catalogVersion:null});
+    const outsourceRefs:{sheet:string;row:number;value:number|null}[]=[];
+    for(const o of outsourced){const rows=o.category==='plating'?platingRows:outsourceRows,sheet=o.category==='plating'?'电镀填报':'外发填报',r=rows.length+1,usage=o.usage===undefined?1:o.usage,raw=o.notApplicable?0:o.unitPrice===null||usage===null?null:ieCostMultiply([o.unitPrice,usage]);const value=adjusted(ieAdjustmentTargets.outsourcing(line.id,o.id),draftFormula(`IF(${ref(sheet,`F${r}`)}=1,0,IF(COUNT(${ref(sheet,`E${r}`)},${ref(sheet,`K${r}`)})=2,ROUND(${ref(sheet,`E${r}`)}*${ref(sheet,`K${r}`)},6),""))`,raw));rows.push([line.id,line.model,o.category==='plating'?'电镀':'一般外发',o.name,o.unitPrice,o.notApplicable?1:0,value,o.notes,o.priceSource,o.part||'',usage]);outsourceRefs.push({sheet,row:r,value:cache(value)});}
+    const mEnd=materialRows.length,pEnd=processRows.length,plEnd=platingRows.length,oEnd=outsourceRows.length;
+    const lineValue=(key:IeLineAdjustmentKey,value:CellValue)=>adjusted(target(key),value);
+    const material=lineValue('material',guardedSum('材料填报','J',mStart,mEnd,cost.material));
+    const loss=lineValue('materialLoss',guardedSum('材料填报','K',mStart,mEnd,cost.materialLoss,excel?2:6));
+    const materialTotal=lineValue('materialWithLoss',sumCells([effectiveRef(target('material')),effectiveRef(target('materialLoss'))],cost.materialWithLoss));
+    const direct=lineValue('process',guardedSum('工序填报','H',pStart,pEnd,cost.process));
+    const plating=lineValue('plating',guardedSum('电镀填报','G',plStart,plEnd,cost.plating));
+    const outside=lineValue('outsourcing',guardedSum('外发填报','G',oStart,oEnd,cost.outsourcing));
+    const outsideTotal=lineValue('outsourcingTotal',sumCells([effectiveRef(target('plating')),effectiveRef(target('outsourcing'))],cost.outsourcingTotal));
+    const indirectItems=[['indirectLabor','间接人工',5],['rent','房租',3],['water','水费',.2],['electricity','电费',2],['depreciation','折旧',2],['supplies','辅料',1.5]] as const;
+    for(const [key,label,value]of indirectItems){const r=indirectRows.length+1;indirectRows.push([line.id,line.model,label,value,lineValue(key,draftFormula(`IF(ISNUMBER(${ref('间接费用',`D${r}`)}),${ref('间接费用',`D${r}`)},"")`,value))]);}
+    const indirect=lineValue('indirect',guardedSum('间接费用','E',indStart,indirectRows.length,cost.indirect));
+    const labor=lineValue('laborTotal',sumCells([effectiveRef(target('process')),effectiveRef(target('indirect'))],cost.laborTotal));
+    const production=lineValue('productionCost',sumCells([effectiveRef(target('materialWithLoss')),effectiveRef(target('outsourcingTotal')),effectiveRef(target('laborTotal'))],cost.productionCost));
+    const fx=ref('填报说明','$B$5'), productionRef=effectiveRef(target('productionCost'));
+    const productionUsd=lineValue('productionCostUsd',draftFormula(`IF(AND(ISNUMBER(${productionRef}),ISNUMBER(${fx}),${fx}>0),ROUND(${productionRef}/${fx},6),"")`,cost.productionCostUsd));
+    const factory=lineValue('factoryPriceCny',draftFormula(`IF(ISNUMBER(${productionRef}),ROUND(${productionRef}*1.3,6),"")`,cost.factoryPriceCny));
+    const usdOverrideRow=adjustmentRowByTarget.get(target('productionCostUsd'))!,usdInput=ref('人工调整',`D${usdOverrideRow}`),usdReason=ref('人工调整',`E${usdOverrideRow}`),usdCost=effectiveRef(target('productionCostUsd')),cnyFactory=effectiveRef(target('factoryPriceCny'));
+    const factoryUsd=lineValue('factoryPriceUsd',draftFormula(`IF(AND(ISNUMBER(${usdInput}),LEN(TRIM(${usdReason}))>0),IF(ISNUMBER(${usdCost}),ROUND(${usdCost}*1.3,6),""),IF(AND(ISNUMBER(${cnyFactory}),ISNUMBER(${fx}),${fx}>0),ROUND(${cnyFactory}/${fx},6),""))`,cost.factoryPriceUsd));
+    const cells:Cells={C3:short(quote.customerCode,24,'详见填报说明'),E3:short(line.model,24,'详见填报说明'),G3:short(line.drawingNo,24,'详见填报说明'),H3:'报价编号',I3:short(quote.quoteNo,24,'详见填报说明'),I2:'人民币',B4:internal?'内部工程核价':'未审填报草稿',C4:internal&&quote.status==='released'?'已复核':'待核对',D4:`R${quote.revision} V${quote.version}`,E4:null,F4:{formula:`IF(AND(ISNUMBER(${fx}),${fx}>0),TEXT(${fx},"0.######"),"汇率待填")`,value:quote.exchangeRateCnyPerUsd&&quote.exchangeRateCnyPerUsd>0?String(quote.exchangeRateCnyPerUsd):'汇率待填'},G4:null,H4:'成本加价30%',I4:null,G38:'分项',L4:draftFormula(`IF(ISNUMBER(${fx}),${fx},"")`,quote.exchangeRateCnyPerUsd)};
+    for(let i=0;i<29;i++){const row=7+i,m=materials[i],src=mStart+i;for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!m)continue;
+      if(i===28&&materials.length>29){cells[`D${row}`]=`其余 ${materials.length-28} 项见材料填报`;const values=materialRows.slice(src-1,mEnd).map(v=>cache(v[9]));cells[`H${row}`]=guardedSum('材料填报','J',src,mEnd,values.some(v=>v===null)?null:ieCostSum(values as number[]));continue;}
+      cells[`D${row}`]=textRef('材料填报',`C${src}`,m.name,24,`材料填报第${src}行`);cells[`E${row}`]=textRef('材料填报',`D${src}`,m.specification,28,`见材料填报第${src}行`);cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`G${src}`)}),${ref('材料填报',`G${src}`)},"")`,m.usage);cells[`G${row}`]=draftFormula(`IF(COUNT(${ref('材料填报',`F${src}`)},${ref('材料填报',`H${src}`)})=2,${ref('材料填报',`F${src}`)}*${ref('材料填报',`H${src}`)},"")`,m.basePrice===null||m.coefficient===null?null:m.basePrice*m.coefficient);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`J${src}`)}),${ref('材料填报',`J${src}`)},"")`,cache(materialRows[src-1][9]));cells[`I${row}`]={formula:`IF(${ref('材料填报',`L${src}`)}=1,"不适用见附页",IF(ISNUMBER(${ref('材料填报',`I${src}`)}),TEXT(${ref('材料填报',`I${src}`)}*100,"0.######")&"%详见附页","损耗待填"))`,value:m.notApplicable?'不适用见附页':`${round((m.lossRate??.1)*100)}%详见附页`};}
+    for(let i=0;i<8;i++){const row=42+i,o=outsourced[i],source=outsourceRefs[i];for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!o)continue;
+      if(i===7&&outsourced.length>8){cells[`C${row}`]=`其余 ${outsourced.length-7} 项见外发填报`;const rest=outsourceRefs.slice(7);cells[`H${row}`]=sumCells(rest.map(v=>ref(v.sheet,`G${v.row}`)),rest.some(v=>v.value===null)?null:ieCostSum(rest.map(v=>v.value!)));continue;}
+      const {sheet,row:src}=source;cells[`C${row}`]=textRef(sheet,`D${src}`,o.name,20,`${sheet}第${src}行`);cells[`D${row}`]=textRef(sheet,`J${src}`,o.part||'',20,'部位见子表');cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`K${src}`)}),${ref(sheet,`K${src}`)},"")`,o.usage===undefined?1:o.usage);cells[`G${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`E${src}`)}),${ref(sheet,`E${src}`)},"")`,o.unitPrice);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`G${src}`)}),${ref(sheet,`G${src}`)},"")`,source.value);cells[`I${row}`]=o.notApplicable?'不适用见附页':`详见${sheet}`;}
+    Object.assign(cells,{H37:material,H38:loss,H39:materialTotal,H50:outsideTotal,F53:1,G53:direct,H53:draftFormula('IF(ISNUMBER(G53),G53,"")',cost.process),H61:labor,H62:production,H63:productionUsd,H66:'成本×1.3出厂价',I66:factory,H67:'出厂价USD/副',I67:factoryUsd,H68:'销售毛利率',I68:draftFormula('IF(AND(ISNUMBER(I66),I66>0,ISNUMBER(H62)),(I66-H62)/I66,"")',cost.factoryPriceCny&&cost.productionCost!==null?(cost.factoryPriceCny-cost.productionCost)/cost.factoryPriceCny:null)});
     for(let row=53;row<=60;row++)for(const c of ['D','E','I'])cells[`${c}${row}`]=null;
-    [5,3,.2,2,2,1.5].forEach((amount,i)=>{cells[`F${54+i}`]=1;cells[`G${54+i}`]=amount;cells[`H${54+i}`]=draftFormula(`F${54+i}*G${54+i}`,amount);});for(const c of 'CDEFGHI')cells[`${c}60`]=null;
-    for(const [cell,source,value] of [['C66','H39',materialTotal],['C67','H50',outside],['C68','H61',labor],['F66','H38',cost.materialLoss],['F67','H59',1.5]] as const)cells[cell]=draftFormula(`IF(ISNUMBER(${source}),${source},"")`,value);
+    indirectItems.forEach(([key],i)=>{const row=54+i,source=ref('间接费用',`E${indStart+i}`);cells[`F${row}`]=1;cells[`G${row}`]=draftFormula(`IF(ISNUMBER(${source}),${source},"")`,cost[key]);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(G${row}),G${row},"")`,cost[key]);});for(const c of 'CDEFGHI')cells[`${c}60`]=null;
+    for(const [cell,source,value]of [['C66','H39',cost.materialWithLoss],['C67','H50',cost.outsourcingTotal],['C68','H61',cost.laborTotal],['F66','H38',cost.materialLoss],['F67','H59',cost.supplies]] as const)cells[cell]=draftFormula(`IF(ISNUMBER(${source}),${source},"")`,value);
     cells.F68=draftFormula('IF(COUNT(I66,H62)=2,I66-H62,"")',cost.factoryPriceCny===null||cost.productionCost===null?null:round(cost.factoryPriceCny-cost.productionCost));for(const c of ['D','G'])for(let row=66;row<=68;row++){const source=`${c==='D'?'C':'F'}${row}`,value=cache(cells[source]);cells[`${c}${row}`]=draftFormula(`IF(AND(ISNUMBER(${source}),ISNUMBER($I$66),$I$66>0),${source}/$I$66,"")`,value===null||!cost.factoryPriceCny?null:value/cost.factoryPriceCny);}
+    const manualPrinted=costs.adjustmentCells.some(c=>c.applied&&c.target.startsWith(`line:${encodeURIComponent(line.id)}:`));
+    if(manualPrinted)cells.H4='含人工调整';
+    for(const [key,address]of [['material','I37'],['materialLoss','I38'],['materialWithLoss','I39'],['outsourcingTotal','I50'],['process','I53'],['indirectLabor','I54'],['rent','I55'],['water','I56'],['electricity','I57'],['depreciation','I58'],['supplies','I59'],['laborTotal','I61'],['productionCost','I62'],['productionCostUsd','I63']] as const)if(calculationByTarget.get(target(key))?.applied)cells[address]='人工调整见附页';
+    if(calculationByTarget.get(target('factoryPriceCny'))?.applied)cells.H66='人工出厂价CNY';
+    if(calculationByTarget.get(target('factoryPriceUsd'))?.applied)cells.H67='人工出厂价USD';
     entries[mapping.path]=strToU8(patchSheet(textEntry(entries,mapping.path),cells));
     brief.push(['款式信息',`${mapping.sheetName} / ${line.model} / 客款 ${line.customerModel} / 色号 ${line.color} / 图号 ${line.drawingNo} / 图纸版次 ${line.drawingRevision} / 数量 ${line.quantityMin??'待填'}–${line.quantityMax??'待填'}`],['结构分析',line.structureNotes],['报价范围',line.scopeNotes]);
+    // These summary rows are outside each detail range and cannot double count.
+    processRows.push([line.id,line.model,'本款直接人工合计',null,null,null,null,direct]);
+    platingRows.push([line.id,line.model,'本款电镀合计',null,null,null,plating]);outsourceRows.push([line.id,line.model,'本款外发合计',null,null,null,outside]);
+    indirectRows.push([line.id,line.model,'本款间接费用合计',null,indirect]);
   }
-  scrubSharedStrings(entries,mappings.map(m=>m.path));
-  appendGridSheet(entries,'材料填报',materialRows,[20,20,26,34,14,16,14,14,18,18,18,20,36,36,36,16,16]);
-  appendGridSheet(entries,'工序填报',processRows,[20,20,28,24,10,18,16,18,18,20,36,36]);
-  appendGridSheet(entries,'外发填报',outsourceRows,[20,20,18,28,18,20,18,36,36]);
-  const charges: GridRow[]=[['收费登记编号','费用名称','适用款式','收费状态','登记金额CNY','本次收费CNY（公式）','来源报价及版本','收费证据','备注']];
+  const charges:GridRow[]=[['收费登记编号','费用名称','适用款式','收费状态','登记金额CNY','本次收费CNY（公式）','来源报价及版本','收费证据','备注']];
   for(const t of quote.tooling){const row=charges.length+1;charges.push([t.toolingId||t.id,t.name,t.lineIds.map(id=>quote.lines.find(l=>l.id===id)?.model||id).join('、'),({charge:'本次单独收费',already_charged:'已有收费记录待核对凭证',included_in_batch:'关联报价已列费',not_applicable:'不适用'}[t.chargeMode]),t.amount,draftFormula(`IF(D${row}="本次单独收费",IF(ISNUMBER(E${row}),E${row},""),0)`,t.chargeMode==='charge'?t.amount:0),`${t.chargeQuoteId}${t.chargeVersion?` V${t.chargeVersion}`:''}`,t.evidence,t.notes]);}
   if(!quote.tooling.length)charges.push(['待登记','尚未明确单列费用；不可理解为免收']);
   const end=charges.length,duplicate=new Set(quote.tooling.map(t=>t.toolingId||t.id)).size!==quote.tooling.length;
-  charges.push(['本次费用合计（不摊单价）',null,null,null,null,draftFormula(quote.tooling.length?`IF(AND(COUNT(F2:F${end})=${quote.tooling.length},SUMPRODUCT(--(COUNTIF(A2:A${end},A2:A${end})>1))=0),SUM(F2:F${end}),"")`:'""',!quote.tooling.length||duplicate?null:costs.toolingChargeCny)]);
+  const toolingFormula=quote.tooling.length?`IF(AND(COUNT(${ref('单列费用',`F2:F${end}`)})=${quote.tooling.length},SUMPRODUCT(--(COUNTIF(${ref('单列费用',`A2:A${end}`)},${ref('单列费用',`A2:A${end}`)})>1))=0),SUM(${ref('单列费用',`F2:F${end}`)}),"")`:'""';
+  charges.push(['本次费用合计（不摊单价）',null,null,null,null,duplicate||!quote.tooling.length?draftFormula('""',null):adjusted(ieAdjustmentTargets.tooling,draftFormula(toolingFormula,!quote.tooling.length?null:costs.toolingChargeCny))]);
   if(duplicate)brief.push(['共用模具待核对','登记编号重复，费用合计保持空白；请合并适用款式，避免重复收费。']);
   options.issues.forEach((issue,i)=>brief.push([`待核验 ${i+1}`,issue]));
+  costs.warnings.forEach((warning,i)=>brief.push([`核价提示 ${i+1}`,warning]));
+  scrubSharedStrings(entries,mappings.map(m=>m.path));
+  appendGridSheet(entries,'材料填报',materialRows,[20,20,26,34,14,16,14,14,18,18,18,20,36,36,36,16,16,22]);
+  appendGridSheet(entries,'电镀填报',platingRows,[20,20,18,28,18,20,18,36,36,28,20]);
+  appendGridSheet(entries,'外发填报',outsourceRows,[20,20,18,28,18,20,18,36,36,28,20]);
+  appendGridSheet(entries,'工序填报',processRows,[20,20,28,24,10,18,16,18,18,20,36,36,20]);
+  appendGridSheet(entries,'间接费用',indirectRows,[20,20,24,20,24]);
+  appendGridSheet(entries,'人工调整',adjustmentRows,[46,40,22,24,48,22,32,40,24,40]);
   appendGridSheet(entries,'单列费用',charges,[28,28,32,28,20,20,34,48,48]);
-  appendGridSheet(entries,'填报说明',brief,[28,110]);
-  appendAttachmentManifest(entries,quote.attachmentRefs);
+  appendGridSheet(entries,'填报说明',brief,[28,110]);appendAttachmentManifest(entries,quote.attachmentRefs);
   entries['xl/workbook.xml']=strToU8(textEntry(entries,'xl/workbook.xml').replace(/<calcPr\b[^>]*\/>/,'<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>'));
   return {bytes:zipSync(entries,ZIP_OPTIONS),templateMode:options.template?'original':'generic',formulaVersion};
 }

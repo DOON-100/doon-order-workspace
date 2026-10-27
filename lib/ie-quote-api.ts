@@ -6,6 +6,7 @@ import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notific
 import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
 import {ieAttachmentGet,ieAttachmentPost} from './ie-quote-attachment-api';
 import {ieHandoffGet,ieHandoffPost} from './ie-quote-handoff-api';
+import {validateIeMaterialNameReferences} from './ie-material-names';
 import {canConfigureIeQuotes,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
 import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
 
@@ -72,9 +73,9 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
  configured(s);
  if(action==='ie-quote-save'){
   engineering(s,m);const {id,version,...fields}=parse(ieQuoteInput,await req.json()),before=id?quote(s,m,id):null;
-  if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');}
+  if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');if(before.manualAdjustments?.length&&fields.manualAdjustments===undefined)throw new AppError('此报价包含人工调整，请刷新到支持人工调整的表格后保存，避免覆盖已确认的人工金额。',409);}
   const a=all(s,'customer_account').find(a=>a.id===fields.customerAccountId) as CustomerAccount|undefined;if(!a?.active)throw new AppError('请选择有效的客户档案。');
-  validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:[...new Set([...(before?.preparedByIds||[]),m.id])],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  const nameReferenceIssue=validateIeMaterialNameReferences(s,fields);if(nameReferenceIssue)throw new AppError(nameReferenceIssue);validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:[...new Set([...(before?.preparedByIds||[]),m.id])],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   q.attachmentRefs=(before?.attachmentRefs||[]).filter(ref=>fields.lines.some(line=>line.id===ref.lineId));
   return persist(s,m,q,before,before?'保存工程报价草稿':'创建工程报价草稿');
  }
