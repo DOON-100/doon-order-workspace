@@ -1,4 +1,4 @@
-export const version = '0.8.0';
+export const version = '0.9.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -19,6 +19,12 @@ export const salesCommands = [
   ['quotes','version','version <id> <version>','读取指定报价历史版本'], ['quotes','export-completed','export-completed --output <file.xlsx>','导出当前业务组或全部有权查看的已完成报价总表'],
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
+export const salesWriteCommands = [
+  {name:'sales inquiries create', usage:'sales inquiries create --input <file> --request-id <uuid>', description:'创建询价需求记录并回读', effect:'business-write'},
+  {name:'sales projects create', usage:'sales projects create --input <file> --request-id <uuid>', description:'创建客户开发项目并回读', effect:'business-write'},
+  {name:'sales customers profile-update', usage:'sales customers profile-update --input <file> --version <number> --request-id <uuid>', description:'更新客户通用资料的指定字段并回读', effect:'business-write'},
+  {name:'sales customers schedule-set', usage:'sales customers schedule-set --input <file> --version <number> --request-id <uuid>', description:'安排客户下次跟进并回读', effect:'business-write'},
+] as const;
 export const orderCommands = [
   ['sales','orders','list','list','查询获授权的订单明细'], ['sales','orders','show','show <id>','查看订单明细、跟进和附件目录'],
   ['sales','sources','list','list','查询销售原单证据'], ['sales','sources','show','show <id>','查看原单逐行字段与来源位置'], ['sales','sources','export','export <id> --output <file.xlsx>','导出单张获授权销售原单 XLSX'],
@@ -52,7 +58,7 @@ export const financeCommands=[
  ['reconciliations','list','list','查询供应商对账记录'],['reconciliations','show','show <id>','查看供应商对账'],['reconciliations','history','history <id>','查看供应商对账历史'],
  ['complaints','list','list','查询客户投诉记录'],['complaints','show','show <id>','查看客户投诉'],['complaints','history','history <id>','查看客户投诉历史'],
 ].map(([resource,action,usage,description])=>({name:`finance ${resource} ${action}`,resource,action,usage:`finance ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -60,4 +66,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

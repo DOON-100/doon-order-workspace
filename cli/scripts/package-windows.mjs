@@ -61,7 +61,7 @@ async function main() {
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
-  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
+  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));
@@ -92,7 +92,8 @@ async function main() {
   delete isolatedEnv.NODE_PATH;
   delete isolatedEnv.NODE_OPTIONS;
   const result = JSON.parse(run(path.join(extracted, 'node.exe'), [path.join(extracted, 'dist/index.js'), 'commands', '--json'], extracted, isolatedEnv));
-  if (!result.ok || result.command !== 'commands' || result.data.length !== 88 || !result.data.some(row => row.name === 'finance records history')) throw Error('Relocated CLI command catalog is incomplete');
+  const {commands} = await import('../dist/catalog.js');
+  if (!result.ok || result.command !== 'commands' || JSON.stringify(result.data.map(row => row.name)) !== JSON.stringify(commands.map(row => row.name))) throw Error('Relocated CLI command catalog is incomplete');
   if (run(path.join(extracted, 'node.exe'), [path.join(extracted, 'dist/index.js'), '--version'], extracted, isolatedEnv).toString().trim() !== pkg.version) throw Error('CLI and release versions disagree');
   const installed = path.join(work, 'installed');
   await fs.mkdir(installed);

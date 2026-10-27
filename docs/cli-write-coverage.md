@@ -2,7 +2,7 @@
 
 基线：`2cd873e`，2026-10-27。本页由 `lib/department-workspace-navigation.ts` 的 `departmentRouteOrder` 明确列出的入口逐一登记；动态生成或落入管理组的旧入口仍待逐页扫描。清单是盘点起点，不表示这些页面可见于每个员工，也不表示已完成逐表单/字段/接口/权限核验。字段、动作、角色与范围、依赖和验收均须在对应批次补齐；不能将页面入口数量当作完成数量。页面表中的候选源码是按栏目归集的排查入口，不表示每个源码均适用于该页面，必须逐项核对。
 
-业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询覆盖与实际 `cli/src/catalog.ts` 对照。所有业务写入仍未开放；候选接口及批次见 [写入阶段计划](cli-write-implementation-plan.md)，处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
+业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询覆盖与实际 `cli/src/catalog.ts` 对照。W1 已接入客户资料更新、跟进排程、项目及询价创建，其余写入未开放；候选接口及批次见 [写入阶段计划](cli-write-implementation-plan.md)，处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
 
 | 栏目 | 页面/入口标识 | 计划批次 | 表单与字段 | 动作/接口 | 角色与记录范围 | 验收 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -135,7 +135,7 @@
 
 | 页面 / 表单 | 动作与字段 | 权限、版本和限制 | 当前状态 |
 | --- | --- | --- | --- |
-| 客户通用资料 | `customer-workflow-profile-save`：`token`, `customerId`, `version`, `patch`；patch 字段定义在 `lib/customer-workflow.ts` | 当前客户责任范围；普通资料和银行资料有不同写权限，启用状态与策略均须满足；服务器合并 patch 并验证完整结果，token 为 UUID、版本可为 0 | 查询部分已接入；写入未接入，字段级权限须逐字段验收 |
+| 客户通用资料 | `customer-workflow-profile-save`：`token`, `customerId`, `version`, `patch`；patch 字段定义在 `lib/customer-workflow.ts` | 当前客户责任范围；普通资料和银行资料有不同写权限，启用状态与策略均须满足；服务器合并 patch 并验证完整结果，token 为 UUID、版本可为 0 | 查询、非银行/非快递账号资料字段更新已接入；其余字段级权限须逐字段验收 |
 | 客户跟进与排程 | `customer-workflow-followup`：token、客户、版本、日期、渠道、内容、结果、处理、下一步、证据；`customer-workflow-schedule`：token、客户、版本、下一步、日期 | 客户责任内的已启用账号及 workflow 权限；同键重放走服务器去重；日期、继续/暂停条件分别校验 | 待实现写入 |
 | 项目开发跟进 | `customer-project-followup-save`：token、id、version、ownerId、customerId、projectId、title、category、stars、status、日期、备注、下一步、checklist | 活跃的 admin/sales/clerk/pmc；非管理员不能改派负责人；关联客户要求操作人和负责人均有客户写权限；更新版本与 token 校验 | 待实现写入 |
 | 跟进邮件归类／转项目 | `customer-project-followup-mail-classify`、`customer-project-followup-promote`；字段详见 `lib/customer-project-followup-api.ts` | 当前跟进或邮件写权限；原负责人、客户和项目组关联一致；使用 UUID token 及当前版本；历史迁入 `customer-project-followup-import` 仅管理员 | 待实现写入；迁入和附件另审计 |

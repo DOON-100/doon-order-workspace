@@ -1,5 +1,5 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
 import type {EngineeringResource, EngineeringAction} from './engineering.js';
@@ -23,7 +23,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     if (json) process.stdout.write(machineJson({schema: outputSchema, ok: true, command, data}));
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
-      else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
+      else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分功能' : '待接入'}\n`);
       else if (['sales ','service ','engineering ','planning ','purchasing ','operations ','finance '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
@@ -65,6 +65,11 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
   for (const resource of ['teams','customers','projects','inquiries','quotes'] as const) {
     const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',inquiries:'询价评估',quotes:'客户报价'}[resource]);
+    if (resource === 'customers') for (const spec of salesWriteCommands.filter(c=>c.name.startsWith('sales customers '))) {
+      const action=spec.name.endsWith('profile-update')?'profile-update':'schedule-set';
+      group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本，可为 0').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,options.version,options.requestId)));
+    }
+    if(resource==='projects'||resource==='inquiries'){const action=resource==='projects'?'project-create':'inquiry-create';const spec=salesWriteCommands.find(c=>c.name===`sales ${resource} create`)!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,'',options.requestId)));}
     for (const spec of salesCommands.filter(c => c.resource === resource)) {
       const command = group.command(spec.action).description(spec.description).option('--team <id>', '业务组编号；不填表示全部获授权范围');
       if (spec.action === 'export-completed') command.requiredOption('--output <file.xlsx>', '新输出文件，已有文件拒绝覆盖');

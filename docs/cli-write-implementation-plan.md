@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1–W11 未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1 进行中；W2–W11 未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -43,7 +43,7 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | 批次 | 订单流程和表单 | 预设接口或需补能力 | 状态 |
 | --- | --- | --- | --- |
 | W0 | 写入框架、登录与权限复用、输入校验、限定接口、错误处理、回读、隔离测试、入口与分发方案 | [入口覆盖清单](cli-write-coverage.md)已登记；真实处理器合成写入验证员工权限、回读、去重和原记录保全；d5a7bde 下载包 88 条命令通过隔离验收。业务写入命令从 W1 开始接入；隔离安装残留因执行策略受阻待清理 | 基础开发与隔离验收完成 |
-| W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | `customer-save`、`customer-project-*`、`customer-project-followup-*`、`customer-workflow-*`、`process-save`；项目回收/恢复分别核对 `customer-project-trash`、`customer-project-restore`；其他表单待审计 | 未开始 |
+| W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | 客户通用资料字段更新、下次跟进排程、项目和询价创建开发中，复用 `customer-workflow-profile-save/schedule` 、`customer-project-save` 与 `process-save`；客户主档、项目、跟进记录、询价等仍待逐项接入，旧主档覆盖风险须先处理 | 进行中 |
 | W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | `ie-quote-save/review/submit`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 未开始 |
 | W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；导入和金蝶相关动作逐一核实是否涉及外部系统 | 未开始 |
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；确认、上传和修改要保留来源版本 | 未开始 |

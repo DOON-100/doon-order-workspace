@@ -158,7 +158,7 @@ try{
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
     const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1',records:'charge1',receivables:'receivable1',reconciliations:'recon1',complaints:'complaint1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
-    for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
+    for(const spec of [...commands.filter(c=>c.name!=='logout'&&c.effect!=='business-write'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
       if(parts.length===1)args.push(...argumentsFor[spec.name]);
       else{
@@ -176,7 +176,7 @@ try{
       if(spec.name==='logout')assert.equal(value.data.serverRevoked,true);
       else assert.deepEqual(snapshot(),before,'Business calls must preserve records and revision: '+spec.name);
     }
-    assert.equal(testedCommands.length,commands.length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
+    assert.equal(testedCommands.length,commands.filter(c=>c.effect!=='business-write').length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
   }
   assert.deepEqual(snapshot().records,before.records);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
   // W0 contract: run the shared write framework against the real process handler,
@@ -184,7 +184,7 @@ try{
   {
     const {ApiClient}=await import('../../dist/client.js'),{routes}=await import('../../dist/routes.js');
     const {executeWrite}=await import('../../dist/write-operation.js');
-    const route='/api/workspace/process-save',inputFile=path.join(dir,'synthetic-write.json');
+    const route='/api/workspace/process-save',inputFile=path.join(dir,'synthetic-write.json'),originalRoute=routes[route];
     const beforeWrite=snapshot(),config=await services.sales_a.state.config();
     const sessionA=await services.sales_a.state.session(config),sessionB=await services.sales_b.state.session(config);
     const client=new ApiClient(config),token='00000000-0000-4000-8000-000000000001';
@@ -207,7 +207,66 @@ try{
       for(const old of beforeWrite.records)assert.equal(originals.get(old.id),old.data,'Original record must not be changed');
       assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
       pass();
-    }finally{delete routes[route];}
+    }finally{if(originalRoute)routes[route]=originalRoute;else delete routes[route];}
+  }
+  // W1: current user, other customer denied, idempotent replay, and preserved private fields.
+  {
+    const writeA=services.sales_a.foundation.salesWrite(),writeB=services.sales_b.foundation.salesWrite();
+    const profileInput=path.join(dir,'profile-input.json'),scheduleInput=path.join(dir,'schedule-input.json'),projectInput=path.join(dir,'project-input.json'),inquiryInput=path.join(dir,'inquiry-input.json');
+    const profileToken='11111111-1111-4111-8111-111111111111',scheduleToken='22222222-2222-4222-8222-222222222222',projectToken='55555555-5555-4555-8555-555555555555',inquiryToken='66666666-6666-4666-8666-666666666666';
+    await fs.writeFile(profileInput,JSON.stringify({customerId:'c1',patch:{legalName:'Synthetic Updated'}}));
+    await fs.writeFile(scheduleInput,JSON.stringify({customerId:'c1',next:'Synthetic follow-up',nextDate:'2026-12-01'}));
+    await fs.writeFile(projectInput,JSON.stringify({customerId:'c1',title:'Synthetic project'}));
+    await fs.writeFile(inquiryInput,JSON.stringify({customerId:'c1',title:'Synthetic inquiry',details:{requirement:'Synthetic',quantity:0}}));
+    const beforeChanges=snapshot();
+    const unsafeInput=path.join(dir,'unsafe-input.json');await fs.writeFile(unsafeInput,JSON.stringify({customerId:'c1',patch:{bankPaymentInfo:'SYNTHETIC_FORBIDDEN'}}));
+    await assert.rejects(writeA.execute('profile-update',unsafeInput,'1','44444444-4444-4444-8444-444444444444'),{code:'INVALID_INPUT'});
+    await assert.rejects(writeB.execute('profile-update',profileInput,'1','33333333-3333-4333-8333-333333333333'),{code:'FORBIDDEN'});
+    await assert.rejects(writeB.execute('project-create',projectInput,'','88888888-8888-4888-8888-888888888888'),{code:'FORBIDDEN'});
+    assert.deepEqual(snapshot(),beforeChanges);
+    const updated=await writeA.execute('profile-update',profileInput,'1',profileToken);
+    assert.equal(updated.record.profile.version,2);assert.equal(updated.record.profile.fields.legalName,'Synthetic Updated');
+    assert(!JSON.stringify(updated).includes('SYNTHETIC_BANK_PRIVATE'));
+    assert.deepEqual(await writeA.execute('profile-update',profileInput,'1',profileToken),updated);
+    const conflicting=path.join(dir,'conflicting-input.json');await fs.writeFile(conflicting,JSON.stringify({customerId:'c1',patch:{legalName:'Conflicting'}}));
+    await assert.rejects(writeA.execute('profile-update',conflicting,'1',profileToken),{code:'CONFLICT'});
+    await assert.rejects(writeA.execute('profile-update',profileInput,'1','dddddddd-dddd-4ddd-8ddd-dddddddddddd'),{code:'CONFLICT'});
+    const scheduled=await writeA.execute('schedule-set',scheduleInput,'0',scheduleToken);
+    assert.equal(scheduled.record.workflow.version,1);assert.equal(scheduled.record.workflow.next,'Synthetic follow-up');
+    assert.deepEqual(await writeA.execute('schedule-set',scheduleInput,'0',scheduleToken),scheduled);
+    const project=await writeA.execute('project-create',projectInput,'',projectToken);assert.equal(project.record.customerId,'c1');assert.equal(project.record.title,'Synthetic project');
+    assert.deepEqual(await writeA.execute('project-create',projectInput,'',projectToken),project);
+    const conflictingProject=path.join(dir,'conflicting-project.json');await fs.writeFile(conflictingProject,JSON.stringify({customerId:'c1',title:'Different project'}));
+    await assert.rejects(writeA.execute('project-create',conflictingProject,'',projectToken),{code:'CONFLICT'});
+    await assert.rejects(writeB.execute('inquiry-create',inquiryInput,'','77777777-7777-4777-8777-777777777777'),{code:'FORBIDDEN'});
+    const inquiry=await writeA.execute('inquiry-create',inquiryInput,'',inquiryToken);assert.equal(inquiry.record.type,'rfq');assert.equal(inquiry.record.details.quantity,0);
+    assert.deepEqual(await writeA.execute('inquiry-create',inquiryInput,'',inquiryToken),inquiry);
+    const finalState=snapshot(),oldById=new Map(beforeChanges.records.map(row=>[row.id,row.data]));
+    const finalById=new Map(finalState.records.map(row=>[row.id,row.data]));
+    for(const [id,data] of oldById)if(id!=='profile1')assert.equal(finalById.get(id),data,'Unrelated record changed or removed');
+    const profile=JSON.parse(finalById.get('profile1')),oldProfile=JSON.parse(oldById.get('profile1'));
+    assert.deepEqual({...profile.fields,legalName:oldProfile.fields.legalName},oldProfile.fields);
+    assert.equal(profile.fields.bankPaymentInfo,'SYNTHETIC_BANK_PRIVATE');
+    assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
+    if(processState){
+      await new FoundationService(processState).login(async()=>({username:'sales_a',password:'Synthetic-Only-2026!'}));
+      const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
+      const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
+      for(const [action,file,version,token] of [['profile-update',profileInput,'2','99999999-9999-4999-8999-999999999999'],['schedule-set',scheduleInput,'1','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa']]){
+        const args=['sales','customers',action,'--input',file,'--version',version,'--request-id',token,'--json'];
+        const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
+        assert.equal(result.ok,true);testedCommands.push('sales customers '+action);
+      }
+      {const args=['sales','projects','create','--input',projectInput,'--request-id','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales projects create');}
+      {const args=['sales','inquiries','create','--input',inquiryInput,'--request-id','cccccccc-cccc-4ccc-8ccc-cccccccccccc','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales inquiries create');}
+      assert.equal(testedCommands.length,commands.length);
+      const afterCli=snapshot(),afterCliById=new Map(afterCli.records.map(row=>[row.id,row.data]));
+      for(const [id,data] of oldById)if(id!=='profile1')assert.equal(afterCliById.get(id),data,'Unrelated record changed or removed by CLI');
+      assert.equal(JSON.parse(afterCliById.get('profile1')).fields.bankPaymentInfo,'SYNTHETIC_BANK_PRIVATE');
+      assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
+      await new FoundationService(processState).logout();
+    }
+    pass();
   }
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
@@ -217,4 +276,4 @@ try{
   if(path.dirname(target)!==base||!path.basename(target).startsWith('cli-test-'))throw Error('Refusing cleanup outside the generated test directory');
   await fs.rm(target,{recursive:true,force:true});assert.equal(await fs.stat(target).then(()=>true,()=>false),false);
 }
-console.log(JSON.stringify({passed:checks,syntheticOnly:true,productionRequests:0,businessRecordsAndOriginalBytesPreserved:true,testDirectoryRemoved:true,testedCommands}));
+console.log(JSON.stringify({passed:checks,syntheticOnly:true,productionRequests:0,unrelatedBusinessRecordsAndOriginalBytesPreserved:true,testDirectoryRemoved:true,testedCommands}));
