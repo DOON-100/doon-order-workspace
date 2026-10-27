@@ -61,13 +61,13 @@ async function main() {
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
-  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'errors.js', 'index.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'service.js', 'state.js'];
+  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'service.js', 'state.js'];
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));
   for (const filename of distFiles) await fs.copyFile(path.join(root, 'dist', filename), path.join(stage, 'dist', filename));
   // Exact source allowlist: no npmrc, local settings, tests, databases, or checkout copy.
-  for (const filename of ['README.md', 'docs/commands.md', 'docs/agent-usage.md', 'docs/sales.md', 'docs/orders.md', 'docs/engineering.md', 'docs/planning.md']) {
+  for (const filename of ['README.md', 'docs/commands.md', 'docs/agent-usage.md', 'docs/sales.md', 'docs/orders.md', 'docs/engineering.md', 'docs/planning.md', 'docs/operations.md']) {
     await fs.mkdir(path.dirname(path.join(stage, filename)), {recursive: true});
     if (filename === 'README.md') {
       const readme = (await fs.readFile(path.join(root, filename), 'utf8')).replaceAll('../docs/', 'https://github.com/DOON-100/doon-order-workspace/blob/main/docs/');
@@ -92,7 +92,7 @@ async function main() {
   delete isolatedEnv.NODE_PATH;
   delete isolatedEnv.NODE_OPTIONS;
   const result = JSON.parse(run(path.join(extracted, 'node.exe'), [path.join(extracted, 'dist/index.js'), 'commands', '--json'], extracted, isolatedEnv));
-  if (!result.ok || result.command !== 'commands' || result.data.length !== 59 || !result.data.some(row => row.name === 'purchasing purchases history')) throw Error('Relocated CLI command catalog is incomplete');
+  if (!result.ok || result.command !== 'commands' || result.data.length !== 76 || !result.data.some(row => row.name === 'operations shipments history')) throw Error('Relocated CLI command catalog is incomplete');
   if (run(path.join(extracted, 'node.exe'), [path.join(extracted, 'dist/index.js'), '--version'], extracted, isolatedEnv).toString().trim() !== pkg.version) throw Error('CLI and release versions disagree');
   const installed = path.join(work, 'installed');
   await fs.mkdir(installed);

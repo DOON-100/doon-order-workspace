@@ -1,4 +1,4 @@
-export const version = '0.5.0';
+export const version = '0.6.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -38,7 +38,15 @@ export const planningCommands=[
  ['purchasing','outsource','list','list','查询获授权外协单'],['purchasing','outsource','show','show <id>','查看外协单'],
  ['purchasing','factory-orders','list','list','查询工厂内部订单版本'],['purchasing','factory-orders','show','show <id>','查看工厂内部订单版本'],
 ].map(([namespace,resource,action,usage,description])=>({name:`${namespace} ${resource} ${action}`,namespace,resource,action,usage:`${namespace} ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands];
+export const operationsCommands=[
+ ['reports','list','list','查询生产报工'],['reports','show','show <id>','查看生产报工明细'],
+ ['finished','list','list','查询成品外发任务'],['finished','show','show <id>','查看成品任务、在途与入仓状态'],['finished','history','history <id>','查询成品任务事件摘要'],
+ ['quality','list','list --type <type>','查询指定质检类型'],['quality','show','show <id> --type <type>','查看指定质检记录'],['quality','history','history <id> --type <type>','查看指定质检历史'],
+ ['packaging','list','list','查询包装核对记录'],['packaging','show','show <id>','查看包装核对'],['packaging','history','history <id>','查看包装历史'],
+ ['releases','list','list','查询出货放行记录'],['releases','show','show <id>','查看出货放行'],['releases','history','history <id>','查看出货放行历史'],
+ ['shipments','list','list','查询客服发货记录'],['shipments','show','show <id>','查看客服发货记录'],['shipments','history','history <id>','查看客服发货历史'],
+].map(([resource,action,usage,description])=>({name:`operations ${resource} ${action}`,resource,action,usage:`operations ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
+export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -46,4 +54,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name)]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name)]}));

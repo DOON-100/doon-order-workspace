@@ -1,9 +1,10 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
 import type {EngineeringResource, EngineeringAction} from './engineering.js';
 import type {PlanningResource, PlanningAction} from './planning.js';
+import type {OperationResource, OperationAction} from './operations.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -22,7 +23,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
-      else if (['sales ','service ','engineering ','planning ','purchasing '].some(prefix=>command.startsWith(prefix))) {
+      else if (['sales ','service ','engineering ','planning ','purchasing ','operations '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
@@ -125,6 +126,17 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
         if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
         command.action(async(...args:any[])=>result(spec.name,await foundation().planning().execute(resource as PlanningResource,spec.action as PlanningAction,command.opts(),spec.action==='list'?undefined:args[0])));
       }
+    }
+  }
+  const operations=program.command('operations').description('生产、品质、包装和发货查询');
+  for(const resource of ['reports','finished','quality','packaging','releases','shipments'] as const){
+    const group=operations.command(resource);
+    for(const spec of operationsCommands.filter(c=>c.resource===resource)){
+      const command=group.command(spec.action).description(spec.description).option('--team <id>','业务组编号').option('--order <id>','订单明细编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
+      if(!['reports','finished'].includes(resource))command.option('--customer <id>','客户档案编号');
+      if(resource==='quality')command.requiredOption('--type <type>','iqc、first-article、process-quality、outsourcing-quality 或 oqc');
+      if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
+      command.action(async(...args:any[])=>result(spec.name,await foundation().operations().execute(resource as OperationResource,spec.action as OperationAction,command.opts(),spec.action==='list'?undefined:args[0])));
     }
   }
   try {

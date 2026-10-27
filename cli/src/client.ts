@@ -27,10 +27,10 @@ export class ApiClient {
     const url = new URL(this.config.origin + route);
     for (const [key, value] of Object.entries(options.query || {})) {
       if (!spec.query?.includes(key) || typeof value !== 'string' || value.length > 160 || /[\u0000-\u001f\u007f]/.test(value)) throw new CliError('INVALID_QUERY', '该接口不接受此查询参数。', 2);
-      if (route === '/api/workspace/process-data' && (key !== 'type' || value !== 'rfq')) throw new CliError('UNSUPPORTED_OPERATION', '当前只开放询价流程查询。', 2);
+      if (route === '/api/workspace/process-data' && (key !== 'type' || !['rfq','iqc','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release'].includes(value))) throw new CliError('UNSUPPORTED_OPERATION', '该流程类型尚未开放查询。', 2);
       url.searchParams.set(key, value);
     }
-    if (route === '/api/workspace/process-data' && url.searchParams.get('type') !== 'rfq') throw new CliError('INVALID_QUERY', '询价查询必须限定 rfq。', 2);
+    if (route === '/api/workspace/process-data' && !url.searchParams.has('type')) throw new CliError('INVALID_QUERY', '流程查询必须限定类型。', 2);
     if (session) {
       const name = this.config.localHttp ? 'doon_session' : 'doon_employee_session';
       if (session.origin !== this.config.origin || !new RegExp('^' + name + '=[\\w-]{43}$').test(session.cookie)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);

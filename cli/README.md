@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本 0.5.0，批次 4。Commander.js 负责命令解析，复用中台员工登录与业务接口。支持 7 个基础命令及 52 个业务查询/导出命令，新增 PMC 核对轮次、采购、外协和工厂内部订单查询。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md) 和 [PMC与采购说明](docs/planning.md)。
+版本 0.6.0，批次 5。Commander.js 负责命令解析，复用中台员工登录与业务接口。支持 7 个基础命令及 69 个业务查询/导出命令，新增生产、品质、包装和交付查询。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md) 和 [生产与交付说明](docs/operations.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
@@ -43,7 +43,7 @@ JSON 成功结构为 `{schema:"doon-cli-output-v1",ok:true,command,data}`，失�
 
 业务请求超时 30 秒，响应上限 32 MiB；命令输出按 JSON Unicode 转义后限制为 512 KiB，超限报错，不输出部分结果。列表在客户端筛选和分页，不会降低服务器全量读取的工作量；详情的各子列表独立使用相同 limit/offset。
 
-doctor 检查 health、运行模式和当前身份，不调用管理员维护或业务数据接口。当前服务器没有公开构建版本握手；`serverBuild=null` 不证明所有业务接口兼容。`installedBusinessCommands=52` 是本机已安装命令数，`businessCommandsAvailable=null` 表示没有探测当前账号业务接口的可用性。
+doctor 检查 health、运行模式和当前身份，不调用管理员维护或业务数据接口。当前服务器没有公开构建版本握手；`serverBuild=null` 不证明所有业务接口兼容。`installedBusinessCommands=69` 是本机已安装命令数，`businessCommandsAvailable=null` 表示没有探测当前账号业务接口的可用性。
 
 ## 开发与合成测试
 

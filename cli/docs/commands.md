@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.5.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.6.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -63,6 +63,23 @@
 | `doon purchasing outsource show <id>` | 查看外协单 | business-read-and-session-last-seen |
 | `doon purchasing factory-orders list` | 查询工厂内部订单版本 | business-read-and-session-last-seen |
 | `doon purchasing factory-orders show <id>` | 查看工厂内部订单版本 | business-read-and-session-last-seen |
+| `doon operations reports list` | 查询生产报工 | business-read-and-session-last-seen |
+| `doon operations reports show <id>` | 查看生产报工明细 | business-read-and-session-last-seen |
+| `doon operations finished list` | 查询成品外发任务 | business-read-and-session-last-seen |
+| `doon operations finished show <id>` | 查看成品任务、在途与入仓状态 | business-read-and-session-last-seen |
+| `doon operations finished history <id>` | 查询成品任务事件摘要 | business-read-and-session-last-seen |
+| `doon operations quality list --type <type>` | 查询指定质检类型 | business-read-and-session-last-seen |
+| `doon operations quality show <id> --type <type>` | 查看指定质检记录 | business-read-and-session-last-seen |
+| `doon operations quality history <id> --type <type>` | 查看指定质检历史 | business-read-and-session-last-seen |
+| `doon operations packaging list` | 查询包装核对记录 | business-read-and-session-last-seen |
+| `doon operations packaging show <id>` | 查看包装核对 | business-read-and-session-last-seen |
+| `doon operations packaging history <id>` | 查看包装历史 | business-read-and-session-last-seen |
+| `doon operations releases list` | 查询出货放行记录 | business-read-and-session-last-seen |
+| `doon operations releases show <id>` | 查看出货放行 | business-read-and-session-last-seen |
+| `doon operations releases history <id>` | 查看出货放行历史 | business-read-and-session-last-seen |
+| `doon operations shipments list` | 查询客服发货记录 | business-read-and-session-last-seen |
+| `doon operations shipments show <id>` | 查看客服发货记录 | business-read-and-session-last-seen |
+| `doon operations shipments history <id>` | 查看客服发货历史 | business-read-and-session-last-seen |
 
 ## 业务栏目
 
@@ -74,10 +91,10 @@
 | 工程部 | engineering | partial |
 | PMC 计划 | planning | partial |
 | 采购与外协 | purchasing | partial |
-| 仓储物流 | warehouse | pending |
-| 生产车间 | production | pending |
-| 品质部 | quality | pending |
+| 仓储物流 | warehouse | partial |
+| 生产车间 | production | partial |
+| 品质部 | quality | partial |
 | 财务部 | finance | pending |
 | 系统管理 | management | pending |
 
-批次 4 共接入 52 个业务查询/导出命令。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 和 [PMC与采购说明](planning.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+批次 5 共接入 69 个业务查询/导出命令。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 和 [生产与交付说明](operations.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

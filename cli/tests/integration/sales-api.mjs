@@ -62,6 +62,15 @@ saveRecords([{id:'round1',kind:'pmc_round',actorId:pmc.memberId,actor:'Synthetic
 {id:'purchase-event1',kind:'purchase_event',purchaseId:'purchase1',version:1,type:'opening',quantity:0,returnPending:0,date:'2026-10-20',reference:'SYN',note:'synthetic',actor:'Synthetic',createdAt:at,event:'核对初始数量'},
 {id:'outs1',kind:'outsource',version:1,lineId:'o1',supplier:'Synthetic Supplier',process:'电镀',quantity:10,sentDate:'2026-10-20',dueDate:'2026-11-01',reference:'OUT-1',note:'synthetic',received:0,approvalStatus:'待主管审批',actor:'Synthetic',createdAt:at},
 {id:'factory1',kind:'factory_order',version:1,lineId:'o1',priorId:'',sourceEnglish:'Synthetic source',chineseProcess:'合成工艺',materialSpec:'',platingSpec:'',lensSpec:'',materialImageConfirmed:false,status:'待客服确认',createdAt:at,createdBy:'Synthetic'}]);
+const op=(id,type)=>({id,kind:'process_record',type,version:1,customerId:'c1',orderId:'o1',teamId:'t1',title:'Synthetic '+type,status:'待核实',gateStatus:'待检',details:{inspectedQuantity:null,acceptedQuantity:0,rejectedQuantity:0,quantity:0,releaseRef:'待核对'},createdAt:at,updatedAt:at,updatedBy:'Synthetic'});
+const quality=op('quality1','iqc'),additionalQuality=['first-article','process-quality','outsourcing-quality','oqc'].map(type=>op('quality-'+type,type)),packaging=op('packaging1','packaging'),release=op('release1','shipment-release');
+const ship={id:'ship1',kind:'service_record',type:'shipment',version:1,customerId:'c1',orderId:'o1',title:'Synthetic shipment',description:'',status:'open',waitingFor:'none',dueDate:'',nextFollowUp:'',details:{invoiceNo:'INV-1',quantity:1,shipDate:'',carrier:'',trackingNo:'',packingNote:''},createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+saveRecords([quality,...additionalQuality,packaging,release,...[quality,...additionalQuality,packaging,release].map(row=>({id:'history-'+row.id,kind:'process_record_revision',recordId:row.id,customerId:'c1',orderId:'o1',teamId:'t1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:row})),ship,
+{id:'ship-history',kind:'service_revision',recordId:'ship1',customerId:'c1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:ship},
+{id:'report1',kind:'report',version:1,lineId:'o1',orderNo:'SO-o1',drawing:'DRAW',color:'Black',lens:'Clear',workOrder:'W1',task:'T1',process:'包装',batch:'B1',startedAt:at,reportedAt:at,quantity:0,approval:'待核对',nativeId:'R1',identityType:'MES',source:'synthetic.xlsx',updatedAt:at,updatedBy:'Synthetic'},
+{id:'finished1',kind:'finished_supplier_task',version:1,lineId:'o1',supplierId:'sup1',supplierName:'Synthetic Supplier',orderNo:'SO-o1',drawing:'DRAW',color:'Black',lens:'Clear',productType:'frame',quantity:10,baselineStatus:'pending',template:'metal',stages:[{id:'packing',label:'包装',baseline:null,completed:null}],dueDate:'',promisedDate:'',baselineStock:null,baselineStockReturned:0,baselineRework:0,baseline:{cutoffDate:'2026-10-20',note:'synthetic'},acceptedAt:'',acceptedDate:'',closedAt:'',lastException:null,createdAt:at,updatedAt:at},
+{id:'finished-ship1',kind:'finished_supplier_shipment',taskId:'finished1',reference:'IN-1',quantity:2,date:'2026-10-20',expectedDate:'',note:'',reworkId:'',source:'supplier',received:0,accepted:0,rejected:0,stocked:0,returned:0,attachmentIds:[],createdAt:at,updatedAt:at},
+{id:'finished-event1',kind:'finished_supplier_event',taskId:'finished1',action:'task-create',actorId:a.memberId,actor:'Synthetic',actorType:'employee',date:'2026-10-20',note:'',data:{},createdAt:at}]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
@@ -87,6 +96,13 @@ try{
   }
   const before=snapshot(),original=await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin'));
   const a=services.sales_a.sales,b=services.sales_b.sales;
+  const ops=services.sales_a.foundation.operations(),otherOps=services.sales_b.foundation.operations();
+  assert.equal((await ops.execute('reports','list',{team:'t1'})).page.total,1);assert.equal((await ops.execute('reports','show',{},'report1')).record.quantity,0);pass();
+  const task=await ops.execute('finished','show',{team:'t1'},'finished1');assert.equal(task.record.stocked,null);assert.equal(task.shipments.rows[0].received,0);assert.equal((await ops.execute('finished','history',{team:'t1'},'finished1')).page.total,1);await assert.rejects(otherOps.execute('finished','show',{},'finished1'),{code:'NOT_IN_SCOPE'});pass();
+  for(const [resource,id,type] of [['quality','quality1','iqc'],['packaging','packaging1',undefined],['releases','release1',undefined],['shipments','ship1',undefined]]){
+   const options={team:'t1',...(type?{type}:{})};assert.equal((await ops.execute(resource,'list',options)).page.total,1);assert.equal((await ops.execute(resource,'show',options,id)).record.customerId,'c1');assert.equal((await ops.execute(resource,'history',options,id)).page.total,1);pass();
+  }
+  for(const type of ['first-article','process-quality','outsourcing-quality','oqc']){const id='quality-'+type,opts={team:'t1',type};assert.equal((await ops.execute('quality','show',opts,id)).record.type,type);assert.equal((await ops.execute('quality','history',opts,id)).page.total,1);}await assert.rejects(otherOps.execute('quality','show',{type:'iqc'},'quality1'),{code:'NOT_IN_SCOPE'});pass();
   const plan=services.pmc_test.foundation.planning(),purchase=services.sales_a.foundation.planning(),limited=services.sales_b.foundation.planning();
   assert.equal((await plan.execute('rounds','list',{team:'t1'})).page.total,1);assert.equal((await plan.execute('rounds','show',{team:'t1'},'round1')).reviews.rows[0].status,'pending');assert.equal((await plan.execute('rounds','list',{team:'t1',scope:'external'})).page.rows[0].id,'round2');await assert.rejects(purchase.execute('rounds','list'),{code:'FORBIDDEN'});pass();
   assert.equal((await purchase.execute('purchases','list',{team:'t1'})).page.total,1);const purchaseDetail=await purchase.execute('purchases','show',{team:'t1'},'purchase1');assert.equal(purchaseDetail.record.received,null);assert.equal(purchaseDetail.record.balanceKnown,false);assert(!JSON.stringify(purchaseDetail).includes('SYNTHETIC_RAW_PRIVATE'));assert.equal((await purchase.execute('purchases','history',{team:'t1'},'purchase1')).events.total,1);await assert.rejects(limited.execute('purchases','show',{},'purchase1'),{code:'NOT_IN_SCOPE'});pass();
@@ -124,7 +140,7 @@ try{
     const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
     const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
-    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1'};
+    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
     for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
@@ -133,6 +149,7 @@ try{
         const [,resource,action]=parts;
         if(!['list','export-completed'].includes(action))args.push(ids[resource]);
         if(action==='version')args.push('1');
+        if(resource==='quality')args.push('--type','iqc');
         if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
         if(resource!=='ie-quotes')args.push('--team','t1');
       }
