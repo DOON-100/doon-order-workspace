@@ -16,8 +16,8 @@ export class ApiClient {
 
   private async perform(route: Route, session: SavedSession | null | undefined, body: unknown, options: RequestOptions) {
     if (!Object.hasOwn(routes, route)) throw new CliError('UNSUPPORTED_OPERATION', '该操作尚未接入客户端。', 2);
-    const spec = routes[route] as {method: string; business?: boolean; write?: boolean; query?: readonly string[]; binary?: boolean};
-    const method = spec.method, headers: Record<string, string> = {'Accept': spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
+    const spec = routes[route] as {method: string; business?: boolean; write?: boolean; query?: readonly string[]; binary?: boolean | 'file'; multipart?: boolean};
+    const method = spec.method, headers: Record<string, string> = {'Accept': spec.binary==='file' ? 'application/octet-stream' : spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
     if (spec.business && !session) throw new CliError('AUTH_REQUIRED', '请先运行 doon login。', 4);
     if (spec.business && ((method !== 'GET' && !spec.write) || (body !== undefined && (!spec.write || method !== 'POST')))) throw new CliError('UNSUPPORTED_OPERATION', '该业务写入尚未接入客户端。', 2);
     if (spec.business && spec.write && (method !== 'POST' || !body || typeof body !== 'object' || Array.isArray(body))) throw new CliError('INVALID_INPUT', '业务写入必须使用结构化对象。', 2);
@@ -37,11 +37,12 @@ export class ApiClient {
       if (session.origin !== this.config.origin || !new RegExp('^' + name + '=[\\w-]{43}$').test(session.cookie)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);
       headers.Cookie = session.cookie;
     }
-    if (method === 'POST') { headers.Origin = this.config.origin; headers['Content-Type'] = 'application/json'; }
-    let encoded: string | undefined;
+    if (method === 'POST') { headers.Origin = this.config.origin; if(!spec.multipart)headers['Content-Type'] = 'application/json'; }
+    let encoded: string | FormData | undefined;
     if (method === 'POST') {
-      try { encoded = JSON.stringify(body ?? {}); } catch { throw new CliError('INVALID_INPUT', '输入不能转换为 JSON。', 2); }
-      if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > 1024 * 1024)) throw new CliError('INVALID_INPUT', '业务输入超过 1 MiB 或格式无效。', 2);
+      if(spec.multipart){if(!(body instanceof FormData))throw new CliError('INVALID_INPUT','附件上传需要文件表单。',2);encoded=body;}
+      else {try { encoded = JSON.stringify(body ?? {}); } catch { throw new CliError('INVALID_INPUT', '输入不能转换为 JSON。', 2); }
+      if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > 1024 * 1024)) throw new CliError('INVALID_INPUT', '业务输入超过 1 MiB 或格式无效。', 2);}
     }
     const signal = AbortSignal.timeout(this.timeout);
     try {
@@ -59,7 +60,7 @@ export class ApiClient {
         throw new CliError(status >= 500 ? 'SERVER_UNAVAILABLE' : 'REQUEST_REJECTED', status >= 500 ? '服务器暂时无法完成操作。' : '服务器未接受请求，请核对配置与客户端版本。', status >= 500 ? 5 : 2, {status, retryable: method === 'GET' && status >= 500, ...(method === 'POST' && status >= 500 ? {outcomeUnknown: true} : {})});
       }
       const expectedType = spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json';
-      if (!response.headers.get('content-type')?.toLowerCase().includes(expectedType)) { await response.body?.cancel(); throw new CliError('INVALID_RESPONSE', '服务地址未返回预期接口，请检查配置。', 5); }
+      if (spec.binary!=='file'&&!response.headers.get('content-type')?.toLowerCase().includes(expectedType)) { await response.body?.cancel(); throw new CliError('INVALID_RESPONSE', '服务地址未返回预期接口，请检查配置。', 5); }
       const reader = response.body?.getReader();
       if (!reader) throw new CliError('INVALID_RESPONSE', '服务器响应为空。', 5);
       let size = 0; const chunks: Uint8Array[] = [];
@@ -71,7 +72,7 @@ export class ApiClient {
       }
       const bytes = Buffer.concat(chunks);
       if (spec.binary) {
-        if (bytes.length < 4 || bytes.subarray(0, 4).toString('hex') !== '504b0304') throw new CliError('INVALID_RESPONSE', '导出文件不符合 XLSX 格式。', 5);
+        if (spec.binary!=='file'&&(bytes.length < 4 || bytes.subarray(0, 4).toString('hex') !== '504b0304')) throw new CliError('INVALID_RESPONSE', '导出文件不符合 XLSX 格式。', 5);
         return {data: bytes, headers: response.headers};
       }
       let data: any;

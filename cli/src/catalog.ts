@@ -1,4 +1,4 @@
-export const version = '0.24.0';
+export const version = '0.25.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -83,7 +83,8 @@ export const financeCommands=[
  ['complaints','list','list','查询客户投诉记录'],['complaints','show','show <id>','查看客户投诉'],['complaints','history','history <id>','查看客户投诉历史'],
 ].map(([resource,action,usage,description])=>({name:`finance ${resource} ${action}`,resource,action,usage:`finance ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
 export const developmentReadCommands=[{name:'sales projects development-show',usage:'sales projects development-show <id> --customer <id>',description:'查询项目开发阶段与进展',effect:'business-read-and-session-last-seen'},{name:'sales projects document-show',usage:'sales projects document-show <id> --customer <id>',description:'查询项目资料文档与历史',effect:'business-read-and-session-last-seen'}] as const;
-export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const attachmentCommands=[{name:'sales attachments list',usage:'sales attachments list --customer <id> [--project <id>]',description:'查询客户或项目附件',effect:'business-read-and-session-last-seen'},{name:'sales attachments download',usage:'sales attachments download <id> --customer <id> [--project <id>] --output <file>',description:'校验并下载授权附件',effect:'local-file-and-session-last-seen'},{name:'sales attachments upload',usage:'sales attachments upload --input <file> --file <file> --request-id <uuid>',description:'上传客户或项目附件并回读',effect:'business-write'},{name:'sales attachments update',usage:'sales attachments update --input <file> --version <number> --request-id <uuid>',description:'修改或归档附件资料并回读',effect:'business-write'}] as const;
+export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -91,4 +92,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

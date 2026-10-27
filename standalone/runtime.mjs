@@ -41,7 +41,7 @@ function objectPath(key){return path.join(objectDir,createHash('sha256').update(
 const kingdeeReadonlyEnv=Object.fromEntries(['READONLY_ENABLED','SALES_WRITE_ENABLED','CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>['DOON_KINGDEE_'+key,process.env['DOON_KINGDEE_'+key]]));
 export const env={...kingdeeReadonlyEnv,IE_MAIL:createIeMailAdapter(),DB:{prepare:sql=>new Statement(sql),batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
  async put(key,value){const target=objectPath(key),temp=target+'.'+randomUUID()+'.tmp';const bytes=typeof value==='string'?Buffer.from(value):Buffer.from(value);await fs.writeFile(temp,bytes);await fs.rename(temp,target);},
- async get(key){try{const body=await fs.readFile(objectPath(key));return {body,json:async()=>JSON.parse(body.toString())};}catch(e){if(e.code==='ENOENT')return null;throw e;}}
+ async get(key){try{const body=await fs.readFile(objectPath(key));return {body,json:async()=>JSON.parse(body.toString()),arrayBuffer:async()=>body.buffer.slice(body.byteOffset,body.byteOffset+body.byteLength)};}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 }};
 export async function makeBackup(){
  const target=path.join(dataDir,'backups',new Date().toISOString().replace(/[:.]/g,'-')+'-'+randomUUID().slice(0,6));await fs.mkdir(target,{recursive:true});

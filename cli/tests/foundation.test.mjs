@@ -72,7 +72,7 @@ test('doctor checks only foundation routes, reports unknown build and unauthenti
     return Response.json(url.endsWith('/health') ? {ok: true, service: 'Synthetic'} : {readOnly: false});
   }).doctor();
   assert.deepEqual(routes, ['/health', '/api/review-mode']);
-  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, 112);
+  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, 116);
 });
 
 test('limited errors, no automatic POST retries, timeout and bounded response', async () => {

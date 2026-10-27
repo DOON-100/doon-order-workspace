@@ -95,3 +95,7 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects development-show <项目ID> --customer <客户ID> --json` 查询独立的项目开发资料与进展，尚无资料时版本为 0。`development-save --input <文件> --version <版本> --request-id <UUID>` 维护阶段，输入 `customerId`、`projectId`、`stage`、`next`、`notes`、`reason`；`development-log` 使用同样参数，输入 `customerId`、`projectId`、`stage`、`next`、`result`，追加进展并保留原备注。阶段为待核实、需求了解、可行性、报价、打样、样品反馈、商务确认、暂缓或关闭。
 
 `doon sales projects document-show <项目ID> --customer <客户ID> --json` 查询项目资料文档及历史版本；没有文档时版本为 0。`doon sales projects document-save --input <文件> --version <版本> --request-id <UUID>` 保存新版本，JSON 包含 `customerId`、`projectId`、`content`、`reason`；服务器保留原文和历史版本。
+
+## 客户和项目附件
+
+`sales attachments list --customer <客户ID> [--project <项目ID>]` 查看附件；`download <附件ID>` 增加相同范围参数及 `--output <新文件>`，校验大小与 SHA-256 后新建文件，不覆盖现有文件。`upload --input <JSON> --file <原件> --request-id <UUID>` 上传，JSON 需提供 `customerId`、`title`、`fileVersion`，客户附件指定 `category`，项目附件指定 `projectId` 和 `folder`，可提供 `documentType`、`status`、`note`；原件限 20 MiB。`update --input <JSON> --version <版本> --request-id <UUID>` 可维护或归档，须提供 `id`、`customerId`、`projectId`、分类或目录、`documentType`、`title`、`fileVersion`、`status`、`note`、`reason`。实际目录、类型与权限以服务器校验为准。

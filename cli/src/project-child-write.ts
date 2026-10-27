@@ -5,6 +5,10 @@ import {executeWrite} from './write-operation.js';
 import {type WriteSchema} from './write-input.js';
 import {fields, pick} from './business.js';
 import {isDeepStrictEqual} from 'node:util';
+import {open} from 'node:fs/promises';
+import {basename,resolve} from 'node:path';
+import {createHash} from 'node:crypto';
+import {readWriteInput} from './write-input.js';
 
 const itemSchema:WriteSchema={projectId:{type:'string',required:true,min:1,max:160},model:{type:'string',required:true,min:1,max:160},quantity:{type:'number',required:true,integer:true,min:1,max:10000000},customerModel:{type:'string',max:160},drawing:{type:'string',max:160},color:{type:'string',max:160},lens:{type:'string',max:160},material:{type:'string',max:160},requirements:{type:'string',max:6000}};
 const communicationSchema:WriteSchema={projectId:{type:'string',required:true,min:1,max:160},roundId:{type:'string',max:160},channel:{type:'string',max:120},contact:{type:'string',max:240},occurredAt:{type:'string',required:true,min:10,max:10},content:{type:'string',required:true,min:1,max:10000},nextAction:{type:'string',max:2000},ownerId:{type:'string',max:160},dueDate:{type:'string',max:10},visibility:{type:'string',enum:['internal','customer']},attachmentIds:{type:'array',max:300,items:{type:'string',min:1,max:160}}};
@@ -124,6 +128,45 @@ export class ProjectDevelopmentService {
    validate(payload){if(['customerId','projectId','stage','next','reason','result'].some(key=>typeof payload[key]==='string'&&payload[key]!==String(payload[key]).trim()))throw new CliError('INVALID_INPUT','编号及指定字段不能含首尾空格。',2);},
    async send(payload){const data=(await api.request(action==='save'?'/api/workspace/customer-workflow-project-save':'/api/workspace/customer-workflow-project-log',session,payload)).data;if(data?.ok!==true||data.customerId!==payload.customerId)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data;},
    async readBack(_result,input){const data=(await api.request('/api/workspace/customer-workflow-project',session,undefined,{query:{customerId:String(input.customerId),projectId:String(input.projectId)}})).data,row=data?.project;if(!row||row.customerId!==input.customerId||row.projectId!==input.projectId||row.version!==version+1||row.stage!==input.stage||row.next!==input.next||(action==='save'&&row.notes!==input.notes))throw Error('changed');if(action==='log'&&(!Array.isArray(data.logs)||!data.logs.some((v:any)=>v.stage===input.stage&&v.next===input.next&&v.result===input.result)))throw Error('log missing');return {scope:{customerId:row.customerId,projectId:row.projectId},record:pick(row,fields('id version customerId projectId stage next notes updatedAt updatedBy'))};}
+  },{file,version,token});
+ }
+}
+
+const attachmentMeta:WriteSchema={customerId:{type:'string',required:true,min:1,max:160},projectId:{type:'string',max:160},category:{type:'string',enum:['NDA 原件','长期合作协议','公司资料','银行资料证明','固定地址资料','其他客户通用正式附件']},folder:{type:'string',max:160},documentType:{type:'string',max:160},title:{type:'string',required:true,min:1,max:240},fileVersion:{type:'string',required:true,min:1,max:80},status:{type:'string',enum:['待确认','有效']},note:{type:'string',max:3000}};
+const attachmentFields=fields('id version customerId projectId category folder documentType title fileVersion status note filename contentType size hash createdAt createdBy updatedAt updatedBy archivedAt archivedBy archiveReason');
+export class CustomerAttachmentService {
+ constructor(private store:StateStore,private transport:typeof fetch=fetch){}
+ private async client(){const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);return {api:new ApiClient(config,this.transport,30000),session};}
+ async list(customerId:string,projectId=''){
+  if(!customerId||customerId!==customerId.trim()||projectId!==projectId.trim())throw new CliError('INVALID_ARGUMENT','请提供明确客户和项目编号。',2);
+  const {api,session}=await this.client(),data=(await api.request('/api/workspace/customer-workflow-files',session,undefined,{query:{customerId,projectId}})).data;if(!Array.isArray(data?.files))throw new CliError('INVALID_RESPONSE','附件列表响应不符合协议。',5);
+  if(data.files.some((row:any)=>row.customerId!==customerId||(row.projectId||'')!==projectId))throw new CliError('INVALID_RESPONSE','附件范围不匹配。',5);
+  return {scope:{customerId,projectId:projectId||null},files:data.files.map((row:any)=>pick(row,attachmentFields)),canWrite:!!data.canWrite};
+ }
+ async upload(inputFile:string,filePath:string,token:string){
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const input=await readWriteInput(inputFile,attachmentMeta);if(['customerId','projectId','category','folder','documentType','title','fileVersion'].some(key=>typeof input[key]==='string'&&input[key]!==String(input[key]).trim()))throw new CliError('INVALID_INPUT','附件编号和名称不能含首尾空格。',2);
+  const handle=await open(filePath,'r').catch(()=>{throw new CliError('INVALID_INPUT','无法读取附件。',2);});let bytes:Buffer;try{const info=await handle.stat(),limit=20*1024*1024;if(!info.isFile()||info.size<1||info.size>limit)throw new CliError('INVALID_INPUT','附件须为不超过 20 MiB 的非空普通文件。',2);const buffer=Buffer.alloc(limit+1);let size=0;while(size<buffer.length){const read=await handle.read(buffer,size,buffer.length-size,null);if(!read.bytesRead)break;size+=read.bytesRead;}if(size>limit||size!==info.size)throw new CliError('INVALID_INPUT','附件大小发生变化。',2);bytes=buffer.subarray(0,size);}finally{await handle.close();}
+  const filename=basename(filePath),hash=createHash('sha256').update(bytes).digest('hex'),form=new FormData();for(const [key,value] of Object.entries(input))form.set(key,String(value));form.set('token',token);form.set('file',new File([Uint8Array.from(bytes)],filename));
+  const {api,session}=await this.client(),data=(await api.request('/api/workspace/customer-workflow-file-upload',session,form)).data;if(data?.ok!==true||data.customerId!==input.customerId)throw new CliError('INVALID_RESPONSE','上传结果无法核对，请查询原操作。',5,{outcomeUnknown:true});
+  try{const list=await this.list(String(input.customerId),String(input.projectId||'')),found=list.files.filter((row:any)=>row.hash===hash&&row.title===input.title&&row.fileVersion===input.fileVersion&&row.size===bytes.length);if(found.length!==1)throw Error('ambiguous');return {scope:list.scope,record:found[0]};}catch{throw new CliError('READBACK_FAILED','上传已响应但回读未完成；请查询原操作，不要重复提交。',5,{outcomeUnknown:true});}
+ }
+ async download(customerId:string,projectId:string,id:string,output:string){
+  const list=await this.list(customerId,projectId),row=list.files.find((r:any)=>r.id===id);if(!row)throw new CliError('NOT_IN_SCOPE','附件不在当前授权范围。',7);
+  const {api,session}=await this.client(),bytes=(await api.request('/api/workspace/customer-workflow-file',session,undefined,{query:{id}})).data as Buffer;
+  if(bytes.length!==row.size||createHash('sha256').update(bytes).digest('hex')!==row.hash)throw new CliError('INVALID_RESPONSE','附件完整性校验失败。',5);
+  const target=resolve(output);let file;try{file=await open(target,'wx',0o600);await file.writeFile(bytes);}catch(error){throw new CliError((error as NodeJS.ErrnoException).code==='EEXIST'?'OUTPUT_EXISTS':'OUTPUT_WRITE_FAILED','无法写入新文件，请核对路径；不会覆盖已有文件。',3);}finally{await file?.close();}
+  return {scope:list.scope,file:{path:target,bytes:bytes.length,sha256:row.hash}};
+ }
+ async update(file:string,rawVersion:string,token:string){
+  if(!/^[1-9]\d*$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion)))throw new CliError('INVALID_ARGUMENT','版本须为正整数。',2);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const schema:WriteSchema={...attachmentMeta,id:{type:'string',required:true,min:1,max:160},projectId:{type:'string',required:true,max:160},documentType:{type:'string',required:true,max:160},note:{type:'string',required:true,max:3000},status:{type:'string',required:true,enum:['待确认','有效','已归档']},reason:{type:'string',required:true,min:1,max:3000}};
+  const version=Number(rawVersion),{api,session}=await this.client();
+  return executeWrite({schema,versionField:'version',tokenField:'token',
+   validate(input){if(['id','customerId','projectId','category','folder','documentType','title','fileVersion','reason'].some(key=>typeof input[key]==='string'&&input[key]!==String(input[key]).trim()))throw new CliError('INVALID_INPUT','附件编号、名称和原因不能含首尾空格。',2);},
+   async send(input){const data=(await api.request('/api/workspace/customer-workflow-file-save',session,input)).data;if(data?.ok!==true||data.customerId!==input.customerId)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data;},
+   readBack:async(_result,input)=>{const list=await this.list(String(input.customerId),String(input.projectId)),row=list.files.find((v:any)=>v.id===input.id);if(!row||row.version!==version+1||['title','fileVersion','status','note','category','folder','documentType'].some(key=>Object.hasOwn(input,key)&&!isDeepStrictEqual(row[key],input[key])))throw Error('changed');return {scope:list.scope,record:row};}
   },{file,version,token});
  }
 }
