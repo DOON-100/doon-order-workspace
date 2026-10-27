@@ -58,7 +58,7 @@ export function applyIeGridPaste({line,kind,rowId,column,text,idFactory}:{line:L
  let sequence=Math.max(0,...line.processes.map(row=>row.sequence));
  while(rows.length<start+matrix.length){
   const common={id:idFactory(),name:'',priceSource:'',notes:'',notApplicable:false};
-  rows.push(kind==='material'?{...common,specification:'',unit:'',basePrice:null,usage:null,coefficient:1,lossRate:0.1,lossAdjustmentReason:''}:kind==='process'?{...common,parentId:'',sequence:++sequence,usage:1,standardSeconds:null,basePrice:null,difficulty:1}:{...common,category:kind,part:'',usage:1,unitPrice:null});
+  rows.push(kind==='material'?{...common,specification:'',unit:'',basePrice:null,usage:1,coefficient:1,lossRate:0.1,lossAdjustmentReason:''}:kind==='process'?{...common,parentId:'',sequence:++sequence,usage:1,standardSeconds:null,basePrice:null,difficulty:1}:{...common,category:kind,part:'',usage:1,unitPrice:null});
  }
  parsed.forEach((values,i)=>{
   const clearsCatalog=(kind==='material'?['name','basePrice','priceSource']:kind==='process'?['name','basePrice','standardSeconds','priceSource']:['name','unitPrice','priceSource']).some(key=>key in values);

@@ -105,6 +105,7 @@ const ieHarness={ok,call,state,pass,files,rawRecords:()=>db.prepare('SELECT data
 const {testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeToolingChargeSources(ieHarness);
 const {testIeAdditionalEditors}=await import('./ie-quote-editor-access-cases.mjs');await testIeAdditionalEditors(ieHarness);
 const {testIeQuoteExcelCalculation}=await import('./ie-quote-calculation-cases.mjs');await testIeQuoteExcelCalculation(ieHarness);
+const {testIeMaterialChecklist}=await import('./ie-material-checklist-cases.mjs');await testIeMaterialChecklist(ieHarness);
 const {testIeManualAdjustments}=await import('./ie-quote-manual-cases.mjs');await testIeManualAdjustments(ieHarness);
 const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-cases.mjs');await testIeAttachmentsAndHandoff(ieHarness);
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(ieHarness);

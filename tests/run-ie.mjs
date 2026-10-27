@@ -23,6 +23,7 @@ const {testMemberNotificationMailboxes}=await import('./member-notification-mail
 const {testIeQuotes,testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeQuotes(harness);await testIeToolingChargeSources(harness);
 const {testIeAdditionalEditors}=await import('./ie-quote-editor-access-cases.mjs');await testIeAdditionalEditors(harness);
 const {testIeQuoteExcelCalculation}=await import('./ie-quote-calculation-cases.mjs');await testIeQuoteExcelCalculation(harness);
+const {testIeMaterialChecklist}=await import('./ie-material-checklist-cases.mjs');await testIeMaterialChecklist(harness);
 const {testIeManualAdjustments}=await import('./ie-quote-manual-cases.mjs');await testIeManualAdjustments(harness);
 const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-cases.mjs');await testIeAttachmentsAndHandoff(harness);
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(harness);

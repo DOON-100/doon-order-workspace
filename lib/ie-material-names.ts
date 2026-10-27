@@ -2,7 +2,7 @@ import {z} from 'zod';
 import {all,type Entity,type State} from './domain';
 
 const id=z.string().trim().min(1).max(120);
-export const ieMaterialNameReference=z.object({catalogId:id,catalogVersion:z.number().int().positive(),entryId:id}).strict();
+export const ieMaterialNameReference=z.object({catalogId:id,catalogVersion:z.number().int().positive(),entryId:id,nameUsage:z.literal('part-v1').optional()}).strict();
 export type IeMaterialNameReference=z.infer<typeof ieMaterialNameReference>;
 export const ieMaterialNameEntry=z.object({id,code:z.string().min(1).max(100),name:z.string().min(1).max(240),nameEn:z.string().max(300).default(''),sourceSheet:z.string().min(1).max(100),sourceRow:z.number().int().positive().max(1048576)}).strict();
 export const ieMaterialNameCatalog=z.object({sourceFilename:z.string().min(1).max(240).refine(v=>!/[\\/]/.test(v),'只保存文件名'),sourceSha256:z.string().regex(/^[a-f0-9]{64}$/),entries:z.array(ieMaterialNameEntry).min(1).max(2000)}).strict().superRefine((value,ctx)=>{
@@ -11,10 +11,25 @@ export const ieMaterialNameCatalog=z.object({sourceFilename:z.string().min(1).ma
 export type IeMaterialNameEntry=z.infer<typeof ieMaterialNameEntry>;
 export type IeMaterialNameCatalogRecord=Entity&{kind:'ie_material_name_catalog';version:number;previousId:string;catalog:z.infer<typeof ieMaterialNameCatalog>;createdAt:string;createdById:string};
 export function latestIeMaterialNameCatalog(s:State){return (all(s,'ie_material_name_catalog') as IeMaterialNameCatalogRecord[]).sort((a,b)=>b.version-a.version)[0]||null;}
+export type IeMaterialPartItem=IeMaterialNameEntry&{catalogId:string;version:number;sourceName:string;nameUsage:'part-v1'};
+/** Versioned interpretation of source field labels, never a rewrite of the source
+ * catalog. Keep this rule stable: existing part-v1 references are validated by it. */
+export function materialPartName(sourceName:string):string|null{
+ const name=sourceName.normalize('NFKC').trim().replace(/(?:颜色|色)(\d*)$/u,'$1');
+ if(!name||/(?:条(?:形)?码(?:号)?|编码|批次(?:号)?|色号|CAT\s*值)$/iu.test(name))return null;
+ if(/(?:镭射抹油|烫印|滴油|喷油|丝印|注塑)$/u.test(name)||/^(?:LOGO|其[他它])$/iu.test(name))return null;
+ // A plating label names its underlying part; other process-only labels above
+ // belong in process/outsourcing sheets. No prices or usage are inferred here.
+ return name.replace(/电镀$/u,'').trim()||null;
+}
+export function materialPartChecklist(catalog:IeMaterialNameCatalogRecord|null):IeMaterialPartItem[]{
+ if(!catalog)return [];
+ return catalog.catalog.entries.flatMap(entry=>{const name=materialPartName(entry.name);return name?[{...entry,name,sourceName:entry.name,nameUsage:'part-v1' as const,catalogId:catalog.id,version:catalog.version}]:[];});
+}
 const normalize=(v:string)=>v.normalize('NFKC').toLocaleLowerCase().replace(/[\p{P}\p{S}\s]/gu,'');
 function distance(a:string,b:string){let prev=Array.from({length:b.length+1},(_,i)=>i);for(let i=1;i<=a.length;i++){const row=[i];for(let j=1;j<=b.length;j++)row[j]=Math.min(row[j-1]+1,prev[j]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));prev=row;}return prev[b.length];}
-function rank(entry:IeMaterialNameEntry,query:string){
- const names=[entry.code,entry.name,entry.nameEn,entry.name.replace(/(?:颜色|色)$/u,''),entry.nameEn.replace(/\s+colou?r$/i,'')].map(normalize).filter(Boolean);
+function rank(entry:IeMaterialNameEntry&{sourceName?:string},query:string){
+ const names=[entry.code,entry.name,entry.nameEn,entry.sourceName||'',entry.name.replace(/(?:颜色|色)(\d*)$/u,'$1'),entry.nameEn.replace(/\s+colou?r$/i,'')].map(normalize).filter(Boolean);
  let score=0;for(const name of names){if(name===query)score=Math.max(score,100);else if(name.startsWith(query))score=Math.max(score,90);else if(name.includes(query))score=Math.max(score,80);else if(query.length>=3&&Math.abs(name.length-query.length)<=2){const d=distance(name,query),similarity=1-d/Math.max(name.length,query.length);if(d<=2&&similarity>=0.6)score=Math.max(score,Math.round(similarity*60));}}
  return score;
 }
@@ -23,10 +38,14 @@ export function searchIeMaterialNames(catalog:IeMaterialNameCatalogRecord|null,q
  const matches=catalog.catalog.entries.map((entry,index)=>({entry,index,score:q?rank(entry,q):1})).filter(v=>v.score>0).sort((a,b)=>b.score-a.score||a.index-b.index);
  return {items:matches.slice(0,limit).map(({entry})=>({...entry,catalogId:catalog.id,version:catalog.version})),total:matches.length};
 }
+export function searchIeMaterialParts(catalog:IeMaterialNameCatalogRecord|null,query:string,limit=2000){
+ const q=normalize(query).slice(0,100),matches=materialPartChecklist(catalog).map((entry,index)=>({entry,index,score:q?rank(entry,q):1})).filter(v=>v.score>0).sort((a,b)=>b.score-a.score||a.index-b.index);
+ return {items:matches.slice(0,limit).map(({entry})=>entry),total:matches.length};
+}
 export function validateIeMaterialNameReferences(s:State,fields:{lines:{materials:{name:string;nameReference?:IeMaterialNameReference}[]}[]}):string|null{
  for(const line of fields.lines)for(const material of line.materials){const ref=material.nameReference;if(!ref)continue;
   const catalog=all(s,'ie_material_name_catalog').find(r=>r.id===ref.catalogId&&r.version===ref.catalogVersion) as IeMaterialNameCatalogRecord|undefined;
   const entry=catalog?.catalog.entries.find(e=>e.id===ref.entryId);
-  if(!entry||entry.name!==material.name)return '材料名称与所选资料版本不一致，请重新选用名称；手工改名时须清除资料引用。';
+  if(!entry||(ref.nameUsage==='part-v1'?materialPartName(entry.name):entry.name)!==material.name)return '材料名称与所选资料版本不一致，请重新选用名称；手工改名时须清除资料引用。';
  }return null;
 }

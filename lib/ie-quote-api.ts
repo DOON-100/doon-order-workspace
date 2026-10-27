@@ -6,7 +6,7 @@ import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notific
 import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
 import {ieAttachmentGet,ieAttachmentPost} from './ie-quote-attachment-api';
 import {ieHandoffGet,ieHandoffPost} from './ie-quote-handoff-api';
-import {validateIeMaterialNameReferences} from './ie-material-names';
+import {validateIeMaterialNameReferences,latestIeMaterialNameCatalog,materialPartChecklist} from './ie-material-names';
 import {canConfigureIeQuotes,canFillIeQuote,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
 import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuotePreparedByIds,ieQuoteReviewRouting,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
 
@@ -52,7 +52,7 @@ export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(a=>a.active&&canReadIeAccount(s,m,a)).map(({id,customer,customerCode})=>({id,customer,customerCode}));
  const visibleCustomers=new Set(customers.map(a=>a.id));
  const toolingChargeSources=(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).flatMap(q=>{const released=latestReleasedIeVersion(s,q.id);return released&&released.customerAccountId===q.customerAccountId&&canReadIeQuote(s,m,released)&&released.tooling.some(t=>t.chargeMode==='charge')?[publicIeQuote(s,m,released)]:[];});
- return json({canUse:true,quotes:(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicIeQuote(s,m,q)),customers,capabilities:ieCapabilities(s,m),policy:publicIePolicy(s,m),
+ return json({materialChecklist:materialPartChecklist(latestIeMaterialNameCatalog(s)),canUse:true,quotes:(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicIeQuote(s,m,q)),customers,capabilities:ieCapabilities(s,m),policy:publicIePolicy(s,m),
  toolingChargeSources,
  toolingRegistry:(all(s,'ie_quote_tooling') as IeTooling[]).filter(t=>visibleCustomers.has(t.customerAccountId)).map(publicTooling),
  catalog:(all(s,'ie_quote_catalog') as IeCatalog[]).filter(c=>c.active).map(({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})=>({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})),
@@ -73,7 +73,7 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
  configured(s);
  if(action==='ie-quote-save'){
   engineering(s,m);const {id,version,...fields}=parse(ieQuoteInput,await req.json()),before=id?quote(s,m,id):null;
-  if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');if(before.manualAdjustments?.length&&fields.manualAdjustments===undefined)throw new AppError('此报价包含人工调整，请刷新到支持人工调整的表格后保存，避免覆盖已确认的人工金额。',409);}
+  if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');if(before.materialPricingMode==='checklist'&&fields.materialPricingMode!=='checklist')throw new AppError('此报价已使用材料清单规则，请刷新页面后保存，避免退回旧计价口径。',409);if(before.manualAdjustments?.length&&fields.manualAdjustments===undefined)throw new AppError('此报价包含人工调整，请刷新到支持人工调整的表格后保存，避免覆盖已确认的人工金额。',409);}
   const a=all(s,'customer_account').find(a=>a.id===fields.customerAccountId) as CustomerAccount|undefined;if(!a?.active)throw new AppError('请选择有效的客户档案。');
   const nameReferenceIssue=validateIeMaterialNameReferences(s,fields);if(nameReferenceIssue)throw new AppError(nameReferenceIssue);validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:before?ieQuotePreparedByIds(s,before,m.id):[m.id],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   q.attachmentRefs=(before?.attachmentRefs||[]).filter(ref=>fields.lines.some(line=>line.id===ref.lineId));
