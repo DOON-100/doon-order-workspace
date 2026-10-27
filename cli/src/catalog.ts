@@ -1,4 +1,4 @@
-export const version = '0.12.0';
+export const version = '0.13.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -21,6 +21,9 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales projects task-create', usage:'sales projects task-create --input <file> --request-id <uuid>', description:'新增项目待办并回读', effect:'business-write'},
+  {name:'sales projects task-submit', usage:'sales projects task-submit --input <file> --version <number> --request-id <uuid>', description:'提交项目待办结果并回读', effect:'business-write'},
+  {name:'sales projects task-review', usage:'sales projects task-review --input <file> --version <number> --request-id <uuid>', description:'审核项目待办并回读', effect:'business-write'},
   {name:'sales followups create', usage:'sales followups create --input <file> --request-id <uuid>', description:'新增客户跟进并回读', effect:'business-write'},
   {name:'sales projects round-add', usage:'sales projects round-add --input <file> --request-id <uuid>', description:'新增项目轮次并回读', effect:'business-write'},
   {name:'sales projects item-add', usage:'sales projects item-add --input <file> --request-id <uuid>', description:'新增项目款色并回读', effect:'business-write'},

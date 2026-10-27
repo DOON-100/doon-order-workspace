@@ -77,7 +77,7 @@ export class SalesService {
         return result;
       });
       return {scope, record: pick(record, projectFields), items: related('items', fields('id version model customerModel drawing color lens material requirements quantity')),
-        rounds: page(rounds,window), tasks: related('tasks', fields('id version title description ownerId dueDate status result canSubmit canReviewService canReviewSales')),
+        rounds: page(rounds,window), tasks: related('tasks', fields('id version title description ownerId serviceReviewerId salesReviewerId waitingFor dueDate status result reviewCycle canSubmit canReviewService canReviewSales')),
         communications: related('communications', fields('id version channel contact occurredAt content nextAction ownerId dueDate visibility'))};
     }
     if (resource === 'inquiries') {
