@@ -87,3 +87,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales customers master <ID> --json` 查询可维护客户主档和版本；`doon sales customers master-update --input <文件> --version <版本> --json` 只更新指定主档字段。输入示例：`{ "id": "客户ID", "patch": { "notes": "客户备注" } }`；允许的字段为 `customer`、`customerCode`、`notes`。后台保留未指定字段、原责任和账号权限，并按原规则记录身份变化及审计。该功能需要服务器同步更新；当前仅覆盖管理员及本人负责的业务/客服，其他角色按服务器权限暂不开放。结果不明先查询当前记录，不自动重试。
 
 `doon sales projects recycle --json` 查询有权管理的回收站项目；`doon sales projects trash --input <文件> --version <当前版本> --request-id <UUID> --json` 移入回收站，输入 `id` 和 `reason`；`doon sales projects restore` 使用同样参数，输入仅 `id`。服务器校验项目管理权限和未完成事项，回收不物理删除记录，恢复沿用原业务状态。
+
+`doon sales customers followup-add --input <文件> --version <跟进状态版本> --request-id <UUID> --json` 登记客户沟通并更新跟进状态，与项目跟进记录不同。输入须包含 `customerId`、`at`、`channel`、`content`、`result`、`disposition`、`next`、`nextDate`、`evidence`；`channel` 支持邮件、孚盟（历史）、WhatsApp Business、个人微信、会议、电话、其他；`disposition` 为继续跟进或暂停跟进。暂停时下次日期填空字符串；状态版本从客户详情获取。仅登记事实，不发送消息；重复匹配的历史记录可能导致回读结果不明，须查询原记录。
