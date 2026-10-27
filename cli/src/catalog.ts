@@ -1,4 +1,4 @@
-export const version = '0.6.0';
+export const version = '0.7.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -46,7 +46,13 @@ export const operationsCommands=[
  ['releases','list','list','查询出货放行记录'],['releases','show','show <id>','查看出货放行'],['releases','history','history <id>','查看出货放行历史'],
  ['shipments','list','list','查询客服发货记录'],['shipments','show','show <id>','查看客服发货记录'],['shipments','history','history <id>','查看客服发货历史'],
 ].map(([resource,action,usage,description])=>({name:`operations ${resource} ${action}`,resource,action,usage:`operations ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands];
+export const financeCommands=[
+ ['records','list','list --kind <kind>','查询指定项目财务记录'],['records','show','show <id> --kind <kind>','查看项目财务记录'],['records','history','history <id> --kind <kind>','查看项目财务历史摘要'],
+ ['receivables','list','list','查询客服应收记录'],['receivables','show','show <id>','查看应收及已收余额'],['receivables','history','history <id>','查看应收历史摘要'],
+ ['reconciliations','list','list','查询供应商对账记录'],['reconciliations','show','show <id>','查看供应商对账'],['reconciliations','history','history <id>','查看供应商对账历史'],
+ ['complaints','list','list','查询客户投诉记录'],['complaints','show','show <id>','查看客户投诉'],['complaints','history','history <id>','查看客户投诉历史'],
+].map(([resource,action,usage,description])=>({name:`finance ${resource} ${action}`,resource,action,usage:`finance ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
+export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -54,4 +60,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name)]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

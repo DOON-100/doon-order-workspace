@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.6.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.7.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -80,6 +80,18 @@
 | `doon operations shipments list` | 查询客服发货记录 | business-read-and-session-last-seen |
 | `doon operations shipments show <id>` | 查看客服发货记录 | business-read-and-session-last-seen |
 | `doon operations shipments history <id>` | 查看客服发货历史 | business-read-and-session-last-seen |
+| `doon finance records list --kind <kind>` | 查询指定项目财务记录 | business-read-and-session-last-seen |
+| `doon finance records show <id> --kind <kind>` | 查看项目财务记录 | business-read-and-session-last-seen |
+| `doon finance records history <id> --kind <kind>` | 查看项目财务历史摘要 | business-read-and-session-last-seen |
+| `doon finance receivables list` | 查询客服应收记录 | business-read-and-session-last-seen |
+| `doon finance receivables show <id>` | 查看应收及已收余额 | business-read-and-session-last-seen |
+| `doon finance receivables history <id>` | 查看应收历史摘要 | business-read-and-session-last-seen |
+| `doon finance reconciliations list` | 查询供应商对账记录 | business-read-and-session-last-seen |
+| `doon finance reconciliations show <id>` | 查看供应商对账 | business-read-and-session-last-seen |
+| `doon finance reconciliations history <id>` | 查看供应商对账历史 | business-read-and-session-last-seen |
+| `doon finance complaints list` | 查询客户投诉记录 | business-read-and-session-last-seen |
+| `doon finance complaints show <id>` | 查看客户投诉 | business-read-and-session-last-seen |
+| `doon finance complaints history <id>` | 查看客户投诉历史 | business-read-and-session-last-seen |
 
 ## 业务栏目
 
@@ -94,7 +106,7 @@
 | 仓储物流 | warehouse | partial |
 | 生产车间 | production | partial |
 | 品质部 | quality | partial |
-| 财务部 | finance | pending |
+| 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-批次 5 共接入 69 个业务查询/导出命令。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 和 [生产与交付说明](operations.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+批次 6 共接入 81 个业务查询/导出命令。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

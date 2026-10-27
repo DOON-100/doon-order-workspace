@@ -2,11 +2,12 @@ import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
 import {SalesService} from './sales.js';
-import {salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands} from './catalog.js';
+import {salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
 import {OperationsService} from './operations.js';
+import {FinanceService} from './finance.js';
 
 function userFrom(data: any) {
   const u = data?.user;
@@ -25,6 +26,7 @@ export class FoundationService {
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
   operations() { return new OperationsService(this.store, this.transport); }
+  finance() { return new FinanceService(this.store, this.transport); }
 
   async whoami() {
     const config = await this.store.config(), saved = await this.store.session(config);
@@ -88,6 +90,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: salesCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: salesCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

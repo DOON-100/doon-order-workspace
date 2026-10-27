@@ -27,7 +27,7 @@ export class ApiClient {
     const url = new URL(this.config.origin + route);
     for (const [key, value] of Object.entries(options.query || {})) {
       if (!spec.query?.includes(key) || typeof value !== 'string' || value.length > 160 || /[\u0000-\u001f\u007f]/.test(value)) throw new CliError('INVALID_QUERY', '该接口不接受此查询参数。', 2);
-      if (route === '/api/workspace/process-data' && (key !== 'type' || !['rfq','iqc','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release'].includes(value))) throw new CliError('UNSUPPORTED_OPERATION', '该流程类型尚未开放查询。', 2);
+      if (route === '/api/workspace/process-data' && (key !== 'type' || !['rfq','iqc','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release','supplier-reconciliation','complaint'].includes(value))) throw new CliError('UNSUPPORTED_OPERATION', '该流程类型尚未开放查询。', 2);
       url.searchParams.set(key, value);
     }
     if (route === '/api/workspace/process-data' && !url.searchParams.has('type')) throw new CliError('INVALID_QUERY', '流程查询必须限定类型。', 2);

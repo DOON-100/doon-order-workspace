@@ -71,6 +71,17 @@ saveRecords([quality,...additionalQuality,packaging,release,...[quality,...addit
 {id:'finished1',kind:'finished_supplier_task',version:1,lineId:'o1',supplierId:'sup1',supplierName:'Synthetic Supplier',orderNo:'SO-o1',drawing:'DRAW',color:'Black',lens:'Clear',productType:'frame',quantity:10,baselineStatus:'pending',template:'metal',stages:[{id:'packing',label:'包装',baseline:null,completed:null}],dueDate:'',promisedDate:'',baselineStock:null,baselineStockReturned:0,baselineRework:0,baseline:{cutoffDate:'2026-10-20',note:'synthetic'},acceptedAt:'',acceptedDate:'',closedAt:'',lastException:null,createdAt:at,updatedAt:at},
 {id:'finished-ship1',kind:'finished_supplier_shipment',taskId:'finished1',reference:'IN-1',quantity:2,date:'2026-10-20',expectedDate:'',note:'',reworkId:'',source:'supplier',received:0,accepted:0,rejected:0,stocked:0,returned:0,attachmentIds:[],createdAt:at,updatedAt:at},
 {id:'finished-event1',kind:'finished_supplier_event',taskId:'finished1',action:'task-create',actorId:a.memberId,actor:'Synthetic',actorType:'employee',date:'2026-10-20',note:'',data:{},createdAt:at}]);
+const charge={id:'charge1',kind:'project_charge',version:1,customerId:'c1',projectId:'p1',roundId:'',title:'Synthetic charge',category:'sample',currency:'USD',amountCents:10000,prepayCents:2000,dueDate:'',note:'synthetic',status:'draft',plan:[],createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+const receipt={id:'receipt1',kind:'project_receipt',customerId:'c1',amountCents:1000,currency:'USD',date:'2026-10-20',reference:'RCPT-1',payer:'SYNTHETIC_PAYER_PRIVATE',account:'SYNTHETIC_BANK_PRIVATE',note:'synthetic',createdAt:at};
+const receivable={id:'receivable1',kind:'service_record',type:'receivable',version:1,customerId:'c1',orderId:'o1',title:'Synthetic receivable',description:'',status:'open',waitingFor:'none',dueDate:'',nextFollowUp:'',details:{invoiceNo:'INV-1',currency:'USD',amountCents:1000,terms:'TBD'},createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+const recon={...op('recon1','supplier-reconciliation'),details:{supplierName:'Synthetic Supplier',statementRef:'S-1',invoiceRef:'I-1',currency:'USD',amount:0}},complaint={...op('complaint1','complaint'),details:{complaintRef:'C-1',cause:'待核对',correction:'',verification:'',customerConfirmation:''}};
+saveRecords([{id:'finance-grant',kind:'project_finance_grant',memberId:a.memberId,customerIds:['c1'],active:true,version:1},charge,receipt,receivable,recon,complaint,
+{id:'charge-history',kind:'project_finance_history',targetId:'charge1',customerId:'c1',projectId:'p1',action:'创建',actor:'Synthetic',createdAt:at,before:null,after:charge},
+{id:'receivable-history',kind:'service_revision',recordId:'receivable1',customerId:'c1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:receivable},
+...[recon,complaint].map(row=>({id:'history-'+row.id,kind:'process_record_revision',recordId:row.id,customerId:'c1',orderId:'o1',teamId:'t1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:row}))]);
+const otherFinanceKinds={allocations:'project_allocation',adjustments:'project_adjustment',creditApplications:'project_credit_application',documents:'project_billing_document',notices:'project_payment_notice',cases:'project_after_sale',costs:'project_after_sale_cost',refunds:'project_refund',requirements:'project_payment_requirement',sends:'project_document_send',reversals:'project_receipt_reversal'};
+const otherFinance=Object.entries(otherFinanceKinds).map(([category,kind])=>({id:'finance-'+category,kind,version:1,customerId:'c1',projectId:'p1',roundId:'',title:'Synthetic '+category,currency:'USD',amountCents:0,prepayCents:0,budgetCents:0,actualCents:0,quantity:0,resolution:'pending',customerAccepted:false,status:'draft',receiptId:'receipt1',chargeId:'charge1',sourceChargeId:'charge1',targetChargeId:'charge1',entryType:'allocate',type:'credit',originalId:'',reason:'synthetic',chargeIds:[],adjustmentIds:[],lines:[],createdAt:at,updatedAt:at,updatedBy:'Synthetic'}));
+saveRecords([...otherFinance,...otherFinance.map(row=>({id:'history-'+row.id,kind:'project_finance_history',targetId:row.id,customerId:'c1',projectId:'p1',action:'创建',actor:'Synthetic',createdAt:at,before:null,after:row}))]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
@@ -96,6 +107,11 @@ try{
   }
   const before=snapshot(),original=await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin'));
   const a=services.sales_a.sales,b=services.sales_b.sales;
+  const fin=services.sales_a.foundation.finance(),otherFin=services.sales_b.foundation.finance();
+  const chargeView=await fin.execute('records','show',{kind:'charges',team:'t1'},'charge1');assert.equal(chargeView.record.amountCents,10000);assert.equal(chargeView.record.status,'draft');assert.equal((await fin.execute('records','history',{kind:'charges',team:'t1'},'charge1')).page.total,1);assert.equal((await otherFin.execute('records','list',{kind:'charges'})).page.total,0);pass();
+  const receiptView=await fin.execute('records','show',{kind:'receipts'},'receipt1');assert.equal(receiptView.record.amountCents,1000);assert(!JSON.stringify(receiptView).includes('SYNTHETIC_BANK_PRIVATE'));assert(!JSON.stringify(receiptView).includes('SYNTHETIC_PAYER_PRIVATE'));pass();
+  for(const kind of ['allocations','adjustments','creditApplications','documents','notices','cases','costs','refunds','requirements','sends','reversals']){const id='finance-'+kind,opts={kind,team:'t1'};assert.equal((await fin.execute('records','show',opts,id)).record.customerId,'c1');assert.equal((await fin.execute('records','history',opts,id)).page.total,1);}assert.equal((await fin.execute('records','show',{kind:'cases'},'finance-cases')).record.customerAccepted,false);pass();
+  for(const [resource,id] of [['receivables','receivable1'],['reconciliations','recon1'],['complaints','complaint1']]){assert.equal((await fin.execute(resource,'list',{team:'t1'})).page.total,1);assert.equal((await fin.execute(resource,'show',{team:'t1'},id)).record.customerId,'c1');assert.equal((await fin.execute(resource,'history',{team:'t1'},id)).page.total,1);await assert.rejects(otherFin.execute(resource,'show',{},id),{code:'NOT_IN_SCOPE'});pass();}
   const ops=services.sales_a.foundation.operations(),otherOps=services.sales_b.foundation.operations();
   assert.equal((await ops.execute('reports','list',{team:'t1'})).page.total,1);assert.equal((await ops.execute('reports','show',{},'report1')).record.quantity,0);pass();
   const task=await ops.execute('finished','show',{team:'t1'},'finished1');assert.equal(task.record.stocked,null);assert.equal(task.shipments.rows[0].received,0);assert.equal((await ops.execute('finished','history',{team:'t1'},'finished1')).page.total,1);await assert.rejects(otherOps.execute('finished','show',{},'finished1'),{code:'NOT_IN_SCOPE'});pass();
@@ -140,7 +156,7 @@ try{
     const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
     const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
-    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1'};
+    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1',records:'charge1',receivables:'receivable1',reconciliations:'recon1',complaints:'complaint1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
     for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
@@ -150,6 +166,7 @@ try{
         if(!['list','export-completed'].includes(action))args.push(ids[resource]);
         if(action==='version')args.push('1');
         if(resource==='quality')args.push('--type','iqc');
+        if(parts[0]==='finance'&&resource==='records')args.push('--kind','charges');
         if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
         if(resource!=='ie-quotes')args.push('--team','t1');
       }

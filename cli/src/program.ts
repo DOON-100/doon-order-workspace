@@ -1,10 +1,11 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
 import type {EngineeringResource, EngineeringAction} from './engineering.js';
 import type {PlanningResource, PlanningAction} from './planning.js';
 import type {OperationResource, OperationAction} from './operations.js';
+import type {FinanceResource, FinanceAction} from './finance.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -23,7 +24,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
-      else if (['sales ','service ','engineering ','planning ','purchasing ','operations '].some(prefix=>command.startsWith(prefix))) {
+      else if (['sales ','service ','engineering ','planning ','purchasing ','operations ','finance '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
@@ -137,6 +138,16 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       if(resource==='quality')command.requiredOption('--type <type>','iqc、first-article、process-quality、outsourcing-quality 或 oqc');
       if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
       command.action(async(...args:any[])=>result(spec.name,await foundation().operations().execute(resource as OperationResource,spec.action as OperationAction,command.opts(),spec.action==='list'?undefined:args[0])));
+    }
+  }
+  const finance=program.command('finance').description('财务、对账及售后查询');
+  for(const resource of ['records','receivables','reconciliations','complaints'] as const){
+    const group=finance.command(resource);
+    for(const spec of financeCommands.filter(c=>c.resource===resource)){
+      const command=group.command(spec.action).description(spec.description).option('--team <id>','业务组编号').option('--customer <id>','客户档案编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
+      if(resource==='records')command.requiredOption('--kind <kind>','财务记录类型').option('--project <id>','项目编号');
+      if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
+      command.action(async(...args:any[])=>result(spec.name,await foundation().finance().execute(resource as FinanceResource,spec.action as FinanceAction,command.opts(),spec.action==='list'?undefined:args[0])));
     }
   }
   try {
