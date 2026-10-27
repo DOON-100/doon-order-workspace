@@ -1,8 +1,9 @@
 import {Command, CommanderError} from 'commander';
-import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, modules, outputSchema, version} from './catalog.js';
+import {commands, foundationCommands, salesCommands, orderCommands, engineeringCommands, planningCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
 import type {EngineeringResource, EngineeringAction} from './engineering.js';
+import type {PlanningResource, PlanningAction} from './planning.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
@@ -21,7 +22,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分查询' : '待接入'}\n`);
-      else if (command.startsWith('sales ') || command.startsWith('service ') || command.startsWith('engineering ')) {
+      else if (['sales ','service ','engineering ','planning ','purchasing '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
@@ -111,6 +112,19 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
       if(spec.action==='version')command.argument('<version>','正整数版本号');
       command.action(async(...args:any[])=>result(spec.name,await foundation().engineering().execute(resource as EngineeringResource,spec.action as EngineeringAction,command.opts(),spec.action==='list'?undefined:args[0],spec.action==='version'?args[1]:undefined)));
+    }
+  }
+  for(const namespace of ['planning','purchasing'] as const){
+    const group=program.command(namespace).description(namespace==='planning'?'PMC核对轮次':'采购、外协与工厂内部订单');
+    for(const resource of [...new Set(planningCommands.filter(c=>c.namespace===namespace).map(c=>c.resource))]){
+      const subgroup=group.command(resource);
+      for(const spec of planningCommands.filter(c=>c.namespace===namespace&&c.resource===resource)){
+        const command=subgroup.command(spec.action).description(spec.description).option('--team <id>','业务组编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
+        if(resource==='rounds')command.option('--scope <scope>','internal 或 external，默认internal');
+        if(['outsource','factory-orders'].includes(resource))command.option('--order <id>','精确订单明细ID');
+        if(spec.action==='list')command.option('--search <text>','按摘要字段搜索');else command.argument('<id>','记录编号');
+        command.action(async(...args:any[])=>result(spec.name,await foundation().planning().execute(resource as PlanningResource,spec.action as PlanningAction,command.opts(),spec.action==='list'?undefined:args[0])));
+      }
     }
   }
   try {

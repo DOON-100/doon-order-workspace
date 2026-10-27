@@ -20,7 +20,7 @@ await build({absWorkingDir:root,entryPoints:['app/api/workspace/[action]/route.t
 await fs.writeFile(path.join(runtime,'seed.mjs'), `
 import fs from 'node:fs/promises';import path from 'node:path';import {db,saveRecords,dataDir} from './runtime.mjs';import {createAccount} from './auth.mjs';
 const at='2026-10-20T00:00:00.000Z',a=await createAccount({username:'sales_a',name:'Synthetic Sales A',role:'sales',password:'Synthetic-Only-2026!'},null),b=await createAccount({username:'sales_b',name:'Synthetic Sales B',role:'sales',password:'Synthetic-Only-2026!'},null);
-await createAccount({username:'broad',name:'Synthetic Broad Reader',role:'viewer',orderScope:'all',password:'Synthetic-Only-2026!'},null);await createAccount({username:'unassigned',name:'Synthetic Unassigned',role:'sales',orderScope:'assigned',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
+await createAccount({username:'broad',name:'Synthetic Broad Reader',role:'viewer',orderScope:'all',password:'Synthetic-Only-2026!'},null);await createAccount({username:'unassigned',name:'Synthetic Unassigned',role:'sales',orderScope:'assigned',password:'Synthetic-Only-2026!'},null);const pmc=await createAccount({username:'pmc_test',name:'Synthetic PMC',role:'pmc',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'sales',password:'Synthetic-Only-2026!'},null);
 const customer=(id,name,memberIds)=>({id,kind:'customer_account',customer:name,customerCode:id.toUpperCase(),salesName:'',serviceName:'',pmcName:'',salesMemberIds:memberIds,serviceMemberIds:[],quoteMemberIds:memberIds,active:true,notes:'',version:1,createdAt:at,updatedAt:at});
 const quote=(id,cid)=>({id,kind:'customer_quote',version:2,status:'draft',customerAccountId:cid,customerName:cid,customerCode:cid.toUpperCase(),companyEn:'Synthetic Co',companyZh:'合成公司',collectionEn:'Frames',collectionZh:'镜架',quoteNo:'TEST-'+id,quoteDate:'2026-10-20',validUntil:'2026-12-31',currency:'EUR',contactName:'Synthetic',businessType:'frame',quoteMode:'order',pricingBasis:'row_item',currencyReviewed:true,lines:[{id:'line_'+id,model:'SYNTH-'+id,descriptionZh:'合成产品',descriptionEn:'Synthetic product',quantity:10,unitPrice:0,toolingFee:0,unit:'pair',supplyStage:'finished',productType:'frame',scopeReviewed:true,sourceFormula:'SYNTHETIC_INTERNAL_FORMULA'}],terms:[{id:'term_'+id,labelZh:'条款',labelEn:'Terms',zh:'待核查',en:'Check',needsReview:true}],reviewNotes:['待核查'],internalNotesZh:'SYNTHETIC_INTERNAL_COST',internalCosts:[],customerCharges:[],createdAt:at,createdBy:'Synthetic',updatedAt:at,updatedBy:'Synthetic'});
 const q1=quote('q1','c1'),q2=quote('q2','c2'),snap=q=>({...q,version:1,status:'confirmed',terms:q.terms.map(t=>({...t,needsReview:false})),reviewNotes:[],confirmedAt:at,confirmedBy:'Synthetic',confirmedById:a.memberId});
@@ -55,6 +55,13 @@ saveRecords([d1,d2,sop,sample,ie,{id:'drawing-history1',kind:'engineering_drawin
 {id:'sop-history1',kind:'engineering_sop_revision',sopId:'sop1',customerId:'c1',version:1,action:'保存',actor:'Synthetic',createdAt:at,snapshot:{...sop,version:1}},
 {id:'ie-history1',kind:'ie_quote_revision',quoteId:'ie1',version:1,revision:1,action:'保存',updatedAt:at,updatedBy:'Synthetic',snapshot:{...ie,version:1}},
 {id:'ie-policy',kind:'ie_quote_policy',version:1,engineerMemberId:a.memberId,reviewerMemberId:b.memberId,finalApproverMemberId:members.find(m=>m.role==='viewer').id,updatedAt:at,updatedBy:'Synthetic'}]);
+saveRecords([{id:'round1',kind:'pmc_round',actorId:pmc.memberId,actor:'Synthetic PMC',lineIds:['o1'],lastLineId:'o1',productionScope:'internal',scope:'synthetic',createdAt:at},
+{id:'round2',kind:'pmc_round',actorId:pmc.memberId,actor:'Synthetic PMC',lineIds:['o1'],lastLineId:'o1',productionScope:'external',scope:'synthetic',createdAt:at},
+{id:'review1',kind:'pmc_review',roundId:'round1',lineId:'o1',orderVersion:1,status:'pending',note:'待核对',actor:'Synthetic PMC',updatedAt:at},
+{id:'purchase1',kind:'purchase',version:1,sourceVersion:1,po:'PO-1',supplier:'Synthetic Supplier',buyer:'Synthetic',itemCode:'ITEM-1',itemName:'Material',unit:'pcs',quantity:10,orderDate:'2026-10-20',dueDate:'2026-11-01',customerOrder:'SO-o1',auditStatus:'已审核',closeStatus:'未关闭',sourceNote:'',sourceRow:2,sourceAsOf:'2026-10-20',sourceHash:'a'.repeat(64),sourceFile:'synthetic.xlsx',sourceSheet:'Sheet',sourceFilter:'',raw:{secret:'SYNTHETIC_RAW_PRIVATE'},promisedDate:'',expectedDate:'',nextFollowupDate:'',followupNote:'',balanceKnown:false,received:0,returnPending:0,lifecycle:'active'},
+{id:'purchase-event1',kind:'purchase_event',purchaseId:'purchase1',version:1,type:'opening',quantity:0,returnPending:0,date:'2026-10-20',reference:'SYN',note:'synthetic',actor:'Synthetic',createdAt:at,event:'核对初始数量'},
+{id:'outs1',kind:'outsource',version:1,lineId:'o1',supplier:'Synthetic Supplier',process:'电镀',quantity:10,sentDate:'2026-10-20',dueDate:'2026-11-01',reference:'OUT-1',note:'synthetic',received:0,approvalStatus:'待主管审批',actor:'Synthetic',createdAt:at},
+{id:'factory1',kind:'factory_order',version:1,lineId:'o1',priorId:'',sourceEnglish:'Synthetic source',chineseProcess:'合成工艺',materialSpec:'',platingSpec:'',lensSpec:'',materialImageConfirmed:false,status:'待客服确认',createdAt:at,createdBy:'Synthetic'}]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
 const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
@@ -69,16 +76,21 @@ let checks=0;const pass=()=>checks++;const testedCommands=[];
 try{
   let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}assert(ready,'Native server starts');
   const services={};
-  for(const username of ['sales_a','sales_b','broad','unassigned','initial']){
+  for(const username of ['sales_a','sales_b','broad','unassigned','pmc_test','initial']){
     const state=new StateStore(path.join(dir,username),testCodec());await state.setup(origin,true);const f=new FoundationService(state);await f.login(async()=>({username,password:'Synthetic-Only-2026!'}));services[username]={foundation:f,sales:f.sales(),state};
   }
   // Authentication audit may advance the workspace revision; establish all test sessions before the read-only baseline.
-  let processState;
+  let processState,pmcProcessState;
   if(process.platform==='win32'){
     processState=new StateStore(path.join(dir,'process-client'),windowsCodec);await processState.setup(origin,true);await new FoundationService(processState).login(async()=>({username:'sales_a',password:'Synthetic-Only-2026!'}));
+    pmcProcessState=new StateStore(path.join(dir,'process-pmc'),windowsCodec);await pmcProcessState.setup(origin,true);await new FoundationService(pmcProcessState).login(async()=>({username:'pmc_test',password:'Synthetic-Only-2026!'}));
   }
   const before=snapshot(),original=await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin'));
   const a=services.sales_a.sales,b=services.sales_b.sales;
+  const plan=services.pmc_test.foundation.planning(),purchase=services.sales_a.foundation.planning(),limited=services.sales_b.foundation.planning();
+  assert.equal((await plan.execute('rounds','list',{team:'t1'})).page.total,1);assert.equal((await plan.execute('rounds','show',{team:'t1'},'round1')).reviews.rows[0].status,'pending');assert.equal((await plan.execute('rounds','list',{team:'t1',scope:'external'})).page.rows[0].id,'round2');await assert.rejects(purchase.execute('rounds','list'),{code:'FORBIDDEN'});pass();
+  assert.equal((await purchase.execute('purchases','list',{team:'t1'})).page.total,1);const purchaseDetail=await purchase.execute('purchases','show',{team:'t1'},'purchase1');assert.equal(purchaseDetail.record.received,null);assert.equal(purchaseDetail.record.balanceKnown,false);assert(!JSON.stringify(purchaseDetail).includes('SYNTHETIC_RAW_PRIVATE'));assert.equal((await purchase.execute('purchases','history',{team:'t1'},'purchase1')).events.total,1);await assert.rejects(limited.execute('purchases','show',{},'purchase1'),{code:'NOT_IN_SCOPE'});pass();
+  for(const [resource,id] of [['outsource','outs1'],['factory-orders','factory1']]){assert.equal((await purchase.execute(resource,'list',{team:'t1'})).page.total,1);assert.equal((await purchase.execute(resource,'show',{team:'t1'},id)).record.lineId,'o1');await assert.rejects(limited.execute(resource,'show',{},id),{code:'NOT_IN_SCOPE'});pass();}
   const eng=services.sales_a.foundation.engineering(),otherEng=services.sales_b.foundation.engineering();
   assert.equal((await eng.execute('drawings','list',{team:'t1'})).page.total,1);assert.equal((await eng.execute('drawings','show',{},'drawing1')).record.newCount,0);assert.equal((await eng.execute('drawings','history',{},'drawing1')).page.total,1);await assert.rejects(otherEng.execute('drawings','show',{},'drawing1'),{code:'NOT_IN_SCOPE'});pass();
   assert.equal((await eng.execute('sops','list',{team:'t1'})).page.total,1);assert.equal((await eng.execute('sops','show',{},'sop1')).record.targetVersion,'V2');assert.equal((await eng.execute('sops','history',{},'sop1')).page.total,1);pass();
@@ -112,7 +124,7 @@ try{
     const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
     const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
-    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1'};
+    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
     for(const spec of [...commands.filter(c=>c.name!=='logout'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
@@ -124,13 +136,13 @@ try{
         if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
         if(resource!=='ie-quotes')args.push('--team','t1');
       }
-      const value=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args,'--json'],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
+      const value=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args,'--json'],{env:{...env,DOON_CLI_HOME:parts[0]==='planning'?pmcProcessState.directory:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
       assert.equal(value.ok,true,spec.name);assert.equal(value.command,spec.name);testedCommands.push(spec.name);
       if(spec.name==='commands')assert.deepEqual(value.data.map(c=>c.name),commands.map(c=>c.name));
       if(spec.name==='logout')assert.equal(value.data.serverRevoked,true);
       else assert.deepEqual(snapshot(),before,'Business calls must preserve records and revision: '+spec.name);
     }
-    assert.equal(testedCommands.length,commands.length);assert.equal(await processState.hasSession(),false);pass();
+    assert.equal(testedCommands.length,commands.length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
   }
   assert.deepEqual(snapshot().records,before.records);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);

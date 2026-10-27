@@ -22,6 +22,10 @@ export const routes = {
   '/api/workspace/sop-history': {method: 'GET', business: true, query: ['id']},
   '/api/workspace/ie-quotes': {method: 'GET', business: true},
   '/api/workspace/ie-quote': {method: 'GET', business: true, query: ['id','version']},
+  '/api/workspace/pmc-data': {method: 'GET', business: true, query: ['scope']},
+  '/api/workspace/purchase-data': {method: 'GET', business: true},
+  '/api/workspace/purchase-history': {method: 'GET', business: true, query: ['id']},
+  '/api/workspace/factory-orders': {method: 'GET', business: true},
 } as const;
 export type Route = keyof typeof routes;
 export type RequestOptions = {query?: Record<string, string>; team?: string};

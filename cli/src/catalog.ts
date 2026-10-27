@@ -1,4 +1,4 @@
-export const version = '0.4.0';
+export const version = '0.5.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -32,7 +32,13 @@ export const engineeringCommands = [
   ['samples','list','list','查询授权样品'],['samples','show','show <id>','查看样品详情'],
   ['ie-quotes','list','list','查询授权IE报价'],['ie-quotes','show','show <id>','查看工程报价与成本'],['ie-quotes','history','history <id>','查询工程报价历史目录'],['ie-quotes','version','version <id> <version>','查看指定工程报价版本'],
 ].map(([resource,action,usage,description])=>({name:`engineering ${resource} ${action}`,resource,action,usage:`engineering ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands];
+export const planningCommands=[
+ ['planning','rounds','list','list','查询PMC核对轮次'],['planning','rounds','show','show <id>','查看核对轮次及明细状态'],
+ ['purchasing','purchases','list','list','查询获授权采购明细'],['purchasing','purchases','show','show <id>','查看采购跟单及收货状态'],['purchasing','purchases','history','history <id>','查询采购事件及最近编辑摘要'],
+ ['purchasing','outsource','list','list','查询获授权外协单'],['purchasing','outsource','show','show <id>','查看外协单'],
+ ['purchasing','factory-orders','list','list','查询工厂内部订单版本'],['purchasing','factory-orders','show','show <id>','查看工厂内部订单版本'],
+].map(([namespace,resource,action,usage,description])=>({name:`${namespace} ${resource} ${action}`,namespace,resource,action,usage:`${namespace} ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
+export const commands = [...foundationCommands, ...salesCommands, ...orderCommands, ...engineeringCommands, ...planningCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -40,4 +46,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? salesCommands.map(c => c.name) : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name)]}));

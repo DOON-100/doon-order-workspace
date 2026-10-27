@@ -1,12 +1,12 @@
 {
   "name": "@doon/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "度昂员工命令行客户端",
   "type": "module",
   "engines": {"node": ">=22.13.0"},
   "bin": {"doon": "dist/index.js"},
-  "files": ["dist", "README.md", "docs/commands.md", "docs/agent-usage.md", "docs/sales.md", "docs/orders.md", "docs/engineering.md"],
+  "files": ["dist", "README.md", "docs/commands.md", "docs/agent-usage.md", "docs/sales.md", "docs/orders.md", "docs/engineering.md", "docs/planning.md"],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
