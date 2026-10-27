@@ -18,9 +18,11 @@ const rawRecords=()=>db.prepare('SELECT data FROM records ORDER BY rowid').all()
 await ok('enroll',{});
 rawInsert({id:'ie_suite_sales',kind:'member',userId:'ie_suite_sales',email:'sales@test.invalid',name:'合成范围业务',role:'sales',customers:[],active:true,createdAt:'2026-10-01'});
 rawInsert({id:'ie_suite_sales_policy',kind:'customer_quote_access',memberIds:['ie_suite_sales'],aliasesByMember:{}});
-const harness={ok,call,pass:console.log,rawRecords,rawInsert,files};
+const harness={ok,call,pass:console.log,rawRecords,rawInsert,files,rawUpdate:record=>db.prepare('UPDATE records SET data=? WHERE id=? AND kind=?').run(JSON.stringify(record),record.id,record.kind)};
 const {testMemberNotificationMailboxes}=await import('./member-notification-mailbox-cases.mjs');await testMemberNotificationMailboxes(harness);
 const {testIeQuotes,testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeQuotes(harness);await testIeToolingChargeSources(harness);
+const {testIeQuoteExcelCalculation}=await import('./ie-quote-calculation-cases.mjs');await testIeQuoteExcelCalculation(harness);
+const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-cases.mjs');await testIeAttachmentsAndHandoff(harness);
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(harness);
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(harness);
 const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass:console.log});

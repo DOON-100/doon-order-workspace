@@ -3,6 +3,10 @@ import {all,strictDate,type CustomerAccount,type Entity,type Member,type State} 
 import {canMaintainCustomerQuoteAccount} from './customer-quote-access';
 import {canReadIeQuote,ieQuotePolicy,iePolicyMember,isIeEngineeringMember} from './ie-quote-access';
 import {ieTemplateStatus} from './ie-quote-template';
+import {ieAttachmentIssues,publicIeAttachments,type IeAttachmentRef} from './ie-quote-attachments';
+import {calculateIeQuote} from './ie-quote-calculation';
+import {ieHandoffFields} from './ie-quote-handoffs';
+export {calculateIeQuote} from './ie-quote-calculation';
 export {canReadIeQuote,readAccess,canFinalApproveIeSales,iePolicyMember,ieQuotePolicy} from './ie-quote-access';
 
 const text=(n=4000)=>z.string().trim().max(n).default('');
@@ -27,30 +31,8 @@ export type IeQuoteFields=Omit<z.infer<typeof ieQuoteInput>,'id'|'version'>;
 export type IeQuoteLine=IeQuoteFields['lines'][number];
 export type IeTooling=Entity & {kind:'ie_quote_tooling';version:number;customerAccountId:string;name:string;reference:string;chargeStatus:'uncollected'|'collected';evidence:string;updatedAt:string;updatedBy:string;updatedById:string};
 export type IeCatalog=Entity & {kind:'ie_quote_catalog';version:number;category:'material'|'process'|'plating'|'general';name:string;specification:string;unit:string;basePrice:number;standardSeconds:number|null;priceSource:string;effectiveDate:string;active:boolean;updatedAt:string;updatedBy:string};
-export type IeQuote=Entity & IeQuoteFields & {kind:'ie_quote';version:number;revision:number;status:'draft'|'submitted'|'returned'|'released';customerName:string;customerCode:string;preparedByIds:string[];policyVersion:number;requiredReviewMemberId:string;costs:IeQuoteCosts;createdAt:string;createdBy:string;createdById:string;updatedAt:string;updatedBy:string;updatedById:string;submittedAt?:string;submittedBy?:string;submittedById?:string;reviewedAt?:string;reviewedBy?:string;reviewedById?:string;reviewReason?:string};
+export type IeQuote=Entity & IeQuoteFields & {kind:'ie_quote';version:number;revision:number;status:'draft'|'submitted'|'returned'|'released';attachmentRefs?:IeAttachmentRef[];customerName:string;customerCode:string;preparedByIds:string[];policyVersion:number;requiredReviewMemberId:string;costs:IeQuoteCosts;createdAt:string;createdBy:string;createdById:string;updatedAt:string;updatedBy:string;updatedById:string;submittedAt?:string;submittedBy?:string;submittedById?:string;reviewedAt?:string;reviewedBy?:string;reviewedById?:string;reviewReason?:string};
 export type IeQuoteRevision=Entity & {kind:'ie_quote_revision';quoteId:string;version:number;revision:number;action:string;updatedAt:string;updatedBy:string;snapshot:IeQuote};
-// Integer micro-CNY arithmetic avoids binary floating point accumulation. Each
-// cost row is rounded once to 6 decimals; no display rounding feeds back into cost.
-const SCALE=BigInt(1000000);
-const micro=(v:number)=>BigInt(Math.round(v*1e6));
-const div=(n:bigint,d:bigint)=>(n+d/BigInt(2))/d;
-const out=(v:bigint)=>Number(v)/1e6;
-const multiply=(values:number[])=>out(div(values.reduce((p,v)=>p*micro(v),BigInt(1)),SCALE**BigInt(values.length-1)));
-const sum=(values:number[])=>out(values.reduce((p,v)=>p+micro(v),BigInt(0)));
-const sumRows=<T extends {notApplicable:boolean}>(rows:T[],calc:(r:T)=>number|null)=>{if(!rows.length)return null;const active=rows.filter(r=>!r.notApplicable),values=active.map(calc);return values.some(v=>v===null)?null:sum(values as number[]);};
-export function calculateIeQuote(fields:IeQuoteFields){
- const lines=fields.lines.map(l=>{
-  const material=sumRows(l.materials,r=>r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient]));
-  const process=sumRows(l.processes,r=>r.basePrice===null||r.difficulty===null?null:multiply([r.basePrice,r.difficulty]));
-  const plating=sumRows(l.outsourcing.filter(r=>r.category==='plating'),r=>r.unitPrice),outsourcing=sumRows(l.outsourcing.filter(r=>r.category==='general'),r=>r.unitPrice);
-  const materialLoss=sumRows(l.materials,r=>r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient,r.lossRate??0.1])),productionCost=[material,materialLoss,process,plating,outsourcing].some(n=>n===null)?null:sum([material!,materialLoss!,process!,plating!,outsourcing!,13.7]);
-  const factoryPriceCny=productionCost===null?null:multiply([productionCost,1.3]);
-  const factoryPriceUsd=factoryPriceCny===null||!fields.exchangeRateCnyPerUsd?null:out(div(micro(factoryPriceCny)*SCALE,micro(fields.exchangeRateCnyPerUsd)));
-  return {lineId:l.id,material,materialLoss,process,plating,outsourcing,indirect:13.7,productionCost,factoryPriceCny,factoryPriceUsd};
- });
- const amounts=fields.tooling.filter(t=>t.chargeMode==='charge').map(t=>t.amount);
- return {formulaVersion:'ie-cost-v2-line-loss',materialLossRate:0.1,factoryMultiplier:1.3,lines,toolingChargeCny:amounts.some(v=>v===null)?null:sum(amounts as number[])};
-}
 export type IeQuoteCosts=ReturnType<typeof calculateIeQuote>;
 export function currentIeQuote(s:State,id:string){return all(s,'ie_quote').find(q=>q.id===id) as IeQuote|undefined;}
 export function releasedIeSnapshot(s:State,id:string,version:number):IeQuote|null{
@@ -64,8 +46,8 @@ export function ieQuoteVersion(s:State,id:string,version?:number):IeQuote|null{
  const rows=(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===id&&r.version===version);return rows.length===1?rows[0].snapshot:null;
 }
 export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return m.active&&q.status==='submitted'&&q.requiredReviewMemberId===m.id&&!q.preparedByIds.includes(m.id)&&!!all(s,'member').find(v=>v.id===m.id&&v.active);}
-export function ieQuoteIssues(s:State,q:IeQuoteFields,ownId=''){
- const issues:string[]=[],need=(condition:unknown,message:string)=>{if(!condition)issues.push(message);};
+export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttachmentRef[]},ownId=''){
+ const issues:string[]=ieAttachmentIssues(s,q,ownId),need=(condition:unknown,message:string)=>{if(!condition)issues.push(message);};
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId);need(account?.active,'客户档案不存在或已停用');
  need(q.quoteNo,'填写工程报价编号');need(q.quoteDate,'填写报价日期');need(q.validUntil,'填写报价有效期');need(!q.validUntil||!q.quoteDate||q.validUntil>=q.quoteDate,'有效期不能早于报价日期');need(q.batchId,'填写客户报价批次编号，用于跨款共用模具计费');
  need(q.exchangeRateCnyPerUsd!==null&&q.exchangeRateCnyPerUsd>0,'手填正数汇率（1 USD = x CNY）');need(q.exchangeRateDate,'填写汇率采集日期');need(q.exchangeRateSource,'填写汇率来源');
@@ -74,9 +56,9 @@ export function ieQuoteIssues(s:State,q:IeQuoteFields,ownId=''){
   need(l.quantityMin&&l.quantityMax,prefix+'填写数量档上下限');need(l.quantityMin===null||l.quantityMax===null||l.quantityMax>=l.quantityMin,prefix+'数量档上限不能小于下限');
   need(l.materials.length,prefix+'列出材料；不适用须明确勾选');need(l.processes.length,prefix+'列出工艺；不适用须明确勾选');
   for(const category of ['plating','general'])need(l.outsourcing.some(r=>r.category===category),prefix+(category==='plating'?'电镀':'一般外发')+'须列明或显式不适用');
-  l.materials.forEach((r,i)=>{need(r.name,prefix+`材料 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`材料 ${i+1} 不适用须说明`);return;}need(r.basePrice!==null&&r.usage!==null&&r.coefficient!==null,prefix+`材料 ${i+1} 未税基价 / 用量 / 系数缺失（空白不算 0）`);need(r.unit,prefix+`材料 ${i+1} 单位缺失`);need(r.priceSource,prefix+`材料 ${i+1} 价格依据缺失`);need((r.lossRate??0.1)===0.1||r.lossAdjustmentReason,prefix+`材料 ${i+1} 调整默认 10% 损耗须说明原因`);});
+  l.materials.forEach((r,i)=>{need(r.name,prefix+`材料 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`材料 ${i+1} 不适用须说明`);return;}need(r.basePrice!==null&&r.usage!==null&&r.coefficient!==null,prefix+`材料 ${i+1} 未税基价 / 用量 / 系数缺失（空白不算 0）`);need(r.priceSource,prefix+`材料 ${i+1} 价格依据缺失`);need((r.lossRate??0.1)===0.1||r.lossAdjustmentReason,prefix+`材料 ${i+1} 调整默认 10% 损耗须说明原因`);});
   const ids=new Set(l.processes.map(r=>r.id));
-  l.processes.forEach((r,i)=>{need(r.name,prefix+`工序 ${i+1} 名称为空`);need(!r.parentId||ids.has(r.parentId)&&r.parentId!==r.id,prefix+`工序 ${i+1} 上级无效`);let next=r.parentId,seen=new Set([r.id]);while(next){if(seen.has(next)){issues.push(prefix+`工序 ${i+1} 上下级形成循环`);break;}seen.add(next);next=l.processes.find(p=>p.id===next)?.parentId||'';}if(r.notApplicable){need(r.notes,prefix+`工序 ${i+1} 不适用须说明`);return;}need(r.standardSeconds!==null,prefix+`工序 ${i+1} 标准秒工时未填`);need(r.basePrice!==null&&r.difficulty!==null,prefix+`工序 ${i+1} 基价 / 难度系数缺失`);need(r.priceSource,prefix+`工序 ${i+1} 价格依据缺失`);});
+  l.processes.forEach((r,i)=>{need(r.name,prefix+`工序 ${i+1} 名称为空`);need(!r.parentId||ids.has(r.parentId)&&r.parentId!==r.id,prefix+`工序 ${i+1} 上级无效`);let next=r.parentId,seen=new Set([r.id]);while(next){if(seen.has(next)){issues.push(prefix+`工序 ${i+1} 上下级形成循环`);break;}seen.add(next);next=l.processes.find(p=>p.id===next)?.parentId||'';}if(r.notApplicable){need(r.notes,prefix+`工序 ${i+1} 不适用须说明`);return;}need(r.basePrice!==null&&r.difficulty!==null,prefix+`工序 ${i+1} 基价 / 难度系数缺失`);need(r.priceSource,prefix+`工序 ${i+1} 价格依据缺失`);});
   l.outsourcing.forEach((r,i)=>{need(r.name,prefix+`外发 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`外发 ${i+1} 不适用须说明`);return;}need(r.unitPrice!==null,prefix+`外发 ${i+1} 未税单价缺失`);need(r.priceSource,prefix+`外发 ${i+1} 价格依据缺失`);});
  });
  const lineIds=new Set(q.lines.map(l=>l.id)),used=new Set<string>();
@@ -103,7 +85,7 @@ export function publicIeQuote(s:State,m:Member,q:IeQuote){
  const current=currentIeQuote(s,q.id),latest=current?.version===q.version,editable=latest&&['draft','returned'].includes(q.status)&&isIeEngineeringMember(s,m);
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId) as CustomerAccount|undefined;
  const templateStatus=ieTemplateStatus(s,m,q),issues=ieQuoteIssues(s,q,q.id);
- return {...q,costs:calculateIeQuote(q),issues,templateStatus,canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&isIeEngineeringMember(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
+ return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs:calculateIeQuote(q),issues,templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&isIeEngineeringMember(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
  history:(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&canReadIeQuote(s,m,r.snapshot)).sort((a,b)=>b.version-a.version).map(({version,revision,action,updatedAt,updatedBy,snapshot})=>({version,revision,action,updatedAt,updatedBy,status:snapshot.status})),
  };
 }

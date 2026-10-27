@@ -4,6 +4,8 @@ import {AppError,audit,commit,json} from './store';
 import {ieWorkbookGet,ieWorkbookPost} from './ie-quote-workbook-api';
 import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notification-api';
 import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
+import {ieAttachmentGet,ieAttachmentPost} from './ie-quote-attachment-api';
+import {ieHandoffGet,ieHandoffPost} from './ie-quote-handoff-api';
 import {canConfigureIeQuotes,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
 import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
 
@@ -35,6 +37,8 @@ function validateCatalog(s:State,fields:IeQuoteFields){
 function publicTooling(t:IeTooling){const {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy}=t;return {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy};}
 
 export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise<Response|null>{
+ const handoff=ieHandoffGet(action,url,s,m);if(handoff)return handoff;
+ const attachment=await ieAttachmentGet(action,url,s,m);if(attachment)return attachment;
  const memberMailbox=memberNotificationMailboxGet(action,s,m);if(memberMailbox)return memberMailbox;
  const notification=await ieQuoteNotificationGet(action,url,s,m);if(notification)return notification;
  const workbook=await ieWorkbookGet(action,url,s,m);if(workbook)return workbook;
@@ -55,6 +59,8 @@ export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise
  });
 }
 export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ const handoff=await ieHandoffPost(action,req,s,m);if(handoff)return handoff;
+ const attachment=await ieAttachmentPost(action,req,s,m);if(attachment)return attachment;
  const memberMailbox=await memberNotificationMailboxPost(action,req,s,m);if(memberMailbox)return memberMailbox;
  const notification=await ieQuoteNotificationPost(action,req,s,m);if(notification)return notification;
  const workbook=await ieWorkbookPost(action,req,s,m);if(workbook)return workbook;
@@ -69,6 +75,7 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
   if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');}
   const a=all(s,'customer_account').find(a=>a.id===fields.customerAccountId) as CustomerAccount|undefined;if(!a?.active)throw new AppError('请选择有效的客户档案。');
   validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:[...new Set([...(before?.preparedByIds||[]),m.id])],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  q.attachmentRefs=(before?.attachmentRefs||[]).filter(ref=>fields.lines.some(line=>line.id===ref.lineId));
   return persist(s,m,q,before,before?'保存工程报价草稿':'创建工程报价草稿');
  }
  if(action==='ie-quote-review'){

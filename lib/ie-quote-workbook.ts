@@ -1,5 +1,6 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import type { IeQuote } from './ie-quotes';
+import { calculateIeQuote, ieCalculationVersion, ieCostMultiply, ieCostSum, ieCostRoundCents, type IeFormulaVersion } from './ie-quote-calculation';
 
 /** This is an INTERNAL cost workbook. Customer quotations use a separate exporter.
  * Never use a historical multi-customer workbook as a reusable blank template.
@@ -11,9 +12,9 @@ const MAX_ENTRY_BYTES = 24 * 1024 * 1024;
 const MAX_ENTRIES = 512;
 const ZIP_OPTIONS = { level: 6 as const, mtime: new Date(1980, 0, 1, 0, 0, 0) };
 const MATERIAL_FIRST = 7, MATERIAL_LAST = 35, PROCESS_FIRST = 42, PROCESS_LAST = 49;
-type CellValue = string | number | null | { formula: string; value: number };
+type CellValue = string | number | null | { formula: string; value: number | string };
 type Cells = Record<string, CellValue>;
-export type IeWorkbookLine = { code?: string; name: string; specification?: string; color?: string; description?: string; quantity: number; unitCostCny: number; lossRate?: number; lossAdjustmentReason?: string; notes?: string };
+export type IeWorkbookLine = { code?: string; name: string; specification?: string; color?: string; description?: string; quantity: number; unitCostCny: number; basePrice?: number; coefficient?: number; lossRate?: number; lossAdjustmentReason?: string; notes?: string };
 export type IeWorkbookToolingCharge = { key: string; name: string; amountCny: number | null; alreadyCharged?: boolean; chargeMode?: 'charge' | 'already_charged' | 'included_in_batch' | 'not_applicable'; sourceReference?: string; evidence?: string; notes?: string };
 export type IeWorkbookBinding = {
   sheetName: string; customerCode: string; model: string; quantity: number;
@@ -21,6 +22,7 @@ export type IeWorkbookBinding = {
   directLaborCny: number; toolingCharges: IeWorkbookToolingCharge[];
   factory?: string; quoteNo?: string; revision?: number; version?: number; status?: string;
   color?: string; drawingNo?: string; drawingRevision?: string; quantityMax?: number;
+  formulaVersion?: IeFormulaVersion;
   expectedAmounts?: { material: number; materialLoss: number; productionCost: number; factoryPriceCny: number; factoryPriceUsd: number };
 };
 export type IeTemplateSheet = { name: string; state: string; path: string; printArea: string; layoutSha256: string; customerCode: string; model: string };
@@ -214,11 +216,11 @@ export function makeIeWorkbookBindings(quote: IeQuote, sheetBindings: { sheetNam
     return {
       sheetName: mapping.sheetName, customerCode: quote.customerCode, model: line.model, quantity: line.quantityMin ?? 0, exchangeRateCnyPerUsd: quote.exchangeRateCnyPerUsd!,
       color: line.color, drawingNo: line.drawingNo, drawingRevision: line.drawingRevision, quantityMax: line.quantityMax ?? undefined,
-      quoteNo: quote.quoteNo, revision: quote.revision, version: quote.version, status: quote.status, directLaborCny: costs.process,
+      quoteNo: quote.quoteNo, revision: quote.revision, version: quote.version, status: quote.status, directLaborCny: costs.process, formulaVersion: ieCalculationVersion(quote),
       expectedAmounts: { material: costs.material, materialLoss: costs.materialLoss, productionCost: costs.productionCost, factoryPriceCny: costs.factoryPriceCny, factoryPriceUsd: costs.factoryPriceUsd },
       materials: line.materials.filter(m => !m.notApplicable).map(m => {
         if (m.basePrice === null || m.usage === null || m.coefficient === null) fail('材料基价、用量或系数尚未填写', 'IE_EXPORT_INPUT');
-        return { name: m.name, specification: m.specification, quantity: m.usage, unitCostCny: m.basePrice * m.coefficient, lossRate: m.lossRate, lossAdjustmentReason: m.lossAdjustmentReason, notes: m.notes };
+        return { name: m.name, specification: m.specification, quantity: m.usage, unitCostCny: m.basePrice * m.coefficient, basePrice: m.basePrice, coefficient: m.coefficient, lossRate: m.lossRate, lossAdjustmentReason: m.lossAdjustmentReason, notes: m.notes };
       }),
       processes: line.outsourcing.filter(p => !p.notApplicable).map(p => { if (p.unitPrice === null) fail('外发单价尚未填写', 'IE_EXPORT_INPUT'); return { name: p.name, quantity: 1, unitCostCny: p.unitPrice, notes: p.notes }; }),
       toolingCharges: quote.tooling.filter(t => t.lineIds.includes(line.id)).map(t => {
@@ -246,6 +248,7 @@ const textWidth = (value: string) => [...value].reduce((n, character) => n + (ch
 const round = (n: number) => Math.round((n + Number.EPSILON) * 1e6) / 1e6;
 const f = (formula: string, value: number): CellValue => ({ formula, value });
 function quoteCells(binding: IeWorkbookBinding) {
+  const excel = binding.formulaVersion === 'ie-cost-v3-excel', digits = excel ? 2 : 6;
   number(binding.quantity, '报价数量', true); number(binding.exchangeRateCnyPerUsd, '手填汇率', true); number(binding.directLaborCny, '直接人工');
   string(binding.customerCode, '客户代码', true); string(binding.model, '款号', true);
   fits(binding.customerCode, 24, '客户代码'); fits(binding.model, 24, '款号'); fits(binding.drawingNo, 24, '图纸编号'); fits(binding.quoteNo, 24, '报价编号'); fits(String(binding.exchangeRateCnyPerUsd), 11, '汇率');
@@ -264,30 +267,32 @@ function quoteCells(binding: IeWorkbookBinding) {
       const line = lines[row - first]; if (!line) continue;
       string(line.name, '项目名称', true); number(line.quantity, '项目用量'); number(line.unitCostCny, '项目单价');
       fits(line.name, material ? 24 : 20, '项目名称'); fits(material ? line.specification : line.description, 28, '规格描述'); fits(line.color, 20, '颜色');
-      const amount = round(line.quantity * line.unitCostCny); total += amount;
+      const factors = line.basePrice !== undefined && line.coefficient !== undefined ? [line.basePrice, line.quantity, line.coefficient] : [line.quantity, line.unitCostCny];
+      const amount = ieCostMultiply(factors, material ? digits : 6); total += amount;
       out[`C${row}`] = material ? string(line.code, '物料编码') : line.name;
       out[`D${row}`] = material ? line.name : string(line.color, '颜色');
       out[`E${row}`] = material ? string(line.specification, '物料规格') : string(line.description, '工序描述');
-      out[`F${row}`] = line.quantity; out[`G${row}`] = line.unitCostCny; out[`H${row}`] = f(`ROUND(F${row}*G${row},6)`, amount); out[`I${row}`] = string(line.notes, '备注');
+      out[`F${row}`] = line.quantity; out[`G${row}`] = line.unitCostCny; out[`H${row}`] = f(`ROUND(F${row}*G${row},${material ? digits : 6})`, amount); out[`I${row}`] = string(line.notes, '备注');
       if (material) {
         const lossRate = line.lossRate ?? 0.1; number(lossRate, '材料总损耗率');
         if (lossRate > 10) fail('材料损耗率超过允许范围', 'IE_EXPORT_INPUT');
         // The rate is stated in the same row; no hidden helper or new print column.
         const fullNote = `损耗 ${round(lossRate * 100)}%${line.notes ? `；${line.notes}` : ''}`;
         out[`I${row}`] = textWidth(fullNote) <= 14 && !/[\r\n]/.test(fullNote) ? fullNote : `${round(lossRate * 100)}%附页`;
-        losses.push(round(line.quantity * line.unitCostCny * lossRate)); lossFormulas.push(`ROUND(F${row}*G${row}*${lossRate},6)`);
+        losses.push(ieCostMultiply(excel ? [amount, lossRate] : [...factors, lossRate])); lossFormulas.push(excel ? `ROUND(H${row}*${lossRate},6)` : `ROUND(F${row}*G${row}*${lossRate},6)`);
       }
       fits(out[`I${row}`] as string, 26, '行备注（含损耗率）');
     }
     return round(total);
   };
   const materials = fill(binding.materials, MATERIAL_FIRST, MATERIAL_LAST, true), processes = fill(binding.processes, PROCESS_FIRST, PROCESS_LAST, false);
-  const loss = round(losses.reduce((a, b) => a + b, 0)), materialTotal = round(materials + loss), labor = round(binding.directLaborCny + 13.7), cost = round(materialTotal + processes + labor), factory = round(cost * 1.3);
+  const rawLoss = ieCostSum(losses), loss = excel ? ieCostRoundCents(rawLoss) : rawLoss, materialTotal = ieCostSum([materials, loss]), labor = ieCostSum([binding.directLaborCny, 13.7]), cost = ieCostSum([materialTotal, processes, labor]), factory = ieCostMultiply([cost, 1.3]);
   if (binding.expectedAmounts) {
     const actual = { material: materials, materialLoss: loss, productionCost: cost, factoryPriceCny: factory, factoryPriceUsd: round(factory / binding.exchangeRateCnyPerUsd) };
     for (const key of Object.keys(actual) as (keyof typeof actual)[]) if (Math.abs(actual[key] - binding.expectedAmounts[key]) > 0.0000005) fail('打印计算与当前工程报价不一致，已停止导出以避免金额错误', 'IE_EXPORT_RECONCILIATION');
   }
-  Object.assign(out, { H37: f('SUM(H7:H35)', materials), H38: f(lossFormulas.length ? `SUM(${lossFormulas.join(',')})` : '0', loss), H39: f('H37+H38', materialTotal), H50: f('SUM(H42:H49)', processes), F53: 1, G53: binding.directLaborCny, H53: f('ROUND(F53*G53,6)', round(binding.directLaborCny)), H61: f('SUM(H53:H60)', labor), H62: f('H39+H50+H61', cost), H63: f('ROUND(H62/$L$4,6)', round(cost / binding.exchangeRateCnyPerUsd)), H66: '生产成本×1.3出厂价', I66: f('ROUND(H62*1.3,6)', factory), H67: '出厂价（USD/副）', I67: f('ROUND(I66/$L$4,6)', round(factory / binding.exchangeRateCnyPerUsd)), H68: '销售毛利率', I68: f('(I66-H62)/I66', (factory - cost) / factory) });
+  const lossFormula = lossFormulas.length ? `SUM(${lossFormulas.join(',')})` : '0';
+  Object.assign(out, { H37: f('SUM(H7:H35)', materials), H38: f(excel ? `ROUND(${lossFormula},2)` : lossFormula, loss), H39: f('H37+H38', materialTotal), H50: f('SUM(H42:H49)', processes), F53: 1, G53: binding.directLaborCny, H53: f('ROUND(F53*G53,6)', round(binding.directLaborCny)), H61: f('SUM(H53:H60)', labor), H62: f('H39+H50+H61', cost), H63: f('ROUND(H62/$L$4,6)', round(cost / binding.exchangeRateCnyPerUsd)), H66: '生产成本×1.3出厂价', I66: f('ROUND(H62*1.3,6)', factory), H67: '出厂价（USD/副）', I67: f('ROUND(I66/$L$4,6)', round(factory / binding.exchangeRateCnyPerUsd)), H68: '销售毛利率', I68: f('(I66-H62)/I66', (factory - cost) / factory) });
   out.H67 = `${binding.quantity}${binding.quantityMax && binding.quantityMax !== binding.quantity ? `–${binding.quantityMax}` : ''}副出厂价USD`;
   for (let row = 53; row <= 60; row++) { out[`D${row}`] = null; out[`E${row}`] = null; out[`I${row}`] = null; }
   [5, 3, 0.2, 2, 2, 1.5].forEach((amount, i) => { const row = 54 + i; out[`F${row}`] = 1; out[`G${row}`] = amount; out[`H${row}`] = f(`ROUND(F${row}*G${row},6)`, amount); });
@@ -302,6 +307,7 @@ function serializeCell(original: string, address: string, value: CellValue) {
   if (value === null) return `<c${cellAttributes}/>`;
   if (typeof value === 'string') return `<c${cellAttributes} t="inlineStr"><is><t xml:space="preserve">${xml(value)}</t></is></c>`;
   if (typeof value === 'number') return `<c${cellAttributes}><v>${value}</v></c>`;
+  if (typeof value.value === 'string') return `<c${cellAttributes} t="str"><f>${xml(value.formula)}</f><v>${xml(value.value)}</v></c>`;
   if (!Number.isFinite(value.value)) fail('计算结果无效，请检查报价金额', 'IE_EXPORT_INPUT');
   return `<c${cellAttributes}><f>${xml(value.formula)}</f><v>${value.value}</v></c>`;
 }
@@ -385,7 +391,11 @@ function appendCostSupplement(entries: Record<string, Uint8Array>, bindings: IeW
   rows[lossTitle - 1] = rows[lossTitle - 1].replace(/ht="[^"]*"/, 'ht="22"');
   add(['款式', '材料名称', '规格描述', '正常损耗', '额外（百分点）', '本项合计损耗', '损耗金额（CNY）', '完整备注 / 调整原因'], true);
   for (const binding of bindings) {
-    for (const material of binding.materials) add([binding.model, material.name, material.specification || '', 0.1, round(((material.lossRate ?? 0.1) - 0.1) * 100), material.lossRate ?? 0.1, round(material.quantity * material.unitCostCny * (material.lossRate ?? 0.1)), [`用量 ${material.quantity}；计价单价 ${material.unitCostCny} CNY`, material.notes, material.lossAdjustmentReason ? `调整原因：${material.lossAdjustmentReason}` : ''].filter(Boolean).join('\n')], false, [6], [3, 5]);
+    for (const material of binding.materials) {
+      const factors = material.basePrice !== undefined && material.coefficient !== undefined ? [material.basePrice,material.quantity,material.coefficient] : [material.quantity,material.unitCostCny];
+      const loss = ieCostMultiply(binding.formulaVersion === 'ie-cost-v3-excel' ? [ieCostMultiply(factors,2),material.lossRate??.1] : [...factors,material.lossRate??.1]);
+      add([binding.model, material.name, material.specification || '', 0.1, round(((material.lossRate ?? 0.1) - 0.1) * 100), material.lossRate ?? 0.1, loss, [`用量 ${material.quantity}；计价单价 ${material.unitCostCny} CNY`, material.notes, material.lossAdjustmentReason ? `调整原因：${material.lossAdjustmentReason}` : '',binding.formulaVersion === 'ie-cost-v3-excel'?'材料行按分位，损耗加权合计后再按分位。':''].filter(Boolean).join('\n')], false, [6], [3, 5]);
+    }
     if (!binding.materials.length) add([binding.model, '材料已明确不适用', '', null, null, null, 0, ''], false, [6], [3, 5]);
   }
   add(['说明', '共用收费编号只列一次。已收费或关联报价已列费的项目，本次收费为 0；原登记金额仅供追溯。']);
@@ -405,7 +415,7 @@ function appendCostSupplement(entries: Record<string, Uint8Array>, bindings: IeW
  * shared strings change. Print setup, styles, drawings, dimensions and relationships
  * remain intact. Unsupported auxiliary worksheets deliberately block the operation.
  */
-export async function exportIeQuoteWorkbook(bytes: Uint8Array, request: { expectedTemplateSha256: string; bindings: IeWorkbookBinding[] }) {
+export async function exportIeQuoteWorkbook(bytes: Uint8Array, request: { expectedTemplateSha256: string; bindings: IeWorkbookBinding[]; attachmentRefs?: IeQuote['attachmentRefs'] }) {
   const { inspection, entries } = await inspectArchive(bytes);
   if (inspection.sha256 !== request.expectedTemplateSha256) fail('模板原件已变化，请重新核验后导出', 'IE_TEMPLATE_VERSION');
   if (!inspection.canExport) fail(inspection.blockers.join('；'), 'IE_TEMPLATE_UNMAPPED');
@@ -438,5 +448,138 @@ export async function exportIeQuoteWorkbook(bytes: Uint8Array, request: { expect
     entries['xl/sharedStrings.xml'] = strToU8(strFromU8(entries['xl/sharedStrings.xml']).replace(/<si\b[^>]*>[\s\S]*?<\/si>/g, entry => used.has(index++) ? entry : '<si><t></t></si>'));
   }
   appendCostSupplement(entries, request.bindings, [...tooling.values()]);
+  if (request.attachmentRefs?.length) appendAttachmentManifest(entries, request.attachmentRefs);
   return { bytes: zipSync(entries, ZIP_OPTIONS), inspection, toolingCharges: [...tooling.values()] };
+}
+
+type GridRow = CellValue[];
+const colName = (index: number) => { let name = ''; for (let n = index + 1; n; n = Math.floor((n - 1) / 26)) name = String.fromCharCode(65 + (n - 1) % 26) + name; return name; };
+const draftFormula = (formula: string, value: number | null): CellValue => ({ formula, value: value === null ? '' : value });
+const ref = (sheet: string, cell: string) => `'${sheet.replace(/'/g, "''")}'!${cell}`;
+
+/** Adds an independent sheet; the bound STYLE XML and its print setup are untouched. */
+function appendGridSheet(entries: Record<string, Uint8Array>, name: string, rows: GridRow[], widths: number[]) {
+  const styles = appendStyles(entries), workbook = textEntry(entries, 'xl/workbook.xml'), existing = [...workbook.matchAll(/<sheet\b[^>]*\/?\s*>/g)];
+  if (existing.some(s => attrs(s[0]).name === name)) fail('导出辅助工作表名称冲突', 'IE_TEMPLATE_BINDING');
+  const sheetId = Math.max(0, ...existing.map(s => Number(attrs(s[0]).sheetId))) + 1, id = `ieGrid${sheetId}`, path = `xl/worksheets/ie-grid-${sheetId}.xml`;
+  const rowXml = rows.map((values, i) => {
+    const height = Math.min(400, Math.max(24, ...values.map((v, c) => typeof v === 'string' ? (Math.ceil(textWidth(v) / Math.max(8, (widths[c] || 18) - 2)) + (v.match(/\n/g)?.length || 0)) * 14 + 6 : 24)));
+    return `<row r="${i + 1}" ht="${height}" customHeight="1">${values.map((value, c) => serializeCell(`<c r="${colName(c)}${i + 1}" s="${i === 0 ? styles.heading : typeof value === 'number' || typeof value === 'object' && value !== null ? styles.number : styles.text}"/>`, `${colName(c)}${i + 1}`, value)).join('')}</row>`;
+  }).join('');
+  const last = `${colName(widths.length - 1)}${Math.max(1, rows.length)}`;
+  entries[path] = strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${last}"/><sheetViews><sheetView showGridLines="1" workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="24"/><cols>${widths.map((w,i) => `<col min="${i+1}" max="${i+1}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${rowXml}</sheetData><printOptions horizontalCentered="1"/><pageMargins left="0.25" right="0.25" top="0.35" bottom="0.35" header="0.15" footer="0.15"/><pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/><headerFooter><oddFooter>内部工程资料 &amp;R&amp;P / &amp;N</oddFooter></headerFooter></worksheet>`);
+  const names = `<definedName name="_xlnm.Print_Area" localSheetId="${existing.length}">${xml(`'${name}'!$A$1:$${colName(widths.length - 1)}$${Math.max(1, rows.length)}`)}</definedName><definedName name="_xlnm.Print_Titles" localSheetId="${existing.length}">${xml(`'${name}'!$1:$1`)}</definedName>`;
+  let next = workbook.replace('</sheets>', `<sheet name="${xml(name)}" sheetId="${sheetId}" r:id="${id}"/></sheets>`);
+  next = next.includes('</definedNames>') ? next.replace('</definedNames>', names + '</definedNames>') : next.replace('</sheets>', '</sheets><definedNames>' + names + '</definedNames>');
+  entries['xl/workbook.xml'] = strToU8(next);
+  entries['xl/_rels/workbook.xml.rels'] = strToU8(textEntry(entries, 'xl/_rels/workbook.xml.rels').replace('</Relationships>', `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/ie-grid-${sheetId}.xml"/></Relationships>`));
+  entries['[Content_Types].xml'] = strToU8(textEntry(entries, '[Content_Types].xml').replace('</Types>', `<Override PartName="/${path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>`));
+}
+
+function appendAttachmentManifest(entries: Record<string, Uint8Array>, attachments: IeQuote['attachmentRefs'] = []) {
+  appendGridSheet(entries, '图纸附件清单', [['款式行编号', '图纸编号', '图纸版本', '原文件名', 'SHA-256', '附件编号'], ...attachments.map(a => [a.lineId, a.drawingNo, a.drawingRevision, a.filename, a.sha256, a.attachmentId])], [24, 24, 18, 42, 68, 32]);
+}
+
+/** Clean general-purpose grid. It carries no uploaded customer pictures or old data.
+ * The section/column positions follow STYLE, but this is not the client's exact print template. */
+function genericDraftTemplate(quote: IeQuote) {
+  const entries: Record<string, Uint8Array> = {}, mappings = quote.lines.map((l,i) => ({ lineId: l.id, sheetName: `STYLE${i + 1}`, path: `xl/worksheets/sheet${i + 1}.xml` }));
+  const relationship = (id: string, type: string, target: string) => `<Relationship Id="${id}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/${type}" Target="${target}"/>`;
+  const rels = (s: string) => `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${s}</Relationships>`;
+  entries['[Content_Types].xml'] = strToU8(`<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${mappings.map(m => `<Override PartName="/${m.path}" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}</Types>`);
+  entries['_rels/.rels'] = strToU8(rels(relationship('office', 'officeDocument', 'xl/workbook.xml')));
+  entries['xl/_rels/workbook.xml.rels'] = strToU8(rels(relationship('styles','styles','styles.xml') + mappings.map((m,i) => relationship(`r${i+1}`,'worksheet',m.path.slice(3))).join('')));
+  entries['xl/workbook.xml'] = strToU8(`<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><bookViews><workbookView/></bookViews><sheets>${mappings.map((m,i) => `<sheet name="${m.sheetName}" sheetId="${i+1}" r:id="r${i+1}"/>`).join('')}</sheets><definedNames>${mappings.map((m,i) => `<definedName name="_xlnm.Print_Area" localSheetId="${i}">'${m.sheetName}'!$B$1:$I$69</definedName>`).join('')}</definedNames><calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`);
+  entries['xl/styles.xml'] = strToU8('<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="9"/><name val="Microsoft YaHei"/></font><font><b/><sz val="10"/><name val="Microsoft YaHei"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border/><border><left style="thin"/><right style="thin"/><top style="thin"/><bottom style="thin"/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>');
+  const labels: Cells = { E1:'产品物料清单及报价明细', B3:'客户', D3:'工厂型号', F3:'图纸号', B5:'一、材料', B37:'材料小计', B38:'材料损耗', B39:'材料合计', B40:'二、电镀 / 外发费用', B50:'外发费用合计', B51:'三、人工及间接费用', B61:'人工间接合计', B62:'成本合计（元/副）', B63:'成本（美元/副）', B64:'内部成本分析 / 出厂核价', B66:'材料', B67:'外发', B68:'人工间接', E66:'损耗', E67:'辅料', E68:'加价金额' };
+  ['序号','物料编码','物料名称','规格','用量','未税单价','金额','备注'].forEach((v,i) => labels[`${colName(i+1)}6`] = v);
+  ['序号','项目','颜色','说明','数量','未税单价','金额','备注'].forEach((v,i) => { labels[`${colName(i+1)}41`] = v; labels[`${colName(i+1)}52`] = v; });
+  ['直接人工','间接人工','房租','水费','电费','折旧','辅料'].forEach((v,i) => labels[`C${53+i}`] = v);
+  for (const m of mappings) {
+    let data = '';
+    for (let row=1;row<=69;row++) data += `<row r="${row}" ht="${row===1?28:18}" customHeight="1">${[...'BCDEFGHI'].map(c => serializeCell(`<c r="${c}${row}" s="${[1,5,6,37,38,39,40,41,50,51,52,61,62,63,64].includes(row)?2:1}"/>`,`${c}${row}`,labels[`${c}${row}`]??null)).join('')}</row>`;
+    const merges = ['E1:I1','B5:I5','B37:G37','B38:F38','B39:G39','B40:I40','B50:G50','B51:I51','B61:G61','B62:G62','B63:G63','B64:I64'];
+    entries[m.path] = strToU8(`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="B1:L69"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="B7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>${[5,15,20,20,12,12,16,26].map((w,i)=>`<col min="${i+2}" max="${i+2}" width="${w}" customWidth="1"/>`).join('')}</cols><sheetData>${data}</sheetData><mergeCells count="${merges.length}">${merges.map(m=>`<mergeCell ref="${m}"/>`).join('')}</mergeCells><printOptions horizontalCentered="1"/><pageMargins left="0.2" right="0.2" top="0.3" bottom="0.3" header="0.1" footer="0.1"/><pageSetup paperSize="9" orientation="portrait" fitToWidth="1" fitToHeight="1"/><headerFooter><oddFooter>未审填报草稿 · 通用版式</oddFooter></headerFooter></worksheet>`);
+  }
+  return { entries, mappings };
+}
+
+/** Incomplete, explicitly UNREVIEWED filling copy. It never authorizes approval,
+ * release, customer pricing or mail. Blank inputs yield blank formula results. */
+export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: { issues: string[]; template?: { bytes: Uint8Array; expectedSha256: string; sheetBindings: { sheetName: string; lineId: string }[] } }) {
+  let entries: Record<string, Uint8Array>, mappings: { sheetName: string; lineId: string; path: string }[];
+  if (options.template) {
+    const inspected = await inspectArchive(options.template.bytes);
+    if (inspected.inspection.sha256 !== options.template.expectedSha256) fail('模板原件已变化，请重新核验后导出', 'IE_TEMPLATE_VERSION');
+    if (!inspected.inspection.canExport) fail(inspected.inspection.blockers.join('；'), 'IE_TEMPLATE_UNMAPPED');
+    const binding = options.template.sheetBindings, normalize = (v: string) => v.normalize('NFKC').trim().toUpperCase();
+    if (binding.length !== quote.lines.length || binding.length !== inspected.inspection.sheets.length || new Set(binding.map(b=>b.lineId)).size !== binding.length || new Set(binding.map(b=>b.sheetName)).size !== binding.length) fail('草稿必须逐款绑定全部模板，不得夹带其他款资料', 'IE_TEMPLATE_BINDING');
+    mappings = binding.map(b => { const sheet = inspected.inspection.sheets.find(s=>s.name===b.sheetName), line = quote.lines.find(l=>l.id===b.lineId); if (!sheet || !line || normalize(sheet.customerCode)!==normalize(quote.customerCode) || normalize(sheet.model)!==normalize(line.model)) fail('草稿模板的客户、款式绑定不一致', 'IE_TEMPLATE_BINDING'); return {...b,path:sheet.path}; });
+    entries = inspected.entries;
+  } else ({ entries, mappings } = genericDraftTemplate(quote));
+  const formulaVersion = ieCalculationVersion(quote), excel = formulaVersion === 'ie-cost-v3-excel', costs = calculateIeQuote(quote);
+  const materialRows: GridRow[] = [['款式行编号','款式','材料名称','规格','单位（可选）','未税基价','用量','系数','本项总损耗率','材料金额（公式）','损耗金额（公式）','不适用=1 / 适用=0','备注','额外损耗原因','价格依据','正常损耗率','额外百分点']];
+  const processRows: GridRow[] = [['款式行编号','款式','工序名称','上级工序编号','顺序','工价基价','难度系数','工价金额（公式）','标准秒数（可选）','不适用=1 / 适用=0','备注','价格依据']];
+  const outsourceRows: GridRow[] = [['款式行编号','款式','类别','名称','未税单价','不适用=1 / 适用=0','金额（公式）','备注','价格依据']];
+  const brief: GridRow[] = [['未审 Excel 填报草稿','仅供内部核对；不是已复核报价，也不是给客户的报价'],['工程报价编号',quote.quoteNo],['来源版本',`R${quote.revision} V${quote.version} / ${quote.status}`],['计算规则',formulaVersion],['1 USD = CNY（手填）',quote.exchangeRateCnyPerUsd],['汇率日期',quote.exchangeRateDate],['汇率来源',quote.exchangeRateSource],['打印模板',options.template?'保留本次绑定原模板的打印区域、版式与原模板照片；照片不代表新上传图纸':'通用同类格式；无原客户模板照片，未宣称与原模板打印完全一致'],['填写方法','在材料填报、工序填报、外发填报输入页填写；STYLE 按公式汇总。空白金额不当作 0。修改 Excel 不会自动回写或触发中台审核。'],['材料损耗','正常 10% + 指定单项额外百分点 = 本项总损耗率；其他材料仍为 10%。在材料填报 I 列录入总比例，Q 列显示额外百分点。'],['单价范围','全部未税；间接费用固定 13.70 元/副；生产成本 × 1.3 为出厂价；业务另行定客价，曲艳红批准。模具等费用全部单列。'],['完整性',options.issues.length?`${options.issues.length} 项待核验；数值完整只代表可计算，不代表已批准。`:'数值与必填检查完整；本文件仍是未审填报副本。'],['原格容量','超过原表材料 29 行或外发 8 行时，末行汇总其余项目；全量输入和金额保留在对应填报页。'],['内部备注',quote.notes]];
+  const short = (s: string, length: number, fallback: string) => textWidth(s) <= length && !/[\r\n]/.test(s) ? s : fallback;
+  const textRef = (sheet: string, cell: string, value: string, max: number, fallback: string):CellValue => ({formula:`IF(LEN(${ref(sheet,cell)})<=${Math.floor(max/2)},${ref(sheet,cell)}&"","${fallback}")`,value:value.length<=Math.floor(max/2)?value:fallback});
+  const guardedSum = (sheet: string, column: string, first: number, last: number, value: number|null, digits=6) => draftFormula(`IF(COUNT(${ref(sheet,`${column}${first}:${column}${last}`)})=${last-first+1},ROUND(SUM(${ref(sheet,`${column}${first}:${column}${last}`)}),${digits}),"")`,value);
+  for (const mapping of mappings) {
+    const line = quote.lines.find(l=>l.id===mapping.lineId)!, cost = costs.lines.find(c=>c.lineId===line.id)!;
+    const mStart=materialRows.length+1,pStart=processRows.length+1,oStart=outsourceRows.length+1;
+    const materials = line.materials.length ? line.materials : [{id:'',name:'',specification:'',unit:'',basePrice:null,usage:null,coefficient:null,lossRate:.1,notApplicable:false,notes:'请列明材料或明确不适用',lossAdjustmentReason:'',priceSource:''}];
+    for (const m of materials) {
+      const r=materialRows.length+1, net=m.notApplicable?0:m.basePrice===null||m.usage===null||m.coefficient===null?null:ieCostMultiply([m.basePrice,m.usage,m.coefficient],excel?2:6), loss=net===null?null:m.notApplicable?0:ieCostMultiply(excel?[net,m.lossRate??.1]:[m.basePrice!,m.usage!,m.coefficient!,m.lossRate??.1]);
+      materialRows.push([line.id,line.model,m.name,m.specification,m.unit,m.basePrice,m.usage,m.coefficient,m.lossRate??.1,draftFormula(`IF(L${r}=1,0,IF(COUNT(F${r}:H${r})=3,ROUND(F${r}*G${r}*H${r},${excel?2:6}),""))`,net),draftFormula(`IF(L${r}=1,0,IF(AND(ISNUMBER(J${r}),ISNUMBER(I${r})),ROUND(${excel?`J${r}`:`F${r}*G${r}*H${r}`}*I${r},6),""))`,loss),m.notApplicable?1:0,m.notes,m.lossAdjustmentReason,m.priceSource,.1,draftFormula(`IF(ISNUMBER(I${r}),ROUND((I${r}-P${r})*100,6),"")`,round(((m.lossRate??.1)-.1)*100))]);
+    }
+    const processes = line.processes.length?line.processes:[{name:'',parentId:'',sequence:0,basePrice:null,difficulty:null,standardSeconds:null,notApplicable:false,notes:'请列明工序或明确不适用',priceSource:''}];
+    for (const p of processes) { const r=processRows.length+1, value=p.notApplicable?0:p.basePrice===null||p.difficulty===null?null:ieCostMultiply([p.basePrice,p.difficulty]);processRows.push([line.id,line.model,p.name,p.parentId,p.sequence,p.basePrice,p.difficulty,draftFormula(`IF(J${r}=1,0,IF(COUNT(F${r}:G${r})=2,ROUND(F${r}*G${r},6),""))`,value),p.standardSeconds,p.notApplicable?1:0,p.notes,p.priceSource]); }
+    const outsourced = [...line.outsourcing];
+    for (const category of ['plating','general'] as const) if (!outsourced.some(o=>o.category===category)) outsourced.push({id:'',category,name:'',unitPrice:null,notApplicable:false,notes:'请列明或明确不适用',priceSource:'',catalogId:'',catalogVersion:null});
+    for (const o of outsourced) { const r=outsourceRows.length+1;outsourceRows.push([line.id,line.model,o.category==='plating'?'电镀':'一般外发',o.name,o.unitPrice,o.notApplicable?1:0,draftFormula(`IF(F${r}=1,0,IF(ISNUMBER(E${r}),E${r},""))`,o.notApplicable?0:o.unitPrice),o.notes,o.priceSource]); }
+    const mEnd=materialRows.length,pEnd=processRows.length,oEnd=outsourceRows.length;
+    const cells: Cells = {C3:short(quote.customerCode,24,'详见填报说明'),E3:short(line.model,24,'详见填报说明'),G3:short(line.drawingNo,24,'详见填报说明'),H3:'报价编号',I3:short(quote.quoteNo,24,'详见填报说明'),I2:'人民币',B4:'未审填报草稿',C4:'待核对',D4:`R${quote.revision} V${quote.version}`,E4:null,F4:quote.exchangeRateCnyPerUsd===null?'汇率待填':String(quote.exchangeRateCnyPerUsd),G4:null,H4:'成本加价30%',I4:null,G38:'分项',L4:draftFormula(`IF(ISNUMBER(${ref('填报说明','B5')}),${ref('填报说明','B5')},"")`,quote.exchangeRateCnyPerUsd)};
+    cells.F4={formula:`IF(AND(ISNUMBER(${ref('填报说明','B5')}),${ref('填报说明','B5')}>0),TEXT(${ref('填报说明','B5')},"0.######"),"汇率待填")`,value:quote.exchangeRateCnyPerUsd&&quote.exchangeRateCnyPerUsd>0?String(quote.exchangeRateCnyPerUsd):'汇率待填'};
+    const cache = (value: CellValue):number|null => typeof value==='number'?value:typeof value==='object'&&value!==null&&typeof value.value==='number'?value.value:null;
+    for (let i=0;i<29;i++) {
+      const row=7+i, m=materials[i], src=mStart+i;
+      for (const c of 'CDEFGHI') cells[`${c}${row}`]=null;
+      if (!m) continue;
+      if (i===28 && materials.length>29) { cells[`D${row}`]=`其余 ${materials.length-28} 项见材料填报`;cells[`H${row}`]=guardedSum('材料填报','J',src,mEnd,materialRows.slice(src-1,mEnd).some(v=>cache(v[9])===null)?null:ieCostSum(materialRows.slice(src-1,mEnd).map(v=>cache(v[9])!)));continue; }
+      cells[`D${row}`]=short(m.name,24,`材料填报第${src}行`);cells[`E${row}`]=short(m.specification,28,`见材料填报第${src}行`);cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`G${src}`)}),${ref('材料填报',`G${src}`)},"")`,m.usage);cells[`G${row}`]=draftFormula(`IF(COUNT(${ref('材料填报',`F${src}`)},${ref('材料填报',`H${src}`)})=2,${ref('材料填报',`F${src}`)}*${ref('材料填报',`H${src}`)},"")`,m.basePrice===null||m.coefficient===null?null:m.basePrice*m.coefficient);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`J${src}`)}),${ref('材料填报',`J${src}`)},"")`,cache(materialRows[src-1][9]));cells[`I${row}`]=m.notApplicable?'不适用（见附页）':`${round((m.lossRate??.1)*100)}% 详见附页`;
+      cells[`D${row}`]=textRef('材料填报',`C${src}`,m.name,24,`材料填报第${src}行`);cells[`E${row}`]=textRef('材料填报',`D${src}`,m.specification,28,`见材料填报第${src}行`);
+      cells[`I${row}`]={formula:`IF(${ref('材料填报',`L${src}`)}=1,"不适用见附页",IF(ISNUMBER(${ref('材料填报',`I${src}`)}),TEXT(${ref('材料填报',`I${src}`)}*100,"0.######")&"%详见附页","损耗待填"))`,value:m.notApplicable?'不适用见附页':`${round((m.lossRate??.1)*100)}%详见附页`};
+    }
+    for (let i=0;i<8;i++) {
+      const row=42+i,o=outsourced[i],src=oStart+i;for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!o)continue;
+      if(i===7&&outsourced.length>8){cells[`C${row}`]=`其余 ${outsourced.length-7} 项见外发填报`;cells[`H${row}`]=guardedSum('外发填报','G',src,oEnd,outsourceRows.slice(src-1,oEnd).some(v=>cache(v[6])===null)?null:ieCostSum(outsourceRows.slice(src-1,oEnd).map(v=>cache(v[6])!)));continue;}
+      cells[`C${row}`]=short(o.name,20,`外发填报第${src}行`);cells[`F${row}`]=1;cells[`G${row}`]=draftFormula(`IF(ISNUMBER(${ref('外发填报',`E${src}`)}),${ref('外发填报',`E${src}`)},"")`,o.unitPrice);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('外发填报',`G${src}`)}),${ref('外发填报',`G${src}`)},"")`,cache(outsourceRows[src-1][6]));cells[`I${row}`]=o.notApplicable?'不适用（见附页）':short(o.notes,26,'详见外发填报');
+      cells[`C${row}`]=textRef('外发填报',`D${src}`,o.name,20,`外发填报第${src}行`);cells[`I${row}`]={formula:`IF(${ref('外发填报',`F${src}`)}=1,"不适用见附页","详见外发填报")`,value:o.notApplicable?'不适用见附页':'详见外发填报'};
+    }
+    const outside=cost.plating===null||cost.outsourcing===null?null:ieCostSum([cost.plating,cost.outsourcing]), materialTotal=cost.material===null||cost.materialLoss===null?null:ieCostSum([cost.material,cost.materialLoss]),labor=cost.process===null?null:ieCostSum([cost.process,13.7]);
+    Object.assign(cells,{H37:guardedSum('材料填报','J',mStart,mEnd,cost.material),H38:guardedSum('材料填报','K',mStart,mEnd,cost.materialLoss,excel?2:6),H39:draftFormula('IF(COUNT(H37:H38)=2,ROUND(SUM(H37:H38),6),"")',materialTotal),H50:guardedSum('外发填报','G',oStart,oEnd,outside),F53:1,G53:guardedSum('工序填报','H',pStart,pEnd,cost.process),H53:draftFormula('IF(ISNUMBER(G53),G53,"")',cost.process),H61:draftFormula('IF(COUNT(H53:H59)=7,ROUND(SUM(H53:H59),6),"")',labor),H62:draftFormula('IF(COUNT(H39,H50,H61)=3,ROUND(SUM(H39,H50,H61),6),"")',cost.productionCost),H63:draftFormula('IF(AND(ISNUMBER(H62),ISNUMBER($L$4),$L$4>0),ROUND(H62/$L$4,6),"")',cost.productionCost===null||!quote.exchangeRateCnyPerUsd?null:round(cost.productionCost/quote.exchangeRateCnyPerUsd)),H66:'成本×1.3出厂价',I66:draftFormula('IF(ISNUMBER(H62),ROUND(H62*1.3,6),"")',cost.factoryPriceCny),H67:'出厂价USD/副',I67:draftFormula('IF(AND(ISNUMBER(I66),ISNUMBER($L$4),$L$4>0),ROUND(I66/$L$4,6),"")',cost.factoryPriceUsd),H68:'销售毛利率',I68:draftFormula('IF(AND(ISNUMBER(I66),I66>0),(I66-H62)/I66,"")',cost.factoryPriceCny?round((cost.factoryPriceCny-cost.productionCost!)/cost.factoryPriceCny):null)});
+    for(let row=53;row<=60;row++)for(const c of ['D','E','I'])cells[`${c}${row}`]=null;
+    [5,3,.2,2,2,1.5].forEach((amount,i)=>{cells[`F${54+i}`]=1;cells[`G${54+i}`]=amount;cells[`H${54+i}`]=draftFormula(`F${54+i}*G${54+i}`,amount);});for(const c of 'CDEFGHI')cells[`${c}60`]=null;
+    for(const [cell,source,value] of [['C66','H39',materialTotal],['C67','H50',outside],['C68','H61',labor],['F66','H38',cost.materialLoss],['F67','H59',1.5]] as const)cells[cell]=draftFormula(`IF(ISNUMBER(${source}),${source},"")`,value);
+    cells.F68=draftFormula('IF(COUNT(I66,H62)=2,I66-H62,"")',cost.factoryPriceCny===null||cost.productionCost===null?null:round(cost.factoryPriceCny-cost.productionCost));for(const c of ['D','G'])for(let row=66;row<=68;row++){const source=`${c==='D'?'C':'F'}${row}`,value=cache(cells[source]);cells[`${c}${row}`]=draftFormula(`IF(AND(ISNUMBER(${source}),ISNUMBER($I$66),$I$66>0),${source}/$I$66,"")`,value===null||!cost.factoryPriceCny?null:value/cost.factoryPriceCny);}
+    entries[mapping.path]=strToU8(patchSheet(textEntry(entries,mapping.path),cells));
+    brief.push(['款式信息',`${mapping.sheetName} / ${line.model} / 客款 ${line.customerModel} / 色号 ${line.color} / 图号 ${line.drawingNo} / 图纸版次 ${line.drawingRevision} / 数量 ${line.quantityMin??'待填'}–${line.quantityMax??'待填'}`],['结构分析',line.structureNotes],['报价范围',line.scopeNotes]);
+  }
+  scrubSharedStrings(entries,mappings.map(m=>m.path));
+  appendGridSheet(entries,'材料填报',materialRows,[20,20,26,34,14,16,14,14,18,18,18,20,36,36,36,16,16]);
+  appendGridSheet(entries,'工序填报',processRows,[20,20,28,24,10,18,16,18,18,20,36,36]);
+  appendGridSheet(entries,'外发填报',outsourceRows,[20,20,18,28,18,20,18,36,36]);
+  const charges: GridRow[]=[['收费登记编号','费用名称','适用款式','收费状态','登记金额CNY','本次收费CNY（公式）','来源报价及版本','收费证据','备注']];
+  for(const t of quote.tooling){const row=charges.length+1;charges.push([t.toolingId||t.id,t.name,t.lineIds.map(id=>quote.lines.find(l=>l.id===id)?.model||id).join('、'),({charge:'本次单独收费',already_charged:'已有收费记录待核对凭证',included_in_batch:'关联报价已列费',not_applicable:'不适用'}[t.chargeMode]),t.amount,draftFormula(`IF(D${row}="本次单独收费",IF(ISNUMBER(E${row}),E${row},""),0)`,t.chargeMode==='charge'?t.amount:0),`${t.chargeQuoteId}${t.chargeVersion?` V${t.chargeVersion}`:''}`,t.evidence,t.notes]);}
+  if(!quote.tooling.length)charges.push(['待登记','尚未明确单列费用；不可理解为免收']);
+  const end=charges.length,duplicate=new Set(quote.tooling.map(t=>t.toolingId||t.id)).size!==quote.tooling.length;
+  charges.push(['本次费用合计（不摊单价）',null,null,null,null,draftFormula(quote.tooling.length?`IF(AND(COUNT(F2:F${end})=${quote.tooling.length},SUMPRODUCT(--(COUNTIF(A2:A${end},A2:A${end})>1))=0),SUM(F2:F${end}),"")`:'""',!quote.tooling.length||duplicate?null:costs.toolingChargeCny)]);
+  if(duplicate)brief.push(['共用模具待核对','登记编号重复，费用合计保持空白；请合并适用款式，避免重复收费。']);
+  options.issues.forEach((issue,i)=>brief.push([`待核验 ${i+1}`,issue]));
+  appendGridSheet(entries,'单列费用',charges,[28,28,32,28,20,20,34,48,48]);
+  appendGridSheet(entries,'填报说明',brief,[28,110]);
+  appendAttachmentManifest(entries,quote.attachmentRefs);
+  entries['xl/workbook.xml']=strToU8(textEntry(entries,'xl/workbook.xml').replace(/<calcPr\b[^>]*\/>/,'<calcPr calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/>'));
+  return {bytes:zipSync(entries,ZIP_OPTIONS),templateMode:options.template?'original':'generic',formulaVersion};
 }

@@ -30,7 +30,7 @@ export async function downloadBusinessTeamFile(url:string,fallbackName:string){
  const response=await businessTeamFetch(url,{cache:'no-store'});
  if(!response.ok){
   const result=await response.json().catch(()=>null) as {error?:string}|null;
-  throw new Error(result?.error||'导出失败，请刷新当前范围后重试。');
+  throw Object.assign(new Error(result?.error||'导出失败，请刷新当前范围后重试。'),{status:response.status});
  }
  const objectUrl=URL.createObjectURL(await response.blob()),anchor=document.createElement('a');
  let filename=fallbackName;

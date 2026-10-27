@@ -10,6 +10,7 @@ function flatten(q:IeQuote|null){
  const fields=(prefix:string,label:string,row:Record<string,unknown>,definitions:Record<string,string>)=>{for(const [key,name] of Object.entries(definitions))put(prefix+'/'+key,label?label+' · '+name:name,row[key]);};
  fields('quote','',q,{quoteNo:'工程报价编号',customerName:'客户',customerCode:'客户编号',quoteDate:'报价日期',validUntil:'有效期',batchId:'报价批次',exchangeRateCnyPerUsd:'手填汇率（1 USD = x CNY）',exchangeRateDate:'汇率日期',exchangeRateSource:'汇率来源',notes:'报价说明',reviewReason:'复核说明'});
  put('quote/status','报价状态',status[q.status]||q.status);
+ for(const ref of q.attachmentRefs||[])fields('attachment/'+ref.attachmentId,'图纸附件 / '+ref.filename,ref,{filename:'文件名',lineId:'款式编号',drawingNo:'图纸编号',drawingRevision:'绑定图纸版本',sha256:'原件摘要'});
  for(const l of q.lines){
   const prefix='line/'+l.id,label=l.model||'未命名款式';
   fields(prefix,label,l,{model:'厂款',customerModel:'客款',color:'颜色',drawingNo:'图纸编号',drawingRevision:'图纸版本',quantityMin:'数量下限',quantityMax:'数量上限',structureNotes:'结构分析',scopeNotes:'供货范围'});

@@ -87,8 +87,9 @@ async function handle(req,res){
    const followupImport=req.method==='POST'&&url.pathname==='/api/workspace/customer-project-followup-import';
    const customerWorkflowUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-workflow-file-upload';
    const invoiceUpload=req.method==='POST'&&['/api/workspace/ar-invoice-import','/api/workspace/ar-invoice-proof'].includes(url.pathname);
-   const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:invoiceUpload?25:customerWorkflowUpload?21:11)*1024*1024;
-   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':invoiceUpload?'发票原件或付款凭证不能超过 20 MiB，含解析清单的请求不能超过 25 MiB。':customerWorkflowUpload?'客户原始附件不能超过 20 MiB。':'文件不能超过 10 MB。',413);parts.push(part);}
+   const ieUpload=req.method==='POST'&&['/api/workspace/ie-quote-attachment-upload','/api/workspace/ie-quote-template-register'].includes(url.pathname);
+   const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:invoiceUpload?25:customerWorkflowUpload?21:ieUpload?13:11)*1024*1024;
+   const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':invoiceUpload?'发票原件或付款凭证不能超过 20 MiB，含解析清单的请求不能超过 25 MiB。':customerWorkflowUpload?'客户原始附件不能超过 20 MiB。':ieUpload?'工程图纸或模板不能超过 12 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
   let response;
   if(supplierOnly&&['GET','HEAD'].includes(req.method)&&['/','/login','/index.html'].includes(url.pathname))response=new Response(null,{status:302,headers:{Location:'/supplier-portal'}});

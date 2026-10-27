@@ -10,5 +10,9 @@ export async function testIeQuoteChangeLog({pass}){
  const changed=after.lines[0].materials.find(m=>m.id==='m1');changed.lossRate=.25;changed.lossAdjustmentReason='合成额外15%';after.costs.lines[0].materialLoss=35;after.privateBucketKey='must-not-leak';
  const log=compareIeQuoteVersions(before,after);assert(log.some(v=>v.label.includes('材料甲')&&v.label.includes('总损耗率')&&v.before==='10%'&&v.after==='25%'));assert(log.some(v=>v.label.includes('额外损耗百分点')&&v.before==='0%'&&v.after==='15%'));assert(log.some(v=>v.label.includes('材料损耗额')&&v.before==='20'&&v.after==='35'));assert(!JSON.stringify(log).includes('must-not-leak'));
  after.lines[0].materials=after.lines[0].materials.filter(m=>m.id!=='m2');assert(compareIeQuoteVersions(before,after).some(v=>v.label.includes('材料乙')&&v.after==='已删除'));
+ after.attachmentRefs=[{attachmentId:'synthetic-attachment',lineId:'line',drawingNo:'TEST-DRAWING',drawingRevision:'R1',filename:'synthetic.png',sha256:'a'.repeat(64),fileKey:'private-file-key'}];
+ const uploadLog=compareIeQuoteVersions(before,after);assert(uploadLog.some(v=>v.label.includes('图纸附件')&&v.after==='synthetic.png'));assert(!JSON.stringify(uploadLog).includes('private-file-key'));
+ const rebound=structuredClone(after);rebound.attachmentRefs[0].drawingRevision='R2';assert(compareIeQuoteVersions(after,rebound).some(v=>v.label.includes('绑定图纸版本')&&v.before==='R1'&&v.after==='R2'));
+ rebound.attachmentRefs=[];assert(compareIeQuoteVersions(after,rebound).some(v=>v.label.includes('图纸附件')&&v.after==='已删除'));
  pass('IE版本日志按稳定行编号展示具体前后值、损耗百分点、删除项和计算结果，排除未知存储字段');
 }

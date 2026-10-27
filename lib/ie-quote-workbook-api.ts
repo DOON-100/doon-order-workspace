@@ -4,7 +4,7 @@ import {AppError,audit,bucket,commit,json} from './store';
 import {canConfigureIeQuotes,canReadIeQuote} from './ie-quote-access';
 import {calculateIeQuote,currentIeQuote,ieQuoteIssues,ieQuoteVersion,releasedIeSnapshot,type IeQuote} from './ie-quotes';
 import {ieQuoteTemplate,ieTemplateFingerprint,ieTemplateStatus,type IeQuoteTemplate} from './ie-quote-template';
-import {IE_TEMPLATE_MAX_BYTES,IeWorkbookError,exportIeQuoteWorkbook,inspectIeQuoteTemplate,makeIeWorkbookBindings,prepareIeQuoteTemplate} from './ie-quote-workbook';
+import {IE_TEMPLATE_MAX_BYTES,IeWorkbookError,exportIeQuoteWorkbook,exportIeQuoteDraftWorkbook,inspectIeQuoteTemplate,makeIeWorkbookBindings,prepareIeQuoteTemplate} from './ie-quote-workbook';
 const mapping=z.array(z.object({sheetName:z.string().trim().min(1).max(120),lineId:z.string().trim().min(1).max(120)}).strict()).min(1).max(100);
 const safeFilename=(name:string)=>name.replace(/[\\/\r\n\u0000-\u001f]/g,'_').slice(0,160);
 function quoted(s:State,m:Member,id:string,version:number){if(!Number.isSafeInteger(version)||version<1)throw new AppError('请选择明确的工程报价版本。');const q=ieQuoteVersion(s,id,version),current=currentIeQuote(s,id);if(!q||!current||current.customerAccountId!==q.customerAccountId||!canReadIeQuote(s,m,current)||!canReadIeQuote(s,m,q))throw new AppError('无权访问该工程报价版本。',403);return q;}
@@ -15,15 +15,20 @@ export async function buildIeQuoteWorkbookAttachment(s:State,m:Member,q:IeQuote)
  const object=await bucket().get(template.preparedFileKey);if(!object)throw new AppError('原版打印模板副本暂不可用。',404);
  try{
   const tooling=q.tooling.map(t=>{if(t.chargeMode==='already_charged'){const registry=all(s,'ie_quote_tooling').find(r=>r.id===t.toolingId&&r.customerAccountId===q.customerAccountId);return {...t,evidence:t.evidence||String(registry?.evidence||'')};}if(t.chargeMode==='included_in_batch'){const source=t.chargeVersion?releasedIeSnapshot(s,t.chargeQuoteId,t.chargeVersion):null;return {...t,evidence:source?`共用来源 ${source.quoteNo} / R${source.revision} / V${source.version}`:t.evidence};}return t;});
-  const bytes=new Uint8Array(await new Response(object.body).arrayBuffer()),result=await exportIeQuoteWorkbook(bytes,{expectedTemplateSha256:template.preparedSha256,bindings:makeIeWorkbookBindings({...q,tooling,costs:calculateIeQuote(q)},template.sheetBindings)});
+  const bytes=new Uint8Array(await new Response(object.body).arrayBuffer()),result=await exportIeQuoteWorkbook(bytes,{expectedTemplateSha256:template.preparedSha256,bindings:makeIeWorkbookBindings({...q,tooling,costs:calculateIeQuote(q)},template.sheetBindings),attachmentRefs:q.attachmentRefs});
   const prefix=q.status==='released'?'已复核内部报价':'未发布内部核价',filename=safeFilename(`${prefix}_${q.quoteNo}_R${q.revision}_V${q.version}.xlsx`),digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new Uint8Array(result.bytes).buffer)),sha256=[...digest].map(v=>v.toString(16).padStart(2,'0')).join('');
   return {filename,contentType:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',bytes:new Uint8Array(result.bytes),sha256,size:result.bytes.length,templateId:template.id,templateSha256:template.preparedSha256};
  }catch(e){if(e instanceof IeWorkbookError)throw new AppError(e.message,409);throw e;}
 }
 export async function ieWorkbookGet(action:string,url:URL,s:State,m:Member):Promise<Response|null>{
- if(!['ie-quote-template-status','ie-quote-export'].includes(action))return null;
+ if(!['ie-quote-template-status','ie-quote-export','ie-quote-draft-export'].includes(action))return null;
  const q=quoted(s,m,url.searchParams.get('id')||'',Number(url.searchParams.get('version')));
  if(action==='ie-quote-template-status')return json({templateStatus:ieTemplateStatus(s,m,q)});
+ if(action==='ie-quote-draft-export'){
+  const template=ieQuoteTemplate(s,q);let source:Parameters<typeof exportIeQuoteDraftWorkbook>[1]['template'];
+  if(template){const object=await bucket().get(template.preparedFileKey);if(!object)throw new AppError('已登记的原版打印模板副本暂不可用，请恢复后再导出。',404);source={bytes:new Uint8Array(await new Response(object.body).arrayBuffer()),expectedSha256:template.preparedSha256,sheetBindings:template.sheetBindings};}
+  try{const result=await exportIeQuoteDraftWorkbook(q,{issues:ieQuoteIssues(s,q,q.id),template:source}),filename=safeFilename(`未审填报草稿_${q.quoteNo}_R${q.revision}_V${q.version}.xlsx`);return new Response(new Uint8Array(result.bytes).buffer,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','X-IE-Workbook-Mode':result.templateMode}});}catch(e){if(e instanceof IeWorkbookError)throw new AppError(e.message,409);throw e;}
+ }
  const attachment=await buildIeQuoteWorkbookAttachment(s,m,q);
  return new Response(new Uint8Array(attachment.bytes).buffer,{headers:{'Content-Type':attachment.contentType,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});
 }

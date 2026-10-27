@@ -30,5 +30,5 @@ export function publicIePolicy(s:State,m:Member){
  const p=ieQuotePolicy(s);return {version:p?.version||0,engineerMemberId:p?.engineerMemberId||'',reviewerMemberId:p?.reviewerMemberId||'',finalApproverMemberId:p?.finalApproverMemberId||'',labels:{engineer:'郑忠伟 · 工程主管',reviewer:'杨德周 · 生产副总',finalApprover:'曲艳红 · 总经理'},
  members:canConfigureIeQuotes(m)?(all(s,'member') as Member[]).filter(v=>v.active&&v.role!=='supplier').map(({id,name,role})=>({id,name,role})):[],
  boundMembers:(['engineer','reviewer','finalApprover'] as const).map(role=>({role,id:iePolicyMember(s,role)?.id||'',name:iePolicyMember(s,role)?.name||''})),
- constants:{materialLossRate:0.1,indirect:13.7,indirectItems:[{name:'间接人工',amount:5},{name:'房租',amount:3},{name:'水费',amount:0.2},{name:'电费',amount:2},{name:'折旧',amount:2},{name:'辅料',amount:1.5}],factoryMultiplier:1.3,exchangeRateDirection:'1 USD = x CNY',formulaVersion:'ie-cost-v2-line-loss'},configured:!!p};
+ constants:{materialLossRate:0.1,indirect:13.7,indirectItems:[{name:'间接人工',amount:5},{name:'房租',amount:3},{name:'水费',amount:0.2},{name:'电费',amount:2},{name:'折旧',amount:2},{name:'辅料',amount:1.5}],factoryMultiplier:1.3,exchangeRateDirection:'1 USD = x CNY',formulaVersion:'ie-cost-v3-excel'},configured:!!p};
 }

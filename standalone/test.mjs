@@ -30,6 +30,11 @@ try{
  assert.match(zippedAsset.headers.get('cache-control'),/public.*immutable/);assert.match(zippedAsset.headers.get('vary'),/Accept-Encoding/);assert.equal(read.res.headers.get('cache-control'),'no-store');
  const uncompressed=await request(asset,undefined,'',{'Accept-Encoding':'gzip;q=0'});assert.equal(uncompressed.headers.get('content-encoding'),null);await uncompressed.arrayBuffer();
  pass('页面资源与JSON支持无损gzip，指纹资源可缓存，HTML和业务API仍不缓存');
+ const largeIeForm=new FormData();largeIeForm.set('file',new File([new Uint8Array(12*1024*1024)],'synthetic-boundary.pdf',{type:'application/pdf'}));largeIeForm.set('quoteId','synthetic-missing-quote');largeIeForm.set('version','1');largeIeForm.set('lineId','synthetic-line');
+ const permittedIe=await request('/api/workspace/ie-quote-attachment-upload',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(permittedIe.status,403);await permittedIe.arrayBuffer();
+ const unrelatedLarge=await request('/api/workspace/receipt-photo',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(unrelatedLarge.status,413);await unrelatedLarge.arrayBuffer();
+ largeIeForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-too-large.pdf',{type:'application/pdf'}));const tooLargeIe=await request('/api/workspace/ie-quote-attachment-upload',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(tooLargeIe.status,413);await tooLargeIe.arrayBuffer();
+ pass('工程上传允许12MB文件通过HTTP边界并继续权限校验，超限及其他附件限额仍拒绝');
  const expandedCustomers=Array.from({length:209},(_,i)=>'TEST-CUSTOMER-'+i);
  await ok('/api/auth/accounts',{username:'scope_test',name:'客户范围容量测试',password:'Test-Scope-Initial!',role:'sales',customers:expandedCustomers},adminCookie);
  const expandedState=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(expandedState.res.headers.get('content-encoding'),'gzip');assert.equal(expandedState.res.headers.get('cache-control'),'no-store');
