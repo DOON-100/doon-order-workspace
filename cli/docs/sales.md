@@ -75,3 +75,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects task-submit --input <文件> --version <当前版本> --request-id <UUID> --json` 由指定跟进人提交，输入为 `projectId`、`id` 和 `result`。`doon sales projects task-review` 使用相同版本及请求标识参数，输入为 `projectId`、`id`、`stage`（`service` 或 `sales`）、`decision`（`approve` 或 `return`）及可选 `comment`；退回须填写意见。服务器执行原有两级审核，CLI 不增加确认。项目详情可查询待办版本、人员和权限标记。
 
 `doon sales followups update --input <文件> --version <当前版本> --request-id <UUID> --json` 更新跟进。为避免旧接口默认值覆盖原资料，输入必须包含 `id`、`ownerId`、`customerId`、`projectId`、`title`、`category`、`stars`、`status`、`followUpDate`、`notes`、`nextAction` 和 `checklist`；先用 `show` 获取当前记录及版本，保留未修改字段，允许明确空字符串和空清单。服务器重新校验权限和版本。
+
+`doon sales projects update --input <文件> --version <当前版本> --request-id <UUID> --json` 修改项目主表。先用 `sales projects show` 取得当前版本和字段；输入须完整提供 `id`、`customerId`、`title`、`code`、`description`、`teamId`、`salesMemberId`、`serviceMemberIds`、`serviceReviewerId`、`salesReviewerId`、`dueDate` 和 `status`，以防旧接口默认值覆盖。旧项目中缺少的审核人字段使用空字符串。服务器校验成员、客户、小组、项目状态与版本。

@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.14.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.15.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -28,6 +28,7 @@
 | `doon sales quotes history <id>` | 查询报价版本目录 | business-read-and-session-last-seen |
 | `doon sales quotes version <id> <version>` | 读取指定报价历史版本 | business-read-and-session-last-seen |
 | `doon sales quotes export-completed --output <file.xlsx>` | 导出当前业务组或全部有权查看的已完成报价总表 | local-file-and-session-last-seen |
+| `doon sales projects update --input <file> --version <number> --request-id <uuid>` | 更新客户项目并回读 | business-write |
 | `doon sales followups update --input <file> --version <number> --request-id <uuid>` | 更新客户跟进并回读 | business-write |
 | `doon sales projects task-create --input <file> --request-id <uuid>` | 新增项目待办并回读 | business-write |
 | `doon sales projects task-submit --input <file> --version <number> --request-id <uuid>` | 提交项目待办结果并回读 | business-write |
@@ -123,4 +124,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-查询阶段共接入 83 个业务查询/导出命令；W1 已接入客户资料更新、跟进排程、项目和询价创建、项目款色、轮次、沟通、待办与客户跟进新增及更新写入，其他写入仍待开发。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 83 个业务查询/导出命令；W1 已接入客户资料更新、跟进排程、项目创建及更新、询价创建、项目款色、轮次、沟通、待办与客户跟进新增及更新写入，其他写入仍待开发。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
