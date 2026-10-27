@@ -1,4 +1,4 @@
-export const version = '0.16.0';
+export const version = '0.18.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -21,6 +21,8 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales customers create', usage:'sales customers create --input <file>', description:'创建客户主档并回读', effect:'business-write'},
+  {name:'sales projects task-update', usage:'sales projects task-update --input <file> --version <number> --request-id <uuid>', description:'调整或取消项目待办并回读', effect:'business-write'},
   {name:'sales inquiries update', usage:'sales inquiries update --input <file> --version <number> --request-id <uuid>', description:'更新询价需求并回读', effect:'business-write'},
   {name:'sales projects update', usage:'sales projects update --input <file> --version <number> --request-id <uuid>', description:'更新客户项目并回读', effect:'business-write'},
   {name:'sales followups update', usage:'sales followups update --input <file> --version <number> --request-id <uuid>', description:'更新客户跟进并回读', effect:'business-write'},

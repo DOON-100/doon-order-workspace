@@ -3,6 +3,7 @@ export const routes = {
   '/api/auth/login': {method: 'POST'}, '/api/auth/session': {method: 'GET'}, '/api/auth/logout': {method: 'POST'},
   '/api/workspace/business-team-data': {method: 'GET', business: true},
   '/api/workspace/customer-workflow-profile-save': {method: 'POST', business: true, write: true},
+  '/api/workspace/customer-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-workflow-schedule': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-workflow-data': {method: 'GET', business: true, query: ['customerId']},
   '/api/workspace/customer-workflow-history': {method: 'GET', business: true, query: ['customerId']},

@@ -37,23 +37,24 @@ export class ProjectChildWriteService {
 }
 
 const taskCreate:WriteSchema={projectId:{type:'string',required:true,min:1,max:160},title:{type:'string',required:true,min:1,max:160},ownerId:{type:'string',required:true,min:1,max:160},roundId:{type:'string',max:160},description:{type:'string',max:6000},serviceReviewerId:{type:'string',max:160},salesReviewerId:{type:'string',max:160},waitingFor:{type:'string',max:240},dueDate:{type:'string',max:10}};
+const taskUpdate:WriteSchema={...Object.fromEntries(Object.entries(taskCreate).map(([key,field])=>[key,{...field,required:true}])),id:{type:'string',required:true,min:1,max:160},status:{type:'string',required:true,enum:['open','cancelled']},changeReason:{type:'string',max:3000}};
 const taskSubmit:WriteSchema={projectId:{type:'string',required:true,min:1,max:160},id:{type:'string',required:true,min:1,max:160},result:{type:'string',required:true,min:1,max:3000}};
 const taskReview:WriteSchema={projectId:{type:'string',required:true,min:1,max:160},id:{type:'string',required:true,min:1,max:160},stage:{type:'string',required:true,enum:['service','sales']},decision:{type:'string',required:true,enum:['approve','return']},comment:{type:'string',max:3000}};
-export type ProjectTaskAction='create'|'submit'|'review';
+export type ProjectTaskAction='create'|'update'|'submit'|'review';
 export class ProjectTaskWriteService {
  constructor(private store:StateStore,private transport:typeof fetch=fetch){}
  async execute(action:ProjectTaskAction,file:string,rawVersion:string,token:string){
-  if(!['create','submit','review'].includes(action))throw new CliError('UNSUPPORTED_OPERATION','该写入尚未接入。',2);
+  if(!['create','update','submit','review'].includes(action))throw new CliError('UNSUPPORTED_OPERATION','该写入尚未接入。',2);
   if(action!=='create'&&(!/^[1-9]\d*$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion))))throw new CliError('INVALID_ARGUMENT','版本须为正整数。',2);
   if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
   const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);
-  const api=new ApiClient(config,this.transport,30000),version=Number(rawVersion),route=action==='create'?'/api/workspace/customer-project-task-save':action==='submit'?'/api/workspace/customer-project-task-submit':'/api/workspace/customer-project-task-review';
-  return executeWrite({schema:action==='create'?taskCreate:action==='submit'?taskSubmit:taskReview,tokenField:'token',...(action==='create'?{}:{versionField:'version'}),
+  const api=new ApiClient(config,this.transport,30000),version=Number(rawVersion),route=action==='create'||action==='update'?'/api/workspace/customer-project-task-save':action==='submit'?'/api/workspace/customer-project-task-submit':'/api/workspace/customer-project-task-review';
+  return executeWrite({schema:action==='create'?taskCreate:action==='update'?taskUpdate:action==='submit'?taskSubmit:taskReview,tokenField:'token',...(action==='create'?{}:{versionField:'version'}),
    validate(payload){if(hasUntrimmed(payload))throw new CliError('INVALID_INPUT','字段不能含首尾空格。',2);},
    async send(payload){const data=(await api.request(route,session,payload)).data;if(data?.ok!==true||!data.item?.id||data.item.projectId!==payload.projectId||!data.item.customerId||(action!=='create'&&data.item.id!==payload.id))throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data.item;},
    async readBack(result,input){const data=(await api.request('/api/workspace/customer-project-data',session)).data,parent=Array.isArray(data?.projects)?data.projects.find((r:any)=>r.id===input.projectId):null,row=Array.isArray(data?.tasks)?data.tasks.find((r:any)=>r.id===result.id):null;
-    const expected=action==='create'?'open':action==='submit'?'service_review':input.decision==='return'?'returned':input.stage==='service'?'sales_review':'done';
-    const keys=action==='create'?['projectId','title','ownerId','roundId','description','serviceReviewerId','salesReviewerId','waitingFor','dueDate']:action==='submit'?['projectId','result']:['projectId'];
+    const expected=action==='create'?'open':action==='update'?input.status:action==='submit'?'service_review':input.decision==='return'?'returned':input.stage==='service'?'sales_review':'done';
+    const keys=action==='create'||action==='update'?['projectId','title','ownerId','roundId','description','serviceReviewerId','salesReviewerId','waitingFor','dueDate']:action==='submit'?['projectId','result']:['projectId'];
     if(!parent||!row||row.projectId!==input.projectId||row.customerId!==parent.customerId||row.customerId!==result.customerId||row.version!==(action==='create'?1:version+1)||row.status!==expected||keys.some(key=>Object.hasOwn(input,key)&&!isDeepStrictEqual(row[key],input[key])))throw Error('scope or changed');
     if(action==='review'){const event=Array.isArray(row.reviewHistory)?row.reviewHistory.at(-1):null;if(!event||event.action!==input.decision||event.stage!==input.stage||event.comment!==(input.comment||''))throw Error('review changed');}
     return {scope:{teamId:null,customerId:row.customerId},record:pick(row,fields('id version projectId customerId roundId title description ownerId serviceReviewerId salesReviewerId waitingFor dueDate status result reviewCycle canSubmit canReviewService canReviewSales'))};

@@ -79,3 +79,7 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects update --input <文件> --version <当前版本> --request-id <UUID> --json` 修改项目主表。先用 `sales projects show` 取得当前版本和字段；输入须完整提供 `id`、`customerId`、`title`、`code`、`description`、`teamId`、`salesMemberId`、`serviceMemberIds`、`serviceReviewerId`、`salesReviewerId`、`dueDate` 和 `status`，以防旧接口默认值覆盖。旧项目中缺少的审核人字段使用空字符串。服务器校验成员、客户、小组、项目状态与版本。
 
 `doon sales inquiries update --input <文件> --version <当前版本> --request-id <UUID> --json` 更新询价。先查询当前记录；输入必须完整包含 `id`、`customerId`、`orderId`、`teamId`、`title`、`batch`、`ownerId`、`responsibleId`、`plannedDate`、`actualDate`、`status`、`inputBasis`、`inputVersion`、`outputEvidence`、`gateStatus`、`blocker`、`nextAction`、`nextOwnerId`、`nextDueDate`、`notes`，以及 `details` 的 `gateReason`、`documentRef`、`requirement`、`targetDelivery`、`quantity`、`currency`、`quoteRef`。未确认数量使用 `null`，明确零用 `0`；缺省的文字字段使用空字符串。服务器校验关联、权限、状态和版本。
+
+`doon sales projects task-update --input <文件> --version <当前版本> --request-id <UUID> --json` 调整待办或将 `status` 设为 `cancelled` 取消。先查询项目详情，完整提供 `id`、`projectId`、`title`、`ownerId`、`roundId`、`description`、`serviceReviewerId`、`salesReviewerId`、`waitingFor`、`dueDate` 和 `status`；审核中调整或取消须提供 `changeReason`。取消时保留当前配置字段，服务器保留原记录和审核历史。
+
+`doon sales customers create --input <文件> --json` 新建客户主档。输入示例：`{ "customer": "客户名称", "customerCode": "客户编号", "salesName": "本人姓名" }`，还可指定 `serviceName` 和 `notes`；服务器决定哪些角色可创建及可指派的责任人。该接口仅创建，客户名称已存在时拒绝覆盖。服务器没有请求标识幂等能力，因此结果不明时先查询客户，不要盲目重复提交。
