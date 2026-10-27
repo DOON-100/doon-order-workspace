@@ -43,7 +43,7 @@ Expand-Archive -LiteralPath $Archive -DestinationPath $Destination
   run(shell,['-NoProfile','-NonInteractive','-File',path.join(extracted,'install.ps1'),'-InstallRoot',installed,'-SkipPathUpdate'],environment);
   const versions=await fs.readdir(path.join(installed,'programs'));assert.equal(versions.length,1);const cliRoot=path.join(installed,'programs',versions[0]);
   run(shell,['-NoProfile','-NonInteractive','-File',path.join(root,'cli/scripts/test-installed.ps1'),'-InstallRoot',installed],environment);
-  const output=run(process.execPath,[path.join(root,'cli/tests/integration/sales-api.mjs'),'--cli-root',cliRoot],environment);
+  const output=run(process.execPath,[path.join(root,'cli/tests/integration/sales-api.mjs'),'--cli-root',cliRoot,...(process.argv.includes('--skip-kingdee')?['--skip-kingdee']:[])],environment);
   result=JSON.parse(output.trim().split(/\r?\n/).at(-1));assert(result.testDirectoryRemoved);assert.equal(result.productionRequests,0);assert(result.testedCommands.length>0);
   assert.deepEqual(await inventory(extracted),manifest.files); // Running and installation did not mutate the original package.
 }finally{

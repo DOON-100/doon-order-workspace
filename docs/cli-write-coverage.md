@@ -240,3 +240,22 @@ PMC `pmc-save` 批量变更字段需 id、version、col、value，并按同一�
 - 此表还不是逐字段、逐角色的完成矩阵；待逐批读取页面及服务端 schema，逐项标注可复用、需新增接口或不支持、CRUD 语义和验收证据。
 - 附件、批量导入、审批、外部同步/发送、历史及只读报表需要独立记录副作用；不假设所有 `GET` 都是无副作用。
 - 尚未确定全员下载入口、升级渠道、不同系统分发及容量上限；见 W11。测试环境的容量结果不得当作生产承诺。
+
+
+## W4 工程与样办表单对应（开发完成，成品验收中）
+
+| 页面/表单 | CLI与服务器接口 | 权限/版本/副作用及保留 | 证据 |
+| --- | --- | --- | --- |
+| 工程画图需求 | `engineering drawings schema/form/references/save`；drawing-save/data | 创建标识仅新建；修改当前版本与指定字段，工程执行字段和需求字段按原角色分开 | 合成增改、未知/0、冲突、不同内容UUID及越权 |
+| 审图/变更/追加明细 | `drawings action --type review/event-review/detail-add`及events；drawing-review/event-review/detail-add/history | 工程需求版本；审图限指定角色，关键依据变更撤回批准，采纳事件只登记决定不自动覆盖字段 | 合成独立审图、原批准撤销、变更事件和明细 |
+| 工程历史原表 | `drawings import`；drawing-import | 管理员、来源摘要/工作表/行号身份；追加证据、原列保留，同来源冲突拒绝 | 合成新建/跳过及普通业务拒绝 |
+| SOP指令及任务 | `engineering sops schema/form/references/action --type`；sop-create/change/target/prepare/mes-upload/confirm/cancel | 新建操作标识、当前任务版本、目标版本和不可变历史；实际MES凭证登记不操作MES | 合成创建/明确版本/准备/事实/独立确认/后续改图/取消；本人自确认拒绝 |
+| SOP原件及凭证 | `sops files/file-upload/file-download`；sop-attachment/file | 10MiB、类型及内容签名、归属和SHA-256；文件追加不更换原件、不递增任务版本 | 合成独立文件、下载原字节及本地不覆盖 |
+| 项目图纸/客户确认/报价 | `engineering projects schema/references/form/save --type drawing/confirmation/quote-link/drawing-withdraw`；customer-project-* | 项目/轮次/款色、原件、明确图纸及报价历史版本；客户证据和原撤回留痕 | 合成原件/图纸/客户决定/精确报价引用、撤回、跨客户拒绝 |
+| 内部样办 | 共用projects save --type sample-release/sample-update/sample-promise | 下达绑定轮次版本及原技术/付款门禁；执行按当前样办版本，内部预计与对客日期分开 | 合成下达、接单/制作/QC/可寄、越级拒绝，指定字段保留 |
+| 寄样/签收/反馈 | 共用projects save --type sample-dispatch/dispatch-receive/sample-feedback | 不超未寄数量，明确实寄与签收；逐款反馈保存证据，不自动寄送/发消息 | 合成分批寄样、签收与逐款客批 |
+| 大货正式交接 | 共用projects save --type bulk-link | 轮次与每条订单版本、正式来源、图纸/客户确认/报价/财务前提；不覆盖原订单数量身份 | 合成精确关联及原数量回读保全 |
+| 样品签样与工程变更/冻结依据 | `engineering records schema/list/form/history/save --type sample/engineering-change`；process-data/history/save | 原角色/客户/订单/业务组；字段增量、details合并、历史不可变，完成关口依据仍必填 | 合成2类型增改完成、旧版/重放、历史、0及原字段保留 |
+| 台账图号更正 | `sales orders drawing-correct`；drawing-correction | 原管理员/PMC权限、原订单版本、原因及历史身份；保留主键与原件 | 合成更正及普通业务拒绝 |
+
+本批仅复用已有有鉴权API，不增加物理删除、隐式外发或新的CLI确认；全局账号/模板/邮件与其他共用维护继续按W10。金蝶既有12条命令保留但本批暂停操作，成品验收明确排除并列明；不将金蝶命令目录存在称为已继续联调。

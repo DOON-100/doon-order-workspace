@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1功能与本地成品验收完成；W2本地成品验收完成；W3功能、本地成品及GitHub下载来源验收完成；W4–W11未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1功能与本地成品验收完成；W2本地成品验收完成；W3功能、本地成品及GitHub下载来源验收完成；W4进行中；W5–W11未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -45,8 +45,8 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W0 | 写入框架、登录与权限复用、输入校验、限定接口、错误处理、回读、隔离测试、入口与分发方案 | [入口覆盖清单](cli-write-coverage.md)已登记；真实处理器合成写入验证员工权限、回读、去重和原记录保全；d5a7bde 下载包 88 条命令通过隔离验收。业务写入命令从 W1 开始接入；隔离安装残留因执行策略受阻待清理 | 基础开发与隔离验收完成 |
 | W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | 客户主档及目录、通用/专属资料、流转、附件、客户任务、项目/跟进/询价增改、普通表单统一保存、项目原件与跟进转项目/邮件归属已接入；145条命令安装包本地验收通过，远端同步与CI下载来源复核待网络恢复 | 本地验收完成 |
 | W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | 已接入IE/客户报价schema、可编辑字段查询、统一新增/增量修改及提交/评审/修订/确认/采用IE等固定动作。其余新版本 IE 图纸附件及业务交接接口 `ie-quote-handoff` / `ie-quote-handoff-accept`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 本地验收完成 |
-| W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，208条成品验收及GitHub下载来源核验通过，金蝶真实上传保留协议缺口 | 本地验收完成 |
-| W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；确认、上传和修改要保留来源版本 | 未开始 |
+| W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，208条成品验收及GitHub下载来源核验通过；金蝶相关操作按最新指示暂缓、后续单独安排 | 本地验收完成 |
+| W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；确认、上传和修改要保留来源版本 | 进行中 |
 | W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | `pmc-save/round`、`planning-control-*`、`purchase-preview/commit/save/receipt/archive`、`purchase-change-*`、`supplier-save`、`supplier-quote-save`、`outsource-approve/cancel`、`finished-supplier-*`；预览与正式提交分开核验 | 未开始 |
 | W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | `process-save` 按实际类型复用；`purchase-receipt`、`finished-supplier-*`、现有生产/损耗操作处理器；采购、库存、质检和流程跟踪不是同一业务记录，缺口待审计/补接口 | 未开始 |
 | W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | `process-save` 对应 OQC、包装和出货放行；`service-save`、`handoff-business-*`、既有发运/物流接口待审计；放行、入仓、发运、签收、发送分别表达 | 未开始 |
@@ -139,3 +139,26 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] W3集中业务回归382项、类型检查、68项CLI测试和17项原生服务器HTTP检查通过；静态表单生成及命令说明一致性通过。
 - [x] 0.32.0版本化安装包全208条命令实际安装验收及64组合成检查通过；测试安装、会话及数据已清理，正式服务器请求0。详见[W3验收](cli-write-w3-acceptance.md)。
 - [x] 9bd16ca及此前W1/W2提交已推送main，CLI CI通过；GitHub成品已下载安装并核验程序文件与已验收本地包相同（手册仅换行差异），来源和本地完整测试分别留痕。
+
+
+## 2026-10-27范围调整：金蝶暂缓，继续W4
+
+- 用户明确金蝶相关操作暂缓、后续单独安排。既有代码保留，本批不新增、不联调、不调用金蝶；W4成品业务测试跳过金蝶命令并单独列出，不把它们写成已执行。已有全回归中的隔离合成测试只作兼容性检查，不连接真实ERP。
+- W4集中接入工程需求新增/指定字段修改/审图/变更事件/明细、SOP任务和凭证、项目图纸版本/客户确认/样办及正式交接、样品签样和工程变更流程表单。能复用的使用既有API及统一schema/form/save/action参数；不另造审批或CLI确认。
+- 本批只在合成数据、独立端口和目录中测试；不部署、不改正式数据。按批次验收，普通步骤不重复全量回归。
+- [ ] 完成W4命令和覆盖矩阵。
+- [ ] 完成W4合成真实处理器场景及阶段检查。
+- [ ] 版本化成品安装验收，明确跳过金蝶；清理本次测试数据、安装及会话。
+
+
+## W4 当前进度
+
+- [x] 工程工作台schema/form/references/save/action/events/import，新增/指定字段修改、审图、现有事件核对、追加需求及历史证据迁入；角色、来源和独立版本沿用服务器。
+- [x] SOP共用action --type create/change/target/prepare/mes-upload/confirm/cancel，文件及独立MES凭证上传、目录与摘要下载；登记事实不实际操作MES，上传登记人不能自确认。
+- [x] 项目图纸、客户确认、精确报价关联、样办下达/执行/对客日期/寄样/签收/逐款反馈、大货交接共用projects save --type；原件复用W1上传，原技术/财务/版本门禁保留。
+- [x] 独立签样及工程变更表单schema/list/form/history/save，指定字段和details按键合并，保留未知与0、版本及原关联；冻结依据登记不冒充全局生产放行。
+- [x] 台账图号更正复用原drawing-correction接口，管理员/PMC原权限、旧身份保留，不覆盖原单主键与原件。
+- [x] 24条新命令的Commander入口和真实原生处理器链路通过开发期集中检查（进程内调用，非成品进程验收），测试场景包含越权、旧版、UUID不同内容、SOP独立确认、状态跳转、签样依据、图号历史及大货数量保全。
+- [x] 类型、70项CLI测试、17项独立构建后的原生HTTP检查通过；代码收尾仅做对应文件针对性验证；集中业务回归385项通过。
+- [ ] 0.33.0成品安装后执行232条登记命令中本期纳入验收的220条；12条金蝶命令按用户指示跳过、单列。核对测试数据、原记录和原件，清理本次安装及会话。
+- [ ] 更新最终验收记录，自动提交并安全推送main；不部署服务器。

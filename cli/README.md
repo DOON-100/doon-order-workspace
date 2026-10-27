@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本 0.32.0，W1/W2 本地成品验收完成；W3 订单、原单、单据及内部订单接入完成，本地验收结果见仓库执行记录；支持客户主档创建及指定字段更新、客户资料更新、跟进排程、项目创建及更新、询价创建及更新、项目款色、轮次、沟通、待办及客户跟进新增及更新。Commander.js 负责命令解析，复用中台员工登录与业务接口。支持 7 个基础命令及 111 个业务查询/导出命令，新增财务、对账和售后查询。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
+版本 0.33.0，W1/W2 本地成品验收完成；W3 订单、原单、单据及内部订单接入完成，W4工程需求、SOP、项目图纸/样办、签样与工程变更已接入，本地验收结果见仓库执行记录；支持客户主档创建及指定字段更新、客户资料更新、跟进排程、项目创建及更新、询价创建及更新、项目款色、轮次、沟通、待办及客户跟进新增及更新。Commander.js 负责命令解析，复用中台员工登录与业务接口。查询阶段的7个基础命令及111个业务查询/导出命令保持兼容，W3/W4另增加对应表单、查询和写入，当前登记232条命令。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
@@ -63,3 +63,5 @@ npm run package:windows
 `DOON_CLI_HOME` 仅供开发/测试重定向本机配置目录，必须是绝对路径，不能设置为共享或公开目录。合成服务使用 `setup --server http://127.0.0.1:<测试端口> --allow-local-http`；不允许公网 HTTP。测试使用临时目录和合成账号，不访问真实员工或生产数据库。
 
 首版持久凭据仅支持 Windows；Linux/macOS 可构建和运行无凭据基础命令，持久登录支持留待后续批次。所有依赖许可证随 Windows 包提供。
+
+金蝶相关操作已按用户要求暂缓，后续单独安排；本批保持既有代码，金蝶命令不纳入W4业务操作验收。

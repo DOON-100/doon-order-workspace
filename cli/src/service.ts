@@ -1,3 +1,6 @@
+import {EngineeringWriteService} from './engineering-write.js';
+import {ProjectEngineeringService} from './project-engineering.js';
+import {EngineeringRecordService} from './engineering-records.js';
 import {BusinessDocumentWriteService} from './documents-write.js';
 import {OrderWriteService} from './order-write.js';
 import {KingdeeSalesService} from './kingdee-sales.js';
@@ -14,7 +17,7 @@ import {QuoteHandoffService} from './quote-handoffs.js';
 import {QuoteFileService} from './quote-files.js';
 import {PriceArchiveService} from './price-archive.js';
 import {SalesService} from './sales.js';
-import {orderWriteCommands, priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {engineeringWriteCommands, orderWriteCommands, priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -53,6 +56,9 @@ export class FoundationService {
   orderWrite() { return new OrderWriteService(this.store, this.transport); }
   kingdeeSales() { return new KingdeeSalesService(this.store, this.transport); }
   orders() { return new OrderService(this.store, this.transport); }
+  engineeringWrite() { return new EngineeringWriteService(this.store,this.transport); }
+  projectEngineering() { return new ProjectEngineeringService(this.store,this.transport); }
+  engineeringRecords() { return new EngineeringRecordService(this.store,this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
   operations() { return new OperationsService(this.store, this.transport); }
@@ -120,6 +126,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: orderWriteCommands.length + priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: engineeringWriteCommands.length + orderWriteCommands.length + priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

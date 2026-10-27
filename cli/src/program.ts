@@ -1,3 +1,4 @@
+import {registerEngineeringWrites} from './engineering-write-program.js';
 import {registerOrderWrites} from './order-write-program.js';
 import {Command, CommanderError} from 'commander';
 import {commands, foundationCommands, salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
@@ -232,6 +233,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     }
   }
   registerOrderWrites(program,foundation,result);
+  registerEngineeringWrites(program,foundation,result);
   try {
     await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});
