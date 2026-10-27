@@ -121,7 +121,8 @@ try{
   }
   // Authentication audit may advance the workspace revision; establish all test sessions before the read-only baseline.
   let processState,pmcProcessState,adminProcessState;
-  if(process.platform==='win32'){
+  // Test-only switch exercises the Linux path on a Windows development machine.
+  if(process.platform==='win32'&&!process.argv.includes('--in-process-commands')&&!process.argv.includes('--development-cli')){
     processState=new StateStore(path.join(dir,'process-client'),windowsCodec);await processState.setup(origin,true);await new FoundationService(processState).login(async()=>({username:'sales_a',password:'Synthetic-Only-2026!'}));
     pmcProcessState=new StateStore(path.join(dir,'process-pmc'),windowsCodec);await pmcProcessState.setup(origin,true);await new FoundationService(pmcProcessState).login(async()=>({username:'pmc_test',password:'Synthetic-Only-2026!'}));
     adminProcessState=new StateStore(path.join(dir,'process-admin-query'),windowsCodec);await adminProcessState.setup(origin,true);await new FoundationService(adminProcessState).login(async()=>({username:'admin_test',password:'Synthetic-Only-2026!'}));
@@ -472,13 +473,13 @@ try{
 
   }
   if(!process.argv.includes('--w2-only')&&!process.argv.includes('--w4-only')){
-    const beforeW3=snapshot();testedCommands.push(...await verifyOrderWrites({services,dir,origin,env,root,pass}));
+    const beforeW3=snapshot();testedCommands.push(...await verifyOrderWrites({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState)}));
     const afterW3=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW3.records)assert.equal(afterW3.get(row.id),row.data,'W3 changed unrelated original records');
   }
   if(!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')){
-    const beforeW4=snapshot();testedCommands.push(...await verifyEngineeringWrites({services,dir,origin,env,root,pass}));const afterW4=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW4.records)assert.equal(afterW4.get(row.id),row.data,'W4 changed unrelated original records');
+    const beforeW4=snapshot();testedCommands.push(...await verifyEngineeringWrites({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState)}));const afterW4=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW4.records)assert.equal(afterW4.get(row.id),row.data,'W4 changed unrelated original records');
   }
-  if(!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(testedCommands.length,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);
+  if(processState&&!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(testedCommands.length,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{
@@ -487,4 +488,4 @@ try{
   if(path.dirname(target)!==base||!path.basename(target).startsWith('cli-test-'))throw Error('Refusing cleanup outside the generated test directory');
   await fs.rm(target,{recursive:true,force:true});assert.equal(await fs.stat(target).then(()=>true,()=>false),false);
 }
-console.log(JSON.stringify({passed:checks,syntheticOnly:true,productionRequests:0,unrelatedBusinessRecordsAndOriginalBytesPreserved:true,testDirectoryRemoved:true,commandExecution:process.argv.includes('--development-cli')?'in-process-commander-with-real-native-server':'native-cli-processes',deferredCommands:process.argv.includes('--skip-kingdee')?commands.filter(row=>row.name.startsWith('sales kingdee ')).map(row=>row.name):[],testedCommands}));
+console.log(JSON.stringify({passed:checks,syntheticOnly:true,productionRequests:0,unrelatedBusinessRecordsAndOriginalBytesPreserved:true,testDirectoryRemoved:true,commandExecution:process.platform==='win32'&&!process.argv.includes('--in-process-commands')&&!process.argv.includes('--development-cli')?'native-cli-processes':'in-process-commander-with-real-native-server',deferredCommands:process.argv.includes('--skip-kingdee')?commands.filter(row=>row.name.startsWith('sales kingdee ')).map(row=>row.name):[],testedCommands}));
