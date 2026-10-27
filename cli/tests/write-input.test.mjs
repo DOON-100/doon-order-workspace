@@ -6,6 +6,13 @@ import path from 'node:path';
 import {readWriteInput, validateWriteInput} from '../dist/write-input.js';
 
 const schema = {title: {type: 'string', required: true}, quantity: {type: 'number'}, details: {type: 'object', properties:{a:{type:'number'}}}};
+test('nullable numbers distinguish unknown from zero without allowing null elsewhere',()=>{
+ const fields={quantity:{type:'number',required:true,nullable:true,integer:true,min:0}};
+ assert.deepEqual(validateWriteInput({quantity:null},fields),{quantity:null});
+ assert.deepEqual(validateWriteInput({quantity:0},fields),{quantity:0});
+ assert.throws(()=>validateWriteInput({quantity:null},schema),{code:'INVALID_INPUT'});
+ assert.throws(()=>validateWriteInput({},fields),{code:'INVALID_INPUT'});
+});
 test('write input is bounded, validated, and does not echo the payload', async () => {
  const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'doon-cli-write-test-'));
  try {

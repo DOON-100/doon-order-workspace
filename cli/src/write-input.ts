@@ -3,12 +3,13 @@ import {TextDecoder} from 'node:util';
 import {CliError} from './errors.js';
 
 // Infrastructure only: no routes, commands or server-side permissions are registered here.
-export type WriteField = {type: 'string' | 'number' | 'boolean' | 'object' | 'array'; required?: boolean; properties?: WriteSchema; items?: WriteField; enum?: readonly (string | number | boolean)[]; integer?: boolean; min?: number; max?: number};
+export type WriteField = {type: 'string' | 'number' | 'boolean' | 'object' | 'array'; required?: boolean; nullable?: boolean; properties?: WriteSchema; items?: WriteField; enum?: readonly (string | number | boolean)[]; integer?: boolean; min?: number; max?: number};
 export type WriteSchema = Readonly<Record<string, WriteField>>;
 export type WriteObject = Record<string, unknown>;
 const maxInputBytes = 1024 * 1024;
 
 function validateField(item: unknown, field: WriteField): void {
+  if (item === null && field.nullable) return;
   const valid = field.type === 'array' ? Array.isArray(item) : field.type === 'object'
     ? !!item && typeof item === 'object' && !Array.isArray(item) && Object.getPrototypeOf(item) === Object.prototype
     : typeof item === field.type;
