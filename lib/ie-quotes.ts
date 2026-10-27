@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {all,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {canMaintainCustomerQuoteAccount} from './customer-quote-access';
-import {canReadIeQuote,ieQuotePolicy,iePolicyMember,isIeEngineeringMember} from './ie-quote-access';
+import {canFillIeQuote,canReadIeQuote,ieQuotePolicy,iePolicyMember,isIeApprover} from './ie-quote-access';
 import {ieTemplateStatus} from './ie-quote-template';
 import {ieAttachmentIssues,publicIeAttachments,type IeAttachmentRef} from './ie-quote-attachments';
 import {calculateIeQuote,ieAdjustmentTargets} from './ie-quote-calculation';
@@ -48,7 +48,18 @@ export function ieQuoteVersion(s:State,id:string,version?:number):IeQuote|null{
  const q=currentIeQuote(s,id);if(!q)return null;if(!version||version===q.version)return q;
  const rows=(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===id&&r.version===version);return rows.length===1?rows[0].snapshot:null;
 }
-export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return m.active&&q.status==='submitted'&&q.requiredReviewMemberId===m.id&&!q.preparedByIds.includes(m.id)&&!!all(s,'member').find(v=>v.id===m.id&&v.active);}
+/** Participation belongs to the quotation, including its earlier revisions. */
+export function ieQuotePreparedByIds(s:State,q:Pick<IeQuote,'id'|'version'|'preparedByIds'|'createdById'>,actorId=''){
+ const history=(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&r.version<=q.version&&r.snapshot?.id===q.id);
+ return [...new Set([q.createdById,...(q.preparedByIds||[]),...history.flatMap(r=>[r.snapshot.createdById,...(r.snapshot.preparedByIds||[])]),actorId].filter(id=>typeof id==='string'&&!!id))];
+}
+export function ieQuoteReviewRouting(s:State,q:Pick<IeQuote,'id'|'version'|'preparedByIds'|'createdById'>,actorId=''){
+ const preparedByIds=ieQuotePreparedByIds(s,q,actorId),primary=iePolicyMember(s,'reviewer'),fallback=iePolicyMember(s,'finalApprover');
+ if(!ieQuotePolicy(s)||!iePolicyMember(s,'engineer')||!primary||!fallback)return {preparedByIds,reviewer:undefined,reason:'工程报价角色中有未绑定、停用或无效成员，请管理员核对后再提交独立复核。'};
+ const reviewer=[primary,fallback].find(member=>!preparedByIds.includes(member.id));
+ return {preparedByIds,reviewer,reason:reviewer?'':'杨德周、曲艳红均已参与本笔报价填报，不能审核同一笔报价。请管理员安排未参与填报的独立复核人后再提交；历史参与记录不能清除。'};
+}
+export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return isIeApprover(s,m)&&q.status==='submitted'&&q.requiredReviewMemberId===m.id&&!ieQuotePreparedByIds(s,q).includes(m.id);}
 export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttachmentRef[]},ownId=''){
  const issues:string[]=ieAttachmentIssues(s,q,ownId),need=(condition:unknown,message:string)=>{if(!condition)issues.push(message);};
  const nameReferenceIssue=validateIeMaterialNameReferences(s,q);if(nameReferenceIssue)issues.push(nameReferenceIssue);
@@ -88,10 +99,11 @@ export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttac
  return [...new Set(issues)];
 }
 export function publicIeQuote(s:State,m:Member,q:IeQuote){
- const current=currentIeQuote(s,q.id),latest=current?.version===q.version,editable=latest&&['draft','returned'].includes(q.status)&&isIeEngineeringMember(s,m);
+ const current=currentIeQuote(s,q.id),latest=current?.version===q.version,editable=latest&&['draft','returned'].includes(q.status)&&canFillIeQuote(s,m);
+ const routing=ieQuoteReviewRouting(s,q,m.id),submissionBlockReason=editable?routing.reason:'';
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId) as CustomerAccount|undefined;
  const templateStatus=ieTemplateStatus(s,m,q),issues=ieQuoteIssues(s,q,q.id),costs=calculateIeQuote(q);
- return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings:costs.warnings,issues,templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&isIeEngineeringMember(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
+ return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings:costs.warnings,issues,templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable&&!!routing.reviewer,nextReviewMemberId:editable?routing.reviewer?.id||'':'',submissionBlockReason,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&canFillIeQuote(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
  history:(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&canReadIeQuote(s,m,r.snapshot)).sort((a,b)=>b.version-a.version).map(({version,revision,action,updatedAt,updatedBy,snapshot})=>({version,revision,action,updatedAt,updatedBy,status:snapshot.status})),
  };
 }

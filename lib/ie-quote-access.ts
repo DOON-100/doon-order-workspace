@@ -15,6 +15,7 @@ export function iePolicyMember(s:State,role:'engineer'|'reviewer'|'finalApprover
 }
 export const canConfigureIeQuotes=(m:Member)=>m.active&&m.role==='admin';
 export function isIeEngineeringMember(s:State,m:Member){return !!m.active&&!!ieQuotePolicy(s)&&[iePolicyMember(s,'engineer')?.id,iePolicyMember(s,'reviewer')?.id].includes(m.id);}
+export function canFillIeQuote(s:State,m:Member){return !!m.active&&!!ieQuotePolicy(s)&&(canConfigureIeQuotes(m)||isIeEngineeringMember(s,m)||iePolicyMember(s,'finalApprover')?.id===m.id);}
 export function isIeApprover(s:State,m:Member){return !!m.active&&[iePolicyMember(s,'reviewer')?.id,iePolicyMember(s,'finalApprover')?.id].includes(m.id);}
 export function canFinalApproveIeSales(s:State,m:Member){return !!m.active&&iePolicyMember(s,'finalApprover')?.id===m.id;}
 export function canReadIeAccount(s:State,m:Member,a:CustomerAccount){
@@ -25,7 +26,7 @@ export function canReadIeQuote(s:State,m:Member,q:{customerAccountId:string}){
 }
 export const readAccess=canReadIeQuote;
 export function canUseIeQuotes(s:State,m:Member){return !!m.active&&(canConfigureIeQuotes(m)||isIeEngineeringMember(s,m)||canFinalApproveIeSales(s,m)||(all(s,'customer_account') as CustomerAccount[]).some(a=>canMaintainCustomerQuoteAccount(s,m,a)));}
-export function ieCapabilities(s:State,m:Member){return {canCreate:isIeEngineeringMember(s,m),canConfigure:canConfigureIeQuotes(m),canReview:isIeApprover(s,m),canFinalApprove:canFinalApproveIeSales(s,m)};}
+export function ieCapabilities(s:State,m:Member){return {canCreate:canFillIeQuote(s,m),canConfigure:canConfigureIeQuotes(m),canReview:isIeApprover(s,m),canFinalApprove:canFinalApproveIeSales(s,m)};}
 export function publicIePolicy(s:State,m:Member){
  const p=ieQuotePolicy(s);return {version:p?.version||0,engineerMemberId:p?.engineerMemberId||'',reviewerMemberId:p?.reviewerMemberId||'',finalApproverMemberId:p?.finalApproverMemberId||'',labels:{engineer:'郑忠伟 · 工程主管',reviewer:'杨德周 · 生产副总',finalApprover:'曲艳红 · 总经理'},
  members:canConfigureIeQuotes(m)?(all(s,'member') as Member[]).filter(v=>v.active&&v.role!=='supplier').map(({id,name,role})=>({id,name,role})):[],

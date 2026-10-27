@@ -21,6 +21,7 @@ rawInsert({id:'ie_suite_sales_policy',kind:'customer_quote_access',memberIds:['i
 const harness={ok,call,pass:console.log,rawRecords,rawInsert,files,rawUpdate:record=>db.prepare('UPDATE records SET data=? WHERE id=? AND kind=?').run(JSON.stringify(record),record.id,record.kind)};
 const {testMemberNotificationMailboxes}=await import('./member-notification-mailbox-cases.mjs');await testMemberNotificationMailboxes(harness);
 const {testIeQuotes,testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeQuotes(harness);await testIeToolingChargeSources(harness);
+const {testIeAdditionalEditors}=await import('./ie-quote-editor-access-cases.mjs');await testIeAdditionalEditors(harness);
 const {testIeQuoteExcelCalculation}=await import('./ie-quote-calculation-cases.mjs');await testIeQuoteExcelCalculation(harness);
 const {testIeManualAdjustments}=await import('./ie-quote-manual-cases.mjs');await testIeManualAdjustments(harness);
 const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-cases.mjs');await testIeAttachmentsAndHandoff(harness);
@@ -28,6 +29,7 @@ const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await 
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(harness);
 const {testIeManualWorkbook}=await import('./ie-quote-manual-workbook-cases.mjs');await testIeManualWorkbook({pass:console.log});
 const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass:console.log});
+const {testIeQuoteGrid}=await import('./ie-quote-grid-cases.mjs');await testIeQuoteGrid({pass:console.log});
 const {testIeMaterialNames}=await import('./ie-material-names-cases.mjs');await testIeMaterialNames({pass:console.log});
 const {testIeQuoteNotifications}=await import('./ie-quote-notification-cases.mjs');await testIeQuoteNotifications(harness);
 db.close();console.log('IE focused SQLite API suite passed.');

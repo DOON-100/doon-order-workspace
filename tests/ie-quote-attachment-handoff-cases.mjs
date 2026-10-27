@@ -20,7 +20,7 @@ export async function testIeAttachmentsAndHandoff({ok,call,pass,rawRecords,rawIn
  const jpeg=Buffer.from([255,216,255,192,0,11,8,0,1,0,1,1,1,17,0,255,218,0,8,1,1,0,0,63,0,0,255,217]);
  const form=(quote,bytes=png,name='合成图纸.png',type='image/png',extra={})=>{const f=new FormData();f.set('quoteId',quote.id);f.set('version',String(quote.version));f.set('lineId',quote.lines[0].id);f.set('file',new File([bytes],name,{type}));for(const [k,v]of Object.entries(extra))f.set(k,v);return f;};
  const getFile=(quote,a,who=engineer)=>call(`ie-quote-attachment?id=${quote.id}&version=${quote.version}&attachmentId=${a.id}`,undefined,who);
- assert.equal((await call('ie-quote-attachment-upload',form(q))).status,403);
+ assert.equal((await call('ie-quote-attachment-upload',form(q),intruder)).status,403);
  assert.equal((await call('ie-quote-attachment-upload',form(q),business)).status,403);
  assert.equal((await call('ie-quote-attachment-upload',form(q,Buffer.from('<svg onload="bad"/>'),'fake.png'),engineer)).status,400);
  assert.equal((await call('ie-quote-attachment-upload',form(q,Buffer.from('<html>fake</html>'),'fake.pdf','application/pdf'),engineer)).status,400);

@@ -7,13 +7,13 @@ import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './memb
 import {ieAttachmentGet,ieAttachmentPost} from './ie-quote-attachment-api';
 import {ieHandoffGet,ieHandoffPost} from './ie-quote-handoff-api';
 import {validateIeMaterialNameReferences} from './ie-material-names';
-import {canConfigureIeQuotes,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
-import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
+import {canConfigureIeQuotes,canFillIeQuote,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
+import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuotePreparedByIds,ieQuoteReviewRouting,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
 
 const id=z.string().trim().min(1).max(120),version=z.number().int().positive(),change=z.object({id,version}).strict();
 function parse<T extends z.ZodTypeAny>(schema:T,input:unknown):z.output<T>{const result=schema.safeParse(input);if(!result.success)throw new AppError(result.error.issues.slice(0,6).map(i=>`${i.path.join('.')}: ${i.message}`).join('；'));return result.data;}
 function allowed(s:State,m:Member){if(!canUseIeQuotes(s,m))throw new AppError('没有 IE 工程报价权限，请联系管理员核对角色绑定和客户责任。',403);}
-function engineering(s:State,m:Member){if(!isIeEngineeringMember(s,m))throw new AppError('仅绑定的工程主管或生产副总替补可以填写工程报价。',403);}
+function engineering(s:State,m:Member){if(!canFillIeQuote(s,m))throw new AppError('仅管理员及绑定的工程主管、生产副总、总经理可以填写工程报价。',403);}
 function current(q:{version:number},expected:number){if(q.version!==expected)throw new AppError('该记录已更新，你的输入未覆盖新版本；请刷新核对。',409);}
 function quote(s:State,m:Member,id:string){const q=currentIeQuote(s,id);if(!q||!canReadIeQuote(s,m,q))throw new AppError('工程报价不存在或没有此客户的访问权限。',403);return q;}
 function editable(s:State,m:Member,q:IeQuote){engineering(s,m);if(!['draft','returned'].includes(q.status))throw new AppError('提交后的工程报价不能直接修改；已发布版本请先创建修订。',409);}
@@ -75,7 +75,7 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
   engineering(s,m);const {id,version,...fields}=parse(ieQuoteInput,await req.json()),before=id?quote(s,m,id):null;
   if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');if(before.manualAdjustments?.length&&fields.manualAdjustments===undefined)throw new AppError('此报价包含人工调整，请刷新到支持人工调整的表格后保存，避免覆盖已确认的人工金额。',409);}
   const a=all(s,'customer_account').find(a=>a.id===fields.customerAccountId) as CustomerAccount|undefined;if(!a?.active)throw new AppError('请选择有效的客户档案。');
-  const nameReferenceIssue=validateIeMaterialNameReferences(s,fields);if(nameReferenceIssue)throw new AppError(nameReferenceIssue);validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:[...new Set([...(before?.preparedByIds||[]),m.id])],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
+  const nameReferenceIssue=validateIeMaterialNameReferences(s,fields);if(nameReferenceIssue)throw new AppError(nameReferenceIssue);validateCatalog(s,fields);const at=now(),q:IeQuote={...before,...fields,id:before?.id||newId('ie_quote'),kind:'ie_quote',version:(before?.version||0)+1,revision:before?.revision||1,status:before?.status==='returned'?'returned':'draft',customerName:a.customer,customerCode:a.customerCode,preparedByIds:before?ieQuotePreparedByIds(s,before,m.id):[m.id],policyVersion:ieQuotePolicy(s)!.version,requiredReviewMemberId:'',costs:calculateIeQuote(fields),createdAt:before?.createdAt||at,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};
   q.attachmentRefs=(before?.attachmentRefs||[]).filter(ref=>fields.lines.some(line=>line.id===ref.lineId));
   return persist(s,m,q,before,before?'保存工程报价草稿':'创建工程报价草稿');
  }
@@ -90,14 +90,14 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
  const input=parse(change,await req.json()),before=quote(s,m,input.id);current(before,input.version);engineering(s,m);const at=now();
  if(action==='ie-quote-submit'){
   editable(s,m,before);const issues=ieQuoteIssues(s,before,before.id);if(issues.length)throw new AppError('报价仍需补充：'+issues.slice(0,8).join('；'));validateCatalog(s,before);
-  const preparedByIds=[...new Set([...before.preparedByIds,m.id])],primary=iePolicyMember(s,'reviewer')!,reviewer=preparedByIds.includes(primary.id)?iePolicyMember(s,'finalApprover')!:primary;
-  if(preparedByIds.includes(reviewer.id))throw new AppError('填报人与复核人不能相同，请管理员核对角色绑定。',409);
+  const {preparedByIds,reviewer,reason}=ieQuoteReviewRouting(s,before,m.id);
+  if(!reviewer)throw new AppError(reason,409);
   const tooling=before.tooling.map(t=>t.chargeMode==='already_charged'?{...t,evidence:String(all(s,'ie_quote_tooling').find(r=>r.id===t.toolingId&&r.customerAccountId===before.customerAccountId)?.evidence||'')}:t);
   const q:IeQuote={...before,tooling,status:'submitted',version:before.version+1,preparedByIds,requiredReviewMemberId:reviewer.id,policyVersion:ieQuotePolicy(s)!.version,submittedAt:at,submittedBy:m.name,submittedById:m.id,updatedAt:at,updatedBy:m.name,updatedById:m.id};delete q.reviewedAt;delete q.reviewedBy;delete q.reviewedById;delete q.reviewReason;
   return persist(s,m,q,before,'提交工程报价复核');
  }
  if(before.status!=='released')throw new AppError('只有已发布工程报价可以创建修订。',409);
- const q:IeQuote={...before,status:'draft',version:before.version+1,revision:before.revision+1,preparedByIds:[m.id],requiredReviewMemberId:'',updatedAt:at,updatedBy:m.name,updatedById:m.id};
+ const q:IeQuote={...before,status:'draft',version:before.version+1,revision:before.revision+1,preparedByIds:ieQuotePreparedByIds(s,before,m.id),requiredReviewMemberId:'',updatedAt:at,updatedBy:m.name,updatedById:m.id};
  for(const key of ['submittedAt','submittedBy','submittedById','reviewedAt','reviewedBy','reviewedById','reviewReason'] as const)delete q[key];
  return persist(s,m,q,before,'创建工程报价修订草稿');
 }
@@ -111,7 +111,7 @@ async function savePolicy(req:Request,s:State,m:Member){
  const records=[p,audit(m,p,before,'绑定工程报价角色','IE 工程报价',p)];await commit(s.revision,records);return json({ok:true,policy:publicIePolicy(mergeState(s,records),m)});
 }
 async function saveTooling(req:Request,s:State,m:Member){
- if(!isIeEngineeringMember(s,m)&&!isIeApprover(s,m))throw new AppError('只有工程主管、生产副总或总经理可以登记共用模具。',403);
+ if(!canFillIeQuote(s,m))throw new AppError('只有管理员及绑定的工程主管、生产副总、总经理可以登记共用模具。',403);
  const input=parse(z.object({id:id.optional(),version:version.optional(),customerAccountId:id,name:z.string().trim().min(1).max(240),reference:z.string().trim().min(1).max(500),chargeStatus:z.enum(['uncollected','collected']),evidence:z.string().trim().max(4000)}).strict(),await req.json());
  const before=input.id?all(s,'ie_quote_tooling').find(r=>r.id===input.id) as IeTooling|undefined:undefined;if(input.id&&!before)throw new AppError('模具登记不存在。',404);if(before){current(before,input.version||0);if(before.customerAccountId!==input.customerAccountId||before.reference!==input.reference)throw new AppError('稳定模具登记不能变更客户或识别编号。');}else if(input.version)throw new AppError('新登记不能提供版本。');
  if(!all(s,'customer_account').some(a=>a.id===input.customerAccountId&&a.active))throw new AppError('请选择有效客户。');

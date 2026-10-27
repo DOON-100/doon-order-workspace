@@ -1,18 +1,18 @@
 import {z} from 'zod';
 import {all,newId,now,type Member,type State} from './domain';
 import {AppError,bucket,commit,json} from './store';
-import {canReadIeQuote,isIeEngineeringMember} from './ie-quote-access';
-import {currentIeQuote,ieQuoteVersion,publicIeQuote,type IeQuote} from './ie-quotes';
+import {canFillIeQuote,canReadIeQuote} from './ie-quote-access';
+import {currentIeQuote,ieQuotePreparedByIds,ieQuoteVersion,publicIeQuote,type IeQuote} from './ie-quotes';
 import {buildIeQuotePersistenceRecords} from './ie-quote-api';
 import {IE_ATTACHMENT_MAX_BYTES,ieAttachmentHash,validateIeAttachment,type IeAttachmentRef,type IeQuoteAttachment} from './ie-quote-attachments';
 const id=z.string().trim().min(1).max(120),change=z.object({id,version:z.number().int().positive(),lineId:id,attachmentId:id}).strict();
 function editable(s:State,m:Member,quoteId:string,version:number,lineId:string){
- const q=currentIeQuote(s,quoteId);if(!q||!canReadIeQuote(s,m,q)||!isIeEngineeringMember(s,m))throw new AppError('只有工程填报人或替补可维护授权报价的图纸附件。',403);
+ const q=currentIeQuote(s,quoteId);if(!q||!canReadIeQuote(s,m,q)||!canFillIeQuote(s,m))throw new AppError('只有获准填写工程报价的成员可维护图纸附件。',403);
  if(q.version!==version||!['draft','returned'].includes(q.status))throw new AppError('报价版本已变化或已提交，请刷新；已发布内容须先创建修订。',409);
  if(!q.lines.some(l=>l.id===lineId))throw new AppError('请选择当前报价中的有效款式。');return q;
 }
 async function persistRefs(s:State,m:Member,q:IeQuote,refs:IeAttachmentRef[],action:string,attachment?:IeQuoteAttachment){
- const next:IeQuote={...q,attachmentRefs:refs,version:q.version+1,preparedByIds:[...new Set([...q.preparedByIds,m.id])],updatedAt:now(),updatedBy:m.name,updatedById:m.id};
+ const next:IeQuote={...q,attachmentRefs:refs,version:q.version+1,preparedByIds:ieQuotePreparedByIds(s,q,m.id),updatedAt:now(),updatedBy:m.name,updatedById:m.id};
  const records=[...buildIeQuotePersistenceRecords(m,next,q,action),...(attachment?[attachment]:[])];await commit(s.revision,records);
  const ids=new Set(records.map(r=>r.id));return json({ok:true,quote:publicIeQuote({...s,records:[...s.records.filter(r=>!ids.has(r.id)),...records]},m,next)});
 }

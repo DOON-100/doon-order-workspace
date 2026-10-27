@@ -22,7 +22,7 @@ export async function testIeMaterialNames({pass}){
  const post=async(input,m=admin,s=state())=>(await api.ieMaterialNamesPost('ie-material-names-import',new Request('https://test.invalid/api',{method:'POST',body:JSON.stringify(input)}),s,m)).json();
  const deny=async(input,status,m=admin)=>{const before=snapshot();await assert.rejects(()=>post(input,m),e=>e.status===status);assert.equal(snapshot(),before);};
  assert.equal((await get()).total,0);const input=payload(),saved=await post(input),first=snapshot();assert.equal(saved.count,29);assert.equal((await post(input)).idempotent,true);assert.equal(snapshot(),first);
- assert.equal((await get()).items.length,20);assert.equal((await get()).total,29);assert.equal((await get('T1')).items[0].id,'1');assert.equal((await get('圈料')).items[0].name,'合成圈料色');assert.equal((await get('合成圈枓')).items[0].id,'1');assert.equal((await get('ＲＩＭ')).items[0].id,'1');
+ assert.equal((await get()).items.length,29);assert.equal((await get()).total,29);assert.equal((await get('T1')).items[0].id,'1');assert.equal((await get('圈料')).items[0].name,'合成圈料色');assert.equal((await get('合成圈枓')).items[0].id,'1');assert.equal((await get('ＲＩＭ')).items[0].id,'1');
  assert.deepEqual((await get('Rivet')).items.map(v=>v.id),['2','3']);assert.deepEqual((await get('螺丝')).items.map(v=>v.name),['螺丝色1','螺丝色2']);assert.equal((await get('完全无关查询')).total,0);assert(!('basePrice' in (await get()).items[0]));
  pass('IE 名称资料：中英编码与模糊检索、同英文多候选、保留数字及原名、不推断单价');
  const ref={catalogId:saved.id,catalogVersion:1,entryId:'1'},fields={lines:[{materials:[{name:'合成圈料色',nameReference:ref}]}]};assert.equal(api.validateIeMaterialNameReferences(state(),fields),null);
@@ -33,7 +33,9 @@ export async function testIeMaterialNames({pass}){
  await deny(payload(),409);await deny({...input,catalog:{...catalog,sourceFilename:'changed.xlsx'}},409);await deny(payload(2),403,engineer);await deny(payload(2),403,{...admin,active:false});await deny(payload(2),403,member('supplier','supplier'));
  for(const m of [member('outsider','viewer'),member('supplier','supplier'),{...admin,active:false}])assert.throws(()=>get('',m),e=>e.status===403);
  await deny(payload(2,{...catalog,entries:[catalog.entries[0],catalog.entries[0]]}),400);await deny(payload(2,{...catalog,entries:[{...catalog.entries[0],basePrice:2}]}),400);await deny(payload(2,{...catalog,sourceFilename:'C:/private.xlsx'}),400);
- const stale=state();globalThis.__ieNamesState.revision++;await assert.rejects(()=>post(payload(2),admin,stale),e=>e.status===409);
+ const fullCatalog={...catalog,entries:Array.from({length:74},(_,i)=>entry(String(i+1),'合成材料'+(i+1)))};await post(payload(2,fullCatalog));assert.equal((await get()).items.length,74);assert.equal((await get()).total,74);
+ pass('IE 名称下拉：空查询返回完整74项，旧名称无匹配不影响浏览全部');
+ const stale=state();globalThis.__ieNamesState.revision++;await assert.rejects(()=>post(payload(3),admin,stale),e=>e.status===409);
  pass('IE 名称资料：权限、幂等、并发版本、重复编号及越界字段校验');
  delete globalThis.__ieNamesState;
 }

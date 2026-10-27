@@ -103,12 +103,14 @@ const {testCustomerQuotes}=await import('./customer-quote-cases.mjs');await test
 const {testIeQuotes}=await import('./ie-quote-cases.mjs');await testIeQuotes({ok,call,state,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
 const ieHarness={ok,call,state,pass,files,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record)),rawUpdate:record=>db.prepare('UPDATE records SET data=? WHERE id=? AND kind=?').run(JSON.stringify(record),record.id,record.kind)};
 const {testIeToolingChargeSources}=await import('./ie-quote-cases.mjs');await testIeToolingChargeSources(ieHarness);
+const {testIeAdditionalEditors}=await import('./ie-quote-editor-access-cases.mjs');await testIeAdditionalEditors(ieHarness);
 const {testIeQuoteExcelCalculation}=await import('./ie-quote-calculation-cases.mjs');await testIeQuoteExcelCalculation(ieHarness);
 const {testIeManualAdjustments}=await import('./ie-quote-manual-cases.mjs');await testIeManualAdjustments(ieHarness);
 const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-cases.mjs');await testIeAttachmentsAndHandoff(ieHarness);
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(ieHarness);
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(ieHarness);
 const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass});
+const {testIeQuoteGrid}=await import('./ie-quote-grid-cases.mjs');await testIeQuoteGrid({pass:pass});
 const {testIeMaterialNames}=await import('./ie-material-names-cases.mjs');await testIeMaterialNames({pass});
 const {testIeQuoteNotifications}=await import('./ie-quote-notification-cases.mjs');await testIeQuoteNotifications(ieHarness);
 const {testCustomerQuoteReview}=await import('./customer-quote-review-cases.mjs');await testCustomerQuoteReview({ok,call,state,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
