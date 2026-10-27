@@ -93,3 +93,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects item-update` 与 `round-update` 使用 `--input <文件> --version <当前版本> --request-id <UUID>` 修改款色和轮次。为防止旧接口默认值覆盖，输入须包含当前全部可编辑字段：款色为 `id`、`projectId`、`model`、`quantity`、`customerModel`、`drawing`、`color`、`lens`、`material`、`requirements`；轮次为 `id`、`projectId`、`title`、`type`、`scope`、`parentRoundId`、`stage`、`requiredDrawingTypes`、`requireQuote`、`requiredSampleIds`、`sampleGateStage`、`sampleGateNote`、`dueDate`、`reason`、`status`。服务器保留已转单记录并拒绝不允许的修改。
 
 `doon sales projects development-show <项目ID> --customer <客户ID> --json` 查询独立的项目开发资料与进展，尚无资料时版本为 0。`development-save --input <文件> --version <版本> --request-id <UUID>` 维护阶段，输入 `customerId`、`projectId`、`stage`、`next`、`notes`、`reason`；`development-log` 使用同样参数，输入 `customerId`、`projectId`、`stage`、`next`、`result`，追加进展并保留原备注。阶段为待核实、需求了解、可行性、报价、打样、样品反馈、商务确认、暂缓或关闭。
+
+`doon sales projects document-show <项目ID> --customer <客户ID> --json` 查询项目资料文档及历史版本；没有文档时版本为 0。`doon sales projects document-save --input <文件> --version <版本> --request-id <UUID>` 保存新版本，JSON 包含 `customerId`、`projectId`、`content`、`reason`；服务器保留原文和历史版本。

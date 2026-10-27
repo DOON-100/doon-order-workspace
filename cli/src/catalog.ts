@@ -1,4 +1,4 @@
-export const version = '0.23.0';
+export const version = '0.24.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -23,6 +23,7 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales projects document-save', usage:'sales projects document-save --input <file> --version <number> --request-id <uuid>', description:'保存项目资料文档并回读', effect:'business-write'},
   {name:'sales projects development-save', usage:'sales projects development-save --input <file> --version <number> --request-id <uuid>', description:'维护项目开发阶段并回读', effect:'business-write'},
   {name:'sales projects development-log', usage:'sales projects development-log --input <file> --version <number> --request-id <uuid>', description:'登记项目开发进展并回读', effect:'business-write'},
   {name:'sales projects item-update', usage:'sales projects item-update --input <file> --version <number> --request-id <uuid>', description:'修改项目款色并回读', effect:'business-write'},
@@ -81,7 +82,7 @@ export const financeCommands=[
  ['reconciliations','list','list','查询供应商对账记录'],['reconciliations','show','show <id>','查看供应商对账'],['reconciliations','history','history <id>','查看供应商对账历史'],
  ['complaints','list','list','查询客户投诉记录'],['complaints','show','show <id>','查看客户投诉'],['complaints','history','history <id>','查看客户投诉历史'],
 ].map(([resource,action,usage,description])=>({name:`finance ${resource} ${action}`,resource,action,usage:`finance ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const developmentReadCommands=[{name:'sales projects development-show',usage:'sales projects development-show <id> --customer <id>',description:'查询项目开发阶段与进展',effect:'business-read-and-session-last-seen'}] as const;
+export const developmentReadCommands=[{name:'sales projects development-show',usage:'sales projects development-show <id> --customer <id>',description:'查询项目开发阶段与进展',effect:'business-read-and-session-last-seen'},{name:'sales projects document-show',usage:'sales projects document-show <id> --customer <id>',description:'查询项目资料文档与历史',effect:'business-read-and-session-last-seen'}] as const;
 export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.

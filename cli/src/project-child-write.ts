@@ -86,6 +86,7 @@ const developmentStage=['待核实','需求了解','可行性','报价','打样'
 const developmentBase:WriteSchema={customerId:{type:'string',required:true,min:1,max:160},projectId:{type:'string',required:true,min:1,max:160},stage:{type:'string',required:true,enum:developmentStage},next:{type:'string',required:true,max:300}};
 const developmentSave:WriteSchema={...developmentBase,notes:{type:'string',required:true,max:12000},reason:{type:'string',required:true,min:1,max:3000}};
 const developmentLog:WriteSchema={...developmentBase,result:{type:'string',required:true,min:1,max:12000}};
+const developmentDocument:WriteSchema={customerId:{type:'string',required:true,min:1,max:160},projectId:{type:'string',required:true,min:1,max:160},content:{type:'string',required:true,max:20000},reason:{type:'string',required:true,min:1,max:3000}};
 export class ProjectDevelopmentService {
  constructor(private store:StateStore,private transport:typeof fetch=fetch){}
  async show(customerId:string,projectId:string){
@@ -94,6 +95,24 @@ export class ProjectDevelopmentService {
   const data=(await new ApiClient(config,this.transport,30000).request('/api/workspace/customer-workflow-project',session,undefined,{query:{customerId,projectId}})).data;
   if(!data||!Array.isArray(data.logs)||data.project&&(!data.project.id||data.project.customerId!==customerId||data.project.projectId!==projectId))throw new CliError('INVALID_RESPONSE','项目开发资料响应不符合协议。',5);
   return {scope:{customerId,projectId},project:data.project?pick(data.project,fields('id version customerId projectId stage next notes updatedAt updatedBy')):null,version:data.project?.version||0,logs:data.logs.map((row:any)=>pick(row,fields('id stage result next createdAt createdBy'))),canWrite:!!data.canWrite};
+ }
+ async documentShow(customerId:string,projectId:string){
+  if(!customerId||!projectId||customerId!==customerId.trim()||projectId!==projectId.trim())throw new CliError('INVALID_ARGUMENT','请提供明确客户和项目编号。',2);
+  const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);
+  const data=(await new ApiClient(config,this.transport,30000).request('/api/workspace/customer-workflow-project-document',session,undefined,{query:{customerId,projectId}})).data;
+  if(!data||!Array.isArray(data.revisions)||data.document&&(data.document.customerId!==customerId||data.document.projectId!==projectId))throw new CliError('INVALID_RESPONSE','项目文档响应不符合协议。',5);
+  return {scope:{customerId,projectId},document:data.document?pick(data.document,fields('id version customerId projectId content updatedAt updatedBy')):null,version:data.document?.version||0,revisions:data.revisions.map((row:any)=>pick(row,fields('id version content reason createdAt createdBy'))),canWrite:!!data.canWrite};
+ }
+ async documentSave(file:string,rawVersion:string,token:string){
+  if(!/^(0|[1-9]\d*)$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion)))throw new CliError('INVALID_ARGUMENT','版本须为非负整数。',2);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const version=Number(rawVersion),config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);
+  const api=new ApiClient(config,this.transport,30000);
+  return executeWrite({schema:developmentDocument,versionField:'version',versionMin:0,tokenField:'token',
+   validate(payload){if(['customerId','projectId','reason'].some(key=>String(payload[key])!==String(payload[key]).trim()))throw new CliError('INVALID_INPUT','编号和原因不能含首尾空格。',2);},
+   async send(payload){const data=(await api.request('/api/workspace/customer-workflow-project-document-save',session,payload)).data;if(data?.ok!==true||data.customerId!==payload.customerId)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data;},
+   async readBack(_result,input){const data=(await api.request('/api/workspace/customer-workflow-project-document',session,undefined,{query:{customerId:String(input.customerId),projectId:String(input.projectId)}})).data,row=data?.document;if(!row||row.customerId!==input.customerId||row.projectId!==input.projectId||row.version!==version+1||row.content!==input.content||!Array.isArray(data.revisions)||!data.revisions.some((r:any)=>r.version===row.version&&r.content===input.content&&r.reason===input.reason))throw Error('changed');return {scope:{customerId:row.customerId,projectId:row.projectId},record:pick(row,fields('id version customerId projectId content updatedAt updatedBy'))};}
+  },{file,version,token});
  }
  async execute(action:'save'|'log',file:string,rawVersion:string,token:string){
   if(!['save','log'].includes(action))throw new CliError('UNSUPPORTED_OPERATION','该写入尚未接入。',2);
