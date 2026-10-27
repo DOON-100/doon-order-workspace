@@ -1,6 +1,6 @@
 {
   "name": "@doon/cli",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "private": true,
   "description": "度昂员工命令行客户端",
   "type": "module",

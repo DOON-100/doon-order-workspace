@@ -73,3 +73,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects task-create --input <文件> --request-id <UUID> --json` 创建待办，输入示例：`{ "projectId": "项目ID", "title": "待办事项", "ownerId": "跟进人ID", "serviceReviewerId": "客服审核人ID", "salesReviewerId": "业务审核人ID" }`。可选 `roundId`、`description`、`waitingFor`、`dueDate`。负责人和审核人须符合服务器的客户、小组及职责配置。
 
 `doon sales projects task-submit --input <文件> --version <当前版本> --request-id <UUID> --json` 由指定跟进人提交，输入为 `projectId`、`id` 和 `result`。`doon sales projects task-review` 使用相同版本及请求标识参数，输入为 `projectId`、`id`、`stage`（`service` 或 `sales`）、`decision`（`approve` 或 `return`）及可选 `comment`；退回须填写意见。服务器执行原有两级审核，CLI 不增加确认。项目详情可查询待办版本、人员和权限标记。
+
+`doon sales followups update --input <文件> --version <当前版本> --request-id <UUID> --json` 更新跟进。为避免旧接口默认值覆盖原资料，输入必须包含 `id`、`ownerId`、`customerId`、`projectId`、`title`、`category`、`stars`、`status`、`followUpDate`、`notes`、`nextAction` 和 `checklist`；先用 `show` 获取当前记录及版本，保留未修改字段，允许明确空字符串和空清单。服务器重新校验权限和版本。
