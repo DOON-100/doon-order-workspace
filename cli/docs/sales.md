@@ -103,3 +103,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 ## 客户交接与公海
 
 `sales customers transfers --json` 查询授权范围的客户状态、客户版本、交接、公海申请、领取申请及销售人员。`sales customers transfer --action <动作> --input <JSON> --version <状态版本> --request-id <UUID>` 执行固定业务动作。动作支持 `primary`、`handoff`、`accept`、`cancel-handoff`、`pool-request`、`pool-approve`、`pool-reject`、`pool-withdraw`、`claim`、`claim-approve`；服务器执行现有本人接收与管理员审批规则。JSON 必含 `customerId`、`customerVersion`；主负责人和交接提供 `to`、`reason`；公海申请提供 `reason`（两年未下单或多轮跟进未成功）、`basis`；领取提供 `next`、`nextDate`、`reason`；处理现有申请提供 `id`、`requestVersion`、`note`。
+
+`sales customer-tasks list [--customer <ID>]` 查询独立客户任务及可选负责人；`history <ID>` 查询历史；`save --input <JSON> --version <版本> --request-id <UUID>` 用于新增和修改，新增版本为0且不提供 `id`，修改提供 `id` 和当前版本。JSON 完整提供 `customerId`（无客户可为空）、`title`、`ownerId`、`due`、`status`、`result`、`notes`；状态可为待接手、进行中、受阻、完成、取消。服务器校验负责人及客户权限，完成须有结果。

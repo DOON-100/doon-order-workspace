@@ -104,6 +104,10 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     }
   }
   const attachments=sales.command('attachments').description('客户与项目附件');
+  const customerTasks=sales.command('customer-tasks').description('独立客户任务');
+  customerTasks.command('list').option('--customer <id>','客户编号').action(async options=>result('sales customer-tasks list',await foundation().customerTasks().list(options.customer||'')));
+  customerTasks.command('history <id>').action(async id=>result('sales customer-tasks history',await foundation().customerTasks().history(id)));
+  customerTasks.command('save').requiredOption('--input <file>','完整任务JSON').requiredOption('--version <number>','新增为0，修改为当前版本').requiredOption('--request-id <uuid>','操作UUID').action(async options=>result('sales customer-tasks save',await foundation().customerTasks().save(options.input,options.version,options.requestId)));
   attachments.command('list').requiredOption('--customer <id>','客户编号').option('--project <id>','项目编号').action(async options=>result('sales attachments list',await foundation().customerAttachments().list(options.customer,options.project||'')));
   attachments.command('download <id>').requiredOption('--customer <id>','客户编号').option('--project <id>','项目编号').requiredOption('--output <file>','新输出文件').action(async(id,options)=>result('sales attachments download',await foundation().customerAttachments().download(options.customer,options.project||'',id,options.output)));
   attachments.command('upload').requiredOption('--input <file>','附件资料 JSON 文件').requiredOption('--file <file>','附件原件').requiredOption('--request-id <uuid>','操作 UUID').action(async options=>result('sales attachments upload',await foundation().customerAttachments().upload(options.input,options.file,options.requestId)));

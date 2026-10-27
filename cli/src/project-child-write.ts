@@ -200,3 +200,22 @@ export class CustomerTransferService {
  }
 }
 const transferRoutes={primary:'/api/workspace/customer-workflow-primary',handoff:'/api/workspace/customer-workflow-handoff',accept:'/api/workspace/customer-workflow-accept','cancel-handoff':'/api/workspace/customer-workflow-cancel-handoff','pool-request':'/api/workspace/customer-workflow-pool-request','pool-approve':'/api/workspace/customer-workflow-pool-approve','pool-reject':'/api/workspace/customer-workflow-pool-reject','pool-withdraw':'/api/workspace/customer-workflow-pool-withdraw',claim:'/api/workspace/customer-workflow-claim','claim-approve':'/api/workspace/customer-workflow-claim-approve'} as const;
+
+const customerTaskSchema:WriteSchema={id:{type:'string',min:1,max:160},customerId:{type:'string',required:true,max:160},title:{type:'string',required:true,min:1,max:300},ownerId:{type:'string',required:true,min:1,max:160},due:{type:'string',required:true,max:10},status:{type:'string',required:true,enum:['待接手','进行中','受阻','完成','取消']},result:{type:'string',required:true,max:12000},notes:{type:'string',required:true,max:12000}};
+const customerTaskFields=fields('id version customerId title ownerId owner due status result notes createdAt createdBy updatedAt updatedBy canEdit');
+export class CustomerTaskService {
+ constructor(private store:StateStore,private transport:typeof fetch=fetch){}
+ private async client(){const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);return {api:new ApiClient(config,this.transport,30000),session};}
+ async list(customerId=''){const {api,session}=await this.client(),data=(await api.request('/api/workspace/customer-workflow-tasks',session,undefined,{query:customerId?{customerId}:{}})).data;if(!Array.isArray(data?.tasks)||!Array.isArray(data.ownerCandidates)||!Array.isArray(data.customers))throw new CliError('INVALID_RESPONSE','客户任务响应不符合协议。',5);return {tasks:data.tasks.map((r:any)=>pick(r,customerTaskFields)),customers:data.customers.map((r:any)=>pick(r,fields('id customer customerCode'))),ownerCandidates:data.ownerCandidates.map((r:any)=>pick(r,fields('id name customerIds'))),canCreate:!!data.canCreate};}
+ async history(id:string){const {api,session}=await this.client(),data=(await api.request('/api/workspace/customer-workflow-task-history',session,undefined,{query:{id}})).data;if(data?.taskId!==id||!Array.isArray(data.revisions))throw new CliError('INVALID_RESPONSE','客户任务历史响应不符合协议。',5);return {taskId:id,revisions:data.revisions.map((r:any)=>({...pick(r,fields('id version customerId actor createdAt reason')),snapshot:pick(r.snapshot,customerTaskFields)}))};}
+ async save(file:string,rawVersion:string,token:string){
+  if(!/^(0|[1-9]\d*)$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion)))throw new CliError('INVALID_ARGUMENT','版本须为非负整数。',2);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const version=Number(rawVersion),{api,session}=await this.client();
+  return executeWrite({schema:customerTaskSchema,versionField:'version',versionMin:0,tokenField:'token',
+   validate(input){if(['id','customerId','ownerId','title','result'].some(key=>typeof input[key]==='string'&&input[key]!==String(input[key]).trim()))throw new CliError('INVALID_INPUT','任务编号、标题和结果不能含首尾空格。',2);if(input.id&&version===0||!input.id&&version!==0)throw new CliError('INVALID_INPUT','新增使用版本0，修改须提供任务编号和当前版本。',2);},
+   async send(input){const data=(await api.request('/api/workspace/customer-workflow-task-save',session,input)).data;if(data?.ok!==true||!data.item?.id||data.item.customerId!==input.customerId||input.id&&data.item.id!==input.id)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data.item;},
+   readBack:async(item,input)=>{const data=await this.list(String(input.customerId)),row=data.tasks.find((v:any)=>v.id===item.id);if(!row||row.version!==version+1||['customerId','title','ownerId','due','status','result','notes'].some(key=>row[key]!==input[key]))throw Error('changed');return {scope:{customerId:input.customerId||null},record:row};}
+  },{file,version,token});
+ }
+}
