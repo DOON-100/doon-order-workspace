@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1功能与本地成品验收完成；W2本地成品验收完成；W3功能、本地成品及GitHub下载来源验收完成；W4功能、本地成品与GitHub下载来源验收完成；金蝶相关操作暂缓；W5–W11未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0—W4 已完成；W5 功能接入与集中验收中；金蝶相关操作暂缓；W6—W11 未开始**。本计划是实施与验收记录，不代表所有接口已接入、员工分发完成或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -47,7 +47,7 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | 已接入IE/客户报价schema、可编辑字段查询、统一新增/增量修改及提交/评审/修订/确认/采用IE等固定动作。其余新版本 IE 图纸附件及业务交接接口 `ie-quote-handoff` / `ie-quote-handoff-accept`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 本地验收完成 |
 | W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，208条成品验收及GitHub下载来源核验通过；金蝶相关操作按最新指示暂缓、后续单独安排 | 本地验收完成 |
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；24条新命令及本期220条成品验收通过，12条金蝶暂缓；确认、登记和修改保留来源版本 | 本地验收完成 |
-| W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | `pmc-save/round`、`planning-control-*`、`purchase-preview/commit/save/receipt/archive`、`purchase-change-*`、`supplier-save`、`supplier-quote-save`、`outsource-approve/cancel`、`finished-supplier-*`；预览与正式提交分开核验 | 未开始 |
+| W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | 42条新命令已接入；金蝶采购源表继续暂缓，purchase-change网站提案确认不接入CLI批准传递；成品本批仅员工分类/任务/期初，进度和收发品质留W6 | 集中验收中 |
 | W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | `process-save` 按实际类型复用；`purchase-receipt`、`finished-supplier-*`、现有生产/损耗操作处理器；采购、库存、质检和流程跟踪不是同一业务记录，缺口待审计/补接口 | 未开始 |
 | W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | `process-save` 对应 OQC、包装和出货放行；`service-save`、`handoff-business-*`、既有发运/物流接口待审计；放行、入仓、发运、签收、发送分别表达 | 未开始 |
 | W8 | S12 应收、收款、分配、对账、付款条件、供应商结算、发票及财务单据 | `project-finance-entry-save`、`project-charge-*`、`project-receipt-verify/reverse`、`project-allocation/allocation-release`、`project-adjustment`、`project-credit-apply`、`project-document-*`、`service-receipt/reverse`、`ar-*`、`payment-terms-*`、流程供应商对账；金额、币种、核销和冲销分别校验 | 未开始 |
@@ -162,3 +162,17 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 类型、70项CLI测试、17项独立构建后的原生HTTP检查通过；代码收尾仅做对应文件针对性验证；集中业务回归401项通过。
 - [x] 0.33.0成品安装后执行232条登记命令中的220条本期命令，72组合成检查通过；12条金蝶按用户指示跳过、单列。原记录/原件保全，本次数据、安装及会话已清理。
 - [x] a374caa源码及此前W3归档已推送main，CLI CI通过；GitHub成品已下载安装并核验程序文件与220条已验收本地包相同，来源与业务测试分别留痕。详见[W4验收](cli-write-w4-acceptance.md)。最终归档单独提交，提交和推送不部署服务器。
+
+## W5 当前进度
+
+- [x] PMC订单排期、6类总表字段、本人核对轮次/进度；轮次UUID绑定完整范围，旧服务器缺契约时拒绝新增。
+- [x] 9场景27模块计划/齐套、测算、有限产能窗口及分配、状态和历史；原权限/版本/来源门禁、固定程序核算，未知与0分开。
+- [x] 采购指定字段修改、初始核数/更正/收货/退货/补回/齐货存档；字段并发合并、UUID、原来源保全及结果未知核查。
+- [x] 供应商主档、报价版本/原件/模板/导出；服务端原子版本和UUID保护，保留旧报价和原件。
+- [x] 外协下达/复期/审批/取消/历史；新增源订单版本及身份内容指纹。成品协作本批仅员工分类、任务和期初核定；接单/进度/收发品质按W6。
+- [x] 42条新命令开发期Commander入口与真实隔离API集中通过，74组合成检查、正式请求0，原记录/原件保全，测试目录清理。独立复审无阻断项。
+- [x] 类型、74项CLI测试、静态计划字段/命令说明一致性、独立构建后的17项原生HTTP检查通过；全站业务回归402项及全部独立子套件退出0。
+- [ ] 0.34.0干净源码包实际安装后逐条验收262条本期命令（12条金蝶暂缓），清理测试安装/会话/数据；核验GitHub下载来源。
+- [ ] 按规则提交并推送main、归档最终摘要；不部署或改正式数据。详见[W5验收](cli-write-w5-acceptance.md)。
+
+金蝶purchase-preview/commit/held为源表导入继续暂缓，预览保存原件及批次；purchase-change-*维持网站提案确认，CLI不读取或传递批准，也不新增对话确认。直接员工请求使用原采购接口；模型业务判断仍遵守既有人工审批边界。

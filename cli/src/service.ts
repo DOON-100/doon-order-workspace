@@ -1,3 +1,6 @@
+import {PurchaseWriteService} from './purchase-write.js';
+import {PlanningWriteService} from './planning-write.js';
+import {SupplierWriteService} from './supplier-write.js';
 import {EngineeringWriteService} from './engineering-write.js';
 import {ProjectEngineeringService} from './project-engineering.js';
 import {EngineeringRecordService} from './engineering-records.js';
@@ -17,7 +20,7 @@ import {QuoteHandoffService} from './quote-handoffs.js';
 import {QuoteFileService} from './quote-files.js';
 import {PriceArchiveService} from './price-archive.js';
 import {SalesService} from './sales.js';
-import {engineeringWriteCommands, orderWriteCommands, priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {commands,foundationCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -61,6 +64,9 @@ export class FoundationService {
   engineeringRecords() { return new EngineeringRecordService(this.store,this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
+  purchaseWrite() { return new PurchaseWriteService(this.store,this.transport); }
+  planningWrite() { return new PlanningWriteService(this.store,this.transport); }
+  supplierWrite() { return new SupplierWriteService(this.store,this.transport); }
   operations() { return new OperationsService(this.store, this.transport); }
   finance() { return new FinanceService(this.store, this.transport); }
 
@@ -126,6 +132,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: engineeringWriteCommands.length + orderWriteCommands.length + priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: commands.length - foundationCommands.length, businessCommandsAvailable: null};
   }
 }

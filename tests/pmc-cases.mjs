@@ -18,6 +18,11 @@ export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'U',value:'2026-09-26'},{id:b.id,version:oldB.version,col:'U',value:'2026-09-26'}]})).status,409);
  [a,b,c]=await getRows();assert.equal(a.plannedDate,beforeA);await ok('pmc-save',{changes:[{id:a.id,version:a.version,col:'AB',value:'批量备注'},{id:b.id,version:b.version,col:'AB',value:'批量备注'}]});[a,b,c]=await getRows();assert.equal(a.notes,b.notes);assert.equal(c.notes,'原备注');pass('批量修改仅影响指定明细，冲突时整批不保存');
  const token=crypto.randomUUID(),roundInput={token,lineIds:[a.id,b.id],scope:'CANDY · 本轮两行'},round=(await ok('pmc-round',roundInput)).round;assert.equal((await ok('pmc-round',roundInput)).round.id,round.id);
+ assert.equal((await ok('pmc-data')).roundContract,'pmc-round-content-v1');
+ assert.equal((await call('pmc-round',{...roundInput,lineIds:[a.id]})).status,409);
+ assert.equal((await call('pmc-round',{...roundInput,scope:'不同核对范围'})).status,409);
+ assert.deepEqual((await ok('pmc-data')).rounds.find(r=>r.id===round.id).lineIds,[a.id,b.id]);
+ pass('PMC轮次UUID绑定原范围和说明，不同内容重放被拒且原轮次保全');
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:c.id,version:c.version,status:'done'})).status,400);
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'pending'})).status,400);
  await ok('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'});

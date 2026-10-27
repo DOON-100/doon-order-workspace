@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本 0.33.0，W1/W2 本地成品验收完成；W3 订单、原单、单据及内部订单接入完成，W4工程需求、SOP、项目图纸/样办、签样与工程变更已接入，本地验收结果见仓库执行记录；支持客户主档创建及指定字段更新、客户资料更新、跟进排程、项目创建及更新、询价创建及更新、项目款色、轮次、沟通、待办及客户跟进新增及更新。Commander.js 负责命令解析，复用中台员工登录与业务接口。查询阶段的7个基础命令及111个业务查询/导出命令保持兼容，W3/W4另增加对应表单、查询和写入，当前登记232条命令。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
+版本 0.34.0，累计登记274条命令；W5新增42条，接入PMC排期/轮次、计划/齐套与有限产能、采购跟进/核数/存档、供应商主档/报价/原件、外协审批及成品协作准备。W0—W4验收已完成，W5实际检查和成品验收状态见仓库执行记录。Commander.js 负责命令解析，复用员工登录与业务接口；原查询和写入继续兼容。金蝶相关命令保留但按用户指示暂缓。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
@@ -43,7 +43,7 @@ JSON 成功结构为 `{schema:"doon-cli-output-v1",ok:true,command,data}`，失�
 
 业务请求超时 30 秒，响应上限 32 MiB；命令输出按 JSON Unicode 转义后限制为 512 KiB，超限报错，不输出部分结果。列表在客户端筛选和分页，不会降低服务器全量读取的工作量；详情的各子列表独立使用相同 limit/offset。
 
-doctor 检查 health、运行模式和当前身份，不调用管理员维护或业务数据接口。当前服务器没有公开构建版本握手；`serverBuild=null` 不证明所有业务接口兼容。`installedBusinessCommands=81` 是本机已安装命令数，`businessCommandsAvailable=null` 表示没有探测当前账号业务接口的可用性。
+doctor 检查 health、运行模式和当前身份，不调用管理员维护或业务数据接口。当前服务器没有全局构建版本握手；`serverBuild=null` 不证明所有业务接口兼容。`installedBusinessCommands` 是本机登记的非基础命令数，`businessCommandsAvailable=null` 表示没有探测当前账号全部业务接口的可用性。W5的新轮次、报价和外协写入单独检查其服务端保护契约。
 
 ## 开发与合成测试
 

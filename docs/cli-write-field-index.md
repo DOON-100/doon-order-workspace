@@ -1,5 +1,7 @@
 # 写入表单字段源码索引（W0 初筛）
 
+W5字段已落实在 `cli/src/planning-write.ts`、`planning-schemas.ts`、`purchase-write.ts`及`supplier-schemas.ts`。计划场景由`scripts/generate-cli-planning-schemas.mjs --check`校验；`planning control schema --scenario --module/--tool`给出嵌套字段。采购4跟进字段、初始核数/收退补及存档分别使用不同schema；opening/correction省略returnPending按0，未知核数仍输出null。供应商报价新版本保留旧报价；expectedVersion和UUID由服务器原子校验。外协创建绑定orderVersion，成品准备区分订单和任务version。精确字段、范围与验证见[W5矩阵](cli-write-coverage.md)和[PMC与采购说明](../cli/docs/planning.md)，下表原始行号仅保留历史初筛含义。
+
 此表由服务端源码中部分 Zod 对象声明的顶层字段静态提取，只是进一步盘点线索，不是可直接提交的完整 schema：`...` 表示共享字段未展开，嵌套字段、字段约束、默认值、权限、路由映射及副作用须阅读原文件并由对应批次测试。部分行是嵌套数据类型或内部 schema 而非独立 API，不应由此推断接口可用。无法静态识别的表单不在表中，必须结合 [页面覆盖清单](cli-write-coverage.md) 逐项补齐。
 
 | 源码及行 | schema 键 | 可直接提取的顶层字段 |

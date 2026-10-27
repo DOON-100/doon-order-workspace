@@ -15,7 +15,7 @@ export function pmcGet(action:string,s:State,m:Member,req?:Request){
  const scope=productionScope(req?new URL(req.url).searchParams.get('scope'):undefined);
  const latest=new Map<string,Entity>();for(const r of all(s,'pmc_round').filter(r=>productionScope(r.productionScope)===scope))latest.set(r.actorId,r);
  const rounds=[...latest.values()],ids=new Set(rounds.map(r=>r.id));
- return json({rounds,reviews:all(s,'pmc_review').filter(r=>ids.has(r.roundId))});
+ return json({roundContract:'pmc-round-content-v1',rounds,reviews:all(s,'pmc_review').filter(r=>ids.has(r.roundId))});
 }
 export async function pmcPost(action:string,req:Request,s:State,m:Member){
  if(!['pmc-save','pmc-round','pmc-review'].includes(action))return null;access(m);
@@ -42,7 +42,7 @@ export async function pmcPost(action:string,req:Request,s:State,m:Member){
  }
  if(action==='pmc-round'){
   const input=z.object({token:z.string().uuid(),lineIds:z.array(z.string()).min(1).max(5000),scope:z.string().trim().min(1).max(200),productionScope:z.enum(['internal','external']).default('internal')}).parse(await req.json()),id='pmc_round_'+input.token;
-  const prior=s.records.find(r=>r.id===id);if(prior){if(prior.actorId!==m.id||productionScope(prior.productionScope)!==input.productionScope)throw new AppError('核对轮次不可复用。',403);return json({ok:true,round:prior});}
+  const prior=s.records.find(r=>r.id===id);if(prior){if(prior.kind!=='pmc_round'||prior.actorId!==m.id||productionScope(prior.productionScope)!==input.productionScope)throw new AppError('核对轮次不可复用。',403);if(prior.scope!==input.scope||JSON.stringify(prior.lineIds)!==JSON.stringify(input.lineIds))throw new AppError('核对轮次请求标识已用于其他内容。',409);return json({ok:true,round:prior});}
   if(new Set(input.lineIds).size!==input.lineIds.length)throw new AppError('核对范围包含重复明细。');for(const id of input.lineIds)if(!inProductionScope(order(s,m,id),input.productionScope))throw new AppError('所选明细不属于此总表，请刷新后核对。',409);
   const item:PmcRound={id,kind:'pmc_round',actorId:m.id,actor:m.name,lineIds:input.lineIds,scope:input.scope,productionScope:input.productionScope,createdAt:now(),lastLineId:''};
   await commit(s.revision,[item,audit(m,item,null,'开始PMC核对轮次')]);return json({ok:true,round:item});

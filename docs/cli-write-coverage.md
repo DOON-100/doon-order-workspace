@@ -261,3 +261,22 @@ PMC `pmc-save` 批量变更字段需 id、version、col、value，并按同一�
 本批仅复用已有有鉴权API，不增加物理删除、隐式外发或新的CLI确认；全局账号/模板/邮件与其他共用维护继续按W10。金蝶既有12条命令保留但本批暂停操作，成品验收明确排除并列明；不将金蝶命令目录存在称为已继续联调。
 
 W4最终证据见[W4验收](cli-write-w4-acceptance.md)：0.33.0共232条登记命令，本期执行220条、跳过12条金蝶；72组合成链路通过，测试数据和安装已清理，未部署。
+
+## W5 计划、采购与供应商表单对应
+
+CLI 0.34.0新增42条命令；字段以各schema命令和CLI白名单为准。集中检查及成品证据见[W5验收](cli-write-w5-acceptance.md)。
+
+| 页面/表单 | 命令与接口 | 权限、版本与副作用 | 合成验证 |
+| --- | --- | --- | --- |
+| 订单排期与PMC总表 | planning orders schema/form/save、pmc schema/save；workflow、pmc-save | 原PMC/交接权限、订单版本；指定字段/单元格合并，固定核算日期 | 未指定字段保留、同字段冲突、越权、非法日期 |
+| PMC核对轮次 | planning rounds schema/start/review；pmc-round/review/data | 本人internal/external范围；UUID绑定完整lineIds/scope，核对进度绑定订单版本 | 重放、不同内容拒绝、本人轮次及原订单保全 |
+| 计划工作台与齐套 | planning control schema/references/list/form/history/save/action --type record；planning-control-* | 9场景27模块；经理/指定负责人、记录版本、来源、状态门禁及历史 | 各模块真实增改、字段/历史、来源变化/权限/重放 |
+| 测算与有限产能 | 同组--type calculation/window/allocation；planning-control-calculation-save、planning-capacity-* | 服务端计算、窗口占用及订单未排数量；确认/取消独立，非派工或库存 | 分母未知/0、负荷超限、来源版本、取消释放 |
+| 采购跟进 | purchasing purchases schema/form/save；purchase-save/data | 原采购权限；4字段并发合并，无UUID去重 | 旧版本异字段合并、同字段冲突、原raw/source及未知余额保全 |
+| 采购核数/收退补/存档 | purchases action --type opening/correction/receipt/return/replacement/archive；purchase-receipt/archive | 核数UUID绑定身份/完整输入和版本；存档逐项版本、真实退货恢复跟进，不等于库存 | 四位小数、0/null、凭证冲突、越权/不同内容UUID、存档重开、响应丢失/回读失败 |
+| 供应商主档 | purchasing suppliers schema/list/form/save；supplier-save/data | 原采购权限、主档版本、指定字段，停用不删除 | 增量、旧版/无权拒绝，联系人保留 |
+| 供应商报价及原件 | purchasing supplier-quotes schema/list/form/history/save/files/file-upload/file-download/template/export；supplier-quote-* | 原价格权限；原子版本/UUID；报价追加版本，原件独立摘要下载 | 同版本竞态仅一笔成功、重放/异身份拒绝、旧报价及原件字节、真实XLSX |
+| 外协下达/采购复期 | purchasing outsource schema/form/references/history/action；outsource-create/update/approve/cancel | 原工序/采购/主管权限；新增源订单版本和UUID，其余外协版本，不对外发送 | 原订单保全、旧版/异身份/异内容UUID、跟进/审批/取消及历史 |
+| 成品外发准备 | operations finished schema/form/references/action；finished-supplier-order-confirm/task-create/baseline-confirm/baseline-stage | 员工分类/建账/期初；订单和任务独立版本及UUID，明确未知/0 | 分类、待核定到核定、工序null到0、旧版拒绝，源订单身份数量保全 |
+
+金蝶采购源表purchase-preview/commit/held继续暂缓；预览保存批次和原件，不能称只读。purchase-change-*为网站提案确认，CLI不读取或传递批准；直接员工业务请求使用原采购接口，模型业务提案保留已有人工审批边界。成品供应商接单/复期、进度、来料仓储、生产及品质按W6继续；无物理删除、任意HTTP/Shell/数据库入口或正式部署。

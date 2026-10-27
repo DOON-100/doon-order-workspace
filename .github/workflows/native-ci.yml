@@ -34,6 +34,8 @@ jobs:
         run: node tests/run.mjs
       - name: TypeScript
         run: node node_modules/typescript/bin/tsc --noEmit
+      - name: CLI planning field contract
+        run: node scripts/generate-cli-planning-schemas.mjs --check
       - name: CLI real business API integration (synthetic)
         run: |
           npm --prefix cli ci --ignore-scripts --no-audit --no-fund
