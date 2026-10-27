@@ -8,15 +8,15 @@ import {projectFields,without} from './engineering-write.js';
 import {fields,pick,page,pagination,identifier} from './business.js';
 import {integer} from './order-write.js';
 
-export const qualityProcessTypes=['iqc','first-article','process-quality','outsourcing-quality'] as const;
-export const warehouseProcessTypes=['material-kit','warehouse'] as const;
+export const qualityProcessTypes=['iqc','first-article','process-quality','outsourcing-quality','oqc'] as const;
+export const warehouseProcessTypes=['material-kit','warehouse','packaging','shipment-release'] as const;
 const metadata=fields('id version type customerId orderId teamId createdAt updatedAt updatedBy');
 type Options={team?:string;customer?:string;order?:string;limit?:string;offset?:string};
 export class ProcessRecordService{
  constructor(private store:StateStore,private transport:typeof fetch=fetch){}
  private async client(){const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);return {api:new ApiClient(config,this.transport,60000),session};}
  schema(type:string){
-  if(!Object.hasOwn(processDetails,type))throw new CliError('UNSUPPORTED_OPERATION','本批流程类型仅支持来料、齐料、仓储、首件、过程及外协检验。',2);
+  if(!Object.hasOwn(processDetails,type))throw new CliError('UNSUPPORTED_OPERATION','该流程类型尚未接入。',2);
   const detailFields=(processDetails as Record<string,WriteSchema>)[type];
   return {fields:{...without(processFields,['type','token','version']),details:{type:'object',properties:detailFields} as const},semantics:'独立流程凭据记录；不会自动增加库存、报工、实发、ERP过账或实际品质放行。修改只合并指定字段，details默认按键合并；--replace-details整对象替换，可省略数值恢复待核查，未知不能填null或猜成0。',version:'新增0且不提供id；修改提供id和当前版本',requestId:'服务端按当前身份和完整内容去重，结果不明先查询原记录，不自动重试'};
  }

@@ -4,10 +4,11 @@ import {productionWriteCommands} from './production-write-catalog.js';
 export function registerProductionWrites(program:Command,foundation:()=>FoundationService,result:(name:string,data:unknown)=>void){
  const operations=program.commands.find(c=>c.name()==='operations')!,group=(name:string)=>operations.commands.find(c=>c.name()===name)||operations.command(name),ledger=group('ledger'),losses=group('losses'),reports=group('reports'),corrections=group('corrections'),receipts=group('receipts'),service=()=>foundation().productionWrite();
  const input=(c:Command)=>c.requiredOption('--input <file>','UTF-8 JSON文件'),pages=(c:Command)=>c.option('--limit <number>','每页1至100','20').option('--offset <number>','起始偏移','0'),operation=(c:Command)=>c.requiredOption('--version <number>','原订单、报工或更正的当前版本').requiredOption('--request-id <uuid>','操作UUID');
- ledger.command('schema').action(()=>result('operations ledger schema',service().schema('ledger')));
+ ledger.command('schema').option('--type <type>','ledger|lifecycle','ledger').action(o=>result('operations ledger schema',service().schema(o.type)));
  ledger.command('form <id>').action(async id=>result('operations ledger form',await service().ledgerForm(id)));
  pages(ledger.command('history <id>')).action(async(id,o)=>result('operations ledger history',await service().history('ledger',id,o)));
  input(ledger.command('save')).requiredOption('--version <number>','原订单当前版本').action(async o=>result('operations ledger save',await service().saveLedger(o.input,o.version)));
+ input(ledger.command('lifecycle')).requiredOption('--version <number>','原订单当前版本').action(async o=>result('operations ledger lifecycle',await service().ledgerLifecycle(o.input,o.version)));
  losses.command('schema').action(()=>result('operations losses schema',service().schema('loss')));
  pages(losses.command('list')).option('--order <id>','原订单明细ID').option('--process <id>','工序ID').option('--month <month>','确认月份YYYY-MM').action(async o=>result('operations losses list',await service().losses(o)));
  losses.command('form <id>').action(async id=>result('operations losses form',await service().lossForm(id)));

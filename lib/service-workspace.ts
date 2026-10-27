@@ -106,7 +106,7 @@ export const serviceDetailsSchemas={
  receivable:z.object({invoiceNo:z.string().trim().min(1,'请填写应收发票号').max(160),currency:z.enum(serviceCurrencies),amount:money,terms:text(3000)}).strict(),
 };
 export const serviceSaveSchema=z.object({
- id:serviceIdSchema.optional(),version:z.number().int().positive().optional(),
+ id:serviceIdSchema.optional(),version:z.number().int().positive().optional(),token:z.string().uuid().optional(),sourceOrderVersion:z.number().int().positive().optional(),
  type:z.enum(serviceTypes),customerId:serviceIdSchema,orderId:z.string().trim().max(160).default(''),
  teamId:z.string().trim().max(160).optional(),ownerId:z.string().trim().max(160).optional(),
  serviceReviewerId:z.string().trim().max(160).optional(),salesReviewerId:z.string().trim().max(160).optional(),
@@ -115,6 +115,8 @@ export const serviceSaveSchema=z.object({
  waitingFor:z.enum(['none','customer','factory','jennifer']).default('none'),
  dueDate:day,nextFollowUp:day,details:z.record(z.unknown()),
 }).strict().superRefine((value,ctx)=>{
+ if(value.sourceOrderVersion!==undefined&&(!value.token||!value.orderId))ctx.addIssue({code:z.ZodIssueCode.custom,path:['sourceOrderVersion'],message:'来源版本须绑定操作标识和明确订单'});
+ if(value.token&&value.orderId&&value.sourceOrderVersion===undefined)ctx.addIssue({code:z.ZodIssueCode.custom,path:['sourceOrderVersion'],message:'请提供关联订单当前版本'});
  if(value.id&&!value.version)ctx.addIssue({code:z.ZodIssueCode.custom,path:['version'],message:'更新时必须提供当前版本号'});
  if(!value.id&&value.version!==undefined)ctx.addIssue({code:z.ZodIssueCode.custom,path:['version'],message:'新记录不能指定历史版本号'});
 });

@@ -1,4 +1,5 @@
 import {registerPurchaseWrites} from './purchase-write-program.js';
+import {registerDeliveryWrites} from './delivery-write-program.js';
 import {registerProcessWrites} from './process-write-program.js';
 import {registerProductionWrites} from './production-write-program.js';
 import {registerPlanningWrites} from './planning-write-program.js';
@@ -244,6 +245,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   registerSupplierWrites(program,foundation,result);
   registerProcessWrites(program,foundation,result);
   registerProductionWrites(program,foundation,result);
+  registerDeliveryWrites(program,foundation,result);
   try {
     await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});

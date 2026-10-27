@@ -297,3 +297,15 @@ CLI 0.34.0新增42条命令；字段以各schema命令和CLI白名单为准。�
 | 成品原件 | finished files/file-upload/file-download；finished-supplier-attachment/file | 完整性契约、不可变任务/文件id、字节数及SHA-256 | 原件追加、摘要/归属、旧服务器拒绝、已有本地文件不覆盖 |
 
 供应商专属accept/promise/progress/exception/shipment/rework-confirm仍使用既有门户，员工CLI不代行；无任意Shell/数据库、物理删除、真实MES/ERP/物流外发或正式部署。包装/发运及财务按W7/W8继续。
+
+## W7交付对应
+
+| 页面 | CLI/接口 | 范围与证据 |
+| --- | --- | --- |
+| OQC/包装/放行 | quality/warehouse records --type oqc/packaging/shipment-release；process-save | 原部门/客户/组与版本UUID；三数/数量/完成依据、未知、取消恢复和历史通过；不自动库存 |
+| 发运/物流跟进 | service shipments九命令；service-save/data/history/attachment/file | 客户责任、业务组、源订单版本/记录UUID，分批合计/日期、旧版越权、原件回读通过；无承运商/签收接口 |
+| 结单/恢复 | operations ledger lifecycle；ledger-lifecycle | 原角色/严格版本、足量入仓/日期；管理员恢复、旧版拒绝及原身份数量保全；无UUID不重试 |
+| 生产出货资料 | service documents type=production_shipment | 精确发运id/version可引用，保留原人工登记；来源数量/版本、原件、来源变化拦提交通过 |
+| 物流单据 | documents generate/save/action | packing/waybill无价格，Invoice当前PI及行价/累计数量，负责销售核对；超量、过期、管理员代签拒绝通过 |
+
+BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登记、承运商接收和客户签收分别表达，不用样办签收冒充大货。字段和当前结果见[W7验收](cli-write-w7-acceptance.md)。

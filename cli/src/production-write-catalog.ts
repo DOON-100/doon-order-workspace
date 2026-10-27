@@ -1,8 +1,9 @@
 const specs=[
- ['ledger','schema','schema','查询原表工序字段，实际可写列由服务器表单返回','local-read'],
+ ['ledger','schema','schema [--type <type>]','查询原表工序或结单恢复字段，权限由服务器核验','local-read'],
  ['ledger','form','form <id>','读取授权订单的部门工序、版本和损耗候选','read'],
  ['ledger','history','history <id> [--limit <number>] [--offset <number>]','读取当前权限内的原表工序历史','read'],
  ['ledger','save','save --input <file> --version <number>','按当前版本保存指定部门工序字段','write'],
+ ['ledger','lifecycle','lifecycle --input <file> --version <number>','按原权限和当前版本办理结单归档或恢复在制','write'],
  ['losses','schema','schema','查询累计损耗、凭证及冲减字段','local-read'],
  ['losses','list','list [--order <id>] [--process <id>] [--month <month>] [--limit <number>] [--offset <number>]','查询授权独立损耗记录','read'],
  ['losses','form','form <id>','读取单笔累计损耗与增减依据','read'],

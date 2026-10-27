@@ -6,7 +6,8 @@ import {randomUUID} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {StateStore,windowsCodec} from '../../dist/state.js';
 import {FoundationService} from '../../dist/service.js';
-import {ProcessRecordService,qualityProcessTypes,warehouseProcessTypes} from '../../dist/process-write.js';
+import {ProcessRecordService} from '../../dist/process-write.js';
+const qualityProcessTypes=['iqc','first-article','process-quality','outsourcing-quality'],warehouseProcessTypes=['material-kit','warehouse'];
 import {processWriteCommands} from '../../dist/process-write-catalog.js';
 import {main} from '../../dist/program.js';
 
@@ -41,7 +42,7 @@ export async function verifyProcessWrites({services,dir,origin,env,root,pass,nat
   const invalid={customerId:'c1',orderId:'o1',teamId:'t1',title:'Synthetic rejected process',details:{}};
   await assert.rejects(wrongDepartment.save('iqc',await input(invalid),'0',randomUUID(),'t1'),{code:'FORBIDDEN'});await assert.rejects(denied.save('warehouse',await input(invalid),'0',randomUUID(),'t1'),{code:'FORBIDDEN'});await assert.rejects(admin.save('iqc',await input({...invalid,orderId:'o2'}),'0',randomUUID(),'t1'),{code:'FORBIDDEN'});await assert.rejects(admin.save('iqc',await input({...invalid,teamId:'t2'}),'0',randomUUID(),'t1'),{code:'FORBIDDEN'});
   const roster=await admin.references('iqc',{team:'t1'}),unassigned=roster.members.find(row=>row.name==='Synthetic Unassigned');assert(unassigned);await assert.rejects(admin.save('iqc',await input({...invalid,ownerId:unassigned.id}),'0',randomUUID(),'t1'),{code:'REQUEST_REJECTED'});
-  await assert.rejects(admin.save('iqc',await input({id:first.id,customerId:'c2'}),String(first.version),randomUUID(),'t1'),{code:'FORBIDDEN'});await assert.rejects(admin.save('oqc',await input(invalid),'0',randomUUID(),'t1'),{code:'UNSUPPORTED_OPERATION'});pass();
+  await assert.rejects(admin.save('iqc',await input({id:first.id,customerId:'c2'}),String(first.version),randomUUID(),'t1'),{code:'FORBIDDEN'});await assert.rejects(admin.save('not-a-process-type',await input(invalid),'0',randomUUID(),'t1'),{code:'UNSUPPORTED_OPERATION'});pass();
   await assert.rejects(admin.save('iqc',await input({id:first.id,status:'受阻',blocker:''}),String(first.version),randomUUID(),'t1'),{code:'REQUEST_REJECTED'});await assert.rejects(admin.save('iqc',await input({id:first.id,gateStatus:'不适用',details:{gateReason:''}}),String(first.version),randomUUID(),'t1'),{code:'REQUEST_REJECTED'});await assert.rejects(admin.save('iqc',await input({id:first.id}),String(first.version),randomUUID(),'t1',true),{code:'INVALID_INPUT'});pass();
   let committed=false;const readbackFailure=new ProcessRecordService(services.admin_test.state,async(url,init)=>{if(committed&&new URL(url).pathname.endsWith('/process-data'))return Response.json({error:'Synthetic readback outage'},{status:503});const response=await fetch(url,init);if(new URL(url).pathname.endsWith('/process-save'))committed=true;return response;});
   await assert.rejects(readbackFailure.save('iqc',await input({id:first.id,notes:'Synthetic write survived readback outage'}),String(first.version),randomUUID(),'t1'),error=>error.code==='READBACK_FAILED'&&error.details.outcomeUnknown===true);assert.equal((await admin.form('iqc',first.id,'t1')).record.notes,'Synthetic write survived readback outage');pass();

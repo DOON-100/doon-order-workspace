@@ -346,5 +346,95 @@ export const processDetails={
       "type": "string",
       "max": 3000
     }
+  },
+  "oqc": {
+    "gateReason": {
+      "type": "string",
+      "max": 3000
+    },
+    "documentRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "inspectedQuantity": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "acceptedQuantity": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "rejectedQuantity": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "inspectionRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "processName": {
+      "type": "string",
+      "max": 3000
+    }
+  },
+  "packaging": {
+    "gateReason": {
+      "type": "string",
+      "max": 3000
+    },
+    "documentRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "quantity": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "cartons": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "packingSpec": {
+      "type": "string",
+      "max": 3000
+    },
+    "packingListRef": {
+      "type": "string",
+      "max": 3000
+    }
+  },
+  "shipment-release": {
+    "gateReason": {
+      "type": "string",
+      "max": 3000
+    },
+    "documentRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "quantity": {
+      "type": "number",
+      "integer": true,
+      "min": 0,
+      "max": 10000000
+    },
+    "logisticsRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "releaseRef": {
+      "type": "string",
+      "max": 3000
+    }
   }
 } satisfies Record<string,WriteSchema>;

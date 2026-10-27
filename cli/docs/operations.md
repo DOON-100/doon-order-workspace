@@ -1,6 +1,6 @@
 # 生产、品质、仓储与交付
 
-CLI 0.35.0累计314条登记命令。原查询保留；W6新增40条，接入部门工序、损耗、MES原件导入及更正核验、工序外协收货、质量/齐料/仓储凭据、成品员工收发和附件。金蝶继续暂缓，W7发运与后续财务按各批次继续。
+CLI 0.36.0累计324条登记命令。原查询保留；W6新增40条，W7新增10条发运登记/物流跟进及结单命令，并扩OQC/包装/出货放行和生产出货来源单据。金蝶继续暂缓，财务按W8继续。
 
 | 命令组 | 动作 | 记录及范围 |
 | --- | --- | --- |
@@ -58,3 +58,21 @@ MES `import-preview`会保存原件和预览，归business-write，不是只读�
 成品任务必须已经由供应商接单并且期初合法。receive只登记收货，qc分开记合格/不良，stock仅合格且未入仓部分并按原规则回写BF/BG；return分别核对批次或期初库存，close需欠数、在途、待检、待入仓及返工均清零并满足源BF。production可收发但不能用管理员结单权限；服务器每次重放也重新校验当前动作角色。供应商专属accept/promise/progress/exception/shipment/rework-confirm继续在既有门户完成，员工不能代行。
 
 附件上传先检查服务器完整性契约，上传下载均核对不可变id、任务/原件归属、字节数和摘要，下载只新建文件。核数、外协收货、仓储凭据、库存及品质是不同记录。所有动作沿用原权限和业务门禁；CLI不新增对话确认或真实外发。连接中断、写后回读失败先查原动作；无UUID契约的原表单元格保存不宣称自动去重。
+
+## W7交付记录与单据
+
+- `quality records --type oqc`和`warehouse records --type packaging/shipment-release`复用schema/list/form/references/history/save。检验三数及完成依据、包装数量/箱数/规格/装箱单引用、放行物流/放行依据由原服务器校验；流程凭据不会自动过账库存或判定已发运。
+- `service shipments schema/list/references/form/history/save/files/file-upload/file-download`维护发运与物流跟进。新增version=0，修改用当前版本及UUID；有关联订单必须额外`--order-version`。更新仅指定字段并按原历史版本重建合法重放，服务器核权限、版本、订单来源及团队范围；旧服务器无协议标记时写前拒绝。
+- 发运details使用invoiceNo、正整数quantity、shipDate、carrier、trackingNo、packingNote；status=open/done/cancelled。done必须实际发运日期，同订单所有done分批合计不得超原数量。取消/重新打开是台账状态维护，不等于承运商撤单。没有承运商查询、真实发送或客户签收字段，不猜测物流状态。
+- `operations ledger schema --type lifecycle`及`lifecycle --input <file> --version <number>`复用原结单/恢复。输入id、mode=active/archived、reason，归档需closedDate。成品文员只能办理足量入仓后的正常结单；PMC/管理员才可特殊结单和恢复。无UUID契约，不自动重试。包装入仓仍是W6原表BF/BG，启用成品协作的订单不得绕过其专用入口。
+- `service documents`现支持`--kind source --type production_shipment`；references提供精确发运记录id/version供只读来源引用。装箱单/运单无价格，Invoice另需当前PI版本、行映射与累计数量限制。原件及来源版本保留，资料内容checked不等于已经发送、承运商收件或客户签收。
+
+```powershell
+doon service shipments references --customer CUSTOMER_ID --json
+doon service shipments save --input shipment.json --version 0 --order-version CURRENT_ORDER_VERSION --request-id UUID --json
+doon operations ledger schema --type lifecycle --json
+doon operations ledger lifecycle --input archive.json --version CURRENT_ORDER_VERSION --json
+doon service documents references --kind source --type production_shipment --customer CUSTOMER_ID --json
+```
+
+业务成员编号从references取得；`whoami.identity.id`是登录身份，不能擅自用来代替memberId。附件按记录、客户、字节数与SHA-256核对，下载不覆盖已有文件；上传接口无UUID时先查目录再核查中断结果。

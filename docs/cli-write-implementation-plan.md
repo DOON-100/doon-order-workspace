@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0—W5已完成本地成品及相应GitHub来源核验；W6功能接入、集中验收中；W7候选准备中；金蝶相关操作暂缓；W8—W11待实施**。本计划是实施与验收记录，不代表全员分发完成或获准上线。查询阶段及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main`的`3b44c0b`，CLI0.7.0。当前：**W0—W6本地成品及相应GitHub来源完成；W7已接入、集中验收中；W8/W9独立候选已准备；W10审计及候选准备；W11待办；金蝶暂缓**。候选未应用不代表完成，提交同步不代表正式上线。查询及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -48,8 +48,8 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，208条成品验收及GitHub下载来源核验通过；金蝶相关操作按最新指示暂缓、后续单独安排 | 本地验收完成 |
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；24条新命令及本期220条成品验收通过，12条金蝶暂缓；确认、登记和修改保留来源版本 | 本地验收完成 |
 | W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | 42条新命令；0.34.0本期262条及102组合成成品验收通过，GitHub来源/程序文件核验通过；金蝶源表及CLI提案确认边界保留 | 本地与GitHub来源验收完成 |
-| W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | 新增40条并扩展成品员工动作，71组合成开发检查、80项CLI、类型及17项HTTP通过；采购/库存/品质/流程各自独立，供应商专属动作留既有门户 | 集中验收中 |
-| W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | `process-save` 对应 OQC、包装和出货放行；`service-save`、`handoff-business-*`、既有发运/物流接口待审计；放行、入仓、发运、签收、发送分别表达 | 未开始 |
+| W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | 40条新增；0.35.0成品302条/129组及GitHub程序/安装来源通过；各记录独立，供应商专属动作留门户 | 本地与GitHub来源完成 |
+| W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | 10条新增，扩OQC/包装/放行及production_shipment；62组开发、80CLI/类型/17HTTP和402项全站通过；无承运商/签收API不冒充 | 成品与来源验收中 |
 | W8 | S12 应收、收款、分配、对账、付款条件、供应商结算、发票及财务单据 | `project-finance-entry-save`、`project-charge-*`、`project-receipt-verify/reverse`、`project-allocation/allocation-release`、`project-adjustment`、`project-credit-apply`、`project-document-*`、`service-receipt/reverse`、`ar-*`、`payment-terms-*`、流程供应商对账；金额、币种、核销和冲销分别校验 | 未开始 |
 | W9 | S13 客诉、售后、整改、退货/补发、售后费用和退款，关联客户回访 | `process-save` 客诉类型、`project-after-sale-save/cost`、`project-refund-request/execute/cancel`、`service-save`、项目跟进接口；登记与真实退款/外部动作区别对待 | 未开始 |
 | W10 | 全栏目收尾：总览/任务、规则、导入、成员/角色、业务组、模板、通讯、知识、系统配置及遗漏页面；权限内查询和支持的维护 | `member`、`task`、`framework-*`、`ar-access-grant-save`、`project-finance-grant-save`、`payment-terms-*` 及实际页面对应入口；账号与权限管理须管理员权限和独立审计；外发、同步、备份等核清真实副作用后分项设计 | 未开始 |
@@ -185,4 +185,12 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 来料/首件/过程/外协质量、齐料及仓储6类流程；统一12条命令，增量details及显式恢复未知、原角色/客户/组/状态/历史。
 - [x] 成品员工收货/QC/入仓/退货/结单及3条附件命令，任务/业务明细/事件/源订单回读，重放也核当前动作角色；供应商专属操作不代行。
 - [x] 开发期40条新增命令和2条扩展入口、71组合成检查通过；80项CLI、网站/CLI类型、静态字段/命令及17项隔离HTTP通过。初次两条过期白名单断言已修正后全CLI重跑通过。
-- [ ] 全站业务回归、0.35.0干净包302条非金蝶命令及成品检查、GitHub来源、最终提交同步；详见[W6验收](cli-write-w6-acceptance.md)。
+- [x] 402项全站及独立子套件，0.35.0成品302条/129组、GitHub程序/安装来源通过；main96c8612与本地71151e1完整树相同，未部署。详见[W6验收](cli-write-w6-acceptance.md)。
+
+## W7 当前进度
+
+- [x] OQC/包装/放行复用表单；发运/物流字段增量、UUID及源订单版本、当前角色/组、分批数量、历史与原件。
+- [x] 原结单/恢复权限和版本、成品专用保护；production_shipment精确来源到packing/waybill/Invoice，原件保留，不实际外发。
+- [x] 62组开发、80CLI、类型/字段/命令及17HTTP通过，正式/承运商请求0。
+- [x] 全站402项及全部独立子套件退出0。
+- [ ] 0.36.0成品312条及GitHub来源、最终提交同步。详见[W7验收](cli-write-w7-acceptance.md)。

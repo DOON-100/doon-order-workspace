@@ -1,4 +1,8 @@
 export const routes = {
+  '/api/workspace/ledger-lifecycle': {method:'POST',business:true,write:true},
+  '/api/workspace/service-save': {method:'POST',business:true,write:true},
+  '/api/workspace/service-attachment': {method:'POST',business:true,write:true,multipart:true},
+  '/api/workspace/service-file': {method:'GET',business:true,binary:'file',query:['id']},
   "/api/workspace/production-workspace-data": {"method":"GET","business":true},
   "/api/workspace/production-workspace-history": {"method":"GET","business":true,"query":["type","id"]},
   "/api/workspace/production-report-action": {"method":"POST","business":true,"write":true},

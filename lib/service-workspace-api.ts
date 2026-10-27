@@ -1,6 +1,7 @@
 import {z} from 'zod';
-import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
+import {all,canRead,clean,newId,now,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
+import {businessTeamData,businessTeamHeader,filterBusinessTeamRows,ungroupedBusinessTeam} from './business-team-scope';
 import {sha} from './workbooks';
 import {serviceAssignmentData,validateServiceAssignment} from './service-workspace-assignment';
 import {paymentTermsReadOnly} from './payment-terms';
@@ -36,6 +37,7 @@ function linkedOrder(s:State,account:CustomerAccount,orderId:string){
  // Source codes are never inferred from a name or a neighbouring record.
  const identities=serviceOrderCustomerKeys(s,account).map(key).filter(Boolean);
  if(!order||!identities.includes(key(order.customer)))throw new AppError('关联订单的客户与当前客户档案不一致；若客户编码缺失，请先由管理员核对，不能猜测关联。');
+ return order;
 }
 function nextState(s:State,updates:Entity[]):State{
  const ids=new Set(updates.map(row=>row.id));return {...s,records:[...s.records.filter(row=>!ids.has(row.id)),...updates]};
@@ -52,6 +54,8 @@ function financial(record:ServiceRecord){
  if(!Number.isSafeInteger(record.details.amountCents)||!['CNY','USD','EUR','GBP','HKD'].includes(String(record.details.currency)))throw new AppError('应收账款金额或币种异常，请联系管理员核对原记录。',409);
 }
 async function fingerprint(value:unknown){return sha(JSON.stringify(value));}
+const canonicalSave=(value:any):string=>value===null||typeof value!=='object'?JSON.stringify(value):Array.isArray(value)?'['+value.map(canonicalSave).join(',')+']':'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+canonicalSave(value[key])).join(',')+'}';
+function serviceTeam(req:Request,s:State,m:Member,record:ServiceRecord|Record<string,unknown>){const team=(req.headers.get(businessTeamHeader)||'').trim();if(!team)return;if(team.length>160||team!==ungroupedBusinessTeam&&!businessTeamData(s,m).teams.some(row=>row.id===team)||!filterBusinessTeamRows(s,[record],team).length)throw new AppError('客服记录不在所选业务组范围。',403);}
 const imageExtensions:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
 function imageContentType(bytes:ArrayBuffer){
  const data=new Uint8Array(bytes),matches=(offset:number,values:number[])=>values.every((value,index)=>data[offset+index]===value);
@@ -79,7 +83,8 @@ export async function serviceWorkspaceGet(action:string,req:Request,s:State,m:Me
  if(action==='service-data'){
   const records=(all(s,'service_record') as ServiceRecord[]).filter(record=>canReadServiceRecord(s,m,record)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
   const ids=new Set(records.map(row=>row.id)),customers=serviceCustomerAccounts(s,m);
-  return json({records:records.map(record=>publicServiceRecord(s,record)),
+  const customerKeys=new Set(customers.flatMap(account=>serviceOrderCustomerKeys(s,account).map(key=>clean(key).toLowerCase())));
+  return json({writeContract:'service-save-version-token-v1',saveToken:true,sourceOrderVersion:true,orders:(all(s,'order') as Order[]).filter(order=>canRead(m,order)&&customerKeys.has(clean(order.customer).toLowerCase())).map(order=>({id:order.id,version:order.version,customer:order.customer,orderNo:order.orderNo,drawing:order.drawing,color:order.color,quantity:order.quantity})),records:records.map(record=>publicServiceRecord(s,record)),
    receipts:(all(s,'service_receipt') as ServiceReceipt[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceReceipt),
    attachments:(all(s,'service_attachment') as ServiceAttachment[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceAttachment),
    customers:customers.map(account=>({id:account.id,customer:account.customer,customerCode:account.customerCode,active:account.active,salesName:account.salesName,serviceName:account.serviceName,orderKeys:serviceOrderCustomerKeys(s,account)})),
@@ -111,11 +116,17 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
  if(!canWriteServiceWorkspace(s,m))throw new AppError('没有客服业务维护权限；只读或全订单查询权限不能用于修改、到账或核销。',403);
  if(action==='service-save'){
   const input=parse(serviceSaveSchema,await req.json()),before=input.id?editable(s,m,input.id):null;
-  if(before){current(before,input.version);if(before.customerId!==input.customerId||before.type!==input.type)throw new AppError('已保存记录的客户和业务类型不能改换，请为其他客户或类型新建记录；原记录及历史会保留。');}
+  serviceTeam(req,s,m,input);if(before)serviceTeam(req,s,m,before);
+  if(before){if(before.customerId!==input.customerId||before.type!==input.type)throw new AppError('已保存记录的客户和业务类型不能改换，请为其他客户或类型新建记录；原记录及历史会保留。');}
   const account=all(s,'customer_account').find(row=>row.id===input.customerId) as CustomerAccount|undefined;
   if(!account?.active||!assignedServiceCustomer(s,m,account))throw new AppError('只能选择客户责任清单中自己跟进的有效客户。',403);
   validateServiceAssignment(s,account.id,input,before);
-  linkedOrder(s,account,input.orderId);
+  const sourceOrder=linkedOrder(s,account,input.orderId);
+  if(input.token&&sourceOrder&&!canRead(m,sourceOrder))throw new AppError('没有关联订单的读取权限。',403);
+  const requestId=input.token?'service_save_request_'+input.token:'',requestFingerprint=input.token?await sha(canonicalSave(input)):'',prior=requestId?s.records.find(row=>row.id===requestId):undefined;
+  if(prior){if(prior.kind!=='service_save_request'||prior.actorId!==m.id||prior.action!=='service-save'||prior.requestFingerprint!==requestFingerprint)throw new AppError('客服保存请求标识已用于其他身份或内容。',409);const currentRecord=editable(s,m,prior.recordId);serviceTeam(req,s,m,currentRecord);return json({ok:true,idempotent:true,record:publicServiceRecord(s,currentRecord)});}
+  if(before)current(before,input.version);
+  if(input.token&&sourceOrder&&sourceOrder.version!==input.sourceOrderVersion)throw new AppError('关联订单版本已变化，请重新核对来源。',409);
   const validated=parse(serviceDetailsSchemas[input.type],input.details);
   let details:Record<string,string|number>=validated as Record<string,string|number>;
   if(input.type==='customer_profile'&&all(s,'service_record').some(row=>row.id!==before?.id&&row.type==='customer_profile'&&row.customerId===input.customerId))
@@ -140,9 +151,10 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
    if(all(s,'service_record').some(row=>row.id!==before?.id&&row.type==='receivable'&&row.customerId===input.customerId&&row.status!=='cancelled'
     &&clean(row.details?.invoiceNo).toLowerCase()===other.invoiceNo.toLowerCase()&&row.details?.currency===other.currency))throw new AppError('该客户相同发票号及币种已登记应收，请修改原记录，避免重复应收。',409);
   }
-  const {id,version,...fields}=input,at=now(),record:ServiceRecord={...before,...fields,details,id:before?.id||newId('service_record'),kind:'service_record',version:(before?.version||0)+1,
+  const {id,version,token,sourceOrderVersion,...fields}=input,at=now(),record:ServiceRecord={...before,...fields,details,id:before?.id||newId('service_record'),kind:'service_record',version:(before?.version||0)+1,
    createdAt:before?.createdAt||at,updatedAt:at,updatedBy:m.name};
-  const next=await persist(s,m,record,before,before?'更新客服业务记录':'新增客服业务记录');return json({ok:true,record:publicServiceRecord(next,record)});
+  const request=requestId?[{id:requestId,kind:'service_save_request',recordId:record.id,customerId:record.customerId,actorId:m.id,action:'service-save',requestFingerprint,sourceOrderId:record.orderId,sourceOrderVersion:sourceOrder?.version||0,createdAt:at}]:[];
+  const next=await persist(s,m,record,before,before?'更新客服业务记录':'新增客服业务记录',request);return json({ok:true,record:publicServiceRecord(next,record)});
  }
  if(action==='service-receipt'){
   const input=parse(serviceReceiptSchema,await req.json()),before=editable(s,m,input.recordId);financial(before);
@@ -168,7 +180,7 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
    actorId:m.id,actor:m.name,createdAt:record.updatedAt,requestFingerprint};
   const next=await persist(s,m,record,before,'冲销客服到账凭证（保留原凭证）',[receipt]);return json({ok:true,record:publicServiceRecord(next,record),receipt:publicServiceReceipt(receipt)});
  }
- const form=await req.formData(),recordId=String(form.get('recordId')||''),before=editable(s,m,recordId),version=Number(form.get('version'));
+ const form=await req.formData(),recordId=String(form.get('recordId')||''),before=editable(s,m,recordId),version=Number(form.get('version'));serviceTeam(req,s,m,before);
  if(!Number.isSafeInteger(version)||version<1)throw new AppError('上传附件时必须提供当前版本号。');current(before,version);
  const file=form.get('file'),note=parse(z.string().trim().max(3000),String(form.get('note')||'')),category=parse(z.enum(['general','reference-image']),form.get('category')??'general');
  if(!(file instanceof File)||file.size===0||file.size>10*1024*1024)throw new AppError('请选择不超过 10 MB 的附件。');

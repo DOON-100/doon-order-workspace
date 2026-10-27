@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本 0.35.0，累计314条命令；W5新增42条计划/采购/供应商命令，W6新增40条部门工序、损耗、MES报工、更正、质量/仓储凭据及成品员工收发附件命令。W0—W5本地成品验收完成，最新检查和GitHub来源状态见仓库执行记录。Commander.js负责命令解析，复用员工登录与原权限；金蝶继续暂缓。详见[业务部](docs/sales.md)、[订单及单据](docs/orders.md)、[工程](docs/engineering.md)、[PMC与采购](docs/planning.md)、[生产与交付](docs/operations.md)和[财务](docs/finance.md)。
+版本0.36.0，累计324条命令；W5计划采购供应商、W6生产质量仓储、W7发运物流及结单已接入相应固定动作。W0—W6本地成品及GitHub来源验收完成，W7最新状态见执行记录；原权限、版本与业务门禁继续由服务器校验。金蝶暂缓，未自动部署。详见[业务部](docs/sales.md)、[订单及单据](docs/orders.md)、[工程](docs/engineering.md)、[PMC与采购](docs/planning.md)、[生产与交付](docs/operations.md)和[财务](docs/finance.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
