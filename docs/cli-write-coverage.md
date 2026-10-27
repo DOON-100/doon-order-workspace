@@ -4,17 +4,26 @@
 
 业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询和写入以 `cli/src/catalog.ts` 及 [写入阶段计划](cli-write-implementation-plan.md) 为准，W1 已部分接入客户主档、跟进、项目及询价，尚未覆盖全部字段和动作；处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
 
-### W1 当前已接入范围与缺口
+### W1 表单与动作对应（开发已接入，阶段验收进行中）
 
-| 表单或动作 | 当前支持 | 尚待核对或实现 |
-| --- | --- | --- |
-| 客户主档 | 创建；名称、编号、备注按版本更新 | 其他主档字段、PMC 和管理员专属责任/启停操作 |
-| 客户资料和跟进 | 通用资料指定字段、付款/快递专属资料、排程、沟通记录；项目跟进；正式附件；交接、公海及领取；独立客户任务 | 完整字段与角色边界阶段验收 |
-| 客户项目 | 创建、完整表单更新、回收和恢复；款色及轮次新增和更新、沟通新增、前期开发阶段、进展、资料文档及正式附件 | 其余项目记录及角色边界核对 |
-| 项目待办 | 创建、调整、取消、提交和审核 | 完整角色、状态及重放验收 |
-| 询价 | 查询、创建及完整表单更新 | 完整状态与页面字段验收 |
+各行字段以服务端 schema 和 CLI 输入白名单为准；只使用员工本人会话，未新增 CLI 确认机制。新增主档接口需要随网站代码更新；提交和推送不会部署。
 
-以上是当前命令覆盖，不是整个 W1 验收结论；服务器权限和业务状态始终有效，新增客户主档接口需服务器代码更新后才能使用。
+| 页面/表单 | 命令与接口 | 角色/范围与保存语义 | 验证 |
+| --- | --- | --- | --- |
+| 客户主档及目录 | `customers create/master/master-update`；`customer-save`、`customer-master-data/patch` | 复用既有主档和目录权限；PMC名称编号只读、分级及启停限已有管理员规则；指定字段增量更新 | 合成业务/PMC/管理员、旧版本拒绝、未指定字段保留 |
+| 客户资料/联系人 | `customers profile-update/sensitive/sensitive-update`；`customer-workflow-profile-save/data` | 联系人等沿用现有结构；付款资料显式读取、银行修改限财务/管理员 | 合成越权与版本、通用输出不扩散付款字段 |
+| 客户跟进与排程 | `customers schedule-set/followup-add`；既有workflow处理器 | 客户负责人、独立资料/状态版本、请求UUID | 合成创建回读、重复提交与越权 |
+| 客户流转/公海 | `customers transfers/transfer --action` | 10种固定动作；接收限本人，批准限管理员；双记录版本 | 完整合成流转场景、无权拒绝 |
+| 客户任务 | `customer-tasks list/history/save`；`customer-workflow-task-*` | 负责人及客户责任范围，创建0、修改当前版本 | 合成完成及历史、越权拒绝 |
+| 客户/项目正式附件 | `attachments list/download/upload/update`；`customer-workflow-file-*` | 原件与资料分离、上传20MiB、归档保留原件 | 上传重放、归档、原件摘要及不覆盖下载 |
+| 项目主表与回收站 | `projects create/update/recycle/trash/restore`；`customer-project-*` | 客户/业务组权限，保留关联和状态；有依赖时服务器拒绝回收 | 合成增改、旧版本、越权、回收恢复 |
+| 普通款色/轮次/沟通/待办 | `projects entry-schema/entry-save --type`；`customer-project-entry-save` | 同网站普通表单，可留空、数量0；修改仅提交变化字段。原有正式保存/提交/审核命令保留各自语义 | 合成4类增改与重放、跨客户拒绝、旧版本、原字段保留 |
+| 项目原始资料 | `projects file-upload/file-download`、`entry-save --type attachment`；`customer-project-attachment/file/entry-save` | 原件50MiB；原始沟通类别仅项目级；元数据修改保留hash和文件键 | 合成上传去重、资料修改、下载原字节和不覆盖 |
+| 项目开发与文档 | `projects development-show/save/log`、`document-show/save` | 客户项目责任范围；独立版本，历史保存 | 合成维护、历史回读和越权 |
+| 客户跟进工作台 | `followups create/update/list/show/action/mailbox/history`；`customer-project-followup-*` | 转项目/邮件归属是固定业务动作；邮件仅档案读取和归属登记，不对外发送 | 阶段验证纳入转项目、归属、历史及实际CLI进程 |
+| 需求/询价 | `inquiries create/update/list/show/history`；`process-save/data/history` | 限rfq、客户/组/负责人范围；未知数量与0分开 | 合成增改、版本、权限、原关联保留 |
+
+本批不增加客户物理删除或清除历史/附件原件。项目工程图纸、签样、正式下单在W4；报价在W2；订单及交接在W3；历史工作台批量迁入、模板及组织管理在W10；外部真实邮件发送按通讯功能独立审计，当前邮件归属不等于发送。完整安装包验收尚未完成，不能把开发覆盖当成全员可用。
 
 | 栏目 | 页面/入口标识 | 计划批次 | 表单与字段 | 动作/接口 | 角色与记录范围 | 验收 |
 | --- | --- | --- | --- | --- | --- | --- |

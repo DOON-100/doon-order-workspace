@@ -55,7 +55,7 @@ export class SalesService {
     }
     if (resource === 'customers') {
       if(action==='sensitive'){if(team||customer)throw new CliError('UNSUPPORTED_FILTER','此资料不支持额外范围筛选。',2);const data=await read('/api/workspace/customer-workflow-data',{customerId:id!});if(data?.customer?.id!==id)return failResponse();return {scope,record:{customerId:id,version:object(data.profile).version,fields:pick(object(data.profile).fields,fields('bankPaymentInfo courierAccount'))},capabilities:pick(data.capabilities,fields('readBank writeBank writeProfile'))};}
-      if(action==='master'){if(team||customer)throw new CliError('UNSUPPORTED_FILTER','客户主档不支持额外范围筛选。',2);const data=await read('/api/workspace/customer-master-data',{id:id!});if(data?.customer?.id!==id)return failResponse();return {scope,record:pick(data.customer,fields('id version customer customerCode notes active'))};}
+      if(action==='master'){if(team||customer)throw new CliError('UNSUPPORTED_FILTER','客户主档不支持额外范围筛选。',2);const data=await read('/api/workspace/customer-master-data',{id:id!});if(data?.customer?.id!==id)return failResponse();return {scope,record:{...pick(data.customer,fields('id version customer customerCode notes active salesName serviceName pmcName salesMemberIds serviceMemberIds quoteMemberIds')),...(data.customer.directory?{directory:pick(data.customer.directory,fields('country grade gradeStatus qualityGrade productDifficulty bucket focus registeredOn handoffOn defaultPaymentTermId'))}:{})},capabilities:pick(data.capabilities||{},fields('master directory responsibility quoteMembers activation'))};}
       const data = await read('/api/workspace/customer-workflow-data'), rows = collection(data, 'customers');
       const directory = await read('/api/workspace/business-team-data'), names = new Map(collection(directory, 'customers').map(row => [row.id, row]));
       const summaries = rows.map(row => ({id: row.id, ...pick(names.get(row.id) || {}, fields('customer customerCode active')), stage: pick(object(row.profile).fields, ['stage']).stage ?? null, ...pick(row, ['reminder']), workflow: workflow(row.workflow)}));
@@ -81,7 +81,8 @@ export class SalesService {
       });
       return {scope, record: pick(record, projectFields), items: related('items', fields('id version model customerModel drawing color lens material requirements quantity')),
         rounds: page(rounds,window), tasks: related('tasks', fields('id version title description ownerId serviceReviewerId salesReviewerId waitingFor dueDate status result reviewCycle canSubmit canReviewService canReviewSales')),
-        communications: related('communications', fields('id version channel contact occurredAt content nextAction ownerId dueDate visibility'))};
+        communications: related('communications', fields('id version roundId channel contact occurredAt content nextAction ownerId dueDate visibility attachmentIds')),
+        attachments: related('attachments', fields('id version projectId customerId roundId category filename contentType size hash note'))};
     }
     if (resource === 'inquiries') {
       const data = await read('/api/workspace/process-data', {type: 'rfq'}), rows = collection(data, 'records');

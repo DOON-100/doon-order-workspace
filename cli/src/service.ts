@@ -3,8 +3,11 @@ import {StateStore} from './state.js';
 import {CliError} from './errors.js';
 import {ProjectChildWriteService,ProjectTaskWriteService,ProjectRecycleService,ProjectDevelopmentService,CustomerAttachmentService,CustomerTransferService,CustomerTaskService} from './project-child-write.js';
 import {SalesWriteService} from './sales-write.js';
+import {ProjectEntryService} from './project-entries.js';
+import {FollowupActionService} from './followup-actions.js';
+import {QuoteWriteService} from './quote-write.js';
 import {SalesService} from './sales.js';
-import {salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -25,6 +28,9 @@ export class FoundationService {
   constructor(public store = new StateStore(), private transport: typeof fetch = fetch) {}
   sales() { return new SalesService(this.store, this.transport); }
   salesWrite() { return new SalesWriteService(this.store, this.transport); }
+  projectEntries() { return new ProjectEntryService(this.store, this.transport); }
+  followupActions() { return new FollowupActionService(this.store, this.transport); }
+  quoteWrite() { return new QuoteWriteService(this.store, this.transport); }
   projectChildWrite() { return new ProjectChildWriteService(this.store, this.transport); }
   projectTaskWrite() { return new ProjectTaskWriteService(this.store, this.transport); }
   projectRecycle() { return new ProjectRecycleService(this.store, this.transport); }
@@ -100,6 +106,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

@@ -1,4 +1,4 @@
-export const version = '0.28.0';
+export const version = '0.30.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -24,6 +24,13 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales followups action',usage:'sales followups action --type promote|classify --input <file> --version <number> --request-id <uuid>',description:'跟进转项目或邮件归属登记并回读',effect:'business-write'},
+  {name:'sales followups mailbox',usage:'sales followups mailbox [id]',description:'查询授权邮件档案目录或指定正文',effect:'business-read-and-session-last-seen'},
+  {name:'sales followups history',usage:'sales followups history <id>',description:'查询跟进或邮件归属历史',effect:'business-read-and-session-last-seen'},
+  {name:'sales projects file-upload',usage:'sales projects file-upload --input <file> --file <file>',description:'上传项目原件并回读，按内容去重',effect:'business-write'},
+  {name:'sales projects file-download',usage:'sales projects file-download <id> --project <id> --output <file>',description:'按摘要校验并下载项目原件',effect:'local-file-and-session-last-seen'},
+  {name:'sales projects entry-schema',usage:'sales projects entry-schema --type <type>',description:'查询普通项目表单的字段与规则',effect:'local-read'},
+  {name:'sales projects entry-save',usage:'sales projects entry-save --type <type> --input <file> [--version <number>] --request-id <uuid>',description:'按类型新增或修改普通项目表单并回读',effect:'business-write'},
   {name:'sales customers sensitive-update', usage:'sales customers sensitive-update --input <file> --version <number> --request-id <uuid>', description:'按服务器权限更新客户付款或快递资料', effect:'business-write'},
   {name:'sales projects document-save', usage:'sales projects document-save --input <file> --version <number> --request-id <uuid>', description:'保存项目资料文档并回读', effect:'business-write'},
   {name:'sales projects development-save', usage:'sales projects development-save --input <file> --version <number> --request-id <uuid>', description:'维护项目开发阶段并回读', effect:'business-write'},
@@ -88,7 +95,13 @@ export const developmentReadCommands=[{name:'sales projects development-show',us
 export const attachmentCommands=[{name:'sales attachments list',usage:'sales attachments list --customer <id> [--project <id>]',description:'查询客户或项目附件',effect:'business-read-and-session-last-seen'},{name:'sales attachments download',usage:'sales attachments download <id> --customer <id> [--project <id>] --output <file>',description:'校验并下载授权附件',effect:'local-file-and-session-last-seen'},{name:'sales attachments upload',usage:'sales attachments upload --input <file> --file <file> --request-id <uuid>',description:'上传客户或项目附件并回读',effect:'business-write'},{name:'sales attachments update',usage:'sales attachments update --input <file> --version <number> --request-id <uuid>',description:'修改或归档附件资料并回读',effect:'business-write'}] as const;
 export const transferCommands=[{name:'sales customers transfers',usage:'sales customers transfers',description:'查询客户流转与公海工作台',effect:'business-read-and-session-last-seen'},{name:'sales customers transfer',usage:'sales customers transfer --action <action> --input <file> --version <number> --request-id <uuid>',description:'执行客户流转的指定业务动作并回读',effect:'business-write'}] as const;
 export const customerTaskCommands=[{name:'sales customer-tasks list',usage:'sales customer-tasks list [--customer <id>]',description:'查询客户任务与负责人',effect:'business-read-and-session-last-seen'},{name:'sales customer-tasks history',usage:'sales customer-tasks history <id>',description:'查询客户任务历史',effect:'business-read-and-session-last-seen'},{name:'sales customer-tasks save',usage:'sales customer-tasks save --input <file> --version <number> --request-id <uuid>',description:'新增或修改客户任务并回读',effect:'business-write'}] as const;
-export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const quoteWriteCommands=['sales quotes','engineering ie-quotes'].flatMap(prefix=>[
+ {name:prefix+' schema',namespace:prefix.split(' ')[0],usage:prefix+' schema',description:'查询报价表单与动作字段',effect:'local-read'},
+ {name:prefix+' form',namespace:prefix.split(' ')[0],usage:prefix+' form <id>',description:'读取授权的可编辑报价字段',effect:'business-read-and-session-last-seen'},
+ {name:prefix+' save',namespace:prefix.split(' ')[0],usage:prefix+' save --input <file> [--version <number>]',description:'新增报价或更新指定字段并回读',effect:'business-write'},
+ {name:prefix+' action',namespace:prefix.split(' ')[0],usage:prefix+' action --type <type> --input <file> --version <number>',description:'执行既有报价业务动作并回读',effect:'business-write'}
+]);
+export const commands = [...foundationCommands, ...quoteWriteCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -96,4 +109,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...quoteWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

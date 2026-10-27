@@ -19,6 +19,7 @@ import {requestedExportBusinessTeam} from './business-team-export';
 const excelType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const roles=(m:Member)=>broad(m)||m.role==='sales';
 const manageCustomers=(m:Member)=>broad(m)||m.role==='admin';
+function masterCustomerDto(customer:CustomerAccount){return {id:customer.id,version:customer.version,customer:customer.customer,customerCode:customer.customerCode||'',notes:customer.notes||'',active:customer.active,salesName:customer.salesName||'',serviceName:customer.serviceName||'',pmcName:customer.pmcName||'',...(customer.directory?{directory:Object.fromEntries(Object.keys(customerDirectorySchema.shape).filter(key=>Object.prototype.hasOwnProperty.call(customer.directory,key)).map(key=>[key,(customer.directory as any)[key]]))}:{}),...Object.fromEntries(['salesMemberIds','serviceMemberIds','quoteMemberIds'].filter(key=>Object.prototype.hasOwnProperty.call(customer,key)).map(key=>[key,(customer as any)[key]]))};}
 function requireResponsibilityAdministrator(m:Member,before:CustomerAccount|undefined,next:{salesName:string;serviceName:string;pmcName:string;active?:boolean}&CustomerResponsibilityInput){
  if(m.role==='admin')return;
  if(customerResponsibilityListsChanged(before,next))throw new AppError('客户责任成员名单变更须由管理员确认并操作。',403);
@@ -68,8 +69,9 @@ function customerRows(bytes:ArrayBuffer){const book=openWorkbook(bytes),sheetNam
 export async function collaborationGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(action==='customer-master-data'){
   const id=new URL(req.url).searchParams.get('id')||'',customer=all(s,'customer_account').find(row=>row.id===id) as CustomerAccount|undefined;
-  if(!customer||paymentTermsReadOnly(s,m)||!customerMasterCapabilities(s,m,customer).master)throw new AppError('客户不存在或没有主档维护权限。',403);
-  return json({customer:{id:customer.id,version:customer.version,customer:customer.customer,customerCode:customer.customerCode||'',notes:customer.notes||'',active:customer.active}});
+  const rights=customer?customerMasterCapabilities(s,m,customer):null;
+  if(!customer||paymentTermsReadOnly(s,m)||!rights||!rights.master&&!rights.directory)throw new AppError('客户不存在或没有主档维护权限。',403);
+  return json({customer:masterCustomerDto(customer),capabilities:rights});
  }
  if(action==='customer-master-capabilities'&&paymentTermsReadOnly(s,m))return json({policyVersion:customerMasterPolicyVersion,create:false,master:false,directory:false,responsibility:false,quoteMembers:false,activation:false,customers:[]});
  if(action==='customer-master-capabilities')return json({policyVersion:customerMasterPolicyVersion,...customerMasterCapabilities(s,m),customers:(all(s,'customer_account') as CustomerAccount[]).flatMap(c=>{const rights=customerMasterCapabilities(s,m,c);return rights.master||rights.directory?[{id:c.id,...rights}]:[];})});
@@ -100,15 +102,24 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
 
 export async function collaborationPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(action==='customer-master-patch'){
-  const parsed=z.object({id:z.string().trim().min(1).max(160),version:z.number().int().positive(),patch:z.object({customer:z.string().trim().min(1).max(120).optional(),customerCode:z.string().trim().max(80).optional(),notes:z.string().max(1000).optional()}).strict().refine(v=>Object.keys(v).length>0)}).strict().safeParse(await req.json());
+  const parsed=z.object({id:z.string().trim().min(1).max(160),version:z.number().int().positive(),patch:z.object({customer:z.string().trim().min(1).max(120).optional(),customerCode:z.string().trim().max(80).optional(),notes:z.string().max(1000).optional(),salesName:z.string().trim().max(80).optional(),serviceName:z.string().trim().max(80).optional(),pmcName:z.string().trim().max(80).optional(),...customerResponsibilityFields,directory:customerDirectorySchema.optional(),active:z.boolean().optional()}).strict().refine(v=>Object.keys(v).length>0)}).strict().safeParse(await req.json());
   if(!parsed.success)throw new AppError('客户主档字段或版本无效。');
   const {id,version,patch}=parsed.data,before=all(s,'customer_account').find(row=>row.id===id) as CustomerAccount|undefined;
-  if(!before||paymentTermsReadOnly(s,m)||!customerMasterCapabilities(s,m,before).master)throw new AppError('客户不存在或没有主档维护权限。',403);
+  const rights=before?customerMasterCapabilities(s,m,before):null;
+  if(!before||paymentTermsReadOnly(s,m)||!rights||!rights.master&&!rights.directory)throw new AppError('客户不存在或没有主档维护权限。',403);
   if(before.version!==version)throw new AppError('客户资料已更新，请刷新后重试。',409);
-  const item:CustomerAccount={...before,...patch,version:before.version+1,updatedAt:now(),updatedBy:m.name};
+  if(m.role==='pmc'&&(patch.customer!==undefined&&patch.customer!==before.customer||patch.customerCode!==undefined&&patch.customerCode!==before.customerCode))throw new AppError('PMC 不能修改客户名称和编号。',403);
+  if(patch.active!==undefined&&patch.active!==before.active&&m.role!=='admin')throw new AppError('客户启停须由管理员操作。',403);
+  const input={salesName:patch.salesName??before.salesName,serviceName:patch.serviceName??before.serviceName,pmcName:patch.pmcName??before.pmcName,active:patch.active??before.active,expectedVersion:version,...Object.fromEntries(['salesMemberIds','serviceMemberIds','quoteMemberIds'].filter(key=>Object.prototype.hasOwnProperty.call(patch,key)).map(key=>[key,(patch as any)[key]])),...(patch.directory?{directory:patch.directory}:{})};
+  const scopedLists=scopedMasterResponsibilities(s,m,before,input);if(scopedLists===null)requireResponsibilityAdministrator(m,before,input);
+  const selectedTerm=patch.directory?.defaultPaymentTermId;if(selectedTerm&&selectedTerm!==before.directory?.defaultPaymentTermId&&!activePaymentTerm(s,selectedTerm))throw new AppError('只能选择公司已授权且启用的付款条件。',409);
+  if(patch.directory?.bucket!==undefined&&patch.directory.bucket!==before.directory?.bucket&&(patch.directory.bucket==='搁置与公海'||before.directory?.bucket==='搁置与公海'))throw new AppError('移入或移出公海须使用客户流转流程。',409);
+  const changesResponsibilities=['salesName','serviceName','pmcName','salesMemberIds','serviceMemberIds','quoteMemberIds'].some(key=>Object.prototype.hasOwnProperty.call(patch,key));
+  const {directory,salesMemberIds,serviceMemberIds,quoteMemberIds,...simple}=patch;
+  const item:CustomerAccount={...before,...simple,...(directory?{directory:{...before.directory,...directory}}:{}),...(changesResponsibilities?(scopedLists??responsibilityLists(s,before,input)):{}),version:before.version+1,updatedAt:now(),updatedBy:m.name};
   if(conflictingCustomerIdentity(s,id,item.customer,item.customerCode))throw new AppError('客户名称或编号与其他客户的当前/历史身份冲突。',409);
   await commit(s.revision,[item,...customerIdentityChanges(s,m,before,item),audit(m,item,before,'维护客户主档')]);
-  return json({ok:true,customer:{id:item.id,version:item.version,customer:item.customer,customerCode:item.customerCode||'',notes:item.notes||'',active:item.active}});
+  return json({ok:true,customer:masterCustomerDto(item)});
  }
  if(action==='factory-order-template'){
   if(!roles(m))throw new AppError('无权维护订单模板。',403);const form=await req.formData(),file=form.get('file'),customer=clean(form.get('customer'));

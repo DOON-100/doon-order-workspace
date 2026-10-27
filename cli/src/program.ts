@@ -65,8 +65,26 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   program.command('commands').description(describe('commands')).action(() => result('commands', commands));
   program.command('modules').description(describe('modules')).action(() => result('modules', modules));
   const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
+  function registerQuoteWrites(group:Command,kind:'ie'|'customer',prefix:string){
+    group.command('schema').description('查询报价表单与业务动作字段').action(()=>result(prefix+' schema',foundation().quoteWrite().schema(kind)));
+    group.command('form <id>').description('读取可编辑报价字段').action(async id=>result(prefix+' form',await foundation().quoteWrite().form(kind,id)));
+    group.command('save').description('新增报价或更新指定字段').requiredOption('--input <file>','JSON输入文件').option('--version <number>','修改的当前版本，新增0','0').action(async options=>result(prefix+' save',await foundation().quoteWrite().save(kind,options.input,options.version)));
+    group.command('action').description('执行既有报价业务动作').requiredOption('--type <type>',kind==='ie'?'submit|review|revise':'confirm|revise|adopt-ie').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','报价当前版本').action(async options=>result(prefix+' action',await foundation().quoteWrite().action(kind,options.type,options.input,options.version)));
+  }
   for (const resource of ['teams','customers','projects','followups','inquiries','quotes'] as const) {
     const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',followups:'客户跟进',inquiries:'询价评估',quotes:'客户报价'}[resource]);
+    if(resource==='quotes')registerQuoteWrites(group,'customer','sales quotes');
+    if(resource==='followups'){
+      group.command('action').description('跟进转项目或邮件归属登记').requiredOption('--type <type>','promote|classify').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','操作UUID').action(async options=>result('sales followups action',await foundation().followupActions().execute(options.type,options.input,options.version,options.requestId)));
+      group.command('mailbox [id]').description('查询邮件档案目录或指定正文').action(async id=>result('sales followups mailbox',await foundation().followupActions().mailbox(id)));
+      group.command('history <id>').description('查询跟进或邮件归属历史').action(async id=>result('sales followups history',await foundation().followupActions().history(id)));
+    }
+    if(resource==='projects'){
+      group.command('file-upload').description('上传项目原件，服务器按内容去重').requiredOption('--input <file>','项目和分类JSON').requiredOption('--file <file>','原件路径').action(async options=>result('sales projects file-upload',await foundation().projectEntries().upload(options.input,options.file)));
+      group.command('file-download <id>').description('校验并下载项目原件').requiredOption('--project <id>','项目编号').requiredOption('--output <file>','新输出文件').action(async(id,options)=>result('sales projects file-download',await foundation().projectEntries().download(options.project,id,options.output)));
+      group.command('entry-schema').description('查询普通项目表单字段').requiredOption('--type <type>','item|round|communication|task|attachment').action(async options=>result('sales projects entry-schema',foundation().projectEntries().schema(options.type)));
+      group.command('entry-save').description('按类型新增或修改普通项目表单').requiredOption('--type <type>','item|round|communication|task|attachment').requiredOption('--input <file>','JSON输入文件').option('--version <number>','修改时的当前版本，新增为0','0').requiredOption('--request-id <uuid>','操作UUID').action(async options=>result('sales projects entry-save',await foundation().projectEntries().save(options.type,options.input,options.version,options.requestId)));
+    }
     if(resource==='followups'){const spec=salesWriteCommands.find(c=>c.name==='sales followups create')!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().salesWrite().execute('followup-create',options.input,'',options.requestId)));}
     if(resource==='followups'){const spec=salesWriteCommands.find(c=>c.name==='sales followups update')!;group.command('update').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().salesWrite().execute('followup-update',options.input,options.version,options.requestId)));}
     if(resource==='projects'){const spec=salesWriteCommands.find(c=>c.name==='sales projects update')!;group.command('update').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().salesWrite().execute('project-update',options.input,options.version,options.requestId)));}
@@ -138,6 +156,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   const engineering=program.command('engineering').description('工程：图纸、SOP、样品和IE报价查询');
   for(const resource of ['drawings','sops','samples','ie-quotes'] as const){
     const group=engineering.command(resource);
+    if(resource==='ie-quotes')registerQuoteWrites(group,'ie','engineering ie-quotes');
     for(const spec of engineeringCommands.filter(c=>c.resource===resource)){
       const command=group.command(spec.action).description(spec.description).option('--customer <id>','精确客户档案编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
       if(resource!=='ie-quotes')command.option('--team <id>','业务组编号');

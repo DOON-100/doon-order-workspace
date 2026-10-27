@@ -45,6 +45,7 @@ async function main() {
   const sourceDirty = !!run('git', ['status', '--porcelain', '--', 'cli', 'docs/cli-implementation-plan.md', 'docs/cli-execution-log.md', 'tsconfig.json', '.github/workflows/cli-ci.yml', 'README.md'], repository).toString().trim();
   const output = path.join(root, 'artifacts'); await fs.mkdir(output, {recursive: true});
   const work = await fs.mkdtemp(path.join(os.tmpdir(), 'doon-cli-package-'));
+  try {
   const archiveName = `node-v${nodeVersion}-win-x64.zip`;
   const base = `https://nodejs.org/dist/v${nodeVersion}/`;
   const sums = (await download(base + 'SHASUMS256.txt')).toString('utf8');
@@ -61,7 +62,7 @@ async function main() {
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
-  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'project-child-write.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
+  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'project-child-write.js', 'project-entries.js', 'followup-actions.js', 'quote-write.js', 'quote-schemas.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));
@@ -114,5 +115,10 @@ async function main() {
   await fs.copyFile(path.join(extracted, 'release.json'), path.join(output, 'release.json'));
   await fs.writeFile(path.join(output, 'SHA256SUMS'), `${hash(await fs.readFile(zip))}  ${name}\n`);
   console.log('PASS Windows package, extraction, isolated install, command entry and tamper rejection: ' + path.join(output, name));
+  } finally {
+    const target=path.resolve(work),base=path.resolve(os.tmpdir());
+    if(path.dirname(target)!==base||!path.basename(target).startsWith('doon-cli-package-'))throw Error('Refusing cleanup outside the generated package directory');
+    await fs.rm(target,{recursive:true,force:true});
+  }
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();

@@ -107,3 +107,23 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `sales customer-tasks list [--customer <ID>]` 查询独立客户任务及可选负责人；`history <ID>` 查询历史；`save --input <JSON> --version <版本> --request-id <UUID>` 用于新增和修改，新增版本为0且不提供 `id`，修改提供 `id` 和当前版本。JSON 完整提供 `customerId`（无客户可为空）、`title`、`ownerId`、`due`、`status`、`result`、`notes`；状态可为待接手、进行中、受阻、完成、取消。服务器校验负责人及客户权限，完成须有结果。
 
 `sales customers sensitive <客户ID> --json` 按服务器权限明确读取付款和快递账号资料及资料版本；`sensitive-update --input <JSON> --version <版本> --request-id <UUID>` 更新指定字段，JSON 为 `customerId` 和 `patch`，仅允许 `bankPaymentInfo`、`courierAccount`。银行资料维护继续限服务器允许的管理员/财务，其他人员不能借 CLI 扩权；输出只包含本次指定字段。
+
+客户主档 `master` 和 `master-update` 还支持目录字段、责任成员及启停：`patch.directory` 可指定国家、等级、分类、重点标记、历史日期及默认付款条件；责任字段为 `salesName`、`serviceName`、`pmcName`、`salesMemberIds`、`serviceMemberIds`、`quoteMemberIds`，启停为 `active`。未指定字段保留。服务器仍限制管理员专属操作、PMC 名称/编号限制及业务/客服的本人客户范围；公海分类须用流转流程。责任数组的添加、替换及回退姓名匹配语义与服务器既有规则一致。
+
+
+## 普通项目表单与项目原件
+
+`doon sales projects entry-schema --type item|round|communication|task|attachment --json` 返回该类型允许字段。`entry-save --type <类型> --input <JSON> --request-id <UUID>` 新增普通记录；JSON至少提供projectId，其他字段与网站普通表单一致，可留空。修改时在JSON提供id并加`--version <当前版本>`，仅提交变化字段，服务器保留未提供资料。attachment只允许修改已上传原件的资料。普通保存不执行正式下单、寄样或对外发送；现有正式保存、任务提交/审核命令仍复用各自业务规则。
+
+项目原件使用`projects file-upload --input <JSON> --file <原件>`，JSON字段为projectId、可选roundId、category、note。category为general或original-communication，后者仅项目级、roundId须为空，允许任意原件扩展名；上传上限50MiB，服务器按项目/轮次/分类/文件名/内容摘要/说明去重，未提供请求UUID语义。结果不明先查询`projects show <项目ID>`的attachments。`file-download <附件ID> --project <项目ID> --output <新文件>`校验大小和SHA-256后写入新文件，拒绝覆盖。原件与`sales attachments`客户工作流正式附件是网站原有的两种记录，关联沟通原件须使用项目原件ID。
+
+## 跟进转项目和归档邮件
+
+`doon sales followups action --type promote|classify --input <JSON> --version <当前版本> --request-id <UUID>`。promote输入id（跟进ID）、customerId、可选teamId、title、description、code；classify输入id（邮件档案ID）、followupIds数组，空数组表示移出归属。服务器继续检查跟进负责人、客户/组权限和邮件来源。`mailbox [邮件ID]`读取目录或指定正文；`history <跟进或邮件ID>`读取授权历史。以上不发送邮件。历史工作台批量导入属于W10。
+
+
+## 客户报价写入（W2进行中）
+
+`sales quotes schema`查询允许字段，`form <id>`读取有权编辑的字段，`save --input <JSON> [--version <当前版本>]`统一新增与修改。新增不提供id和已有版本；修改JSON提供id，只填写改变的顶层字段，CLI先读取授权当前记录并核对版本后合并保存。数组须提供完整替换内容和稳定行ID，不能把一行当成整个明细数组。服务器校验字段、金额、来源、角色、状态并保留隐藏内容；不提供没有服务端支持的请求UUID或自动重试。
+
+`action --type confirm|revise|adopt-ie --input <JSON> --version <当前版本>`执行现有业务动作，字段见schema。confirm中的acknowledgeEnglish是网站原有最终英文核对字段；审批身份继续由服务器决定。采用IE必须显式传工程版本、款式对应和适用范围。结果不明先查询，不能假设未保存。附件、模板、已发送登记等W2剩余动作尚未接入。
