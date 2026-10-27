@@ -211,18 +211,22 @@ try{
   }
   // W1: current user, other customer denied, idempotent replay, and preserved private fields.
   {
-    const writeA=services.sales_a.foundation.salesWrite(),writeB=services.sales_b.foundation.salesWrite();
-    const profileInput=path.join(dir,'profile-input.json'),scheduleInput=path.join(dir,'schedule-input.json'),projectInput=path.join(dir,'project-input.json'),inquiryInput=path.join(dir,'inquiry-input.json');
+    const writeA=services.sales_a.foundation.salesWrite(),writeB=services.sales_b.foundation.salesWrite(),childA=services.sales_a.foundation.projectChildWrite(),childB=services.sales_b.foundation.projectChildWrite();
+    const profileInput=path.join(dir,'profile-input.json'),scheduleInput=path.join(dir,'schedule-input.json'),projectInput=path.join(dir,'project-input.json'),inquiryInput=path.join(dir,'inquiry-input.json'),itemInput=path.join(dir,'item-input.json'),communicationInput=path.join(dir,'communication-input.json');
     const profileToken='11111111-1111-4111-8111-111111111111',scheduleToken='22222222-2222-4222-8222-222222222222',projectToken='55555555-5555-4555-8555-555555555555',inquiryToken='66666666-6666-4666-8666-666666666666';
     await fs.writeFile(profileInput,JSON.stringify({customerId:'c1',patch:{legalName:'Synthetic Updated'}}));
     await fs.writeFile(scheduleInput,JSON.stringify({customerId:'c1',next:'Synthetic follow-up',nextDate:'2026-12-01'}));
     await fs.writeFile(projectInput,JSON.stringify({customerId:'c1',title:'Synthetic project'}));
     await fs.writeFile(inquiryInput,JSON.stringify({customerId:'c1',title:'Synthetic inquiry',details:{requirement:'Synthetic',quantity:0}}));
+    await fs.writeFile(itemInput,JSON.stringify({projectId:'p1',model:'Synthetic Model',quantity:5}));
+    await fs.writeFile(communicationInput,JSON.stringify({projectId:'p1',occurredAt:'2026-10-20',content:'Synthetic communication',nextAction:'Synthetic next action'}));
     const beforeChanges=snapshot();
     const unsafeInput=path.join(dir,'unsafe-input.json');await fs.writeFile(unsafeInput,JSON.stringify({customerId:'c1',patch:{bankPaymentInfo:'SYNTHETIC_FORBIDDEN'}}));
     await assert.rejects(writeA.execute('profile-update',unsafeInput,'1','44444444-4444-4444-8444-444444444444'),{code:'INVALID_INPUT'});
     await assert.rejects(writeB.execute('profile-update',profileInput,'1','33333333-3333-4333-8333-333333333333'),{code:'FORBIDDEN'});
     await assert.rejects(writeB.execute('project-create',projectInput,'','88888888-8888-4888-8888-888888888888'),{code:'FORBIDDEN'});
+    await assert.rejects(childB.execute('item-add',itemInput,'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'),{code:'FORBIDDEN'});
+    await assert.rejects(childB.execute('communication-add',communicationInput,'12121212-1212-4212-8212-121212121212'),{code:'FORBIDDEN'});
     assert.deepEqual(snapshot(),beforeChanges);
     const updated=await writeA.execute('profile-update',profileInput,'1',profileToken);
     assert.equal(updated.record.profile.version,2);assert.equal(updated.record.profile.fields.legalName,'Synthetic Updated');
@@ -241,6 +245,16 @@ try{
     await assert.rejects(writeB.execute('inquiry-create',inquiryInput,'','77777777-7777-4777-8777-777777777777'),{code:'FORBIDDEN'});
     const inquiry=await writeA.execute('inquiry-create',inquiryInput,'',inquiryToken);assert.equal(inquiry.record.type,'rfq');assert.equal(inquiry.record.details.quantity,0);
     assert.deepEqual(await writeA.execute('inquiry-create',inquiryInput,'',inquiryToken),inquiry);
+    const itemToken='ffffffff-ffff-4fff-8fff-ffffffffffff',communicationToken='12345678-1234-4234-8234-123456789abc';
+    const item=await childA.execute('item-add',itemInput,itemToken);assert.equal(item.record.model,'Synthetic Model');assert.equal(item.record.quantity,5);
+    assert.deepEqual(await childA.execute('item-add',itemInput,itemToken),item);
+    const conflictingItem=path.join(dir,'conflicting-item.json');await fs.writeFile(conflictingItem,JSON.stringify({projectId:'p1',model:'Different model',quantity:5}));
+    await assert.rejects(childA.execute('item-add',conflictingItem,itemToken),{code:'CONFLICT'});
+    const communication=await childA.execute('communication-add',communicationInput,communicationToken);assert.equal(communication.record.content,'Synthetic communication');
+    assert.deepEqual(await childA.execute('communication-add',communicationInput,communicationToken),communication);
+    const noTaskFile=path.join(dir,'no-task.json');await fs.writeFile(noTaskFile,JSON.stringify({projectId:'p1',occurredAt:'2026-10-20',content:'Synthetic no task'}));
+    const noTask=await childA.execute('communication-add',noTaskFile,'13131313-1313-4313-8313-131313131313');
+    assert(!snapshot().records.some(row=>row.kind==='customer_project_task'&&JSON.parse(row.data).communicationId===noTask.record.id));
     const finalState=snapshot(),oldById=new Map(beforeChanges.records.map(row=>[row.id,row.data]));
     const finalById=new Map(finalState.records.map(row=>[row.id,row.data]));
     for(const [id,data] of oldById)if(id!=='profile1')assert.equal(finalById.get(id),data,'Unrelated record changed or removed');
@@ -259,6 +273,7 @@ try{
       }
       {const args=['sales','projects','create','--input',projectInput,'--request-id','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales projects create');}
       {const args=['sales','inquiries','create','--input',inquiryInput,'--request-id','cccccccc-cccc-4ccc-8ccc-cccccccccccc','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales inquiries create');}
+      for(const [action,file,token] of [['item-add',itemInput,'12345678-1234-4234-8234-123456789abd'],['communication-add',communicationInput,'12345678-1234-4234-8234-123456789abe']]){const args=['sales','projects',action,'--input',file,'--request-id',token,'--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales projects '+action);}
       assert.equal(testedCommands.length,commands.length);
       const afterCli=snapshot(),afterCliById=new Map(afterCli.records.map(row=>[row.id,row.data]));
       for(const [id,data] of oldById)if(id!=='profile1')assert.equal(afterCliById.get(id),data,'Unrelated record changed or removed by CLI');

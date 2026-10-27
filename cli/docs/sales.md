@@ -31,7 +31,7 @@ doon sales quotes export-completed --team TEAM_ID --output C:\Private\completed-
 
 已完成报价总表导出使用已有纯读取接口，只支持 team 和必填 output；不支持客户、搜索或分页，导出所选组内全部获授权的已完成行。文件上限32 MiB，校验类型和 XLSX ZIP 签名后独占创建新文件；返回路径、字节数和 SHA-256。已有文件拒绝覆盖。未接入会生成服务器归档的模板导出接口。
 
-除下述 W1 客户资料更新、排程、项目和询价创建外，其他新增、修改、删除、提交、审批、发送等仍暂缓；附件下载、模板归档导出、完整客户资料导出及服务端分页也尚未开放。沿用 Cookie 的权限由服务器决定，固定接口白名单不能替代服务器权限隔离。
+除下述 W1 客户资料更新、排程、项目和询价创建、项目款色与沟通登记外，其他新增、修改、删除、提交、审批、发送等仍暂缓；附件下载、模板归档导出、完整客户资料导出及服务端分页也尚未开放。沿用 Cookie 的权限由服务器决定，固定接口白名单不能替代服务器权限隔离。
 
 ## 客户资料与跟进排程写入（W1）
 
@@ -53,3 +53,11 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 ## 创建询价需求记录
 
 `doon sales inquiries create --input <文件> --request-id <UUID> --json`；输入示例：`{ "customerId": "客户ID", "title": "询价事项", "details": { "requirement": "客户要求", "quantity": 0 } }`。可选顶层字段有 `orderId`、`teamId`、`notes`；`details` 支持 `gateReason`、`documentRef`、`requirement`、`targetDelivery`、`quantity`、`currency`、`quoteRef`。只新建询价流程跟踪记录，不能用于改写订单或报价；服务器校验客户、订单和业务组权限。未填写的内容不推断，数量 0 不代表未知。
+
+## 项目款色与沟通
+
+`doon sales projects item-add --input <文件> --request-id <UUID> --json` 新增款色。输入示例：`{ "projectId": "项目ID", "model": "款号", "quantity": 5 }`；可选 `customerModel`、`drawing`、`color`、`lens`、`material`、`requirements`。
+
+`doon sales projects communication-add --input <文件> --request-id <UUID> --json` 追加沟通记录。输入示例：`{ "projectId": "项目ID", "occurredAt": "2026-10-20", "content": "沟通内容" }`；可选 `roundId`、`channel`、`contact`、`nextAction`、`ownerId`、`dueDate`、`visibility`、`attachmentIds`。如果填写 `nextAction`，服务器还会生成关联的项目任务；不填写时不会创建该任务。此命令只登记沟通，不对外发送。
+
+两项均以新 UUID 和现有项目权限提交并回读；当前仅新增，不通过默认字段覆盖旧记录。

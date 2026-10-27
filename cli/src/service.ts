@@ -1,6 +1,7 @@
 import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
+import {ProjectChildWriteService} from './project-child-write.js';
 import {SalesWriteService} from './sales-write.js';
 import {SalesService} from './sales.js';
 import {salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
@@ -24,6 +25,7 @@ export class FoundationService {
   constructor(public store = new StateStore(), private transport: typeof fetch = fetch) {}
   sales() { return new SalesService(this.store, this.transport); }
   salesWrite() { return new SalesWriteService(this.store, this.transport); }
+  projectChildWrite() { return new ProjectChildWriteService(this.store, this.transport); }
   orders() { return new OrderService(this.store, this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }

@@ -43,8 +43,8 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | 批次 | 订单流程和表单 | 预设接口或需补能力 | 状态 |
 | --- | --- | --- | --- |
 | W0 | 写入框架、登录与权限复用、输入校验、限定接口、错误处理、回读、隔离测试、入口与分发方案 | [入口覆盖清单](cli-write-coverage.md)已登记；真实处理器合成写入验证员工权限、回读、去重和原记录保全；d5a7bde 下载包 88 条命令通过隔离验收。业务写入命令从 W1 开始接入；隔离安装残留因执行策略受阻待清理 | 基础开发与隔离验收完成 |
-| W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | 客户通用资料字段更新、下次跟进排程、项目和询价创建开发中，复用 `customer-workflow-profile-save/schedule` 、`customer-project-save` 与 `process-save`；客户主档、项目、跟进记录、询价等仍待逐项接入，旧主档覆盖风险须先处理 | 进行中 |
-| W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | `ie-quote-save/review/submit`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 未开始 |
+| W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | 已接入客户资料字段更新、下次跟进排程、项目和询价创建，以及项目款色与沟通新增；沿用对应客户工作流、项目和流程接口；客户主档、项目、跟进记录、询价等仍待逐项接入，旧主档覆盖风险须先处理 | 进行中 |
+| W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | `ie-quote-save/review/submit`、新版本 IE 图纸附件及业务交接接口 `ie-quote-handoff` / `ie-quote-handoff-accept`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 未开始 |
 | W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；导入和金蝶相关动作逐一核实是否涉及外部系统 | 未开始 |
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；确认、上传和修改要保留来源版本 | 未开始 |
 | W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | `pmc-save/round`、`planning-control-*`、`purchase-preview/commit/save/receipt/archive`、`purchase-change-*`、`supplier-save`、`supplier-quote-save`、`outsource-approve/cancel`、`finished-supplier-*`；预览与正式提交分开核验 | 未开始 |
@@ -55,13 +55,16 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W10 | 全栏目收尾：总览/任务、规则、导入、成员/角色、业务组、模板、通讯、知识、系统配置及遗漏页面；权限内查询和支持的维护 | `member`、`task`、`framework-*`、`ar-access-grant-save`、`project-finance-grant-save`、`payment-terms-*` 及实际页面对应入口；账号与权限管理须管理员权限和独立审计；外发、同步、备份等核清真实副作用后分项设计 | 未开始 |
 | W11 | 端到端覆盖验收、员工安装升级、命令说明、Codex/WorkBuddy 实机联动及容量评估 | 覆盖矩阵与导航/表单对照；可下载的版本化安装包、版本兼容检查、回滚说明；测试环境并发与服务器限制实测 | 未开始 |
 
+W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写入，而当前 CLI 路由表按路径登记单一方法。实施该功能时需以固定逻辑操作区分 GET 和 POST，不能为此开放任意 URL 或任意方法；图纸附件和交接权限也须以服务器及合成测试核实。
+
 13 个阶段中品质、财务贯穿多个环节，以上是开发先后而非强制业务顺序；现货、自制、工序外协、成品委外分别验证。系统管理不会因提前提供命令而授予普通员工管理员权限。
 
 ## W1 当前进度
 
 - [x] 客户资料指定字段更新、下次跟进排程、客户项目创建、询价记录创建；4 条写入使用员工权限、请求标识和执行后回读。
 - [x] 0.9.0 下载包全部 92 条命令在隔离合成环境通过；旧业务记录和原附件按测试范围保全。下载包只验证已支持功能，不代表 W1 全部完成。
-- [ ] 客户主档创建/修改、项目款式、轮次、任务和沟通、跟进记录、询价修改及相应撤销/恢复；逐个确认字段、范围、版本和幂等后再接入，不安全或不存在的操作标明待补能力。
+- [x] 项目款色新增、项目沟通登记（支持明确指定下一步并回读其关联任务）；真实处理器合成检查与源码命令验收通过，下载包验收待完成。
+- [ ] 客户主档创建/修改、项目轮次、任务、跟进记录、询价修改及相应撤销/恢复仍待开发；逐个确认字段、范围、版本和幂等后再接入，不安全或不存在的操作标明待补能力。
 - [ ] 检查前次执行策略阻止清理的隔离安装目录，并在可用的合法方式下清理；不得绕过执行策略。
 
 ## 每批验收与进度记录

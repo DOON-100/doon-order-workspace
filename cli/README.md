@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本 0.9.0，写入 W1 进行中；新增客户通用资料字段更新、下次跟进排程、开发项目与询价记录创建。Commander.js 负责命令解析，复用中台员工登录与业务接口。支持 7 个基础命令及 81 个业务查询/导出命令，新增财务、对账和售后查询。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
+版本 0.10.0，写入 W1 进行中；支持客户资料更新、跟进排程、项目与询价创建、项目款色和沟通登记。Commander.js 负责命令解析，复用中台员工登录与业务接口。支持 7 个基础命令及 81 个业务查询/导出命令，新增财务、对账和售后查询。详见 [业务部说明](docs/sales.md)、[订单及单据说明](docs/orders.md)、[工程说明](docs/engineering.md)、[PMC与采购说明](docs/planning.md)、[生产与交付说明](docs/operations.md) 和 [财务说明](docs/finance.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
