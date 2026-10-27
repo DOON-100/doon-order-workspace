@@ -467,5 +467,35 @@ export const processDetails={
       "min": 0,
       "max": 1000000000
     }
+  },
+  "complaint": {
+    "gateReason": {
+      "type": "string",
+      "max": 3000
+    },
+    "documentRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "complaintRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "cause": {
+      "type": "string",
+      "max": 3000
+    },
+    "correction": {
+      "type": "string",
+      "max": 3000
+    },
+    "verification": {
+      "type": "string",
+      "max": 3000
+    },
+    "customerConfirmation": {
+      "type": "string",
+      "max": 3000
+    }
   }
 } satisfies Record<string,WriteSchema>;

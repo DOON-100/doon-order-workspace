@@ -66,7 +66,7 @@
 | 客服与单证 | `kingdee-sales` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 客服与单证 | `production-orders` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 客服与单证 | `documents` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
-| 客服与单证 | `process-complaint` | W3/W7/W9 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| 客服与单证 | `process-complaint` | W3/W7/W9 | 已核对：下方W9矩阵 | process-data/history/save，finance complaints五入口 | 原客户/订单/组、角色及证据门槛 | 合并开发通过，阶段待验 |
 | 客服与单证 | `completed` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 工程部 | `ie-quotes` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
 | 工程部 | `engineering-materials` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
@@ -323,3 +323,15 @@ BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登
 | 供应商对账 | finance reconciliations新增5入口，固定supplier-reconciliation | 管理员/PMC/财务维护、原价格读取范围；登记凭据不执行付款 | 精度/null、版本/历史、销售仅有价格读权仍拒绝写入 |
 
 候选0.37.0新增37条，登记361条，非金蝶349条。合并CLI/服务器类型和集中71组合成开发验收通过；W8全站、独立HTTP、Windows成品及CI来源验收待办。未混入W9退款售后或W10权限管理，正式请求0。
+
+### W9 售后、投诉与回访（合并开发通过，阶段待验）
+
+| 页面/表单 | 统一入口 | 权限、关联及真实副作用 | 合成覆盖 |
+| --- | --- | --- | --- |
+| 售后主表及执行事实 | finance project save --type after-sale | 原项目/轮次/订单、责任人和证据；保留原字段及客户接受判断，无新增数量/结案门槛 | 全字段、旧版本/UUID/权限、来源附件及创建信息保全 |
+| 售后费用及独立退款草稿 | cost、entry-refunds | 金额使用精确元文本，独立草稿不影响原到账可用余额 | 精度、跨项目拒绝、关联保全、历史基础版本重放 |
+| 退款申请/执行凭据/取消 | refund-request/execute/cancel | 原核实权限、余额和流水校验；bankTransferPerformed:false，仅中台留痕 | 分配释放后的限额、未来/重复流水、越权、版本与原退款保全 |
+| 客诉/整改/核验 | finance complaints新增五入口，固定complaint process | 原客户/订单/组和完成关口；details增量/明确替换；客户文本已登记不推断接受 | 六种原状态、必填证据、权限/版本/UUID、recorded/unknown、原件及结果不明 |
+| 客户回访 | W1 followup-add、followups create/update | 仅原客户/项目关联，原编号留作文字依据；无虚构投诉/售后外键或自动结案 | 三入口真实调用、保留原回访、拒绝虚构complaintId |
+
+0.38.0新增5条投诉命令，累计366条/354非金蝶。合并类型与集中59组/14入口通过；完整CLI、全站、HTTP、Windows成品及CI来源待办。原W8所有财务与导出保护保留，W10仍独立候选，正式请求0。

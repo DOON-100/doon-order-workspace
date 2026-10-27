@@ -49,3 +49,10 @@ W7的OQC、包装/放行凭据、入仓、结单、生产出货来源、装箱�
 按[财务说明](finance.md)使用`finance project`、`finance ar`、`finance payment-terms`、`finance receivables`和`finance reconciliations`。先读schema/form/references再准备明确字段；沿用员工原权限，不从目录或管理员身份推断核款、指定业务授权或负责人审批资格。元文本、整数分、null及负数按各原接口保留，不自动换算。来源版本/哈希、记录版本和UUID重放必须使用原载荷。
 
 AR总表精确选集preview只读；文件导入保存原件与批次，单据开立可能按原规则生成应收和付款计划。历史累计核对与当前到账分别记录，已发送事实/HTML下载不执行外发。AR导出逐范围执行，canExport不代表所有读取范围都可导出。写后回读失败先核查，禁止空成功响应替代业务结果。W8开发合成通过，全站/HTTP/成品/CI仍待验收；W9退款售后和W10权限配置未混入本批，金蝶继续暂缓。
+
+
+## W9 售后、投诉与回访
+
+按[财务说明](finance.md)使用项目财务after-sale/cost/entry-refunds及refund-request/execute/cancel类型；投诉使用finance complaints的schema/form/references/revisions/save。复用原角色、客户/项目/订单/业务组、版本、来源和UUID，未知字段不猜填。退款execute只登记原生中台凭据，返回bankTransferPerformed:false，不执行银行转账。
+
+处理完成、关口通过、客户确认文本已登记及客户接受各自核对，禁止自动推断。客户回访仅使用W1真实关联字段；投诉/售后/回访之间缺失的机器关联如实说明，原编号可留作文字证据，不添加虚构外键。W9合并开发59组/14入口通过，全站、HTTP、成品及CI仍待验收；W8金额精度、指定付款授权和导出边界继续生效，金蝶暂缓。

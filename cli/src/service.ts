@@ -1,3 +1,4 @@
+import {ComplaintWriteService} from './complaint-write.js';
 import {ProjectFinanceWriteService} from './project-finance-write.js';
 import {ArWriteService} from './ar-write.js';
 import {CollectionWriteService} from './collection-write.js';
@@ -44,6 +45,7 @@ function userFrom(data: any) {
 }
 
 export class FoundationService {
+ complaintWrite(){return new ComplaintWriteService(this.store,this.transport);}
  projectFinanceWrite(){return new ProjectFinanceWriteService(this.store,this.transport);}
  arWrite(){return new ArWriteService(this.store,this.transport);}
  collectionWrite(){return new CollectionWriteService(this.store,this.transport);}

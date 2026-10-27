@@ -1,10 +1,10 @@
 # 财务、应收与结算
 
-CLI 0.37.0在原12条财务查询上新增37条固定命令：项目财务7条、AR10条、付款条件/客服应收/供应商对账20条。361条登记命令中12条金蝶暂缓，本期349条非金蝶。W8合并开发检查71组/37条新增命令通过；全站、独立HTTP、Windows成品和CI来源验收待完成。开发通过不代表正式财务操作或部署授权。
+CLI 0.38.0登记366条，其中12条金蝶继续暂缓、本期354条非金蝶。保留W8新增37条及全部精度、权限、原件和回读保护；W9再新增5条投诉命令，项目财务按type复用售后、费用及退款处理。W9合并开发59组/14个实际入口通过，完整CLI、全站、独立HTTP、Windows成品及CI来源验收待办。
 
 ## 项目财务
 
-`finance project schema/form/references/history/save/action/print`复用原项目财务处理器。保存类型为`charge`、`notice`、`document`、`entry-receipts`、`entry-allocations`、`entry-adjustments`、`entry-creditApplications`；动作包括收费确认、付款要求、正式到账核实/冲销、分配/释放、调账、抵扣，以及单据确认/修订/已发送事实登记。退款/售后按W9，授权维护按W10。
+`finance project schema/form/references/history/save/action/print`复用原项目财务处理器。保存类型为`charge`、`notice`、`document`、`entry-receipts`、`entry-allocations`、`entry-adjustments`、`entry-creditApplications`；动作包括收费确认、付款要求、正式到账核实/冲销、分配/释放、调账、抵扣，以及单据确认/修订/已发送事实登记。售后和退款见下方W9，授权维护仍按W10。
 
 ```powershell
 doon finance project schema --type charge --json
@@ -41,3 +41,22 @@ AR的`*Cents`输入直接使用整数分，`null`表示未知，零和原生允�
 ## 执行与回读
 
 字段、动作和权限以各自schema和原生处理器为准。金额不自动换汇或跨币种相加。身份、客户/项目/业务组、版本、UUID、来源及余额由服务器原子重核。原件按摘要下载到新文件，存储键和私有来源快照不进入常规输出。`READBACK_FAILED`或`outcomeUnknown`表示原动作待核查，应先读取原记录/请求；不得生成新UUID盲目重提。业务记账不是银行转账，事实登记不是邮件或ERP外发。
+
+
+## W9 售后、整改和退款凭据
+
+`finance project`沿用原7个命令名，新增保存类型`after-sale`、`cost`、`entry-refunds`以及动作`refund-request`、`refund-execute`、`refund-cancel`。先读schema与references，使用原客户/项目/轮次、订单及真实当前版本；原附件、客户回访和单据以服务端授权目录为准。
+
+```powershell
+doon finance project schema --type after-sale --json
+doon finance project save --type after-sale --input after-sale.json --version 0 --request-id UUID --json
+doon finance project action --type refund-request --input refund-request.json --request-id UUID --json
+doon finance complaints schema --json
+doon finance complaints save --input complaint.json --version 0 --request-id UUID --json
+```
+
+售后记录保留原数量、处理方式、状态、责任人、客户证据、执行备注、实际退回/完成/补发数量、物流号和客户接受字段。由有权限人员明确输入业务事实，不从完成状态自动填客户接受，不增加原处理器没有的数量或结案门槛。费用、独立退款草稿、正式退款申请、执行凭据和取消分别记录。执行按原核实权限、原到账可用余额、分配/释放、已退款额及流水约束重新核对；`bankTransferPerformed:false`表示只登记中台执行凭据，不调用银行付款。
+
+`finance complaints`保留list/show/history，新增schema/form/references/revisions/save。投诉复用原`process-save`及当前客户/订单/业务组、负责人、期限、关口和证据规则；details默认增量，明确整对象替换用`--replace-details`。原因、整改、核验及原完成关口继续有效，原内部验证/不适用结案路径保留。客户确认文本的recorded只表示已登记文本，unknown保持待核实；完成、通过或回访完成不等于客户接受、退款或发货。
+
+客户回访复用W1：`sales customers followup-add`仅客户关联，`sales followups create/update`支持客户/项目。投诉记录没有projectId/afterSaleId，回访没有complaintId/orderId/afterSaleId；原编号可作为inputBasis/documentRef/notes等文字依据保存，不伪造机器外键或自动闭环。原关联、创建信息、未知字段、历史版本及附件原件保留。UUID重放保持原内容和指定历史基础版本，撤权或回读失败仍按原核查规则处理。

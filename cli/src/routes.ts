@@ -1,4 +1,10 @@
 export const routes = {
+"/api/workspace/project-after-sale-save":{"method": "POST", "business": true, "write": true},
+"/api/workspace/project-after-sale-cost":{"method": "POST", "business": true, "write": true},
+"/api/workspace/project-refund-request":{"method": "POST", "business": true, "write": true},
+"/api/workspace/project-refund-execute":{"method": "POST", "business": true, "write": true},
+"/api/workspace/project-refund-cancel":{"method": "POST", "business": true, "write": true},
+
   "/api/workspace/ar-workspace-data": {"method": "GET", "business": true, "query": ["teamId", "customerId", "currency", "periodType", "period"]},
   "/api/workspace/ar-access-data": {"method": "GET", "business": true, "query": []},
   "/api/workspace/ar-invoice-data": {"method": "GET", "business": true, "query": ["customerId"]},
