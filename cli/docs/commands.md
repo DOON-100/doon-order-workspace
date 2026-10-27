@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.21.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.22.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -30,6 +30,8 @@
 | `doon sales quotes history <id>` | 查询报价版本目录 | business-read-and-session-last-seen |
 | `doon sales quotes version <id> <version>` | 读取指定报价历史版本 | business-read-and-session-last-seen |
 | `doon sales quotes export-completed --output <file.xlsx>` | 导出当前业务组或全部有权查看的已完成报价总表 | local-file-and-session-last-seen |
+| `doon sales projects item-update --input <file> --version <number> --request-id <uuid>` | 修改项目款色并回读 | business-write |
+| `doon sales projects round-update --input <file> --version <number> --request-id <uuid>` | 修改项目轮次并回读 | business-write |
 | `doon sales customers followup-add --input <file> --version <number> --request-id <uuid>` | 登记客户沟通与跟进并回读 | business-write |
 | `doon sales projects trash --input <file> --version <number> --request-id <uuid>` | 将项目移入回收站并回读 | business-write |
 | `doon sales projects restore --input <file> --version <number> --request-id <uuid>` | 恢复项目并回读 | business-write |

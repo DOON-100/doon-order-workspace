@@ -89,3 +89,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects recycle --json` 查询有权管理的回收站项目；`doon sales projects trash --input <文件> --version <当前版本> --request-id <UUID> --json` 移入回收站，输入 `id` 和 `reason`；`doon sales projects restore` 使用同样参数，输入仅 `id`。服务器校验项目管理权限和未完成事项，回收不物理删除记录，恢复沿用原业务状态。
 
 `doon sales customers followup-add --input <文件> --version <跟进状态版本> --request-id <UUID> --json` 登记客户沟通并更新跟进状态，与项目跟进记录不同。输入须包含 `customerId`、`at`、`channel`、`content`、`result`、`disposition`、`next`、`nextDate`、`evidence`；`channel` 支持邮件、孚盟（历史）、WhatsApp Business、个人微信、会议、电话、其他；`disposition` 为继续跟进或暂停跟进。暂停时下次日期填空字符串；状态版本从客户详情获取。仅登记事实，不发送消息；重复匹配的历史记录可能导致回读结果不明，须查询原记录。
+
+`doon sales projects item-update` 与 `round-update` 使用 `--input <文件> --version <当前版本> --request-id <UUID>` 修改款色和轮次。为防止旧接口默认值覆盖，输入须包含当前全部可编辑字段：款色为 `id`、`projectId`、`model`、`quantity`、`customerModel`、`drawing`、`color`、`lens`、`material`、`requirements`；轮次为 `id`、`projectId`、`title`、`type`、`scope`、`parentRoundId`、`stage`、`requiredDrawingTypes`、`requireQuote`、`requiredSampleIds`、`sampleGateStage`、`sampleGateNote`、`dueDate`、`reason`、`status`。服务器保留已转单记录并拒绝不允许的修改。
