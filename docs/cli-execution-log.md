@@ -1,5 +1,12 @@
 # CLI 执行记录
 
+## 2026-10-27：W0 下载包验证及权限核对
+
+- 基线 `d5a7bde`，远端 Windows CLI CI [40442954457](https://github.com/DOON-100/doon-order-workspace/actions/runs/40442954457) 成功。下载 artifact `12706493490`；外层 SHA-256 `66ed044ae752127a102e708fc9a4cdcedefe69290faca390b1a76c95d587a3c0` 与 GitHub 元数据一致，内部 ZIP SHA-256 `27c11d278bf25686d04a39b5cbda2681a8d690f4f09c1b4da549c52bbb9f9028` 与包内清单一致；版本 0.8.0，提交匹配且 sourceDirty=false。
+- 在隔离目录验证并安装下载包，不修改用户 PATH；使用安装包内 Node 和 CLI 逐条执行全部 88 条现有命令。44 项真实处理器合成检查通过；合成业务记录、修订号和附件原件保持一致，正式服务器请求为零；业务测试数据及会话由集成程序清理。
+- 测试结束后，针对单个隔离安装/解压目录 `test-output/cli-w0-download-d5a7bde122fb` 的删除命令被执行策略阻止（blocked by policy），该目录仍在；未绕过限制。已校验的下载包保留在忽略目录。
+- 逐项核查 14 种流程记录类型的字段、角色和范围，并补充客户通用资料、跟进、协作、付款条件、采购、客服、PMC、报价和项目财务接口的限制；PMC 轮次的 token 尚未绑定完整范围；采购 `purchase-preview` 会保存导入任务和原件，不属于零写入预览。见 [覆盖清单](cli-write-coverage.md)。其他页面、字段和角色仍待核实，W0 继续进行中；没有开放业务写入命令。
+
 ## 2026-10-27：继续写入 W0
 
 - 基线 `b0196c4`，远端一致，无关 `.workbuddy/` 保留；上一轮 Windows CLI CI 通过。
