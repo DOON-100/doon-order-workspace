@@ -99,3 +99,7 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 ## 客户和项目附件
 
 `sales attachments list --customer <客户ID> [--project <项目ID>]` 查看附件；`download <附件ID>` 增加相同范围参数及 `--output <新文件>`，校验大小与 SHA-256 后新建文件，不覆盖现有文件。`upload --input <JSON> --file <原件> --request-id <UUID>` 上传，JSON 需提供 `customerId`、`title`、`fileVersion`，客户附件指定 `category`，项目附件指定 `projectId` 和 `folder`，可提供 `documentType`、`status`、`note`；原件限 20 MiB。`update --input <JSON> --version <版本> --request-id <UUID>` 可维护或归档，须提供 `id`、`customerId`、`projectId`、分类或目录、`documentType`、`title`、`fileVersion`、`status`、`note`、`reason`。实际目录、类型与权限以服务器校验为准。
+
+## 客户交接与公海
+
+`sales customers transfers --json` 查询授权范围的客户状态、客户版本、交接、公海申请、领取申请及销售人员。`sales customers transfer --action <动作> --input <JSON> --version <状态版本> --request-id <UUID>` 执行固定业务动作。动作支持 `primary`、`handoff`、`accept`、`cancel-handoff`、`pool-request`、`pool-approve`、`pool-reject`、`pool-withdraw`、`claim`、`claim-approve`；服务器执行现有本人接收与管理员审批规则。JSON 必含 `customerId`、`customerVersion`；主负责人和交接提供 `to`、`reason`；公海申请提供 `reason`（两年未下单或多轮跟进未成功）、`basis`；领取提供 `next`、`nextDate`、`reason`；处理现有申请提供 `id`、`requestVersion`、`note`。

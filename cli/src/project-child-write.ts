@@ -170,3 +170,33 @@ export class CustomerAttachmentService {
   },{file,version,token});
  }
 }
+
+export const customerTransferActions=['primary','handoff','accept','cancel-handoff','pool-request','pool-approve','pool-reject','pool-withdraw','claim','claim-approve'] as const;
+export type CustomerTransferAction=typeof customerTransferActions[number];
+const transferReason={type:'string',required:true,min:1,max:3000} as const;
+export class CustomerTransferService {
+ constructor(private store:StateStore,private transport:typeof fetch=fetch){}
+ private async client(){const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);return {api:new ApiClient(config,this.transport,30000),session};}
+ async list(){const {api,session}=await this.client(),data=(await api.request('/api/workspace/customer-workflow-transfers',session)).data;for(const key of ['pool','handoffs','poolRequests','claims','customers','sales'])if(!Array.isArray(data?.[key]))throw new CliError('INVALID_RESPONSE','客户流转响应不符合协议。',5);
+  const requestFields=fields('id version customerId from to status reason basis next nextDate actorId actor note processedBy processedAt createdAt');
+  return {pool:data.pool.map((v:any)=>pick(v,fields('id customer customerCode country grade version customerVersion poolAt primarySalesMemberId'))),customers:data.customers.map((v:any)=>pick(v,fields('id customer customerCode version customerVersion poolAt primarySalesMemberId'))),handoffs:data.handoffs.map((v:any)=>pick(v,requestFields)),poolRequests:data.poolRequests.map((v:any)=>pick(v,requestFields)),claims:data.claims.map((v:any)=>pick(v,requestFields)),sales:data.sales.map((v:any)=>pick(v,fields('id name'))),canApprove:!!data.canApprove};
+ }
+ async execute(action:CustomerTransferAction,file:string,rawVersion:string,token:string){
+  if(!customerTransferActions.includes(action))throw new CliError('UNSUPPORTED_OPERATION','客户流转动作未接入。',2);
+  if(!/^(0|[1-9]\d*)$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion)))throw new CliError('INVALID_ARGUMENT','状态版本须为非负整数。',2);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const base:WriteSchema={customerId:{type:'string',required:true,min:1,max:160},customerVersion:{type:'number',required:true,integer:true,min:0}},extra:WriteSchema=['primary','handoff'].includes(action)?{to:{type:'string',required:true,min:1,max:160},reason:transferReason}:action==='pool-request'?{reason:{type:'string',required:true,enum:['两年未下单','多轮跟进未成功']},basis:transferReason}:action==='claim'?{next:{type:'string',required:true,min:1,max:300},nextDate:{type:'string',required:true,min:10,max:10},reason:transferReason}:{id:{type:'string',required:true,min:1,max:160},requestVersion:{type:'number',required:true,integer:true,min:0},note:transferReason};
+  const version=Number(rawVersion),{api,session}=await this.client();
+  const route=transferRoutes[action];
+  return executeWrite({schema:{...base,...extra},versionField:'version',versionMin:0,tokenField:'token',
+   validate(input){if(hasUntrimmed(input))throw new CliError('INVALID_INPUT','流转字段不能含首尾空格。',2);},
+   async send(input){const data=(await api.request(route,session,input)).data;if(data?.ok!==true||data.customerId!==input.customerId)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data;},
+   readBack:async(_response,input)=>{const data=await this.list(),customer=data.customers.find((v:any)=>v.id===input.customerId);if(!customer||customer.version!==version+1)throw Error('state changed');let record:any;
+    if(action==='primary'){if(customer.primarySalesMemberId!==input.to)throw Error('primary changed');record=customer;}
+    else if(['handoff','pool-request','claim'].includes(action)){const rows=action==='handoff'?data.handoffs:action==='pool-request'?data.poolRequests:data.claims;const matches=rows.filter((v:any)=>v.customerId===input.customerId&&v.status==='pending'&&(action==='handoff'?v.to===input.to&&v.reason===input.reason:action==='pool-request'?v.reason===input.reason&&v.basis===input.basis:v.reason===input.reason&&v.next===input.next&&v.nextDate===input.nextDate));if(matches.length!==1)throw Error('request ambiguous');record=matches[0];}
+    else {const rows=['accept','cancel-handoff'].includes(action)?data.handoffs:action==='claim-approve'?data.claims:data.poolRequests;record=rows.find((v:any)=>v.id===input.id&&v.customerId===input.customerId);const expected=action==='accept'?'accepted':action==='cancel-handoff'?'cancelled':action==='pool-withdraw'?'withdrawn':action==='pool-reject'?'rejected':'approved';if(!record||record.version!==Number(input.requestVersion)+1||record.status!==expected)throw Error('request changed');if(action==='pool-approve'&&!data.pool.some((v:any)=>v.id===input.customerId))throw Error('pool missing');}
+    return {scope:{customerId:input.customerId},customer,record};}
+  },{file,version,token});
+ }
+}
+const transferRoutes={primary:'/api/workspace/customer-workflow-primary',handoff:'/api/workspace/customer-workflow-handoff',accept:'/api/workspace/customer-workflow-accept','cancel-handoff':'/api/workspace/customer-workflow-cancel-handoff','pool-request':'/api/workspace/customer-workflow-pool-request','pool-approve':'/api/workspace/customer-workflow-pool-approve','pool-reject':'/api/workspace/customer-workflow-pool-reject','pool-withdraw':'/api/workspace/customer-workflow-pool-withdraw',claim:'/api/workspace/customer-workflow-claim','claim-approve':'/api/workspace/customer-workflow-claim-approve'} as const;

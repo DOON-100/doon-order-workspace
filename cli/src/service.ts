@@ -1,10 +1,10 @@
 import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
-import {ProjectChildWriteService,ProjectTaskWriteService,ProjectRecycleService,ProjectDevelopmentService,CustomerAttachmentService} from './project-child-write.js';
+import {ProjectChildWriteService,ProjectTaskWriteService,ProjectRecycleService,ProjectDevelopmentService,CustomerAttachmentService,CustomerTransferService} from './project-child-write.js';
 import {SalesWriteService} from './sales-write.js';
 import {SalesService} from './sales.js';
-import {salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -30,6 +30,7 @@ export class FoundationService {
   projectRecycle() { return new ProjectRecycleService(this.store, this.transport); }
   projectDevelopment() { return new ProjectDevelopmentService(this.store, this.transport); }
   customerAttachments() { return new CustomerAttachmentService(this.store, this.transport); }
+  customerTransfers() { return new CustomerTransferService(this.store, this.transport); }
   orders() { return new OrderService(this.store, this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
@@ -98,6 +99,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

@@ -9,6 +9,7 @@ import type {FinanceResource, FinanceAction} from './finance.js';
 import {FoundationService} from './service.js';
 import {CliError, publicError} from './errors.js';
 import {ask} from './prompt.js';
+import type {CustomerTransferAction} from './project-child-write.js';
 
 const clean = (text: unknown) => String(text).replace(/[\u0000-\u001f\u007f-\u009f]/g, ' ');
 // ASCII JSON survives legacy Windows PowerShell's native-process code page.
@@ -73,6 +74,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     if(resource==='customers'){const spec=salesWriteCommands.find(c=>c.name==='sales customers create')!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').action(async options=>result(spec.name,await foundation().salesWrite().execute('customer-create',options.input,'','')));}
     if(resource==='customers'){const spec=salesWriteCommands.find(c=>c.name==='sales customers master-update')!;group.command('master-update').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').action(async options=>result(spec.name,await foundation().salesWrite().execute('customer-master-update',options.input,options.version,'')));}
     if(resource==='customers'){const spec=salesWriteCommands.find(c=>c.name==='sales customers followup-add')!;group.command('followup-add').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','跟进状态当前版本，可为 0').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().salesWrite().execute('customer-followup-add',options.input,options.version,options.requestId)));}
+    if(resource==='customers'){group.command('transfers').description('查询客户流转与公海工作台').action(async()=>result('sales customers transfers',await foundation().customerTransfers().list()));group.command('transfer').description('客户交接、公海申请与领取').requiredOption('--action <action>','业务动作').requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','状态当前版本，可为 0').requiredOption('--request-id <uuid>','操作 UUID').action(async options=>result('sales customers transfer',await foundation().customerTransfers().execute(options.action as CustomerTransferAction,options.input,options.version,options.requestId)));}
     if (resource === 'customers') for (const spec of salesWriteCommands.filter(c=>['sales customers profile-update','sales customers schedule-set'].includes(c.name))) {
       const action=spec.name.endsWith('profile-update')?'profile-update':'schedule-set';
       group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本，可为 0').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,options.version,options.requestId)));
