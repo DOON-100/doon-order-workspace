@@ -2,7 +2,7 @@ import {assertHandoffProductionGate} from './handoff-production-gate';
 import {z} from 'zod';
 import {all,broad,canRead,clean,newId,now,productTypeOf,strictDate,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
-import {detectHeader,makeWorkbook,openWorkbook,sheetRows} from './workbooks';
+import {detectHeader,makeWorkbook,openWorkbook,sheetRows,sha} from './workbooks';
 import {factoryWorkbook,inspectFactoryTemplate,readFactoryRows} from './factory-order-workbook';
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {serviceOrderCustomerKeys} from './service-workspace';
@@ -86,7 +86,7 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
   return download(factoryWorkbook(projected,latest,bytes),`中英内部订单_${safe(orders[0].orderNo)}_${safe(orders[0].customerPO)}.xlsx`);
  }
  if(action==='factory-order-templates'){if(!roles(m))throw new AppError('无权查看模板。',403);return json({templates:all(s,'collaboration_template').filter(t=>t.templateType==='factory-order'&&(broad(m)||m.customers.includes(t.customer))).map(t=>({customer:t.customer,filename:t.filename}))});}
- if(action==='factory-orders'){const ids=new Set((all(s,'order') as Order[]).filter(o=>canRead(m,o)).map(o=>o.id));return json({items:all(s,'factory_order').filter(v=>ids.has(v.lineId))});}
+ if(action==='factory-orders'){const ids=new Set((all(s,'order') as Order[]).filter(o=>canRead(m,o)).map(o=>o.id));return json({writeContract:'factory-order-version-token-v1',items:all(s,'factory_order').filter(v=>ids.has(v.lineId))});}
  if(action==='customer-template'){if(!m.active||!['admin','pmc','sales','clerk'].includes(m.role))throw new AppError('无权下载客户清单模板。',403);return download(makeWorkbook([], '客户责任清单',['客户','客户编码','业务员','客服','PMC','备注','当前版本']),'客户责任清单模板.xlsx');}
  if(action==='kingdee-export'){
   if(!roles(m))throw new AppError('无权生成金蝶导入表。',403);const ids=new URL(req.url).searchParams.getAll('id').slice(0,1000),authorized=(all(s,'order') as Order[]).filter(o=>canRead(m,o)&&(ids.length?ids.includes(o.id):['PMC已排期','生产中'].includes(o.workflowStatus||''))),teamId=requestedExportBusinessTeam(s,m,req),orders=filterBusinessTeamRows(s,authorized,teamId);
@@ -149,13 +149,13 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   });const job={id:newId('factory_import'),kind:'factory_import',actorId:m.id,filename:safe(file.name),rows:parsed,status:'待确认',createdAt:now()};await commit(s.revision,[job]);return json({id:job.id,rows:parsed.map(r=>({index:r.index,orderNo:r.order.orderNo,drawing:r.order.drawing,color:r.order.color,quantity:r.order.quantity,sourceEnglish:r.item.sourceEnglish,chineseProcess:r.item.chineseProcess,status:r.isNew?'新增订单及草稿':'更新双语草稿'}))});
  }
  if(action==='factory-order-table-commit'){
-  if(!roles(m))throw new AppError('无权导入内部订单。',403);const {id}=z.object({id:z.string()}).parse(await req.json()),job=s.records.find(r=>r.kind==='factory_import'&&r.id===id);if(!job||job.actorId!==m.id)throw new AppError('导入预览不存在或不属于你。',403);if(job.status==='已提交')return json({ok:true,count:job.rows.length,repeated:true});const updates:Entity[]=[];
+  if(!roles(m))throw new AppError('无权导入内部订单。',403);const {id}=z.object({id:z.string()}).parse(await req.json()),job=s.records.find(r=>r.kind==='factory_import'&&r.id===id);if(!job||job.actorId!==m.id)throw new AppError('导入预览不存在或不属于你。',403);const results=job.rows.map((r:any)=>({orderId:r.order.id,orderVersion:r.order.version,factoryId:r.item.id,factoryVersion:r.item.version}));if(job.status==='已提交')return json({ok:true,count:job.rows.length,items:results,repeated:true});const updates:Entity[]=[];
   for(const r of job.rows){const before=all(s,'order').find(o=>o.id===r.order.id) as Order|undefined,prior=all(s,'factory_order').filter(v=>v.lineId===r.order.id).sort((a,b)=>b.version-a.version)[0];
    if(before&&!canRead(m,before)||!before&&!broad(m)&&!m.customers.includes(r.order.customer))throw new AppError('订单权限已变化。',403);
    if((before?.version||0)!==r.expectedOrderVersion||(prior?.version||0)!==r.expectedFactoryVersion||!before&&all(s,'order').some(o=>matchesOrderIdentity(o as Order,r.order)))throw new AppError('预览后订单已变化或历史图号已有对应明细，请重新上传核对。',409);
    if(before&&before.drawing!==r.order.drawing)throw new AppError('图纸编号已更正，请重新导出；内部订单导入不能回退图号。',409);
    if(!before)updates.push(r.order,audit(m,r.order,null,'表格导入内部订单',job.filename));updates.push(r.item,audit(m,r.item,prior||null,'表格保存双语草稿',job.filename));
-  }updates.push({...job,status:'已提交',submittedAt:now()});await commit(s.revision,updates);return json({ok:true,count:job.rows.length});
+  }updates.push({...job,status:'已提交',submittedAt:now()});await commit(s.revision,updates);return json({ok:true,count:job.rows.length,items:results});
  }
  if(action==='customer-import'){
   if(paymentTermsReadOnly(s,m))throw new AppError('当前账号仅有取数与总览权限，不能导入或修改客户责任清单。',403);
@@ -205,7 +205,32 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   await commit(s.revision,[item,...customerIdentityChanges(s,m,before,item),...workflowChanges,audit(m,item,before||null,'维护客户责任')]);return json({ok:true,item});
  }
  if(action==='factory-order-save'){
-  if(!roles(m))throw new AppError('仅业务、客服、PMC 或管理员可维护内部订单。',403);const input=z.object({lineId:z.string(),sourceEnglish:z.string().max(12000).default(''),chineseProcess:z.string().max(12000).default(''),materialSpec:z.string().max(4000).default(''),platingSpec:z.string().max(4000).default(''),lensSpec:z.string().max(4000).default(''),materialImageConfirmed:z.boolean().default(false),action:z.enum(['draft','service-confirm','pmc-confirm','release'])}).parse(await req.json()),o=orderFor(s,input.lineId);if(!canRead(m,o))throw new AppError('该订单不在你的可见范围内。',403);const history=all(s,'factory_order').filter(v=>v.lineId===o.id).sort((x,y)=>y.version-x.version),before=history[0];if(input.action==='service-confirm'&&(!input.sourceEnglish.trim()||!input.chineseProcess.trim()))throw new AppError('请先补齐客户原文和中文工艺描述。');if(['pmc-confirm','release'].includes(input.action)&&!broad(m))throw new AppError('仅 PMC 或管理员可确认生产资料或下发工厂。',403);const needsBoard=/胶|AC|combined|组合/i.test(clean(o.productType||o.ledger?.columns?.W));if(['pmc-confirm','release'].includes(input.action)&&needsBoard&&!input.materialImageConfirmed)throw new AppError('该产品需要 PMC 确认板料图片。');if(input.action==='release'&&before?.status!=='待下发工厂')throw new AppError('请先完成客服确认和 PMC 补图确认。');if(input.action==='release')assertHandoffProductionGate(s,m,o);const status=input.action==='draft'?'待客服确认':input.action==='service-confirm'?'待PMC补图':input.action==='pmc-confirm'?'待下发工厂':'已下发工厂',item={id:newId('factory_order'),kind:'factory_order',version:(before?.version||0)+1,priorId:before?.id||'',...input,status,serviceConfirmedBy:input.action==='service-confirm'?m.name:before?.serviceConfirmedBy||'',serviceConfirmedAt:input.action==='service-confirm'?now():before?.serviceConfirmedAt||'',pmcConfirmedBy:input.action==='pmc-confirm'?m.name:before?.pmcConfirmedBy||'',pmcConfirmedAt:input.action==='pmc-confirm'?now():before?.pmcConfirmedAt||'',releasedBy:input.action==='release'?m.name:'',releasedAt:input.action==='release'?now():'',createdAt:now(),createdBy:m.name};await commit(s.revision,[item,audit(m,item,before||null,'保存工厂内部订单',status)]);return json({ok:true,item});
+  if(!roles(m))throw new AppError('仅业务、客服、PMC 或管理员可维护内部订单。',403);
+  const input=z.object({lineId:z.string(),sourceEnglish:z.string().max(12000).default(''),chineseProcess:z.string().max(12000).default(''),materialSpec:z.string().max(4000).default(''),platingSpec:z.string().max(4000).default(''),lensSpec:z.string().max(4000).default(''),materialImageConfirmed:z.boolean().default(false),action:z.enum(['draft','service-confirm','pmc-confirm','release']),token:z.string().uuid().optional(),expectedVersion:z.number().int().nonnegative().optional(),orderVersion:z.number().int().positive().optional()}).parse(await req.json()),o=orderFor(s,input.lineId);
+  if(!canRead(m,o))throw new AppError('该订单不在你的可见范围内。',403);
+  // Legacy website saves remain compatible; protected callers provide all three fields.
+  const {token,expectedVersion,orderVersion,...values}=input;
+  if([token,expectedVersion,orderVersion].some(v=>v!==undefined)&&[token,expectedVersion,orderVersion].some(v=>v===undefined))throw new AppError('操作标识、内部订单版本及源订单版本须同时提供。');
+  if(['pmc-confirm','release'].includes(input.action)&&!broad(m))throw new AppError('仅 PMC 或管理员可确认生产资料或下发工厂。',403);
+  const fingerprint=token?await sha(JSON.stringify({values,expectedVersion,orderVersion})):'';
+  // Authenticate current scope before replaying an immutable historical result.
+  const priorRequest=token?all(s,'factory_order_request').find(r=>r.token===token):null;
+  if(priorRequest){if(priorRequest.actorId!==m.id||priorRequest.lineId!==o.id||priorRequest.fingerprint!==fingerprint)throw new AppError('操作标识已用于不同内容或账号。',409);
+  const item=all(s,'factory_order').find(r=>r.id===priorRequest.itemId);
+  if(!item)throw new AppError('原操作记录缺失，请核查，不能重复提交。',409);
+  return json({ok:true,item,idempotent:true});
+  }const history=all(s,'factory_order').filter(v=>v.lineId===o.id).sort((x,y)=>y.version-x.version),before=history[0];
+  if(expectedVersion!==undefined&&((before?.version||0)!==expectedVersion||o.version!==orderVersion))throw new AppError('内部订单或源订单已变化，请重新读取后再提交。',409);
+  if(input.action==='service-confirm'&&(!input.sourceEnglish.trim()||!input.chineseProcess.trim()))throw new AppError('请先补齐客户原文和中文工艺描述。');
+  if(['pmc-confirm','release'].includes(input.action)&&!broad(m))throw new AppError('仅 PMC 或管理员可确认生产资料或下发工厂。',403);
+  const needsBoard=/胶|AC|combined|组合/i.test(clean(o.productType||o.ledger?.columns?.W));
+  if(['pmc-confirm','release'].includes(input.action)&&needsBoard&&!input.materialImageConfirmed)throw new AppError('该产品需要 PMC 确认板料图片。');
+  if(input.action==='release'&&before?.status!=='待下发工厂')throw new AppError('请先完成客服确认和 PMC 补图确认。');
+  if(input.action==='release')assertHandoffProductionGate(s,m,o);
+  const status=input.action==='draft'?'待客服确认':input.action==='service-confirm'?'待PMC补图':input.action==='pmc-confirm'?'待下发工厂':'已下发工厂',item={id:newId('factory_order'),kind:'factory_order',version:(before?.version||0)+1,priorId:before?.id||'',...values,status,serviceConfirmedBy:input.action==='service-confirm'?m.name:before?.serviceConfirmedBy||'',serviceConfirmedAt:input.action==='service-confirm'?now():before?.serviceConfirmedAt||'',pmcConfirmedBy:input.action==='pmc-confirm'?m.name:before?.pmcConfirmedBy||'',pmcConfirmedAt:input.action==='pmc-confirm'?now():before?.pmcConfirmedAt||'',releasedBy:input.action==='release'?m.name:'',releasedAt:input.action==='release'?now():'',createdAt:now(),createdBy:m.name};
+  await commit(s.revision,[item,audit(m,item,before||null,'保存工厂内部订单',status),...(token?[{id:newId('factory_order_request'),kind:'factory_order_request',token,actorId:m.id,lineId:o.id,itemId:item.id,fingerprint,createdAt:now()}]:[])]);
+  return json({ok:true,item});
+
  }
  if(action==='workflow'){
   if(!roles(m))throw new AppError('没有交接权限。',403);const input=z.object({id:z.string(),version:z.number().int(),action:z.enum(['submit-service','return-business','submit-pmc','accept-pmc','save-pmc']),note:z.string().max(2000).default(''),productionStartDate:z.string().default(''),productionFinishDate:z.string().default(''),materialStatus:z.string().max(100).default(''),scheduleStatus:z.string().max(100).default(''),exceptionReason:z.string().max(2000).default(''),promisedDate:z.string().default('')}).parse(await req.json()),o=orderFor(s,input.id),account=accountFor(s,o.customer);if(o.version!==input.version)throw new AppError('订单已由其他同事修改，请刷新后重试。',409);let patch:Partial<Order>={handoffNote:input.note};

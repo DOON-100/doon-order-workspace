@@ -2,7 +2,7 @@
 
 基线：`2cd873e`，2026-10-27。本页由 `lib/department-workspace-navigation.ts` 的 `departmentRouteOrder` 明确列出的入口逐一登记；动态生成或落入管理组的旧入口仍待逐页扫描。清单是盘点起点，不表示这些页面可见于每个员工，也不表示已完成逐表单/字段/接口/权限核验。字段、动作、角色与范围、依赖和验收均须在对应批次补齐；不能将页面入口数量当作完成数量。页面表中的候选源码是按栏目归集的排查入口，不表示每个源码均适用于该页面，必须逐项核对。
 
-业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询和写入以 `cli/src/catalog.ts` 及 [写入阶段计划](cli-write-implementation-plan.md) 为准，W1 已部分接入客户主档、跟进、项目及询价，尚未覆盖全部字段和动作；处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
+业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询和写入以 `cli/src/catalog.ts` 及 [写入阶段计划](cli-write-implementation-plan.md) 为准，W1/W2已完成本地成品验收，W3订单/单据/内部交接已接入、阶段验收中；处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
 
 ### W1 表单与动作对应（本地成品验收通过）
 
@@ -23,9 +23,9 @@
 | 客户跟进工作台 | `followups create/update/list/show/action/mailbox/history`；`customer-project-followup-*` | 转项目/邮件归属是固定业务动作；邮件仅档案读取和归属登记，不对外发送 | 阶段验证纳入转项目、归属、历史及实际CLI进程 |
 | 需求/询价 | `inquiries create/update/list/show/history`；`process-save/data/history` | 限rfq、客户/组/负责人范围；未知数量与0分开 | 合成增改、版本、权限、原关联保留 |
 
-本批不增加客户物理删除或清除历史/附件原件。项目工程图纸、签样、正式下单在W4；报价在W2；订单及交接在W3；历史工作台批量迁入、模板及组织管理在W10；外部真实邮件发送按通讯功能独立审计，当前邮件归属不等于发送。完整安装包验收尚未完成，不能把开发覆盖当成全员可用。
+本批不增加客户物理删除或清除历史/附件原件。项目工程图纸、签样、正式下单在W4；报价在W2；订单及交接在W3；历史工作台批量迁入、模板及组织管理在W10；外部真实邮件发送按通讯功能独立审计，当前邮件归属不等于发送。W1本地安装包验收已通过；GitHub同步、CI下载来源核验及全员分发仍待完成。
 
-### W2 对应矩阵（功能接入完成，整阶段验收中）
+### W2 对应矩阵（本地成品175条命令验收通过）
 
 | 页面/表单 | 命令与接口 | 范围及保存语义 | 合成验证 |
 | --- | --- | --- | --- |
@@ -40,7 +40,7 @@
 | 历史价格、SKU发票依据和原件 | sales prices schema/list/archive/import/source-upload/source-download/export | 摘录按客户权限，导入/原件限管理员；新档案、摘要、不覆盖历史 | 内容去重、原件不覆盖、跨角色拒绝、来源摘要与导出 |
 | 发票价格规则和镜片说明 | sales prices selection-save | 报价管理员，版本及当前规则SHA；未指定说明保留 | 首次/更新/旧版本拒绝、无改动重放、普通人员拒绝 |
 
-人员绑定、个人通知邮箱、真实SMTP发送与其他通讯配置在W10单独覆盖；本批没有外部邮件发送。阶段检查以进度计划和成品验收记录为准，当前不能把175条命令开发完成写成最新成品已验收。
+人员绑定、个人通知邮箱、真实SMTP发送与其他通讯配置在W10单独覆盖；本批没有外部邮件发送。阶段检查以进度计划和成品验收记录为准，0.31.0已通过实际安装后175条命令验收，远端同步和CI来源复核待网络恢复。
 
 | 栏目 | 页面/入口标识 | 计划批次 | 表单与字段 | 动作/接口 | 角色与记录范围 | 验收 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -116,6 +116,25 @@
 | 系统管理 | `members` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
 | 系统管理 | `maintenance` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
 | 系统管理 | `business-tools` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
+
+
+### W3 对应矩阵（33条新命令已接入，前32条进程通过，成品验收中）
+
+| 页面/表单 | 命令与接口 | 权限、版本与数据语义 | 验证 |
+| --- | --- | --- | --- |
+| 客户订单字段 | `sales orders schema/form/update`；`data/edit-order` | 服务端原角色字段白名单、按字段冲突合并；仅提交patch | 合成增量修改、越权及回读 |
+| 业务客服PMC交接 | `sales orders workflow --type`；`workflow` | 原客户责任及订单版本；不代为确认责任，不开放W5排期 | 合成提交客服及拒绝无权调用 |
+| 销售原单结构化证据 | `sales sources schema/import`；`sales-order-sources-import/data` | 管理员、UUID、完整来源摘要、同号资料不可覆盖，不创建生产需求 | 合成迁入、重放及普通业务拒绝 |
+| 中英内部订单 | `purchasing factory-orders schema/form/export/save --type`；`factory-orders/factory-order-save` | 旧服务器先拒绝；内部和源订单版本、员工与完整载荷绑定UUID；保留历史和生产门禁 | 合成旧版本/旧源版本/不同载荷UUID/跨账号/并发/后续版本后的原请求重放 |
+| 内部订单表格 | `table-preview/table-commit`；`factory-order-table-*` | 本人预览、双版本原子检查、保留源订单数量身份；提交返回ID并真实回读 | 合成新订单及草稿、预览后变更拒绝、重复预览提交不重复建单 |
+| 客户PO及工程/生产交接资料 | `service documents schema/references/form/save --kind source --type`；`handoff-business-*` | PO/工程资料/生产交接用统一字段保存；字段按键合并，数组完整替换 | 合成指定字段保留、来源/订单精确关联、越权及旧版 |
+| PI及现有单据 | `save --kind document/generate/action --type`；`handoff-business-*` | 明确来源版本，PI从PO生成，指定负责人核对；物流来源与财务请款另按W7/W8补齐前提 | 合成生成、提交、本人核对、管理员不能替代负责人及旧依据检测 |
+| 单据和交接原件 | `files/file-upload/file-download`；`handoff-business-attachment/file` | 10MiB、UUID、版本、不可变原件及摘要；下载不覆盖本地原文件 | 合成上传、原字节核对及已有文件拒绝 |
+| 中英原单上传及草稿 | `sales kingdee source-template/source-preview/source-commit/source-download/prepare`；`kingdee-sales-*` | 8MiB原件，预览保存原件但不提交；本人确认提交，保留摘要和原单行标识 | 合成模板、预览归属、重复提交、原件摘要与不可覆盖 |
+| 金蝶销售草稿 | `schema/status/list/form/save/action/export`；`kingdee-sales-*` | 版本、原单全行、真实客服责任及有效确认；validate也写版本，配置存在时可能外部只读查询 | 合成增改、全单校验、客服确认、标准模板导出 |
+| 金蝶真实上传/核查 | 共用`action --type upload/reconcile` | 原服务器就绪/配置/开关/确认和上传留痕；当前协议缺口继续拒绝真实上传，不重试 | 本地无金蝶配置时拒绝，无真实ERP请求；不宣称端到端真实上传通过 |
+
+不增加订单、原单、单据或历史的物理删除；出货来源维护按W7，财务依据按W8，组织、模板配置及全局历史导入按W10继续。旧网站的内部订单保存调用保留原语义，CLI的新保护必须配套部署网站版本。本批Git提交不触发部署。
 
 ## 重点共用表单及已发现的边界
 
@@ -213,7 +232,7 @@ PMC `pmc-save` 批量变更字段需 id、version、col、value，并按同一�
 ## 其他已确认的接口差异
 
 - `process-save` 更新必须匹配当前版本，新建不得携带旧版本；类型、客户、订单和业务组不可改绑。`token` 可选，服务端按员工和请求指纹检测复用；缺省字段有默认值，更新前仍须核对完整表单语义及并发。各类型 `details` 的字段和权限不相同。
-- `factory-order-save` 的动作字段区分草稿、客服确认、PMC 确认和下发；多个文本字段有空值默认，当前请求 schema 未提供版本或 token。历史会新增版本，但不等于客户端的过期保护或请求去重。W3 接入前须补充或验证针对相应动作的服务器并发、幂等及回读契约，不把下发简化为普通保存。
+- `factory-order-save` 的动作字段区分草稿、客服确认、PMC 确认和下发；多个文本字段有空值默认，W3已补可选token/expectedVersion/orderVersion，三者须一起提供，CLI强制使用。按当前账号、明细及完整内容指纹绑定原操作，新增写入原子复核双版本，重放回读原不可变历史；GET响应契约标识阻止旧服务器静默忽略新保护字段。原网站无新字段的旧调用保持兼容，不将下发简化为普通保存。
 - `workflow` 是另一个订单交接入口，携带订单 `version` 和动作；业务、客服、PMC 各自的责任校验不同，不能仅靠读取订单权限调用。以上是源码审计线索，具体功能仍需独立合成测试。
 
 ## 缺口状态

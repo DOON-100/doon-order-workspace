@@ -10,7 +10,9 @@ import {build} from 'esbuild';
 import * as XLSX from 'xlsx';
 import {StateStore, windowsCodec} from '../../dist/state.js';
 import {FoundationService} from '../../dist/service.js';
-import {commands} from '../../dist/catalog.js';
+import {commands,orderWriteCommands} from '../../dist/catalog.js';
+import {verifyOrderWrites} from './order-writes.mjs';
+const orderWriteNames=new Set(orderWriteCommands.map(row=>row.name));
 import {temporary, root, testCodec} from '../helpers.mjs';
 import {verifyQuoteFiles} from './quote-files.mjs';
 import {verifyPriceArchive} from './price-archive.mjs';
@@ -175,7 +177,7 @@ try{
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
     const ids={'customer-tasks':'customer-task1',attachments:'customer-file1',followups:'followup1',customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1',records:'charge1',receivables:'receivable1',reconciliations:'recon1',complaints:'complaint1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
-    for(const spec of [...commands.filter(c=>c.name!=='logout'&&c.effect!=='business-write'),commands.find(c=>c.name==='logout')]){
+    for(const spec of [...commands.filter(c=>!orderWriteNames.has(c.name)&&c.name!=='logout'&&c.effect!=='business-write'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
       if(parts.length===1)args.push(...argumentsFor[spec.name]);
       else if(spec.name==='sales prices schema')args.push('--type','dataset');
@@ -183,9 +185,9 @@ try{
       else if(spec.name==='sales prices archive')args.push('price-archive1');
       else if(spec.name==='sales prices source-download')args.push('price-archive1','price-source1','--output',path.join(dir,'price-initial-copy.png'));
       else if(spec.name==='sales prices export')args.push('--customer','c1','--view','history','--output',path.join(dir,'price-initial.xlsx'));
-      else if(spec.name.endsWith(' file-schema'))args.push('--type',parts[0]==='sales'?'media':'drawing');
-      else if(spec.name.endsWith(' file-list'))args.push(parts[0]==='sales'?'q1':'ie1','--version','2');
-      else if(spec.name.endsWith(' file-download'))args.push(parts[0]==='sales'?'q1':'ie1','--type',parts[0]==='sales'?'media':'drawing','--id',parts[0]==='sales'?'quote-media1':'ie-file1','--version','2','--output',path.join(dir,'quote-file-'+parts[0]+'.png'));
+      else if(['sales quotes file-schema','engineering ie-quotes file-schema'].includes(spec.name))args.push('--type',parts[0]==='sales'?'media':'drawing');
+      else if(['sales quotes file-list','engineering ie-quotes file-list'].includes(spec.name))args.push(parts[0]==='sales'?'q1':'ie1','--version','2');
+      else if(['sales quotes file-download','engineering ie-quotes file-download'].includes(spec.name))args.push(parts[0]==='sales'?'q1':'ie1','--type',parts[0]==='sales'?'media':'drawing','--id',parts[0]==='sales'?'quote-media1':'ie-file1','--version','2','--output',path.join(dir,'quote-file-'+parts[0]+'.png'));
       else if(spec.name==='engineering ie-quotes file-export')args.push('ie1','--type','draft','--version','2','--output',path.join(dir,'ie-draft-query.xlsx'));
       else if(spec.name==='sales quotes templates')args.push('--customer','c1');
       else if(spec.name.includes(' reference-'))args.push('--type','catalog');
@@ -211,7 +213,7 @@ try{
       if(spec.name==='logout')assert.equal(value.data.serverRevoked,true);
       else assert.deepEqual(snapshot(),before,'Business calls must preserve records and revision: '+spec.name);
     }
-    assert.equal(testedCommands.length,commands.filter(c=>c.effect!=='business-write').length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
+    assert.equal(testedCommands.length,commands.filter(c=>!orderWriteNames.has(c.name)&&c.effect!=='business-write').length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
   }
   assert.deepEqual(snapshot().records,before.records);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
   // W0 contract: run the shared write framework against the real process handler,
@@ -245,7 +247,7 @@ try{
     }finally{if(originalRoute)routes[route]=originalRoute;else delete routes[route];}
   }
   // W1: current user, other customer denied, idempotent replay, and preserved private fields.
-  if(!process.argv.includes('--w2-only')){
+  if(!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')){
     const writeA=services.sales_a.foundation.salesWrite(),writeB=services.sales_b.foundation.salesWrite(),childA=services.sales_a.foundation.projectChildWrite(),childB=services.sales_b.foundation.projectChildWrite();
     const profileInput=path.join(dir,'profile-input.json'),scheduleInput=path.join(dir,'schedule-input.json'),projectInput=path.join(dir,'project-input.json'),inquiryInput=path.join(dir,'inquiry-input.json'),itemInput=path.join(dir,'item-input.json'),communicationInput=path.join(dir,'communication-input.json'),roundInput=path.join(dir,'round-input.json');
     const profileToken='11111111-1111-4111-8111-111111111111',scheduleToken='22222222-2222-4222-8222-222222222222',projectToken='55555555-5555-4555-8555-555555555555',inquiryToken='66666666-6666-4666-8666-666666666666';
@@ -413,7 +415,7 @@ try{
     pass();
   }
   // W2: exercise the shared quote adapter against real handlers with new records only.
-  {
+  if(!process.argv.includes('--w3-only')){
     const beforeW2=snapshot(),quoteA=services.sales_a.foundation.quoteWrite(),quoteB=services.sales_b.foundation.quoteWrite(),quoteAdmin=services.admin_test.foundation.quoteWrite();
     const inputFile=path.join(dir,'w2-quote.json'),input=async value=>{await fs.writeFile(inputFile,JSON.stringify(value));return inputFile;};
     const customerFields=(await quoteA.form('customer','q1')).record;delete customerFields.id;delete customerFields.version;Object.assign(customerFields,{customerName:'Synthetic Alpha',customerCode:'C1',quoteNo:'SYNTHETIC-CLI-CUSTOMER',reviewNotes:[],terms:customerFields.terms.map(row=>({...row,needsReview:false}))});
@@ -463,8 +465,13 @@ try{
       await new FoundationService(processState).logout();
     }
     const afterW2=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW2.records)assert.equal(afterW2.get(row.id),row.data,'Quote writes changed unrelated original records');
-    if(!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only'))assert.equal(testedCommands.length,commands.length);
+
   }
+  if(!process.argv.includes('--w2-only')){
+    const beforeW3=snapshot();testedCommands.push(...await verifyOrderWrites({services,dir,origin,env,root,pass}));
+    const afterW3=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW3.records)assert.equal(afterW3.get(row.id),row.data,'W3 changed unrelated original records');
+  }
+  if(!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only'))assert.equal(testedCommands.length,commands.length);
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{

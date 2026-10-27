@@ -4,18 +4,19 @@ import {readWriteInput, type WriteObject, type WriteSchema} from './write-input.
 // An adapter is defined by the resource implementation, never by CLI input.
 export type WriteAdapter<T> = {
   schema: WriteSchema;
+  maxInputBytes?: number;
   versionField?: string;
   versionMin?: 0 | 1;
   tokenField?: string;
   send: (payload: WriteObject) => Promise<T>;
-  validate?: (payload: WriteObject) => void;
+  validate?: (payload: WriteObject) => void | Promise<void>;
   readBack: (response: T, payload: WriteObject) => Promise<unknown>;
 };
 export type WriteOptions = {file: string; version?: number; token?: string};
 
 export async function executeWrite<T>(adapter: WriteAdapter<T>, options: WriteOptions): Promise<unknown> {
-  const payload = await readWriteInput(options.file, adapter.schema);
-  adapter.validate?.(payload);
+  const payload = await readWriteInput(options.file, adapter.schema, adapter.maxInputBytes);
+  await adapter.validate?.(payload);
   if (adapter.versionField) {
     if (!Number.isSafeInteger(options.version) || (options.version as number) < (adapter.versionMin ?? 1) || Object.hasOwn(payload, adapter.versionField))
       throw new CliError('INVALID_INPUT', '需要符合该业务规则的整数版本，且不能在输入文件中重复提供。', 2);

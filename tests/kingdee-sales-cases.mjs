@@ -9,7 +9,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 const digest=value=>createHash('sha256').update(typeof value==='string'?value:JSON.stringify(value)).digest('hex');
 const at='2026-10-22T00:00:00.000Z',prefix='synthetic_kingdee_sales_',id=name=>prefix+name;
 const templateHeaders=['*单据编号 # billno','*单据日期 # billdate','*客户.编码 # customerid.number','*业务员.名称 # empid.name','*币别.名称 # currencyid.name','*汇率 # exchangerate','*业务类型 # transtype','*商品.编码 # materialid.number','*单位.名称 # unit.name','*数量 # qty','*单价 # price','*增值税税率（%） # cess','是否赠品 # is_free','*预计交货日期 # deliverydate','*客户订单号 # custbillno'];
-function templateFixture(){
+export function syntheticKingdeeSalesTemplate(){
  const book=XLSX.utils.book_new(),sheet=XLSX.utils.aoa_to_sheet([['SYNTHETIC KINGDEE SALES TEMPLATE'],['Synthetic instructions'],templateHeaders,['SYNTHETIC OLD ORDER DO NOT EXPORT','2026-10-01','OLD','OLD','OLD',1,'赊销','OLD','PCS',999,999,13,'否','2026-11-01','OLD']]);
  sheet['!merges']=[XLSX.utils.decode_range('A1:O1'),XLSX.utils.decode_range('A2:O2')];sheet.K4.z='0.00';
  XLSX.utils.book_append_sheet(book,sheet,'sheet1（名称勿改）');XLSX.utils.book_append_sheet(book,XLSX.utils.aoa_to_sheet([['Synthetic dictionary'],['USD'],['PCS']]),'基础资料（名称勿改）');
@@ -83,7 +83,7 @@ export async function testKingdeeSales({api,identity,admin,env=globalThis.__test
   assert.equal(calls.length,0);
   pass('服务端拒绝草稿旧版本、未勾选确认和非本客户人员编辑，预览及本地编辑不调用金蝶写接口');
 
-  const templateBytes=templateFixture(),template={id:id('template'),kind:'collaboration_template',templateType:'kingdee',filename:'synthetic-official-sales-template.xlsx',fileKey:id('template_file'),sheet:'sheet1（名称勿改）',header:3,headers:templateHeaders,actorId:id('admin'),actor:'Synthetic ERP admin',createdAt:at};
+  const templateBytes=syntheticKingdeeSalesTemplate(),template={id:id('template'),kind:'collaboration_template',templateType:'kingdee',filename:'synthetic-official-sales-template.xlsx',fileKey:id('template_file'),sheet:'sheet1（名称勿改）',header:3,headers:templateHeaders,actorId:id('admin'),actor:'Synthetic ERP admin',createdAt:at};
   files.set(template.fileKey,templateBytes);rawPut(template);
   const validInputs=record=>({...record.inputs,billDate:'2026-10-22',employeeName:'Synthetic Employee',currencyName:'USD',exchangeRate:'1',businessType:'赊销',taxMode:'exclusive',lines:record.inputs.lines.map(line=>({...line,categoryCode:'TI',finishCode:'IPBLACK',taxRate:'13',deliveryDate:'2026-11-22'}))});
   draft=(await mutate('kingdee-sales-save',{id:draft.id,version:draft.version,inputs:validInputs(draft)},users.service)).item;
@@ -187,7 +187,7 @@ export async function testKingdeeSales({api,identity,admin,env=globalThis.__test
 
   const sourceChanged=structuredClone(sourceA);sourceChanged.source.lines[0].quantity=13;sourceChanged.contentFingerprint=digest(sourceChanged.source);rawPut(sourceChanged);
   assert.equal((await request('kingdee-sales-upload',{body:{id:draft.id,version:draft.version},user:users.service})).status,409);assert.equal(salesPosts().length,postsBefore);rawPut(sourceA);
-  const changedTemplate=templateFixture();const templateZip=unzipSync(changedTemplate);templateZip['xl/worksheets/sheet1.xml']=strToU8(strFromU8(templateZip['xl/worksheets/sheet1.xml']).replace('SYNTHETIC KINGDEE SALES TEMPLATE','CHANGED SYNTHETIC TEMPLATE'));files.set(template.fileKey,zipSync(templateZip));
+  const changedTemplate=syntheticKingdeeSalesTemplate();const templateZip=unzipSync(changedTemplate);templateZip['xl/worksheets/sheet1.xml']=strToU8(strFromU8(templateZip['xl/worksheets/sheet1.xml']).replace('SYNTHETIC KINGDEE SALES TEMPLATE','CHANGED SYNTHETIC TEMPLATE'));files.set(template.fileKey,zipSync(templateZip));
   assert.equal((await request('kingdee-sales-upload',{body:{id:draft.id,version:draft.version},user:users.service})).status,409);assert.equal(salesPosts().length,postsBefore);files.set(template.fileKey,templateBytes);
   const badTemplateBook=XLSX.read(templateBytes);badTemplateBook.Sheets['sheet1（名称勿改）'].P3={t:'s',v:'UNSUPPORTED EXTRA COLUMN'};badTemplateBook.Sheets['sheet1（名称勿改）']['!ref']='A1:P4';files.set(template.fileKey,XLSX.write(badTemplateBook,{type:'buffer',bookType:'xlsx'}));
   assert.equal((await request('kingdee-sales-export?id='+draft.id+'&version='+draft.version,{user:users.service})).status,400);files.set(template.fileKey,templateBytes);

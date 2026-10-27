@@ -62,7 +62,7 @@ async function main() {
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
-  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'project-child-write.js', 'project-entries.js', 'followup-actions.js', 'quote-write.js', 'quote-resources.js', 'quote-handoffs.js', 'quote-files.js', 'price-archive.js', 'quote-schemas.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
+  const distFiles = ['documents-write.js', 'order-schemas.js', 'order-write.js', 'kingdee-sales.js', 'order-write-catalog.js', 'order-write-program.js', 'business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'project-child-write.js', 'project-entries.js', 'followup-actions.js', 'quote-write.js', 'quote-resources.js', 'quote-handoffs.js', 'quote-files.js', 'price-archive.js', 'quote-schemas.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));

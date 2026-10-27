@@ -1,3 +1,4 @@
+import {commands,foundationCommands} from '../dist/catalog.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -23,7 +24,7 @@ test('machine catalogs report implemented sales queries and keep other modules p
   const result = await invoke(['commands', '--json']); assert.equal(result.code, 0); assert.equal(result.stderr, '');
   const parsed = JSON.parse(result.stdout); assert.equal(parsed.schema, 'doon-cli-output-v1'); assert(parsed.ok);
   assert.deepEqual(parsed.data.slice(0,7).map(row => row.name), ['setup', 'login', 'logout', 'whoami', 'doctor', 'commands', 'modules']);
-  assert.equal(parsed.data.length, 175); assert(parsed.data.some(row => row.name === 'sales quotes version')); assert(parsed.data.some(row=>row.name==='service pi version'));assert(parsed.data.some(row=>row.name==='engineering ie-quotes version'));assert(parsed.data.some(row=>row.name==='purchasing purchases history'));assert(parsed.data.some(row=>row.name==='operations shipments history'));assert(parsed.data.some(row=>row.name==='finance records history'));
+  assert.equal(parsed.data.length, commands.length); assert(parsed.data.some(row => row.name === 'sales quotes version')); assert(parsed.data.some(row=>row.name==='service pi version'));assert(parsed.data.some(row=>row.name==='engineering ie-quotes version'));assert(parsed.data.some(row=>row.name==='purchasing purchases history'));assert(parsed.data.some(row=>row.name==='operations shipments history'));assert(parsed.data.some(row=>row.name==='finance records history'));
   const groups = JSON.parse((await invoke(['modules', '--json'])).stdout).data;
   assert.equal(groups.length, 11); assert.equal(groups.find(row => row.id === 'sales').status, 'partial');
   assert.equal(groups.find(row=>row.id==='service').status,'partial');

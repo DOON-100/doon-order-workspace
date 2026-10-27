@@ -1,0 +1,44 @@
+import {orderWriteCommands} from './order-write-catalog.js';
+import {Command} from 'commander';
+import {FoundationService} from './service.js';
+export function registerOrderWrites(program:Command,foundation:()=>FoundationService,result:(name:string,data:unknown)=>void){
+ const group=(namespace:string,name:string)=>{const parent=program.commands.find(command=>command.name()===namespace)!;return parent.commands.find(command=>command.name()===name)||parent.command(name);};
+ const input=(command:Command)=>command.requiredOption('--input <file>','JSON输入文件');
+ const version=(command:Command)=>command.requiredOption('--version <number>','当前版本，新增支持时为0');
+ const request=(command:Command)=>command.requiredOption('--request-id <uuid>','操作UUID');
+ const orders=group('sales','orders'),sources=group('sales','sources'),factory=group('purchasing','factory-orders'),documents=group('service','documents'),kingdee=group('sales','kingdee');
+ orders.command('schema').requiredOption('--type <type>','order|workflow').action(o=>result('sales orders schema',foundation().orderWrite().schema(o.type)));
+ orders.command('form <id>').action(async id=>result('sales orders form',await foundation().orderWrite().order(id)));
+ version(input(orders.command('update'))).action(async o=>result('sales orders update',await foundation().orderWrite().update(o.input,o.version)));
+ version(input(orders.command('workflow').requiredOption('--type <type>','submit-service|return-business|submit-pmc|accept-pmc'))).action(async o=>result('sales orders workflow',await foundation().orderWrite().workflow(o.type,o.input,o.version)));
+ sources.command('schema').action(()=>result('sales sources schema',foundation().orderWrite().schema('source')));
+ request(input(sources.command('import'))).action(async o=>result('sales sources import',await foundation().orderWrite().importSource(o.input,o.requestId)));
+ factory.command('schema').requiredOption('--type <type>','factory|table').action(o=>result('purchasing factory-orders schema',foundation().orderWrite().schema(o.type)));
+ factory.command('form <lineId>').action(async id=>result('purchasing factory-orders form',await foundation().orderWrite().factory(id)));
+ factory.command('export').requiredOption('--order <id>','订单明细ID，一次导出一行').option('--reference <text>','翻单参考').requiredOption('--output <file.xlsx>','新输出文件').action(async o=>result('purchasing factory-orders export',await foundation().orderWrite().exportFactory(o.order,o.output,o.reference)));
+ request(version(input(factory.command('save').requiredOption('--type <type>','draft|service-confirm|pmc-confirm|release').requiredOption('--order-version <number>','源订单当前版本')))).action(async o=>result('purchasing factory-orders save',await foundation().orderWrite().saveFactory(o.type,o.input,o.version,o.orderVersion,o.requestId)));
+ input(factory.command('table-preview').requiredOption('--file <file.xlsx>','中英内部订单XLSX')).action(async o=>result('purchasing factory-orders table-preview',await foundation().orderWrite().tablePreview(o.input,o.file)));
+ input(factory.command('table-commit')).action(async o=>result('purchasing factory-orders table-commit',await foundation().orderWrite().tableCommit(o.input)));
+ documents.command('schema').requiredOption('--kind <kind>','source|document').requiredOption('--type <type>','po|engineering_drawing|engineering_quote|production_order|pi|invoice|packing|paymentrequest|waybill').action(o=>result('service documents schema',foundation().documentsWrite().schema(o.kind,o.type)));
+ documents.command('references').option('--kind <kind>','source|document').option('--type <type>','类型').option('--customer <id>','客户ID').option('--limit <number>','每页条数','20').option('--offset <number>','起始偏移','0').action(async o=>result('service documents references',await foundation().documentsWrite().references(o)));
+ documents.command('form <id>').action(async id=>result('service documents form',await foundation().documentsWrite().form(id)));
+ request(version(input(documents.command('save').requiredOption('--kind <kind>','source|document').requiredOption('--type <type>','资料或单据类型')))).action(async o=>result('service documents save',await foundation().documentsWrite().save(o.kind,o.type,o.input,o.version,o.requestId)));
+ request(version(input(documents.command('action').requiredOption('--type <type>','submit|return|confirm')))).action(async o=>result('service documents action',await foundation().documentsWrite().action(o.type,o.input,o.version,o.requestId)));
+ request(version(input(documents.command('generate').requiredOption('--type <type>','pi|invoice|packing|paymentrequest|waybill')))).action(async o=>result('service documents generate',await foundation().documentsWrite().generate(o.type,o.input,o.version,o.requestId)));
+ documents.command('files <id>').action(async id=>result('service documents files',await foundation().documentsWrite().files(id)));
+ request(version(input(documents.command('file-upload').requiredOption('--file <file>','原件路径')))).action(async o=>result('service documents file-upload',await foundation().documentsWrite().upload(o.input,o.file,o.version,o.requestId)));
+ documents.command('file-download <id> <fileId>').requiredOption('--output <file>','新输出文件').action(async(id,fileId,o)=>result('service documents file-download',await foundation().documentsWrite().download(id,fileId,o.output)));
+ kingdee.command('schema').action(()=>result('sales kingdee schema',foundation().kingdeeSales().schema()));
+ kingdee.command('status').action(async()=>result('sales kingdee status',await foundation().kingdeeSales().status()));
+ kingdee.command('list').option('--customer <value>','原单客户值').option('--limit <number>','每页条数','20').option('--offset <number>','起始偏移','0').action(async o=>result('sales kingdee list',await foundation().kingdeeSales().list(o)));
+ kingdee.command('form <id>').action(async id=>result('sales kingdee form',await foundation().kingdeeSales().form(id)));
+ input(kingdee.command('prepare')).action(async o=>result('sales kingdee prepare',await foundation().kingdeeSales().prepare(o.input)));
+ version(input(kingdee.command('save'))).action(async o=>result('sales kingdee save',await foundation().kingdeeSales().save(o.input,o.version)));
+ version(input(kingdee.command('action').requiredOption('--type <type>','validate|confirm|upload|reconcile'))).action(async o=>result('sales kingdee action',await foundation().kingdeeSales().action(o.type,o.input,o.version)));
+ kingdee.command('source-preview').requiredOption('--file <file.xlsx>','中英原单XLSX').action(async o=>result('sales kingdee source-preview',await foundation().kingdeeSales().sourcePreview(o.file)));
+ input(kingdee.command('source-commit')).action(async o=>result('sales kingdee source-commit',await foundation().kingdeeSales().sourceCommit(o.input)));
+ kingdee.command('source-template').requiredOption('--output <file.xlsx>','新输出文件').action(async o=>result('sales kingdee source-template',await foundation().kingdeeSales().download('template','',o.output)));
+ kingdee.command('source-download <id>').requiredOption('--output <file.xlsx>','新输出文件').action(async(id,o)=>result('sales kingdee source-download',await foundation().kingdeeSales().download('source',id,o.output)));
+ version(kingdee.command('export <id>').requiredOption('--output <file.xlsx>','新输出文件')).action(async(id,o)=>result('sales kingdee export',await foundation().kingdeeSales().download('export',id,o.output,o.version)));
+ for(const spec of orderWriteCommands){const [namespace,resource,action]=spec.name.split(' ');group(namespace,resource).commands.find(command=>command.name()===action)!.description(spec.description);}
+}

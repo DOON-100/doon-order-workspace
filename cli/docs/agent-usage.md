@@ -26,3 +26,10 @@ IE 报价不能用 `--team`，按服务器授权及可选客户ID读取，含工
 ## W1 客户资料与排程
 
 对于已经明确的操作，使用 `sales customers create`、`sales customers master-update`、`sales customers followup-add`、`sales customers profile-update` 、`sales customers schedule-set` 、`sales projects create` 、`sales projects update` 、`sales projects trash`、`sales projects restore`、`sales inquiries create`、`sales inquiries update`、`sales projects item-add`、`sales projects item-update`、`sales projects round-update` 或 `sales projects communication-add` 或 `sales projects round-add` 或 `sales followups create`、`sales followups update`，以及 `sales projects task-create`、`task-update`、`task-submit`、`task-review`，按业务部说明准备 JSON 文件和操作 UUID，更新操作提供当前版本；CLI 不增加确认逻辑。不要更改未指定的资料字段，不用命令行传入账号密码或会话。出现 `outcomeUnknown` 或 `READBACK_FAILED` 时先查询原结果，不自行生成新 UUID 重复提交。仅同一操作、同一内容可使用原 UUID 复核重放；无权限或版本变化时停止并报告。
+
+
+## W2与W3
+
+报价、目录、交接、报价文件与历史价格按`sales.md`和`engineering.md`说明使用。订单指定字段修改、交接、原单、工厂内部订单、PI等单据及金蝶草稿按[订单说明](orders.md)使用；相同表单采用`save/action --type`参数复用。内部订单必须先核对服务器版本保护契约，读到旧服务器时停止写入并报告需更新网站。预览命令本身可能保存预览或原件，不能宣称完全只读。服务端已有核对字段和人员责任继续有效，不额外增加CLI确认提示。
+
+金蝶真实上传有现有服务端协议缺口，`sales kingdee status`会显示；不得将命令可解析当作已上传或擅自修改开关。测试与示例使用合成资料，运行前核对配置的公司服务器；不要把账号密码、会话或业务原件提交公开仓库。

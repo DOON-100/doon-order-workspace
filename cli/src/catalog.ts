@@ -1,4 +1,6 @@
-export const version = '0.31.0';
+import {orderWriteCommands} from './order-write-catalog.js';
+export {orderWriteCommands} from './order-write-catalog.js';
+export const version = '0.32.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -130,7 +132,7 @@ export const quoteWriteCommands=['sales quotes','engineering ie-quotes'].flatMap
  {name:prefix+' save',namespace:prefix.split(' ')[0],usage:prefix+' save --input <file> [--version <number>]',description:'新增报价或更新指定字段并回读',effect:'business-write'},
  {name:prefix+' action',namespace:prefix.split(' ')[0],usage:prefix+' action --type <type> --input <file> --version <number>',description:'执行既有报价业务动作并回读',effect:'business-write'}
 ]);
-export const commands = [...foundationCommands, ...priceArchiveCommands, ...quoteFileCommands, ...quoteReferenceCommands, ...quoteWriteCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const commands = [...foundationCommands, ...orderWriteCommands, ...priceArchiveCommands, ...quoteFileCommands, ...quoteReferenceCommands, ...quoteWriteCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -138,4 +140,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id==='sales'?priceArchiveCommands.map(c=>c.name):[]),...quoteFileCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id==='engineering'?quoteReferenceCommands.map(c=>c.name):[]),...quoteWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...orderWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id==='sales'?priceArchiveCommands.map(c=>c.name):[]),...quoteFileCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id==='engineering'?quoteReferenceCommands.map(c=>c.name):[]),...quoteWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

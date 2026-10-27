@@ -1,3 +1,4 @@
+import {registerOrderWrites} from './order-write-program.js';
 import {Command, CommanderError} from 'commander';
 import {commands, foundationCommands, salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
@@ -230,6 +231,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       command.action(async(...args:any[])=>result(spec.name,await foundation().finance().execute(resource as FinanceResource,spec.action as FinanceAction,command.opts(),spec.action==='list'?undefined:args[0])));
     }
   }
+  registerOrderWrites(program,foundation,result);
   try {
     await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});

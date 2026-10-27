@@ -1,3 +1,6 @@
+import {BusinessDocumentWriteService} from './documents-write.js';
+import {OrderWriteService} from './order-write.js';
+import {KingdeeSalesService} from './kingdee-sales.js';
 import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
@@ -11,7 +14,7 @@ import {QuoteHandoffService} from './quote-handoffs.js';
 import {QuoteFileService} from './quote-files.js';
 import {PriceArchiveService} from './price-archive.js';
 import {SalesService} from './sales.js';
-import {priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {orderWriteCommands, priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -46,6 +49,9 @@ export class FoundationService {
   customerAttachments() { return new CustomerAttachmentService(this.store, this.transport); }
   customerTransfers() { return new CustomerTransferService(this.store, this.transport); }
   customerTasks() { return new CustomerTaskService(this.store, this.transport); }
+  documentsWrite() { return new BusinessDocumentWriteService(this.store, this.transport); }
+  orderWrite() { return new OrderWriteService(this.store, this.transport); }
+  kingdeeSales() { return new KingdeeSalesService(this.store, this.transport); }
   orders() { return new OrderService(this.store, this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
@@ -114,6 +120,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: orderWriteCommands.length + priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

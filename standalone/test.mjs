@@ -9,7 +9,7 @@ const dist=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist'),dir=await fs.mkd
 const env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const text=await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8'),initial=text.match(/初始密码：([^\n]+)/)[1];
-const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
+const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});const serverDone=new Promise(resolve=>server.once('exit',resolve));let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
 const checks=[];function pass(s){checks.push(s);console.log('PASS '+s);}
 let adminCookie='',clerkCookie='';
 async function request(route,body,cookie='',extra={}){return fetch(origin+route,{method:body===undefined?'GET':'POST',headers:{...(body===undefined?{}:{Origin:origin}),...(body instanceof FormData?{}:{'Content-Type':'application/json'}),...(cookie?{Cookie:cookie}:{}),...extra},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)});}
@@ -95,4 +95,11 @@ try{
  for(let i=0;i<8;i++)assert.equal((await request('/api/auth/login',{username:'nobody',password:'wrong'})).status,401);assert.equal((await request('/api/auth/login',{username:'nobody',password:'wrong'})).status,429);pass('错误登录次数限制生效');
  assert.equal((await request('/lan-data/workspace.sqlite')).status,404);assert.equal((await request('/api/auth/backup',undefined,clerkCookie)).status,401);await ok('/api/auth/logout',{},adminCookie);assert.equal((await request('/api/workspace/data',undefined,adminCookie)).status,401);pass('数据文件不静态公开，退出后不可继续操作');
  await fs.writeFile(path.join(dir,'results.json'),JSON.stringify({checks,at:new Date().toISOString()},null,2));console.log(`完成 ${checks.length} 项内网 HTTP 测试`);
-}finally{server.kill();}
+}finally{
+ server.kill();await serverDone;
+ if(process.env.DOON_TEST_CLEANUP==='1'){
+  const base=path.resolve('test-output'),target=path.resolve(dir);
+  if(path.dirname(target)!==base||!path.basename(target).startsWith('lan-test-'))throw Error('Unsafe native test cleanup');
+  await fs.rm(target,{recursive:true,force:true});assert.equal(await fs.stat(target).then(()=>true,()=>false),false);
+ }
+}

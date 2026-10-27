@@ -1,3 +1,4 @@
+import {commands,foundationCommands} from '../dist/catalog.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -83,7 +84,7 @@ test('doctor checks only foundation routes, reports unknown build and unauthenti
     return Response.json(url.endsWith('/health') ? {ok: true, service: 'Synthetic'} : {readOnly: false});
   }).doctor();
   assert.deepEqual(routes, ['/health', '/api/review-mode']);
-  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, 168);
+  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, commands.length-foundationCommands.length);
 });
 
 test('limited errors, no automatic POST retries, timeout and bounded response', async () => {

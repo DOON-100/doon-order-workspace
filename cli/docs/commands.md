@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.31.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.32.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,39 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon sales orders schema --type <type>` | 订单修改/交接字段 | local-read |
+| `doon sales orders form <id>` | 读取订单修改字段 | business-read-and-session-last-seen |
+| `doon sales orders update --input <file> --version <number>` | 更新指定订单字段 | business-write |
+| `doon sales orders workflow --type <type> --input <file> --version <number>` | 业务客服PMC交接 | business-write |
+| `doon sales sources schema` | 销售原单证据字段 | local-read |
+| `doon sales sources import --input <file> --request-id <uuid>` | 管理员迁入原单证据 | business-write |
+| `doon purchasing factory-orders schema --type <type>` | 内部订单或导入字段 | local-read |
+| `doon purchasing factory-orders form <lineId>` | 读取最新内部订单与源订单版本 | business-read-and-session-last-seen |
+| `doon purchasing factory-orders export --order <id> [--reference <text>] --output <file.xlsx>` | 导出指定订单行的中英内部订单表格 | business-read-and-session-last-seen |
+| `doon purchasing factory-orders save --type <type> --input <file> --version <number> --order-version <number> --request-id <uuid>` | 维护内部订单并核对双版本 | business-write |
+| `doon purchasing factory-orders table-preview --input <file> --file <file.xlsx>` | 保存中英内部订单导入预览 | business-write |
+| `doon purchasing factory-orders table-commit --input <file>` | 提交本人预览并复核双版本 | business-write |
+| `doon service documents schema --kind <kind> --type <type>` | 查询内部资料或单据字段 | local-read |
+| `doon service documents references [--kind <kind>] [--type <type>] [--customer <id>] [--limit <number>] [--offset <number>]` | 查询授权关联资料及人员 | business-read-and-session-last-seen |
+| `doon service documents form <id>` | 读取内部资料或单据可编辑字段 | business-read-and-session-last-seen |
+| `doon service documents save --kind <kind> --type <type> --input <file> --version <number> --request-id <uuid>` | 统一新增或修改资料及单据 | business-write |
+| `doon service documents action --type <type> --input <file> --version <number> --request-id <uuid>` | 提交退回或核对单据 | business-write |
+| `doon service documents generate --type <type> --input <file> --version <number> --request-id <uuid>` | 从指定来源版本生成业务单据 | business-write |
+| `doon service documents files <id>` | 查询内部资料原件目录 | business-read-and-session-last-seen |
+| `doon service documents file-upload --input <file> --file <file> --version <number> --request-id <uuid>` | 归档资料原件 | business-write |
+| `doon service documents file-download <id> <fileId> --output <file>` | 核验并下载资料原件 | business-read-and-session-last-seen |
+| `doon sales kingdee schema` | 销售草稿表单及动作字段 | local-read |
+| `doon sales kingdee status` | 查询金蝶模板、配置及协议就绪状态 | business-read-and-session-last-seen |
+| `doon sales kingdee list [--customer <value>] [--limit <number>] [--offset <number>]` | 查询授权销售草稿 | business-read-and-session-last-seen |
+| `doon sales kingdee form <id>` | 读取销售草稿输入及核查结果 | business-read-and-session-last-seen |
+| `doon sales kingdee prepare --input <file>` | 从已有原单准备销售草稿 | business-write |
+| `doon sales kingdee save --input <file> --version <number>` | 修改销售草稿指定字段 | business-write |
+| `doon sales kingdee action --type <type> --input <file> --version <number>` | 校验确认或受控金蝶上传/核查，不自动重试 | business-write |
+| `doon sales kingdee source-preview --file <file.xlsx>` | 保存中英原单及解析预览 | business-write |
+| `doon sales kingdee source-commit --input <file>` | 提交本人原单预览及草稿 | business-write |
+| `doon sales kingdee source-template --output <file.xlsx>` | 下载中英原单上传模板 | business-read-and-session-last-seen |
+| `doon sales kingdee source-download <id> --output <file.xlsx>` | 核验并下载原单原件 | business-read-and-session-last-seen |
+| `doon sales kingdee export <id> --version <number> --output <file.xlsx>` | 导出客服已确认的金蝶模板 | business-read-and-session-last-seen |
 | `doon sales prices schema --type dataset|selection|source` | 查询价格档案表单字段 | local-read |
 | `doon sales prices list [--customer <id>] [--view sku|history]` | 查询授权历史价格及发票依据 | business-read-and-session-last-seen |
 | `doon sales prices archive <id>` | 管理员核对档案摘要与来源目录 | business-read-and-session-last-seen |
@@ -196,4 +229,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W2阶段验收中，W3及后续写入待开发。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，后续批次写入待开发。新增W3查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
