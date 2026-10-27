@@ -179,6 +179,36 @@ try{
     assert.equal(testedCommands.length,commands.length);assert.equal(await processState.hasSession(),false);await pmcProcessState.clearSession();pass();
   }
   assert.deepEqual(snapshot().records,before.records);assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
+  // W0 contract: run the shared write framework against the real process handler,
+  // with a synthetic route registered only inside this isolated test process.
+  {
+    const {ApiClient}=await import('../../dist/client.js'),{routes}=await import('../../dist/routes.js');
+    const {executeWrite}=await import('../../dist/write-operation.js');
+    const route='/api/workspace/process-save',inputFile=path.join(dir,'synthetic-write.json');
+    const beforeWrite=snapshot(),config=await services.sales_a.state.config();
+    const sessionA=await services.sales_a.state.session(config),sessionB=await services.sales_b.state.session(config);
+    const client=new ApiClient(config),token='00000000-0000-4000-8000-000000000001';
+    await fs.writeFile(inputFile,JSON.stringify({type:'rfq',customerId:'c1',title:'Synthetic W0'}));
+    routes[route]={method:'POST',business:true,write:true};
+    try{
+      const schema={type:{type:'string',required:true,enum:['rfq']},customerId:{type:'string',required:true},title:{type:'string',required:true}};
+      const adapter={schema,tokenField:'token',
+        async send(payload){return (await client.request(route,sessionA,payload)).data;},
+        async readBack(response){const data=(await client.request('/api/workspace/process-data',sessionA,undefined,{query:{type:'rfq'}})).data;const record=data.records.find(r=>r.id===response.record.id);assert(record);return record;}};
+      const forbidden={...adapter,async send(payload){return (await client.request(route,sessionB,payload)).data;}};
+      await assert.rejects(executeWrite(forbidden,{file:inputFile,token:'00000000-0000-4000-8000-000000000002'}),{code:'FORBIDDEN'});
+      assert.deepEqual(snapshot(),beforeWrite);
+      const result=await executeWrite(adapter,{file:inputFile,token});
+      assert.equal(result.customerId,'c1');assert.equal(result.type,'rfq');assert.equal(result.title,'Synthetic W0');assert.equal(result.version,1);
+      const afterFirst=snapshot();assert.equal(afterFirst.revision,beforeWrite.revision+1);
+      assert.deepEqual(await executeWrite(adapter,{file:inputFile,token}),result);
+      assert.deepEqual(snapshot(),afterFirst);
+      const originals=new Map(afterFirst.records.map(row=>[row.id,row.data]));
+      for(const old of beforeWrite.records)assert.equal(originals.get(old.id),old.data,'Original record must not be changed');
+      assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);
+      pass();
+    }finally{delete routes[route];}
+  }
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{
