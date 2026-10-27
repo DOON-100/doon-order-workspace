@@ -15,7 +15,7 @@ export async function testIeQuotes({ok,call,pass,rawRecords,rawInsert}){
  p=(await ok('ie-quote-policy',binding)).policy;
  assert.equal((await call('ie-quotes',undefined,sameName.user)).status,403);
  const list=await ok('ie-quotes',undefined,engineer.user);assert.equal(list.capabilities.canCreate,true);assert.deepEqual(list.policy.members,[]);
- assert.equal((await ok('ie-quotes')).capabilities.canCreate,false);
+ assert.equal((await ok('ie-quotes')).capabilities.canCreate,true);
  pass('IE 角色由管理员绑定不同稳定成员 ID；缺省、其他生产角色与同名成员均不扩权，候选列表不含凭据');
 
  const draft={customerAccountId:a.id,quoteNo:'IE-SYNTHETIC-01',quoteDate:'2026-10-01',validUntil:'2026-11-01',batchId:'IE-BATCH-A',exchangeRateCnyPerUsd:7,exchangeRateDate:'2026-10-01',exchangeRateSource:'合成汇率依据',notes:'合成测试',
@@ -23,7 +23,7 @@ export async function testIeQuotes({ok,call,pass,rawRecords,rawInsert}){
   tooling:[{id:'t-na',toolingId:'',name:'无一次性费用',lineIds:['style-a'],amount:null,chargeMode:'not_applicable',evidence:'',notes:'复用既有生产条件，无新模具'}]};
  const fields=q=>Object.fromEntries([...Object.keys(draft),'id','version'].map(k=>[k,structuredClone(q[k])]));
  const snapshotCount=()=>rawRecords().filter(r=>r.kind==='ie_quote_revision').length;
- assert.equal((await call('ie-quote-save',draft)).status,403);
+ assert.equal((await call('ie-quote-save',draft,intruder.user)).status,403);
  assert.equal((await call('ie-quote-save',{...draft,costs:{productionCost:0}},engineer.user)).status,400);
  let q=(await ok('ie-quote-save',draft,engineer.user)).quote;
  assert.equal(q.costs.lines[0].material,6);assert.equal(q.costs.lines[0].materialLoss,0.6);assert.equal(q.costs.lines[0].process,4.5);assert.equal(q.costs.lines[0].productionCost,26.3);assert.equal(q.costs.lines[0].factoryPriceCny,34.19);assert.equal(q.costs.lines[0].factoryPriceUsd,4.884286);assert.equal(q.costs.toolingChargeCny,0);assert.deepEqual(q.issues,[]);
@@ -105,7 +105,7 @@ export async function testIeQuotes({ok,call,pass,rawRecords,rawInsert}){
  pass('基价和标准工艺目录独立维护版本；报价冻结引用的旧基价依据，目录新版本不暗改旧报价');
 
  const processList=[...draft.lines[0].processes,{...draft.lines[0].processes[0],id:'p2',parentId:'p1',sequence:2,name:'合成子工序'}],presetInput={name:'合成整套流程',description:'用于复用主子工序',processes:processList,active:true};
- assert.equal((await call('ie-quote-process-preset-save',presetInput,manager.user)).status,403);
+ assert.equal((await call('ie-quote-process-preset-save',presetInput,intruder.user)).status,403);
  let preset=(await ok('ie-quote-process-preset-save',presetInput,engineer.user)).preset;assert.equal(preset.version,1);
  const cycle={...presetInput,processes:[{...processList[0],parentId:'p2'},processList[1]]};assert.equal((await call('ie-quote-process-preset-save',cycle,engineer.user)).status,400);
  preset=(await ok('ie-quote-process-preset-save',{...presetInput,id:preset.id,version:preset.version,name:'合成整套流程修订'},reviewer.user)).preset;

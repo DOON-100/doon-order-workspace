@@ -2,16 +2,18 @@ import {z} from 'zod';
 import {all,newId,now,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {canConfigureIeQuotes,canUseIeQuotes} from './ie-quote-access';
-import {ieMaterialNameCatalog,latestIeMaterialNameCatalog,searchIeMaterialNames,type IeMaterialNameCatalogRecord} from './ie-material-names';
+import {ieMaterialNameCatalog,latestIeMaterialNameCatalog,searchIeMaterialNames,searchIeMaterialParts,type IeMaterialNameCatalogRecord} from './ie-material-names';
 
 export function ieMaterialNamesGet(action:string,url:URL,s:State,m:Member):Response|null{
  if(action!=='ie-material-names')return null;
  if(!canUseIeQuotes(s,m))throw new AppError('没有 IE 工程报价权限。',403);
- const catalog=latestIeMaterialNameCatalog(s),query=url.searchParams.get('q')||'';if(query.length>100)throw new AppError('查询名称不能超过100字。');
- const rawOffset=url.searchParams.get('offset')||'0',rawLimit=url.searchParams.get('limit')||'20',offset=Number(rawOffset),limit=Number(rawLimit);
- if(!/^\d+$/.test(rawOffset)||!/^\d+$/.test(rawLimit)||!Number.isSafeInteger(offset)||offset<0||offset>2000||!Number.isSafeInteger(limit)||limit<1||limit>100)throw new AppError('名称资料分页范围无效。');
- const result=searchIeMaterialNames(catalog,query,2000);
- return json({items:result.items.slice(offset,offset+limit),total:result.total,offset,limit,nextOffset:offset+limit<result.total?offset+limit:null,catalogId:catalog?.id||'',version:catalog?.version||0,sourceFilename:catalog?.catalog.sourceFilename||'',sourceSha256:catalog?.catalog.sourceSha256||''});
+ const catalog=latestIeMaterialNameCatalog(s),query=url.searchParams.get('q')||'',kind=url.searchParams.get('kind')||'raw';if(query.length>100)throw new AppError('查询名称不能超过100字。');
+ if(!['raw','part'].includes(kind))throw new AppError('名称查询类型无效。');
+ // Preserve the website's full checklist; explicit CLI pages retain their bounds.
+ const rawOffset=url.searchParams.get('offset')||'0',rawLimit=url.searchParams.get('limit'),offset=Number(rawOffset),limit=rawLimit===null?2000:Number(rawLimit);
+ if(!/^\d+$/.test(rawOffset)||rawLimit!==null&&!/^\d+$/.test(rawLimit)||!Number.isSafeInteger(offset)||offset<0||offset>2000||!Number.isSafeInteger(limit)||limit<1||limit>(rawLimit===null?2000:100))throw new AppError('名称资料分页范围无效。');
+ const result=kind==='part'?searchIeMaterialParts(catalog,query):searchIeMaterialNames(catalog,query,2000);
+ return json({items:result.items.slice(offset,offset+limit),total:result.total,kind,offset,limit,nextOffset:offset+limit<result.total?offset+limit:null,catalogId:catalog?.id||'',version:catalog?.version||0,sourceFilename:catalog?.catalog.sourceFilename||'',sourceSha256:catalog?.catalog.sourceSha256||''});
 }
 const inputSchema=z.object({version:z.number().int().nonnegative(),token:z.string().uuid(),catalog:ieMaterialNameCatalog}).strict();
 export async function ieMaterialNamesPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{

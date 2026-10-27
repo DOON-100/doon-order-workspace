@@ -49,3 +49,5 @@ IE 报价接口没有可靠的业务组筛选协议，本批不提供 `--team`�
 `file-action --action remove|bind --input <JSON> --version <当前版本>`使用id（报价ID）、lineId、attachmentId；bind还需网站原有的acknowledgeDrawingRevision=true业务字段。remove只移除当前引用，bind恢复或重绑同款式原件，均保留历史。`file-download <报价ID> --type drawing --id <附件ID> --version <版本> --output <新文件>`按大小和SHA-256校验并拒绝覆盖。
 
 `file-upload --type template`仅管理员使用，JSON包括quoteId、sheetBindings（sheetName与lineId逐款对应）以及网站既有的acknowledgeRemoveUnmapped=true字段。原Excel私有保留，打印副本移除未映射表；CLI不新增确认提示，也不自动补业务字段。`file-export <报价ID> --type draft|released --version <版本> --output <新.xlsx>`由服务器按模板、当前权限和数据完整性导出，未发布草稿保持其原有标记，不会冒充已复核版本。
+
+远端2026-10-27物料清单更新已兼容：`ie-quotes names --kind raw|part`分别查询原始名称与物料名称，保留`sourceName/nameUsage`及目录版本供表单引用；CLI显式分页，网站未指定分页时继续返回完整清单。表单已同步`materialPricingMode=checklist`及`nameUsage=part-v1`字段，空材料价格、独立复核及管理人员填报规则以最新服务器为准，不由CLI自行计算。

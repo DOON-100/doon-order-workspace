@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {all,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {canMaintainCustomerQuoteAccount} from './customer-quote-access';
-import {canReadIeQuote,ieQuotePolicy,iePolicyMember,isIeEngineeringMember} from './ie-quote-access';
+import {canFillIeQuote,canReadIeQuote,ieQuotePolicy,iePolicyMember,isIeApprover} from './ie-quote-access';
 import {ieTemplateStatus} from './ie-quote-template';
 import {ieAttachmentIssues,publicIeAttachments,type IeAttachmentRef} from './ie-quote-attachments';
 import {calculateIeQuote,ieAdjustmentTargets} from './ie-quote-calculation';
@@ -23,7 +23,7 @@ export const ieProcessSchema=z.object({id,name:text(240),parentId:text(120),sequ
 const outsourcing=z.object({id,category:z.enum(['plating','general']),name:text(240),part:text(240),unitPrice:num,usage:num.default(1),notApplicable:z.boolean(),notes:text(),...catalogRef}).strict();
 const line=z.object({id,model:text(200),customerModel:text(200),color:text(200),drawingNo:text(200),drawingRevision:text(200),quantityMin:z.number().int().positive().max(10000000).nullable(),quantityMax:z.number().int().positive().max(10000000).nullable(),structureNotes:text(),scopeNotes:text(),materials:z.array(material).max(200),processes:z.array(ieProcessSchema).max(300),outsourcing:z.array(outsourcing).max(100)}).strict();
 const tooling=z.object({id,toolingId:text(120),name:text(240),lineIds:z.array(id).max(100),amount:num,chargeMode:z.enum(['charge','already_charged','included_in_batch','not_applicable']),chargeQuoteId:text(120),chargeVersion:z.number().int().positive().nullable().default(null),evidence:text(),notes:text()}).strict();
-export const ieQuoteInput=z.object({id:id.optional(),version:z.number().int().positive().optional(),customerAccountId:id,quoteNo:text(120),quoteDate:date,validUntil:date,batchId:text(120),exchangeRateCnyPerUsd:num,exchangeRateDate:date,exchangeRateSource:text(1000),notes:text(8000),lines:z.array(line).min(1).max(100),tooling:z.array(tooling).max(100),manualAdjustments:z.array(manualAdjustment).max(60000).optional()}).strict().superRefine((v,ctx)=>{
+export const ieQuoteInput=z.object({id:id.optional(),version:z.number().int().positive().optional(),materialPricingMode:z.literal('checklist').optional(),customerAccountId:id,quoteNo:text(120),quoteDate:date,validUntil:date,batchId:text(120),exchangeRateCnyPerUsd:num,exchangeRateDate:date,exchangeRateSource:text(1000),notes:text(8000),lines:z.array(line).min(1).max(100),tooling:z.array(tooling).max(100),manualAdjustments:z.array(manualAdjustment).max(60000).optional()}).strict().superRefine((v,ctx)=>{
  if(v.id&&!v.version)ctx.addIssue({code:'custom',path:['version'],message:'编辑必须提供当前版本'});
  if(!v.id&&v.version)ctx.addIssue({code:'custom',path:['version'],message:'新建不能提供版本'});
  const unique=(items:{id:string}[],path:(string|number)[])=>{if(new Set(items.map(i=>i.id)).size!==items.length)ctx.addIssue({code:'custom',path,message:'行编号不能重复'});};
@@ -48,11 +48,22 @@ export function ieQuoteVersion(s:State,id:string,version?:number):IeQuote|null{
  const q=currentIeQuote(s,id);if(!q)return null;if(!version||version===q.version)return q;
  const rows=(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===id&&r.version===version);return rows.length===1?rows[0].snapshot:null;
 }
-export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return m.active&&q.status==='submitted'&&q.requiredReviewMemberId===m.id&&!q.preparedByIds.includes(m.id)&&!!all(s,'member').find(v=>v.id===m.id&&v.active);}
-export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttachmentRef[]},ownId=''){
+/** Participation belongs to the quotation, including its earlier revisions. */
+export function ieQuotePreparedByIds(s:State,q:Pick<IeQuote,'id'|'version'|'preparedByIds'|'createdById'>,actorId=''){
+ const history=(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&r.version<=q.version&&r.snapshot?.id===q.id);
+ return [...new Set([q.createdById,...(q.preparedByIds||[]),...history.flatMap(r=>[r.snapshot.createdById,...(r.snapshot.preparedByIds||[])]),actorId].filter(id=>typeof id==='string'&&!!id))];
+}
+export function ieQuoteReviewRouting(s:State,q:Pick<IeQuote,'id'|'version'|'preparedByIds'|'createdById'>,actorId=''){
+ const preparedByIds=ieQuotePreparedByIds(s,q,actorId),primary=iePolicyMember(s,'reviewer'),fallback=iePolicyMember(s,'finalApprover');
+ if(!ieQuotePolicy(s)||!iePolicyMember(s,'engineer')||!primary||!fallback)return {preparedByIds,reviewer:undefined,reason:'工程报价角色中有未绑定、停用或无效成员，请管理员核对后再提交独立复核。'};
+ const reviewer=[primary,fallback].find(member=>!preparedByIds.includes(member.id));
+ return {preparedByIds,reviewer,reason:reviewer?'':'杨德周、曲艳红均已参与本笔报价填报，不能审核同一笔报价。请管理员安排未参与填报的独立复核人后再提交；历史参与记录不能清除。'};
+}
+export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return isIeApprover(s,m)&&q.status==='submitted'&&q.requiredReviewMemberId===m.id&&!ieQuotePreparedByIds(s,q).includes(m.id);}
+export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttachmentRef[];costs?:{formulaVersion?:string}},ownId=''){
  const issues:string[]=ieAttachmentIssues(s,q,ownId),need=(condition:unknown,message:string)=>{if(!condition)issues.push(message);};
  const nameReferenceIssue=validateIeMaterialNameReferences(s,q);if(nameReferenceIssue)issues.push(nameReferenceIssue);
- const costs=calculateIeQuote(q),manualCells=new Map(costs.adjustmentCells.filter(c=>c.applied).map(c=>[c.target,c]));
+ const costs=calculateIeQuote(q),checklist=costs.formulaVersion==='ie-cost-v5-material-checklist',manualCells=new Map(costs.adjustmentCells.filter(c=>c.applied).map(c=>[c.target,c]));
  for(const c of costs.adjustmentCells)if(c.stale)issues.push(c.label+'：计算依据已变动，须重新确认人工调整或恢复自动计算');
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId);need(account?.active,'客户档案不存在或已停用');
  need(q.quoteNo,'填写工程报价编号');need(q.quoteDate,'填写报价日期');need(q.validUntil,'填写报价有效期');need(!q.validUntil||!q.quoteDate||q.validUntil>=q.quoteDate,'有效期不能早于报价日期');need(q.batchId,'填写客户报价批次编号，用于跨款共用模具计费');
@@ -60,9 +71,9 @@ export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttac
  q.lines.forEach((l,index)=>{
   const prefix=`第 ${index+1} 款：`;for(const [value,label] of [[l.model,'工厂型号'],[l.color,'颜色 / 色号'],[l.drawingNo,'图纸编号'],[l.drawingRevision,'图纸版本'],[l.structureNotes,'结构分析'],[l.scopeNotes,'报价范围']] as const)need(value,prefix+'填写'+label);
   need(l.quantityMin&&l.quantityMax,prefix+'填写数量档上下限');need(l.quantityMin===null||l.quantityMax===null||l.quantityMax>=l.quantityMin,prefix+'数量档上限不能小于下限');
-  need(l.materials.length,prefix+'列出材料；不适用须明确勾选');need(l.processes.length,prefix+'列出工艺；不适用须明确勾选');
+  if(!checklist)need(l.materials.length,prefix+'列出材料；不适用须明确勾选');need(l.processes.length,prefix+'列出工艺；不适用须明确勾选');
   for(const category of ['plating','general'])need(l.outsourcing.some(r=>r.category===category),prefix+(category==='plating'?'电镀':'一般外发')+'须列明或显式不适用');
-  l.materials.forEach((r,i)=>{need(r.name,prefix+`材料 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`材料 ${i+1} 不适用须说明`);return;}const adjusted=manualCells.get(ieAdjustmentTargets.material(l.id,r.id));need(adjusted||r.basePrice!==null&&r.usage!==null&&r.coefficient!==null,prefix+`材料 ${i+1} 未税基价 / 用量 / 系数缺失（空白不算 0，可说明原因后人工填写本行金额）`);need(r.priceSource||adjusted?.adjustment?.reason,prefix+`材料 ${i+1} 价格依据缺失`);need((r.lossRate??0.1)===0.1||r.lossAdjustmentReason,prefix+`材料 ${i+1} 调整默认 10% 损耗须说明原因`);});
+  l.materials.forEach((r,i)=>{const adjusted=manualCells.get(ieAdjustmentTargets.material(l.id,r.id));if(checklist){if(r.notApplicable||r.basePrice===null&&!adjusted)return;need(r.name,prefix+`材料 ${i+1} 名称为空`);need((r.lossRate??0.1)===0.1||r.lossAdjustmentReason,prefix+`材料 ${i+1} 调整默认 10% 损耗须说明原因`);return;}need(r.name,prefix+`材料 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`材料 ${i+1} 不适用须说明`);return;}need(adjusted||r.basePrice!==null&&r.usage!==null&&r.coefficient!==null,prefix+`材料 ${i+1} 未税基价 / 用量 / 系数缺失（空白不算 0，可说明原因后人工填写本行金额）`);need(r.priceSource||adjusted?.adjustment?.reason,prefix+`材料 ${i+1} 价格依据缺失`);need((r.lossRate??0.1)===0.1||r.lossAdjustmentReason,prefix+`材料 ${i+1} 调整默认 10% 损耗须说明原因`);});
   const ids=new Set(l.processes.map(r=>r.id));
   l.processes.forEach((r,i)=>{need(r.name,prefix+`工序 ${i+1} 名称为空`);need(!r.parentId||ids.has(r.parentId)&&r.parentId!==r.id,prefix+`工序 ${i+1} 上级无效`);let next=r.parentId,seen=new Set([r.id]);while(next){if(seen.has(next)){issues.push(prefix+`工序 ${i+1} 上下级形成循环`);break;}seen.add(next);next=l.processes.find(p=>p.id===next)?.parentId||'';}if(r.notApplicable){need(r.notes,prefix+`工序 ${i+1} 不适用须说明`);return;}const adjusted=manualCells.get(ieAdjustmentTargets.process(l.id,r.id));need(adjusted||r.basePrice!==null&&r.difficulty!==null&&r.usage!==null,prefix+`工序 ${i+1} 基价 / 难度系数 / 用量缺失（可说明原因后人工填写本行金额）`);need(r.priceSource||adjusted?.adjustment?.reason,prefix+`工序 ${i+1} 价格依据缺失`);});
   l.outsourcing.forEach((r,i)=>{need(r.name,prefix+`外发 ${i+1} 名称为空`);if(r.notApplicable){need(r.notes,prefix+`外发 ${i+1} 不适用须说明`);return;}const adjusted=manualCells.get(ieAdjustmentTargets.outsourcing(l.id,r.id));need(adjusted||r.unitPrice!==null&&r.usage!==null,prefix+`外发 ${i+1} 未税单价 / 用量缺失`);need(r.priceSource||adjusted?.adjustment?.reason,prefix+`外发 ${i+1} 价格依据缺失`);});
@@ -88,10 +99,11 @@ export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttac
  return [...new Set(issues)];
 }
 export function publicIeQuote(s:State,m:Member,q:IeQuote){
- const current=currentIeQuote(s,q.id),latest=current?.version===q.version,editable=latest&&['draft','returned'].includes(q.status)&&isIeEngineeringMember(s,m);
+ const current=currentIeQuote(s,q.id),latest=current?.version===q.version,editable=latest&&['draft','returned'].includes(q.status)&&canFillIeQuote(s,m);
+ const routing=ieQuoteReviewRouting(s,q,m.id),submissionBlockReason=editable?routing.reason:'';
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId) as CustomerAccount|undefined;
  const templateStatus=ieTemplateStatus(s,m,q),issues=ieQuoteIssues(s,q,q.id),costs=calculateIeQuote(q);
- return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings:costs.warnings,issues,templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&isIeEngineeringMember(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
+ return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings:costs.warnings,issues,...(editable&&q.materialPricingMode!=='checklist'?{checklistIssues:ieQuoteIssues(s,{...q,materialPricingMode:'checklist',costs:undefined},q.id)}:{}),templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable&&!!routing.reviewer,nextReviewMemberId:editable?routing.reviewer?.id||'':'',submissionBlockReason,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&canFillIeQuote(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
  history:(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&canReadIeQuote(s,m,r.snapshot)).sort((a,b)=>b.version-a.version).map(({version,revision,action,updatedAt,updatedBy,snapshot})=>({version,revision,action,updatedAt,updatedBy,status:snapshot.status})),
  };
 }

@@ -208,6 +208,7 @@ export async function prepareIeQuoteTemplate(bytes: Uint8Array, options: { sheet
 }
 
 export function makeIeWorkbookBindings(quote: IeQuote, sheetBindings: { sheetName: string; lineId: string }[]): IeWorkbookBinding[] {
+  const checklist = ieCalculationVersion(quote) === 'ie-cost-v5-material-checklist';
   if (quote.exchangeRateCnyPerUsd === null || quote.exchangeRateCnyPerUsd <= 0) fail('请先手填有效汇率', 'IE_EXPORT_INPUT');
   if (sheetBindings.length !== quote.lines.length || new Set(sheetBindings.map(b => b.lineId)).size !== quote.lines.length) fail('每个报价款式须唯一绑定一个模板表', 'IE_TEMPLATE_BINDING');
   return sheetBindings.map(mapping => {
@@ -219,8 +220,9 @@ export function makeIeWorkbookBindings(quote: IeQuote, sheetBindings: { sheetNam
       quoteNo: quote.quoteNo, revision: quote.revision, version: quote.version, status: quote.status, directLaborCny: costs.process, formulaVersion: ieCalculationVersion(quote),
       expectedAmounts: { material: costs.material, materialLoss: costs.materialLoss, productionCost: costs.productionCost, factoryPriceCny: costs.factoryPriceCny, factoryPriceUsd: costs.factoryPriceUsd },
       materials: line.materials.filter(m => !m.notApplicable).map(m => {
-        if (m.basePrice === null || m.usage === null || m.coefficient === null) fail('材料基价、用量或系数尚未填写', 'IE_EXPORT_INPUT');
-        return { name: m.name, specification: m.specification, quantity: m.usage, unitCostCny: m.basePrice * m.coefficient, basePrice: m.basePrice, coefficient: m.coefficient, lossRate: m.lossRate, lossAdjustmentReason: m.lossAdjustmentReason, notes: m.notes };
+        const basePrice=checklist?(m.basePrice??0):m.basePrice,usage=checklist?(m.usage??1):m.usage,coefficient=checklist?(m.coefficient??1):m.coefficient;
+        if (basePrice === null || usage === null || coefficient === null) fail('材料基价、用量或系数尚未填写', 'IE_EXPORT_INPUT');
+        return { name: m.name, specification: m.specification, quantity: usage, unitCostCny: basePrice * coefficient, basePrice, coefficient, lossRate: m.lossRate, lossAdjustmentReason: m.lossAdjustmentReason, notes: m.notes };
       }),
       processes: line.outsourcing.filter(p => !p.notApplicable).map(p => { if (p.unitPrice === null) fail('外发单价尚未填写', 'IE_EXPORT_INPUT'); return { name: p.name, quantity: 1, unitCostCny: p.unitPrice, notes: p.notes }; }),
       toolingCharges: quote.tooling.filter(t => t.lineIds.includes(line.id)).map(t => {
@@ -248,7 +250,7 @@ const textWidth = (value: string) => [...value].reduce((n, character) => n + (ch
 const round = (n: number) => Math.round((n + Number.EPSILON) * 1e6) / 1e6;
 const f = (formula: string, value: number): CellValue => ({ formula, value });
 function quoteCells(binding: IeWorkbookBinding) {
-  const excel = binding.formulaVersion === 'ie-cost-v3-excel', digits = excel ? 2 : 6;
+  const excel = binding.formulaVersion === 'ie-cost-v3-excel'||binding.formulaVersion === 'ie-cost-v5-material-checklist', digits = excel ? 2 : 6;
   number(binding.quantity, '报价数量', true); number(binding.exchangeRateCnyPerUsd, '手填汇率', true); number(binding.directLaborCny, '直接人工');
   string(binding.customerCode, '客户代码', true); string(binding.model, '款号', true);
   fits(binding.customerCode, 24, '客户代码'); fits(binding.model, 24, '款号'); fits(binding.drawingNo, 24, '图纸编号'); fits(binding.quoteNo, 24, '报价编号'); fits(String(binding.exchangeRateCnyPerUsd), 11, '汇率');
@@ -393,8 +395,9 @@ function appendCostSupplement(entries: Record<string, Uint8Array>, bindings: IeW
   for (const binding of bindings) {
     for (const material of binding.materials) {
       const factors = material.basePrice !== undefined && material.coefficient !== undefined ? [material.basePrice,material.quantity,material.coefficient] : [material.quantity,material.unitCostCny];
-      const loss = ieCostMultiply(binding.formulaVersion === 'ie-cost-v3-excel' ? [ieCostMultiply(factors,2),material.lossRate??.1] : [...factors,material.lossRate??.1]);
-      add([binding.model, material.name, material.specification || '', 0.1, round(((material.lossRate ?? 0.1) - 0.1) * 100), material.lossRate ?? 0.1, loss, [`用量 ${material.quantity}；计价单价 ${material.unitCostCny} CNY`, material.notes, material.lossAdjustmentReason ? `调整原因：${material.lossAdjustmentReason}` : '',binding.formulaVersion === 'ie-cost-v3-excel'?'材料行按分位，损耗加权合计后再按分位。':''].filter(Boolean).join('\n')], false, [6], [3, 5]);
+      const excel=binding.formulaVersion === 'ie-cost-v3-excel'||binding.formulaVersion === 'ie-cost-v5-material-checklist';
+      const loss = ieCostMultiply(excel ? [ieCostMultiply(factors,2),material.lossRate??.1] : [...factors,material.lossRate??.1]);
+      add([binding.model, material.name, material.specification || '', 0.1, round(((material.lossRate ?? 0.1) - 0.1) * 100), material.lossRate ?? 0.1, loss, [`用量 ${material.quantity}；计价单价 ${material.unitCostCny} CNY`, material.notes, material.lossAdjustmentReason ? `调整原因：${material.lossAdjustmentReason}` : '',excel?'材料行按分位，损耗加权合计后再按分位。':''].filter(Boolean).join('\n')], false, [6], [3, 5]);
     }
     if (!binding.materials.length) add([binding.model, '材料已明确不适用', '', null, null, null, 0, ''], false, [6], [3, 5]);
   }
@@ -527,7 +530,7 @@ export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: IeEdit
     mappings = binding.map(b => { const sheet = inspected.inspection.sheets.find(s=>s.name===b.sheetName), line = quote.lines.find(l=>l.id===b.lineId); if (!sheet || !line || normalize(sheet.customerCode)!==normalize(quote.customerCode) || normalize(sheet.model)!==normalize(line.model)) fail('草稿模板的客户、款式绑定不一致', 'IE_TEMPLATE_BINDING'); return {...b,path:sheet.path}; });
     entries = inspected.entries;
   } else ({ entries, mappings } = genericDraftTemplate(quote));
-  const internal=options.purpose==='internal', formulaVersion=ieCalculationVersion(quote), excel=formulaVersion!=='ie-cost-v2-line-loss', costs=calculateIeQuote(quote);
+  const internal=options.purpose==='internal', formulaVersion=ieCalculationVersion(quote), excel=formulaVersion!=='ie-cost-v2-line-loss', checklist=formulaVersion==='ie-cost-v5-material-checklist', costs=calculateIeQuote(quote);
   const materialRows: GridRow[] = [['款式行编号','款式','材料名称','规格','单位（可选）','未税基价','用量','系数','本项总损耗率','材料金额（公式）','损耗金额（公式）','不适用=1 / 适用=0','备注','额外损耗原因','价格依据','正常损耗率','额外百分点','自动材料金额（公式）']];
   const processRows: GridRow[] = [['款式行编号','款式','直接人工工艺 / 工序名称','上级工序编号','顺序','工价基价','难度系数','人工金额 / 副（公式）','标准秒数（可选）','不适用=1 / 适用=0','备注','价格依据','用量 / 次数（每副）']];
   const outsourceHeader: GridRow=['款式行编号','款式','类别','工序 / 电镀名称','未税单价','不适用=1 / 适用=0','金额 / 副（公式）','备注','价格依据','具体部位','用量 / 次数（每副）'];
@@ -552,7 +555,7 @@ export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: IeEdit
     [internal?'内部工程核价明细':'未审 Excel 填报草稿',internal&&quote.status==='released'?'已复核内部工程价；业务最终客价另行审批':'仅供内部核对；不是已复核报价，也不是给客户的报价'],
     ['工程报价编号',quote.quoteNo],['来源版本',`R${quote.revision} V${quote.version} / ${quote.status}`],['计算规则',formulaVersion],['1 USD = CNY（手填）',quote.exchangeRateCnyPerUsd],['汇率日期',quote.exchangeRateDate],['汇率来源',quote.exchangeRateSource],
     ['打印模板',options.template?'保留绑定原模板的打印区域、版式与照片；照片不代表新上传图纸':'通用同类格式；无原客户模板照片'],
-    ['填写方法','材料、电镀、外发、工序（直接人工）子表逐项填写，汇总金额自动进入 STYLE 总表。空白金额不当作 0。用量 / 次数均为每副，不乘报价批量。'],
+    ['填写方法',checklist?'材料、电镀、外发、工序（直接人工）子表逐项填写，汇总金额自动进入 STYLE 总表。材料清单空白基价按 0，用量和系数留空按 1；只填材料基价即可计算。其他子表空白金额仍须核对。用量 / 次数均为每副，不乘报价批量。':'材料、电镀、外发、工序（直接人工）子表逐项填写，汇总金额自动进入 STYLE 总表。空白金额不当作 0。用量 / 次数均为每副，不乘报价批量。'],
     ['材料损耗','正常 10% + 指定单项额外百分点 = 本项总损耗率；其他材料仍为 10%。材料填报 I 列录入总比例，Q 列显示额外百分点。'],
     ['单价范围','全部未税；间接费默认 13.70 元/副并允许逐项调整；生产成本 × 1.3 为出厂价。业务另行定客价，模具等费用全部单列。'],
     ['完整性',options.issues.length?`${options.issues.length} 项待核验；数值完整不代表已批准。`:internal?'本文件绑定明确工程版本；审批状态见来源版本。':'数值检查完整，本文件仍是未审填报副本。'],
@@ -563,10 +566,12 @@ export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: IeEdit
   for(const mapping of mappings){
     const line=quote.lines.find(l=>l.id===mapping.lineId)!,cost=costs.lines.find(c=>c.lineId===line.id)!, target=(key:IeLineAdjustmentKey)=>ieAdjustmentTargets.line(line.id,key);
     const mStart=materialRows.length+1,pStart=processRows.length+1,plStart=platingRows.length+1,oStart=outsourceRows.length+1,indStart=indirectRows.length+1;
-    const materials=line.materials.length?line.materials:[{id:'',name:'',specification:'',unit:'',basePrice:null,usage:null,coefficient:null,lossRate:.1,notApplicable:false,notes:'请列明材料或明确不适用',lossAdjustmentReason:'',priceSource:''}];
+    const materials=line.materials.length?line.materials:[{id:'',name:'',specification:'',unit:'',basePrice:null,usage:null,coefficient:null,lossRate:.1,notApplicable:false,notes:checklist?'材料清单尚未填写，空白按 0；请按实际选填。':'请列明材料或明确不适用',lossAdjustmentReason:'',priceSource:''}];
     for(const m of materials){
-      const r=materialRows.length+1,raw=m.notApplicable?0:m.basePrice===null||m.usage===null||m.coefficient===null?null:ieCostMultiply([m.basePrice,m.usage,m.coefficient],excel?2:6);
-      const rawFormula=draftFormula(`IF(L${r}=1,0,IF(COUNT(F${r}:H${r})=3,ROUND(F${r}*G${r}*H${r},${excel?2:6}),""))`,raw);
+      const r=materialRows.length+1,basePrice=checklist?(m.basePrice??0):m.basePrice,usage=checklist?(m.usage??1):m.usage,coefficient=checklist?(m.coefficient??1):m.coefficient,raw=m.notApplicable?0:basePrice===null||usage===null||coefficient===null?null:ieCostMultiply([basePrice,usage,coefficient],excel?2:6);
+      // Keep the original blank inputs visible; only the v5 formula supplies defaults.
+      // Text entered offline must remain incomplete instead of silently becoming a number.
+      const rawFormula=draftFormula(checklist?`IF(L${r}=1,0,IF(AND(OR(F${r}="",ISNUMBER(F${r})),OR(G${r}="",ISNUMBER(G${r})),OR(H${r}="",ISNUMBER(H${r}))),ROUND(IF(ISNUMBER(F${r}),F${r},0)*IF(ISNUMBER(G${r}),G${r},1)*IF(ISNUMBER(H${r}),H${r},1),2),""))`:`IF(L${r}=1,0,IF(COUNT(F${r}:H${r})=3,ROUND(F${r}*G${r}*H${r},${excel?2:6}),""))`,raw);
       const amountCell=adjusted(ieAdjustmentTargets.material(line.id,m.id),draftFormula(`IF(ISNUMBER(${ref('材料填报',`R${r}`)}),${ref('材料填报',`R${r}`)},"")`,raw));
       const net=cache(amountCell),loss=net===null?null:m.notApplicable?0:ieCostMultiply(excel?[net,m.lossRate??.1]:[m.basePrice!,m.usage!,m.coefficient!,m.lossRate??.1]);
       materialRows.push([line.id,line.model,m.name,m.specification,m.unit,m.basePrice,m.usage,m.coefficient,m.lossRate??.1,amountCell,draftFormula(`IF(L${r}=1,0,IF(AND(ISNUMBER(J${r}),ISNUMBER(I${r})),ROUND(${excel?`J${r}`:`F${r}*G${r}*H${r}`}*I${r},6),""))`,loss),m.notApplicable?1:0,m.notes,m.lossAdjustmentReason,m.priceSource,.1,draftFormula(`IF(ISNUMBER(I${r}),ROUND((I${r}-P${r})*100,6),"")`,round(((m.lossRate??.1)-.1)*100)),rawFormula]);
@@ -598,7 +603,11 @@ export async function exportIeQuoteDraftWorkbook(quote: IeQuote, options: IeEdit
     const cells:Cells={C3:short(quote.customerCode,24,'详见填报说明'),E3:short(line.model,24,'详见填报说明'),G3:short(line.drawingNo,24,'详见填报说明'),H3:'报价编号',I3:short(quote.quoteNo,24,'详见填报说明'),I2:'人民币',B4:internal?'内部工程核价':'未审填报草稿',C4:internal&&quote.status==='released'?'已复核':'待核对',D4:`R${quote.revision} V${quote.version}`,E4:null,F4:{formula:`IF(AND(ISNUMBER(${fx}),${fx}>0),TEXT(${fx},"0.######"),"汇率待填")`,value:quote.exchangeRateCnyPerUsd&&quote.exchangeRateCnyPerUsd>0?String(quote.exchangeRateCnyPerUsd):'汇率待填'},G4:null,H4:'成本加价30%',I4:null,G38:'分项',L4:draftFormula(`IF(ISNUMBER(${fx}),${fx},"")`,quote.exchangeRateCnyPerUsd)};
     for(let i=0;i<29;i++){const row=7+i,m=materials[i],src=mStart+i;for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!m)continue;
       if(i===28&&materials.length>29){cells[`D${row}`]=`其余 ${materials.length-28} 项见材料填报`;const values=materialRows.slice(src-1,mEnd).map(v=>cache(v[9]));cells[`H${row}`]=guardedSum('材料填报','J',src,mEnd,values.some(v=>v===null)?null:ieCostSum(values as number[]));continue;}
-      cells[`D${row}`]=textRef('材料填报',`C${src}`,m.name,24,`材料填报第${src}行`);cells[`E${row}`]=textRef('材料填报',`D${src}`,m.specification,28,`见材料填报第${src}行`);cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`G${src}`)}),${ref('材料填报',`G${src}`)},"")`,m.usage);cells[`G${row}`]=draftFormula(`IF(COUNT(${ref('材料填报',`F${src}`)},${ref('材料填报',`H${src}`)})=2,${ref('材料填报',`F${src}`)}*${ref('材料填报',`H${src}`)},"")`,m.basePrice===null||m.coefficient===null?null:m.basePrice*m.coefficient);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`J${src}`)}),${ref('材料填报',`J${src}`)},"")`,cache(materialRows[src-1][9]));cells[`I${row}`]={formula:`IF(${ref('材料填报',`L${src}`)}=1,"不适用见附页",IF(ISNUMBER(${ref('材料填报',`I${src}`)}),TEXT(${ref('材料填报',`I${src}`)}*100,"0.######")&"%详见附页","损耗待填"))`,value:m.notApplicable?'不适用见附页':`${round((m.lossRate??.1)*100)}%详见附页`};}
+      cells[`D${row}`]=textRef('材料填报',`C${src}`,m.name,24,`材料填报第${src}行`);cells[`E${row}`]=textRef('材料填报',`D${src}`,m.specification,28,`见材料填报第${src}行`);
+      const baseRef=ref('材料填报',`F${src}`),usageRef=ref('材料填报',`G${src}`),coefficientRef=ref('材料填报',`H${src}`);
+      cells[`F${row}`]=draftFormula(checklist?`IF(ISNUMBER(${usageRef}),${usageRef},IF(${usageRef}="",1,""))`:`IF(ISNUMBER(${usageRef}),${usageRef},"")`,checklist?(m.usage??1):m.usage);
+      cells[`G${row}`]=draftFormula(checklist?`IF(AND(OR(${baseRef}="",ISNUMBER(${baseRef})),OR(${coefficientRef}="",ISNUMBER(${coefficientRef}))),IF(ISNUMBER(${baseRef}),${baseRef},0)*IF(ISNUMBER(${coefficientRef}),${coefficientRef},1),"")`:`IF(COUNT(${baseRef},${coefficientRef})=2,${baseRef}*${coefficientRef},"")`,checklist?(m.basePrice??0)*(m.coefficient??1):m.basePrice===null||m.coefficient===null?null:m.basePrice*m.coefficient);
+      cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref('材料填报',`J${src}`)}),${ref('材料填报',`J${src}`)},"")`,cache(materialRows[src-1][9]));cells[`I${row}`]={formula:`IF(${ref('材料填报',`L${src}`)}=1,"不适用见附页",IF(ISNUMBER(${ref('材料填报',`I${src}`)}),TEXT(${ref('材料填报',`I${src}`)}*100,"0.######")&"%详见附页","损耗待填"))`,value:m.notApplicable?'不适用见附页':`${round((m.lossRate??.1)*100)}%详见附页`};}
     for(let i=0;i<8;i++){const row=42+i,o=outsourced[i],source=outsourceRefs[i];for(const c of 'CDEFGHI')cells[`${c}${row}`]=null;if(!o)continue;
       if(i===7&&outsourced.length>8){cells[`C${row}`]=`其余 ${outsourced.length-7} 项见外发填报`;const rest=outsourceRefs.slice(7);cells[`H${row}`]=sumCells(rest.map(v=>ref(v.sheet,`G${v.row}`)),rest.some(v=>v.value===null)?null:ieCostSum(rest.map(v=>v.value!)));continue;}
       const {sheet,row:src}=source;cells[`C${row}`]=textRef(sheet,`D${src}`,o.name,20,`${sheet}第${src}行`);cells[`D${row}`]=textRef(sheet,`J${src}`,o.part||'',20,'部位见子表');cells[`F${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`K${src}`)}),${ref(sheet,`K${src}`)},"")`,o.usage===undefined?1:o.usage);cells[`G${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`E${src}`)}),${ref(sheet,`E${src}`)},"")`,o.unitPrice);cells[`H${row}`]=draftFormula(`IF(ISNUMBER(${ref(sheet,`G${src}`)}),${ref(sheet,`G${src}`)},"")`,source.value);cells[`I${row}`]=o.notApplicable?'不适用见附页':`详见${sheet}`;}

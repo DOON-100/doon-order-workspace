@@ -1,13 +1,14 @@
 /** Pure, shared arithmetic for the worksheet and server. Amounts are CNY per pair. */
-export type IeFormulaVersion='ie-cost-v2-line-loss'|'ie-cost-v3-excel'|'ie-cost-v4-manual';
+export type IeFormulaVersion='ie-cost-v2-line-loss'|'ie-cost-v3-excel'|'ie-cost-v4-manual'|'ie-cost-v5-material-checklist';
 export type IeManualAdjustment={target:string;value:number;reason:string;sourceSignature:string};
 export type IeAdjustmentCell={target:string;label:string;automaticValue:number|null;effectiveValue:number|null;sourceSignature:string;adjustment?:IeManualAdjustment;stale:boolean;applied:boolean};
 export type IeLineAdjustmentKey='material'|'materialLoss'|'materialWithLoss'|'process'|'plating'|'outsourcing'|'outsourcingTotal'|'indirectLabor'|'rent'|'water'|'electricity'|'depreciation'|'supplies'|'indirect'|'laborTotal'|'productionCost'|'productionCostUsd'|'factoryPriceCny'|'factoryPriceUsd';
 const targetPart=(value:string)=>encodeURIComponent(value);
 export const ieAdjustmentTargets={material:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:material:${targetPart(rowId)}:amount`,process:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:process:${targetPart(rowId)}:amount`,outsourcing:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:outsourcing:${targetPart(rowId)}:amount`,line:(lineId:string,key:IeLineAdjustmentKey)=>`line:${targetPart(lineId)}:${key}`,tooling:'toolingChargeCny'};
 export type IeCalculationInput={
+ materialPricingMode?:'checklist';
  exchangeRateCnyPerUsd:number|null;
- lines:{id:string;model?:string;materials:{id?:string;name?:string;specification?:string;unit?:string;catalogId?:string;catalogVersion?:number|null;nameReference?:{catalogId:string;catalogVersion:number;entryId:string};priceSource?:string;basePrice:number|null;usage:number|null;coefficient:number|null;lossRate?:number;notApplicable:boolean}[];processes:{id?:string;name?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;basePrice:number|null;difficulty:number|null;usage?:number|null;notApplicable:boolean}[];outsourcing:{id?:string;name?:string;part?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;category:'plating'|'general';unitPrice:number|null;usage?:number|null;notApplicable:boolean}[]}[];
+ lines:{id:string;model?:string;materials:{id?:string;name?:string;specification?:string;unit?:string;catalogId?:string;catalogVersion?:number|null;nameReference?:{catalogId:string;catalogVersion:number;entryId:string;nameUsage?:'part-v1'};priceSource?:string;basePrice:number|null;usage:number|null;coefficient:number|null;lossRate?:number;notApplicable:boolean}[];processes:{id?:string;name?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;basePrice:number|null;difficulty:number|null;usage?:number|null;notApplicable:boolean}[];outsourcing:{id?:string;name?:string;part?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;category:'plating'|'general';unitPrice:number|null;usage?:number|null;notApplicable:boolean}[]}[];
  tooling:{id?:string;toolingId?:string;name?:string;lineIds?:string[];chargeMode:string;amount:number|null;chargeQuoteId?:string;chargeVersion?:number|null}[];
  manualAdjustments?:IeManualAdjustment[];
  costs?:{formulaVersion?:string};
@@ -27,7 +28,8 @@ export function ieCalculationVersion(fields:IeCalculationInput):IeFormulaVersion
  // Saved snapshots retain their original rules. Presence of the editable
  // adjustment collection opts a new save into the manual-price rules.
  const saved=fields.costs?.formulaVersion;
- if(saved==='ie-cost-v2-line-loss'||saved==='ie-cost-v3-excel'||saved==='ie-cost-v4-manual')return saved;
+ if(saved==='ie-cost-v2-line-loss'||saved==='ie-cost-v3-excel'||saved==='ie-cost-v4-manual'||saved==='ie-cost-v5-material-checklist')return saved;
+ if(fields.materialPricingMode==='checklist')return 'ie-cost-v5-material-checklist';
  return fields.manualAdjustments===undefined?'ie-cost-v3-excel':'ie-cost-v4-manual';
 }
 /** A deterministic dependency fingerprint, not an authorization token. The
@@ -35,7 +37,7 @@ export function ieCalculationVersion(fields:IeCalculationInput):IeFormulaVersion
 function signature(value:unknown){const text=JSON.stringify(value);let a=2166136261,b=2246822519;for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b^code,3266489917);}return 'ie-adjust-v1:'+(a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');}
 const completeSum=(values:(number|null)[])=>values.some(v=>v===null)?null:sum(values as number[]);
 export function calculateIeQuote(fields:IeCalculationInput){
- const formulaVersion=ieCalculationVersion(fields),excel=formulaVersion!=='ie-cost-v2-line-loss',manual=formulaVersion==='ie-cost-v4-manual';
+ const formulaVersion=ieCalculationVersion(fields),excel=formulaVersion!=='ie-cost-v2-line-loss',checklist=formulaVersion==='ie-cost-v5-material-checklist',manual=checklist||formulaVersion==='ie-cost-v4-manual';
  const adjustmentCells:IeAdjustmentCell[]=[],warnings:string[]=[],tokens=new Map<string,unknown>();
  const overrides=new Map((manual?fields.manualAdjustments||[]:[]).map(a=>[a.target,a]));
  const cell=(target:string,label:string,automaticValue:number|null,source:unknown,eligible=true)=>{
@@ -48,15 +50,15 @@ export function calculateIeQuote(fields:IeCalculationInput){
  const lines=fields.lines.map(l=>{
   const target=(key:IeLineAdjustmentKey)=>ieAdjustmentTargets.line(l.id,key),label=l.model||l.id;
   const lineCell=(key:IeLineAdjustmentKey,title:string,automatic:number|null,source:unknown)=>cell(target(key),label+' / '+title,automatic,source);
-  const materialRows=l.materials.map((r,i)=>{const t=ieAdjustmentTargets.material(l.id,r.id??String(i)),automatic=r.notApplicable?0:r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient],excel?2:6);return {row:r,target:t,value:cell(t,label+' / 材料 '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.specification||'',r.unit||'',r.catalogId||'',r.catalogVersion??null,r.nameReference?[r.nameReference.catalogId,r.nameReference.catalogVersion,r.nameReference.entryId]:null,r.priceSource,r.basePrice,r.usage,r.coefficient,r.notApplicable],!r.notApplicable)};});
+  const materialRows=l.materials.map((r,i)=>{const t=ieAdjustmentTargets.material(l.id,r.id??String(i)),automatic=r.notApplicable?0:checklist?multiply([r.basePrice??0,r.usage??1,r.coefficient??1],2):r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient],excel?2:6);const source=[r.name,r.specification||'',r.unit||'',r.catalogId||'',r.catalogVersion??null,r.nameReference?[r.nameReference.catalogId,r.nameReference.catalogVersion,r.nameReference.entryId,...(r.nameReference.nameUsage?[r.nameReference.nameUsage]:[])]:null,r.priceSource,r.basePrice,r.usage,r.coefficient,r.notApplicable,...(checklist?['material-checklist']:[])];return {row:r,target:t,value:cell(t,label+' / 材料 '+(r.name||String(i+1))+' 金额',automatic,source,!r.notApplicable)};});
   const processRows=l.processes.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.process(l.id,r.id??String(i)),automatic=r.notApplicable?0:r.basePrice===null||r.difficulty===null||usage===null?null:multiply([r.basePrice,r.difficulty,usage]);return {row:r,target:t,value:cell(t,label+' / 工序 '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.catalogId||'',r.catalogVersion??null,r.priceSource,r.basePrice,r.difficulty,usage,r.notApplicable],!r.notApplicable)};});
   const outsourcingRows=l.outsourcing.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.outsourcing(l.id,r.id??String(i)),automatic=r.notApplicable?0:r.unitPrice===null||usage===null?null:multiply([r.unitPrice,usage]);return {row:r,target:t,value:cell(t,label+' / '+(r.category==='plating'?'电镀':'一般外发')+' '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.part||'',r.catalogId||'',r.catalogVersion??null,r.priceSource,r.category,r.unitPrice,usage,r.notApplicable],!r.notApplicable)};});
-  const material=lineCell('material','材料净额',l.materials.length?completeSum(materialRows.map(r=>r.value)):null,materialRows.map(r=>token(r.target)));
+  const material=lineCell('material','材料净额',l.materials.length?completeSum(materialRows.map(r=>r.value)):checklist?0:null,materialRows.map(r=>token(r.target)));
   const process=lineCell('process','直接人工 / 工序',l.processes.length?completeSum(processRows.map(r=>r.value)):null,processRows.map(r=>token(r.target)));
   const categoryRows=(category:'plating'|'general')=>outsourcingRows.filter(r=>r.row.category===category),categoryTotal=(category:'plating'|'general')=>{const rows=categoryRows(category);return rows.length?completeSum(rows.map(r=>r.value)):null;};
   const plating=lineCell('plating','电镀',categoryTotal('plating'),categoryRows('plating').map(r=>token(r.target)));
   const outsourcing=lineCell('outsourcing','一般外发',categoryTotal('general'),categoryRows('general').map(r=>token(r.target)));
-  const rawLoss=l.materials.length?completeSum(materialRows.filter(r=>!r.row.notApplicable).map(({row:r,value})=>value===null?null:excel?multiply([value,r.lossRate??.1]):multiply([r.basePrice!,r.usage!,r.coefficient!,r.lossRate??.1]))):null;
+  const rawLoss=l.materials.length?completeSum(materialRows.filter(r=>!r.row.notApplicable).map(({row:r,value})=>value===null?null:excel?multiply([value,r.lossRate??.1]):multiply([r.basePrice!,r.usage!,r.coefficient!,r.lossRate??.1]))):checklist?0:null;
   // Original Excel rounds each material line to cents, then the total material
   // loss to cents. Weighting each rounded line preserves individual extra loss.
   const materialLoss=lineCell('materialLoss','材料损耗额',rawLoss===null?null:excel?cents(rawLoss):rawLoss,materialRows.map(r=>[token(r.target),r.row.lossRate??.1,r.row.notApplicable]));

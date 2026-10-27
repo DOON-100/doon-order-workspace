@@ -18,5 +18,9 @@ export async function testIeQuoteChangeLog({pass}){
  rebound.manualAdjustments=[{target:'line:line:material:m1:amount',value:9,reason:'合成逐项人工核价',sourceSignature:'ie-adjust-v1:0000000000000000'}];
  rebound.costs.adjustmentCells=[{target:rebound.manualAdjustments[0].target,label:'TEST / 材料甲 金额',automaticValue:10,effectiveValue:9,adjustment:rebound.manualAdjustments[0],applied:true,stale:false}];
  const manualLog=compareIeQuoteVersions(after,rebound);assert(manualLog.some(v=>v.label.includes('自动金额')&&v.after==='10'));assert(manualLog.some(v=>v.label.includes('人工金额')&&v.after==='9'));assert(manualLog.some(v=>v.label.includes('调整原因')&&v.after==='合成逐项人工核价'));assert(manualLog.some(v=>v.label.includes('名称来源')&&v.label.includes('词库版本')&&v.after==='2'));
+ const checklist=structuredClone(rebound);checklist.materialPricingMode='checklist';checklist.costs.formulaVersion='ie-cost-v5-material-checklist';checklist.lines[0].materials[0].nameReference.nameUsage='part-v1';
+ const ruleLog=compareIeQuoteVersions(rebound,checklist);assert(ruleLog.some(v=>v.path==='quote/materialPricingMode'&&v.label==='材料计价规则'&&v.before.includes('未填价格待确认')&&v.after.includes('未填价格按 0')));assert(ruleLog.some(v=>v.path==='quote/formulaVersion'&&v.after==='ie-cost-v5-material-checklist'));assert(ruleLog.some(v=>v.path.endsWith('/nameReference/nameUsage')&&v.before==='颜色资料原名'&&v.after==='配件名称（part-v1）'));assert(!ruleLog.some(v=>v.label.includes('基价')),'规则变更不伪造价格单元格改动');
+ assert.deepEqual(compareIeQuoteVersions(checklist,structuredClone(checklist)),[]);
  pass('IE版本日志按稳定行编号展示具体前后值、损耗百分点、删除项和计算结果，排除未知存储字段');
+ pass('IE版本日志记录材料清单计价规则、公式版本和名称取用方式变化，原名与配件投影可追溯');
 }

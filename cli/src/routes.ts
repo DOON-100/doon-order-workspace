@@ -55,7 +55,7 @@ export const routes = {
   '/api/workspace/ie-quote-handoff-read': {path:'/api/workspace/ie-quote-handoff',method:'GET',business:true,query:['id']},
   '/api/workspace/ie-quote-handoff': {method:'POST',business:true,write:true},
   '/api/workspace/ie-quote-handoff-accept': {method:'POST',business:true,write:true},
-  '/api/workspace/ie-material-names': {method:'GET',business:true,query:['q','offset','limit']},
+  '/api/workspace/ie-material-names': {method:'GET',business:true,query:['q','kind','offset','limit']},
   '/api/workspace/ie-material-names-import': {method:'POST',business:true,write:true},
   '/api/workspace/ie-quote-save': {method:'POST',business:true,write:true},
   '/api/workspace/ie-quote-submit': {method:'POST',business:true,write:true},

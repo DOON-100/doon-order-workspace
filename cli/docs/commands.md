@@ -69,7 +69,7 @@
 | `doon engineering ie-quotes handoffs [id] [--quote <id>]` | 查询工程交接目录或详情 | business-read-and-session-last-seen |
 | `doon engineering ie-quotes handoff --action push|accept --input <file> --version <number>` | 下推工程报价或本人接收并回读 | business-write |
 | `doon engineering ie-quotes names-schema` | 查询材料名称资料导入字段 | local-read |
-| `doon engineering ie-quotes names [--search <text>] [--limit <number>] [--offset <number>]` | 查询授权材料名称和来源行 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes names [--kind <kind>] [--search <text>] [--limit <number>] [--offset <number>]` | 查询授权材料名称和来源行 | business-read-and-session-last-seen |
 | `doon engineering ie-quotes names-import --input <file> --version <number> --request-id <uuid>` | 迁入独立材料名称资料并回读 | business-write |
 | `doon engineering ie-quotes reference-schema --type catalog|preset|tooling` | 查询基价、预设或模具表单字段 | local-read |
 | `doon engineering ie-quotes reference-list --type catalog|preset|tooling [--include-inactive]` | 查询授权报价参考资料 | business-read-and-session-last-seen |

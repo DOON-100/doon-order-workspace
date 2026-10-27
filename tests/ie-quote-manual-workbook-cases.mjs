@@ -46,6 +46,34 @@ export async function testIeManualWorkbook({pass=console.log}={}){
  const zero=structuredClone(q);zero.manualAdjustments=[];set(zero,t.process('line','p'),0);set(zero,t.line('line','factoryPriceCny'),0);const zeroOutput=parse((await m.exportIeQuoteInternalWorkbook(zero,{issues:[],template})).bytes);assert.equal(zeroOutput.cell('STYLE1','H53').value,0);assert.equal(zeroOutput.cell('STYLE1','I66').value,0);assert.equal(zeroOutput.cell('STYLE1','I67').value,0);
  const manualMissing=structuredClone(zero);manualMissing.manualAdjustments=[];manualMissing.lines[0].materials[0].basePrice=null;set(manualMissing,t.material('line','m'),8);const manualOutput=parse((await m.exportIeQuoteInternalWorkbook(manualMissing,{issues:[],template})).bytes);assert.equal(manualOutput.cell('材料填报','F2').value,null);assert.equal(manualOutput.cell('STYLE1','H7').value,8);assert.equal(manualOutput.cell('STYLE1','H62').value,calculateIeQuote(manualMissing).lines[0].productionCost);
  pass('IE Excel 人工价格与子表：电镀部位/次数、外发工序、直接人工、间接费用分别明细汇总；v4全部金额与服务端一致，自动/人工/原因/签名留存，0与缺基础价人工金额正确，失效调整不采用且正式导出阻断，原STYLE版式图片保全');
+ const checklist=structuredClone(q);checklist.materialPricingMode='checklist';checklist.manualAdjustments=[];
+ const material=checklist.lines[0].materials[0];
+ checklist.lines[0].materials=[{...material,id:'blank',name:'Synthetic blank checklist material',basePrice:null,usage:null,coefficient:null,priceSource:''},{...material,id:'price-only',basePrice:3.335,usage:null,coefficient:null},{...material,id:'explicit-zero',basePrice:5,usage:0,coefficient:null}];
+ const checklistCost=calculateIeQuote(checklist);assert.equal(checklistCost.formulaVersion,'ie-cost-v5-material-checklist');assert.equal(checklistCost.lines[0].material,3.34);assert.equal(checklistCost.lines[0].materialLoss,.33);
+ for(const output of [await m.exportIeQuoteDraftWorkbook(checklist,{issues:[],template}),await m.exportIeQuoteInternalWorkbook(checklist,{issues:[],template})]){
+  const {cell,sheets,entries}=parse(output.bytes);assert.equal(output.formulaVersion,'ie-cost-v5-material-checklist');
+  for(const address of ['F2','G2','H2','G3','H3'])assert.equal(cell('材料填报',address).value,null,address+' preserves source blank');
+  assert.equal(cell('材料填报','J2').value,0);assert.equal(cell('材料填报','K2').value,0);assert.equal(cell('材料填报','R2').value,0);assert.equal(cell('材料填报','J3').value,3.34);assert.equal(cell('材料填报','J4').value,0);
+  assert.equal(cell('STYLE1','F7').value,1);assert.equal(cell('STYLE1','G7').value,0);assert.equal(cell('STYLE1','H7').value,0);assert.equal(cell('STYLE1','F8').value,1);assert.equal(cell('STYLE1','G8').value,3.335);assert.equal(cell('STYLE1','H8').value,3.34);assert.equal(cell('STYLE1','F9').value,0);
+  const formula=cell('材料填报','R2').formula;assert(formula.includes('IF(ISNUMBER(F2),F2,0)*IF(ISNUMBER(G2),G2,1)*IF(ISNUMBER(H2),H2,1)'));assert(formula.includes('OR(F2="",ISNUMBER(F2))'));assert.equal(cell('STYLE1','F7').formula,'IF(ISNUMBER(\'材料填报\'!G2),\'材料填报\'!G2,IF(\'材料填报\'!G2="",1,""))');assert(cell('STYLE1','G7').formula.includes('IF(ISNUMBER(\'材料填报\'!F2),\'材料填报\'!F2,0)*IF(ISNUMBER(\'材料填报\'!H2),\'材料填报\'!H2,1)'));
+  assert.equal(cell('STYLE1','H37').value,checklistCost.lines[0].material);assert.equal(cell('STYLE1','H38').value,checklistCost.lines[0].materialLoss);assert.equal(cell('STYLE1','H62').value,checklistCost.lines[0].productionCost);assert.equal(cell('STYLE1','I66').value,checklistCost.lines[0].factoryPriceCny);
+  assert(sheets.get('填报说明').includes('材料清单空白基价按 0'));assert(sheets.get('填报说明').includes('其他子表空白金额仍须核对'));
+  assert.deepEqual(entries['xl/media/image1.png'],unzipSync(prepared.bytes)['xl/media/image1.png']);assert.equal((await m.inspectIeQuoteTemplate(output.bytes)).sheets.find(s=>s.name==='STYLE1').layoutSha256,prepared.inspection.sheets[0].layoutSha256);
+ }
+ const checklistManual=structuredClone(checklist);set(checklistManual,t.material('line','blank'),8,'Synthetic checklist manual amount');
+ const checklistManualCost=calculateIeQuote(checklistManual),checklistManualOutput=parse((await m.exportIeQuoteInternalWorkbook(checklistManual,{issues:[],template})).bytes);
+ assert.equal(checklistManualOutput.cell('材料填报','F2').value,null);assert.equal(checklistManualOutput.cell('材料填报','R2').value,0);assert.equal(checklistManualOutput.cell('材料填报','J2').value,8);assert.equal(checklistManualOutput.cell('材料填报','K2').value,.8);assert.equal(checklistManualOutput.cell('STYLE1','I66').value,checklistManualCost.lines[0].factoryPriceCny);assert(checklistManualOutput.sheets.get('人工调整').includes('Synthetic checklist manual amount'));
+ checklistManual.lines[0].materials[0].basePrice=2;
+ const changed=parse((await m.exportIeQuoteDraftWorkbook(checklistManual,{issues:['Synthetic stale amount'],template})).bytes);assert.equal(changed.cell('材料填报','J2').value,2);assert(changed.sheets.get('人工调整').includes('来源已变更，人工值未采用'));await assert.rejects(()=>m.exportIeQuoteInternalWorkbook(checklistManual,{issues:[],template}),/核对所有明细和人工调整/);
+ for(const rows of [[],[{...material,basePrice:null,usage:null,coefficient:null}]]){
+  const blank=structuredClone(checklist);blank.lines[0].materials=rows;const output=parse((await m.exportIeQuoteDraftWorkbook(blank,{issues:[],template})).bytes);assert.equal(output.cell('STYLE1','H37').value,0);assert.equal(output.cell('STYLE1','H38').value,0);assert.equal(output.cell('STYLE1','H62').value,calculateIeQuote(blank).lines[0].productionCost);
+ }
+ for(const version of ['ie-cost-v2-line-loss','ie-cost-v3-excel','ie-cost-v4-manual']){
+  const old=structuredClone(checklist);delete old.materialPricingMode;old.costs={formulaVersion:version};const oldBytes=await m.exportIeQuoteDraftWorkbook(old,{issues:['Synthetic legacy incomplete'],template});
+  old.materialPricingMode='checklist';const unchanged=await m.exportIeQuoteDraftWorkbook(old,{issues:['Synthetic legacy incomplete'],template});assert.equal(unchanged.formulaVersion,version);assert.deepEqual(unchanged.bytes,oldBytes.bytes);const oldOutput=parse(unchanged.bytes);assert.equal(oldOutput.cell('材料填报','J2').value,null);assert.equal(oldOutput.cell('STYLE1','H62').value,null);assert(oldOutput.cell('材料填报','R2').formula.includes('COUNT(F2:H2)=3'));
+ }
+ await fs.writeFile('test-output/ie-checklist-workbook-synthetic.xlsx',(await m.exportIeQuoteDraftWorkbook(checklist,{issues:[],template})).bytes);
+ pass('IE Excel 材料清单：v5空价按0、空用量系数按1、明确0保留；材料源格仍空白，公式缓存/STYLE汇总与服务端一致；人工价与失效签名保留；v2/v3/v4历史字节不变，原版式图片保全');
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)await testIeManualWorkbook();
 

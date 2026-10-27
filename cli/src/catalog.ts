@@ -120,7 +120,7 @@ export const quoteReferenceCommands=[
 {name:'engineering ie-quotes handoffs',usage:'engineering ie-quotes handoffs [id] [--quote <id>]',description:'查询工程交接目录或详情',effect:'business-read-and-session-last-seen'},
 {name:'engineering ie-quotes handoff',usage:'engineering ie-quotes handoff --action push|accept --input <file> --version <number>',description:'下推工程报价或本人接收并回读',effect:'business-write'},
 {name:'engineering ie-quotes names-schema',usage:'engineering ie-quotes names-schema',description:'查询材料名称资料导入字段',effect:'local-read'},
-{name:'engineering ie-quotes names',usage:'engineering ie-quotes names [--search <text>] [--limit <number>] [--offset <number>]',description:'查询授权材料名称和来源行',effect:'business-read-and-session-last-seen'},
+{name:'engineering ie-quotes names',usage:'engineering ie-quotes names [--kind <kind>] [--search <text>] [--limit <number>] [--offset <number>]',description:'查询授权材料名称和来源行',effect:'business-read-and-session-last-seen'},
 {name:'engineering ie-quotes names-import',usage:'engineering ie-quotes names-import --input <file> --version <number> --request-id <uuid>',description:'迁入独立材料名称资料并回读',effect:'business-write'},
 {name:'engineering ie-quotes reference-schema',usage:'engineering ie-quotes reference-schema --type catalog|preset|tooling',description:'查询基价、预设或模具表单字段',effect:'local-read'},
 {name:'engineering ie-quotes reference-list',usage:'engineering ie-quotes reference-list --type catalog|preset|tooling [--include-inactive]',description:'查询授权报价参考资料',effect:'business-read-and-session-last-seen'},

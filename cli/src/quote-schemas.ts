@@ -12,6 +12,12 @@ export const quoteSchemas={
       "integer": true,
       "min": 0
     },
+    "materialPricingMode": {
+      "type": "string",
+      "enum": [
+        "checklist"
+      ]
+    },
     "customerAccountId": {
       "type": "string",
       "min": 1,
@@ -186,6 +192,12 @@ export const quoteSchemas={
                       "min": 1,
                       "max": 120,
                       "required": true
+                    },
+                    "nameUsage": {
+                      "type": "string",
+                      "enum": [
+                        "part-v1"
+                      ]
                     }
                   }
                 },
