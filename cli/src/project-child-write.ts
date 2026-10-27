@@ -62,3 +62,19 @@ export class ProjectTaskWriteService {
   },{file,...(action==='create'?{}:{version}),token});
  }
 }
+
+export class ProjectRecycleService {
+ constructor(private store:StateStore,private transport:typeof fetch=fetch){}
+ async execute(action:'trash'|'restore',file:string,rawVersion:string,token:string){
+  if(!['trash','restore'].includes(action))throw new CliError('UNSUPPORTED_OPERATION','该写入尚未接入。',2);
+  if(!/^[1-9]\d*$/.test(rawVersion)||!Number.isSafeInteger(Number(rawVersion)))throw new CliError('INVALID_ARGUMENT','版本须为正整数。',2);
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token))throw new CliError('INVALID_ARGUMENT','操作标识须为 UUID。',2);
+  const version=Number(rawVersion),config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);
+  const api=new ApiClient(config,this.transport,30000),schema:WriteSchema={id:{type:'string',required:true,min:1,max:160},...(action==='trash'?{reason:{type:'string',required:true,min:1,max:2000} as const}:{})};
+  return executeWrite({schema,versionField:'version',tokenField:'token',
+   validate(payload){if(hasUntrimmed(payload))throw new CliError('INVALID_INPUT','字段不能含首尾空格。',2);},
+   async send(payload){const data=(await api.request(action==='trash'?'/api/workspace/customer-project-trash':'/api/workspace/customer-project-restore',session,payload)).data;if(data?.ok!==true||data.item?.id!==payload.id||!data.item.customerId)throw new CliError('INVALID_RESPONSE','写入结果无法核对，请查询原操作。',5,{outcomeUnknown:true});return data.item;},
+   async readBack(result,input){const data=(await api.request('/api/workspace/customer-project-data',session)).data,rows=action==='trash'?data?.trashedProjects:data?.projects,row=Array.isArray(rows)?rows.find((v:any)=>v.id===input.id):null;if(!row||row.version!==version+1||row.customerId!==result.customerId||(action==='trash'&&(!row.trashedAt||row.trashReason!==input.reason))||(action==='restore'&&row.trashedAt))throw Error('scope or changed');return {scope:{customerId:row.customerId},record:pick(row,fields('id version customerId title status trashedAt trashedBy trashReason'))};}
+  },{file,version,token});
+ }
+}

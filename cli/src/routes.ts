@@ -14,6 +14,8 @@ export const routes = {
   '/api/workspace/customer-project-task-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-task-submit': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-task-review': {method: 'POST', business: true, write: true},
+  '/api/workspace/customer-project-trash': {method: 'POST', business: true, write: true},
+  '/api/workspace/customer-project-restore': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-communication': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-data': {method: 'GET', business: true},

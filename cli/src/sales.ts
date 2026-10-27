@@ -5,7 +5,7 @@ import {CliError} from './errors.js';
 import type {Route} from './routes.js';
 
 export type Resource = 'teams' | 'customers' | 'projects' | 'followups' | 'inquiries' | 'quotes';
-export type Action = 'list' | 'show' | 'history' | 'version' | 'export-completed' | 'master';
+export type Action = 'list' | 'show' | 'history' | 'version' | 'export-completed' | 'master' | 'recycle';
 export type SalesOptions = {team?: string; customer?: string; search?: string; limit?: string; offset?: string; output?: string};
 const customerFields = fields('legalName shortName website brandIntroduction backgroundResearch contactPerson contactTitle phone email whatsapp wechat contacts companyAddress billingAddress shippingAddress defaultPaymentMethod defaultTradeTerms ndaStatus packagingRequirements documentRequirements longTermNotes type source stage orderHistory firstListedOn lastOrderOn');
 const projectFields = fields('id version customerId teamId code title description salesMemberId serviceMemberId serviceMemberIds serviceReviewerId salesReviewerId dueDate status updatedAt updatedBy canWrite canManageTasks canManageAssignments');
@@ -20,12 +20,12 @@ export class SalesService {
   constructor(private store: StateStore, private transport: typeof fetch = fetch) {}
 
   async execute(resource: Resource, action: Action, options: SalesOptions = {}, rawId?: string, rawVersion?: string) {
-    if (!['teams','customers','projects','followups','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed','master'].includes(action) || action==='master'&&resource!=='customers' || resource==='followups'&&!['list','show'].includes(action) ||
+    if (!['teams','customers','projects','followups','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed','master','recycle'].includes(action) || action==='recycle'&&resource!=='projects' || action==='master'&&resource!=='customers' || resource==='followups'&&!['list','show'].includes(action) ||
       (['version','export-completed'].includes(action) && resource !== 'quotes') || resource === 'teams' && action !== 'list') throw new CliError('UNSUPPORTED_OPERATION', '该业务命令尚未开放。', 2);
-    const team = identifier(options.team, '业务组'), customer = identifier(options.customer, '客户'), id = identifier(rawId, '记录', !['list','export-completed'].includes(action));
+    const team = identifier(options.team, '业务组'), customer = identifier(options.customer, '客户'), id = identifier(rawId, '记录', !['list','recycle','export-completed'].includes(action));
     const window = pagination(options), search = options.search?.trim() || '';
     if (search.length > 200 || /[\u0000-\u001f\u007f]/.test(search)) throw new CliError('INVALID_ARGUMENT', '搜索文字最多 200 个字符。', 2);
-    if (action !== 'list' && search) throw new CliError('INVALID_ARGUMENT', 'search 仅用于列表。', 2);
+    if (!['list','recycle'].includes(action) && search) throw new CliError('INVALID_ARGUMENT', 'search 仅用于列表。', 2);
     if (action === 'export-completed' && (customer || options.limit || options.offset || search || !options.output)) throw new CliError('INVALID_ARGUMENT', '总表导出仅支持业务组和必填 output，不支持客户或分页筛选。', 2);
     if (action === 'version' && (!rawVersion || !/^[1-9]\d*$/.test(rawVersion) || !Number.isSafeInteger(Number(rawVersion)))) throw new CliError('INVALID_ARGUMENT', '报价版本须为正整数。', 2);
     const scope = {teamId: team || null, customerId: customer || null, search: search || null, pagination: 'client', authorization: 'current-server-permissions', teamFilter: team ? 'server-list-guard' : 'all-authorized'};
@@ -69,6 +69,7 @@ export class SalesService {
     if (resource === 'projects') {
       const data = await read('/api/workspace/customer-project-data'), rows = collection(data, 'projects').filter(row => matches(row, ['id','code','title','description']));
       if (action === 'list') return {scope, page: page(rows.map(row => pick(row, fields('id version customerId teamId code title dueDate status updatedAt canWrite'))), window)};
+      if (action === 'recycle') return {scope,page:page(collection(data,'trashedProjects').filter(row=>matches(row,['id','code','title'])).map(row=>pick(row,fields('id version customerId teamId code title status trashedAt trashedBy trashReason'))),window)};
       const record = find(rows, id!);
       if (action === 'history') return {scope, projectId: id, page: page(collection(await read('/api/workspace/customer-project-history', {projectId: id!}), 'history').map(row => pick(row, fields('id action actor createdAt targetId'))), window)};
       const related = (key: string, keys: string[]) => page(collection(data, key).filter(row => row.projectId === id && row.customerId === record.customerId).map(row => pick(row, keys)), window);

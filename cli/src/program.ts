@@ -77,19 +77,20 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     }
     if(resource==='projects')for(const spec of salesWriteCommands.filter(c=>['sales projects item-add','sales projects communication-add','sales projects round-add'].includes(c.name))){const action=spec.name.endsWith('item-add')?'item-add':spec.name.endsWith('round-add')?'round-add':'communication-add';group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().projectChildWrite().execute(action,options.input,options.requestId)));}
     if(resource==='projects')for(const action of ['create','update','submit','review'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects task-${action}`)!;const command=group.command(`task-${action}`).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID');if(action!=='create')command.requiredOption('--version <number>','当前版本');command.action(async options=>result(spec.name,await foundation().projectTaskWrite().execute(action,options.input,options.version||'',options.requestId)));}
+    if(resource==='projects')for(const action of ['trash','restore'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects ${action}`)!;group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().projectRecycle().execute(action,options.input,options.version,options.requestId)));}
     if(resource==='projects'||resource==='inquiries'){const action=resource==='projects'?'project-create':'inquiry-create';const spec=salesWriteCommands.find(c=>c.name===`sales ${resource} create`)!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,'',options.requestId)));}
     for (const spec of salesCommands.filter(c => c.resource === resource)) {
       const command = group.command(spec.action).description(spec.description).option('--team <id>', '业务组编号；不填表示全部获授权范围');
       if (spec.action === 'export-completed') command.requiredOption('--output <file.xlsx>', '新输出文件，已有文件拒绝覆盖');
       else {
         command.option('--customer <id>', '精确客户编号').option('--limit <number>', '客户端每页 1–100 条', '20').option('--offset <number>', '客户端起始偏移', '0');
-        if (spec.action === 'list') command.option('--search <text>', '按当前资源的摘要字段搜索');
+        if (spec.action === 'list' || spec.action === 'recycle') command.option('--search <text>', '按当前资源的摘要字段搜索');
         else command.argument('<id>', '记录编号');
         if (spec.action === 'version') command.argument('<version>', '报价正整数版本号');
       }
       command.action(async (...args: any[]) => {
         const options = command.opts();
-        const id = spec.action !== 'list' && spec.action !== 'export-completed' ? args[0] : undefined;
+        const id = spec.action !== 'list' && spec.action !== 'recycle' && spec.action !== 'export-completed' ? args[0] : undefined;
         const quoteVersion = spec.action === 'version' ? args[1] : undefined;
         result(spec.name, await foundation().sales().execute(resource as Resource, spec.action as Action, options, id, quoteVersion));
       });

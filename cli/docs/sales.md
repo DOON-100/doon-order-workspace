@@ -85,3 +85,5 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales customers create --input <文件> --json` 新建客户主档。输入示例：`{ "customer": "客户名称", "customerCode": "客户编号", "salesName": "本人姓名" }`，还可指定 `serviceName` 和 `notes`；服务器决定哪些角色可创建及可指派的责任人。该接口仅创建，客户名称已存在时拒绝覆盖。服务器没有请求标识幂等能力，因此结果不明时先查询客户，不要盲目重复提交。
 
 `doon sales customers master <ID> --json` 查询可维护客户主档和版本；`doon sales customers master-update --input <文件> --version <版本> --json` 只更新指定主档字段。输入示例：`{ "id": "客户ID", "patch": { "notes": "客户备注" } }`；允许的字段为 `customer`、`customerCode`、`notes`。后台保留未指定字段、原责任和账号权限，并按原规则记录身份变化及审计。该功能需要服务器同步更新；当前仅覆盖管理员及本人负责的业务/客服，其他角色按服务器权限暂不开放。结果不明先查询当前记录，不自动重试。
+
+`doon sales projects recycle --json` 查询有权管理的回收站项目；`doon sales projects trash --input <文件> --version <当前版本> --request-id <UUID> --json` 移入回收站，输入 `id` 和 `reason`；`doon sales projects restore` 使用同样参数，输入仅 `id`。服务器校验项目管理权限和未完成事项，回收不物理删除记录，恢复沿用原业务状态。

@@ -1,7 +1,7 @@
 import {ApiClient, cookieSession} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
-import {ProjectChildWriteService,ProjectTaskWriteService} from './project-child-write.js';
+import {ProjectChildWriteService,ProjectTaskWriteService,ProjectRecycleService} from './project-child-write.js';
 import {SalesWriteService} from './sales-write.js';
 import {SalesService} from './sales.js';
 import {salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
@@ -27,6 +27,7 @@ export class FoundationService {
   salesWrite() { return new SalesWriteService(this.store, this.transport); }
   projectChildWrite() { return new ProjectChildWriteService(this.store, this.transport); }
   projectTaskWrite() { return new ProjectTaskWriteService(this.store, this.transport); }
+  projectRecycle() { return new ProjectRecycleService(this.store, this.transport); }
   orders() { return new OrderService(this.store, this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
