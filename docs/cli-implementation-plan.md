@@ -2,7 +2,7 @@
 
 基线：`origin/main` 的 `efbcf99`；2026-10-27（Asia/Shanghai）。用户确认 Commander.js，采用“框架先行、优先复用、缺少配套能力暂缓”的方式。固定业务客户端走主线，按栏目逐批交付。提交、推送与安装包构建不代表生产部署或全员开放。
 
-写入阶段另见 [CLI 写入阶段计划与进度](cli-write-implementation-plan.md)：W0–W11 均未开始，目标覆盖员工权限内全部表单和数据操作。
+写入阶段另见 [CLI 写入阶段计划与进度](cli-write-implementation-plan.md)：W0 进行中，W1–W11 未开始，目标覆盖员工权限内全部表单和数据操作。
 
 ## 批次和当前状态
 

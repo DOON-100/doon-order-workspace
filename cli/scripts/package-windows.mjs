@@ -61,7 +61,7 @@ async function main() {
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
-  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'service.js', 'state.js'];
+  const distFiles = ['business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'service.js', 'state.js', 'write-input.js'];
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));

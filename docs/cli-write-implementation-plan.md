@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**方案已记录，写入各批次均未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 进行中；W1–W11 未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -35,7 +35,7 @@ doon <业务组> <资源> <业务动作> <编号> ...
 
 | 批次 | 订单流程和表单 | 预设接口或需补能力 | 状态 |
 | --- | --- | --- | --- |
-| W0 | 全站能力盘点、通用写入框架；列出所有页面及其角色、动作、字段和记录范围；连接、输入文件、版本、错误及结果回读；确定员工使用与分发方案 | 现有身份会话及各业务接口；逐项核验版本/幂等/审计/预览；需要时补限定用途的服务端能力。产出覆盖矩阵和命令设计，不开放通用任意请求 | 未开始 |
+| W0 | 全站能力盘点、通用写入框架；列出所有页面及其角色、动作、字段和记录范围；连接、输入文件、版本、错误及结果回读；确定员工使用与分发方案 | [入口覆盖清单](cli-write-coverage.md)已登记 72 项；完成基础 JSON 输入校验，业务写入仍禁用。逐表单、字段、角色、接口能力及版本/幂等/回读框架待完成 | 进行中 |
 | W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | `customer-save`、`customer-project-*`、`customer-project-followup-*`、`customer-workflow-*`、`process-save`；项目回收/恢复分别核对 `customer-project-trash`、`customer-project-restore`；其他表单待审计 | 未开始 |
 | W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | `ie-quote-save/review/submit`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 未开始 |
 | W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；导入和金蝶相关动作逐一核实是否涉及外部系统 | 未开始 |

@@ -16,10 +16,11 @@ export class ApiClient {
 
   private async perform(route: Route, session: SavedSession | null | undefined, body: unknown, options: RequestOptions) {
     if (!Object.hasOwn(routes, route)) throw new CliError('UNSUPPORTED_OPERATION', '该操作尚未接入客户端。', 2);
-    const spec = routes[route] as {method: string; business?: boolean; query?: readonly string[]; binary?: boolean};
+    const spec = routes[route] as {method: string; business?: boolean; write?: boolean; query?: readonly string[]; binary?: boolean};
     const method = spec.method, headers: Record<string, string> = {'Accept': spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
     if (spec.business && !session) throw new CliError('AUTH_REQUIRED', '请先运行 doon login。', 4);
-    if (spec.business && body !== undefined) throw new CliError('UNSUPPORTED_OPERATION', '本批业务命令只接受查询。', 2);
+    if (spec.business && ((method !== 'GET' && !spec.write) || (body !== undefined && (!spec.write || method !== 'POST')))) throw new CliError('UNSUPPORTED_OPERATION', '该业务写入尚未接入客户端。', 2);
+    if (spec.business && spec.write && (method !== 'POST' || !body || typeof body !== 'object' || Array.isArray(body))) throw new CliError('INVALID_INPUT', '业务写入必须使用结构化对象。', 2);
     if (options.team) {
       if (!spec.business || options.team.length > 160 || /[\u0000-\u001f\u007f]/.test(options.team)) throw new CliError('INVALID_SCOPE', '业务组编号无效。', 2);
       headers['X-Workspace-Team'] = options.team;
@@ -37,10 +38,15 @@ export class ApiClient {
       headers.Cookie = session.cookie;
     }
     if (method === 'POST') { headers.Origin = this.config.origin; headers['Content-Type'] = 'application/json'; }
+    let encoded: string | undefined;
+    if (method === 'POST') {
+      try { encoded = JSON.stringify(body ?? {}); } catch { throw new CliError('INVALID_INPUT', '输入不能转换为 JSON。', 2); }
+      if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > 1024 * 1024)) throw new CliError('INVALID_INPUT', '业务输入超过 1 MiB 或格式无效。', 2);
+    }
     const signal = AbortSignal.timeout(this.timeout);
     try {
-      const response = await this.transport(url.href, {method, headers, body: method === 'POST' ? JSON.stringify(body ?? {}) : undefined, redirect: 'manual', signal});
-      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5); }
+      const response = await this.transport(url.href, {method, headers, body: encoded, redirect: 'manual', signal});
+      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5, method === 'POST' && spec.write ? {outcomeUnknown: true} : {}); }
       if (!response.ok) {
         await response.body?.cancel();
         const status = response.status, retry = response.headers.get('retry-after');
@@ -48,7 +54,8 @@ export class ApiClient {
         if (status === 401) throw new CliError('AUTH_REQUIRED', '登录已失效或账号密码不正确，请重新登录。', 4, {status});
         if (status === 403) throw new CliError('FORBIDDEN', '服务器拒绝此操作，请核对员工权限或先在网页修改初始密码。', 4, {status});
         if (status === 404) throw new CliError('NOT_FOUND', '记录或接口不存在，请核对编号和服务器版本。', 7, {status});
-        if (status === 429) throw new CliError('RATE_LIMITED', '服务器当前繁忙或请求过于频繁，请稍后再试。', 6, {status, retryable: true, ...(seconds !== undefined ? {retryAfterSeconds: seconds} : {})});
+        if (status === 409 && spec.write) throw new CliError('CONFLICT', '记录状态或版本发生冲突，请重新读取并核对。', 2, {status});
+        if (status === 429) throw new CliError('RATE_LIMITED', '服务器当前繁忙或请求过于频繁，请稍后再试。', 6, {status, retryable: !spec.write, ...(seconds !== undefined ? {retryAfterSeconds: seconds} : {})});
         throw new CliError(status >= 500 ? 'SERVER_UNAVAILABLE' : 'REQUEST_REJECTED', status >= 500 ? '服务器暂时无法完成操作。' : '服务器未接受请求，请核对配置与客户端版本。', status >= 500 ? 5 : 2, {status, retryable: method === 'GET' && status >= 500, ...(method === 'POST' && status >= 500 ? {outcomeUnknown: true} : {})});
       }
       const expectedType = spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json';
