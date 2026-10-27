@@ -63,3 +63,7 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `doon sales projects communication-add --input <文件> --request-id <UUID> --json` 追加沟通记录。输入示例：`{ "projectId": "项目ID", "occurredAt": "2026-10-20", "content": "沟通内容" }`；可选 `roundId`、`channel`、`contact`、`nextAction`、`ownerId`、`dueDate`、`visibility`、`attachmentIds`。如果填写 `nextAction`，服务器还会生成关联的项目任务；不填写时不会创建该任务。此命令只登记沟通，不对外发送。
 
 上述三项均以新 UUID 和现有项目权限提交并回读；当前仅新增，不通过默认字段覆盖旧记录。
+
+## 客户跟进
+
+`doon sales followups list --json` 和 `doon sales followups show <ID> --json` 查询本人有权访问的跟进记录，不支持业务组筛选；列表的 `members` 提供服务器返回的人员 ID、姓名和角色，供选择负责人，权限仍由服务器校验。`doon sales followups create --input <文件> --request-id <UUID> --json` 新建跟进；输入示例：`{ "ownerId": "负责人ID", "customerId": "客户ID", "projectId": "项目ID", "title": "跟进事项" }`。客户和项目可省略；关联项目须属于所选客户。可选 `category`、`stars`、`status`、`followUpDate`、`notes`、`nextAction`、`checklist`，`category` 可取 `shipping`、`order`、`exhibition`、`engineering`、`other`，`stars` 为 0–3；`status` 可取 `pending`、`in_progress`、`waiting_customer`、`waiting_internal`、`completed`。每项检查包括 `id`、`text`、`checked`。服务器校验客户及负责人权限，此命令仅新增，不覆盖旧跟进。

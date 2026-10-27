@@ -65,6 +65,7 @@ saveRecords([{id:'round1',kind:'pmc_round',actorId:pmc.memberId,actor:'Synthetic
 const op=(id,type)=>({id,kind:'process_record',type,version:1,customerId:'c1',orderId:'o1',teamId:'t1',title:'Synthetic '+type,status:'待核实',gateStatus:'待检',details:{inspectedQuantity:null,acceptedQuantity:0,rejectedQuantity:0,quantity:0,releaseRef:'待核对'},createdAt:at,updatedAt:at,updatedBy:'Synthetic'});
 const quality=op('quality1','iqc'),additionalQuality=['first-article','process-quality','outsourcing-quality','oqc'].map(type=>op('quality-'+type,type)),packaging=op('packaging1','packaging'),release=op('release1','shipment-release');
 const ship={id:'ship1',kind:'service_record',type:'shipment',version:1,customerId:'c1',orderId:'o1',title:'Synthetic shipment',description:'',status:'open',waitingFor:'none',dueDate:'',nextFollowUp:'',details:{invoiceNo:'INV-1',quantity:1,shipDate:'',carrier:'',trackingNo:'',packingNote:''},createdAt:at,updatedAt:at,updatedBy:'Synthetic'};
+saveRecords([{id:'followup1',kind:'customer_project_followup',version:1,ownerId:a.memberId,customerId:'c1',projectId:'p1',title:'Synthetic followup',category:'other',stars:0,status:'pending',followUpDate:'',notes:'',nextAction:'',checklist:[]}]);
 saveRecords([quality,...additionalQuality,packaging,release,...[quality,...additionalQuality,packaging,release].map(row=>({id:'history-'+row.id,kind:'process_record_revision',recordId:row.id,customerId:'c1',orderId:'o1',teamId:'t1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:row})),ship,
 {id:'ship-history',kind:'service_revision',recordId:'ship1',customerId:'c1',version:1,action:'创建',actor:'Synthetic',createdAt:at,snapshot:ship},
 {id:'report1',kind:'report',version:1,lineId:'o1',orderNo:'SO-o1',drawing:'DRAW',color:'Black',lens:'Clear',workOrder:'W1',task:'T1',process:'包装',batch:'B1',startedAt:at,reportedAt:at,quantity:0,approval:'待核对',nativeId:'R1',identityType:'MES',source:'synthetic.xlsx',updatedAt:at,updatedBy:'Synthetic'},
@@ -156,7 +157,7 @@ try{
     const flag=process.argv.indexOf('--cli-root'),cliRoot=flag<0?path.join(root,'cli'):path.resolve(process.argv[flag+1]);
     const nodeBinary=flag<0?process.execPath:path.join(cliRoot,'node.exe');
     const argumentsFor={setup:['--server',origin,'--allow-local-http'],login:[],logout:[],whoami:[],doctor:[],commands:[],modules:[]};
-    const ids={customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1',records:'charge1',receivables:'receivable1',reconciliations:'recon1',complaints:'complaint1'};
+    const ids={followups:'followup1',customers:'c1',projects:'p1',inquiries:'r1',quotes:'q1',orders:'o1',sources:'source1',pi:'pi1',documents:'invoice1','production-orders':'production1',drawings:'drawing1',sops:'sop1',samples:'sample1','ie-quotes':'ie1',rounds:'round1',purchases:'purchase1',outsource:'outs1','factory-orders':'factory1',reports:'report1',finished:'finished1',quality:'quality1',packaging:'packaging1',releases:'release1',shipments:'ship1',records:'charge1',receivables:'receivable1',reconciliations:'recon1',complaints:'complaint1'};
     // Run every command from the actual catalog, rather than maintaining an unrelated fixed command count.
     for(const spec of [...commands.filter(c=>c.name!=='logout'&&c.effect!=='business-write'),commands.find(c=>c.name==='logout')]){
       const parts=spec.name.split(' ');let args=[...parts];
@@ -168,7 +169,7 @@ try{
         if(resource==='quality')args.push('--type','iqc');
         if(parts[0]==='finance'&&resource==='records')args.push('--kind','charges');
         if(action==='export'||action==='export-completed')args.push('--output',path.join(dir,'command-'+testedCommands.length+'.xlsx'));
-        if(resource!=='ie-quotes')args.push('--team','t1');
+        if(!['ie-quotes','followups'].includes(resource))args.push('--team','t1');
       }
       const value=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args,'--json'],{env:{...env,DOON_CLI_HOME:parts[0]==='planning'?pmcProcessState.directory:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));
       assert.equal(value.ok,true,spec.name);assert.equal(value.command,spec.name);testedCommands.push(spec.name);
@@ -221,6 +222,8 @@ try{
     await fs.writeFile(itemInput,JSON.stringify({projectId:'p1',model:'Synthetic Model',quantity:5}));
     await fs.writeFile(communicationInput,JSON.stringify({projectId:'p1',occurredAt:'2026-10-20',content:'Synthetic communication',nextAction:'Synthetic next action'}));
     await fs.writeFile(roundInput,JSON.stringify({projectId:'p1',title:'Synthetic round',type:'development',scope:[{itemId:'not-visible',quantity:3}]}));
+    const identityId=(await services.sales_a.foundation.whoami()).identity.id,ownerId=snapshot().records.filter(row=>row.kind==='member').map(row=>JSON.parse(row.data)).find(row=>row.userId===identityId)?.id;assert(ownerId);
+    const followupInput=path.join(dir,'followup-input.json');await fs.writeFile(followupInput,JSON.stringify({ownerId,customerId:'c1',projectId:'p1',title:'Synthetic new followup',checklist:[{id:'check1',text:'Synthetic check',checked:false}]}));
     const beforeChanges=snapshot();
     const unsafeInput=path.join(dir,'unsafe-input.json');await fs.writeFile(unsafeInput,JSON.stringify({customerId:'c1',patch:{bankPaymentInfo:'SYNTHETIC_FORBIDDEN'}}));
     await assert.rejects(writeA.execute('profile-update',unsafeInput,'1','44444444-4444-4444-8444-444444444444'),{code:'INVALID_INPUT'});
@@ -229,7 +232,9 @@ try{
     await assert.rejects(childB.execute('item-add',itemInput,'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'),{code:'FORBIDDEN'});
     await assert.rejects(childB.execute('communication-add',communicationInput,'12121212-1212-4212-8212-121212121212'),{code:'FORBIDDEN'});
     await assert.rejects(childB.execute('round-add',roundInput,'14141414-1414-4414-8414-141414141414'),{code:'FORBIDDEN'});
+    await assert.rejects(writeB.execute('followup-create',followupInput,'','16161616-1616-4616-8616-161616161616'),{code:'FORBIDDEN'});
     assert.deepEqual(snapshot(),beforeChanges);
+    const followup=await writeA.execute('followup-create',followupInput,'','17171717-1717-4717-8717-171717171717');assert.equal(followup.record.title,'Synthetic new followup');assert.deepEqual(await writeA.execute('followup-create',followupInput,'','17171717-1717-4717-8717-171717171717'),followup);assert.equal((await a.execute('followups','show',{},followup.record.id)).record.title,'Synthetic new followup');await assert.rejects(b.execute('followups','show',{},followup.record.id),{code:'NOT_IN_SCOPE'});
     const updated=await writeA.execute('profile-update',profileInput,'1',profileToken);
     assert.equal(updated.record.profile.version,2);assert.equal(updated.record.profile.fields.legalName,'Synthetic Updated');
     assert(!JSON.stringify(updated).includes('SYNTHETIC_BANK_PRIVATE'));
@@ -282,6 +287,7 @@ try{
       {const args=['sales','projects','create','--input',projectInput,'--request-id','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales projects create');}
       {const args=['sales','inquiries','create','--input',inquiryInput,'--request-id','cccccccc-cccc-4ccc-8ccc-cccccccccccc','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales inquiries create');}
       for(const [action,file,token] of [['item-add',itemInput,'12345678-1234-4234-8234-123456789abd'],['communication-add',communicationInput,'12345678-1234-4234-8234-123456789abe'],['round-add',roundInput,'12345678-1234-4234-8234-123456789abf']]){const args=['sales','projects',action,'--input',file,'--request-id',token,'--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales projects '+action);}
+      {const args=['sales','followups','create','--input',followupInput,'--request-id','18181818-1818-4818-8818-181818181818','--json'];const result=JSON.parse(execFileSync(nodeBinary,[path.join(cliRoot,'dist/index.js'),...args],{env:{...env,DOON_CLI_HOME:processState.directory},windowsHide:true,encoding:'utf8',maxBuffer:1024*1024}));assert.equal(result.ok,true);testedCommands.push('sales followups create');}
       assert.equal(testedCommands.length,commands.length);
       const afterCli=snapshot(),afterCliById=new Map(afterCli.records.map(row=>[row.id,row.data]));
       for(const [id,data] of oldById)if(id!=='profile1')assert.equal(afterCliById.get(id),data,'Unrelated record changed or removed by CLI');

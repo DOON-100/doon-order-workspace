@@ -63,8 +63,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   program.command('commands').description(describe('commands')).action(() => result('commands', commands));
   program.command('modules').description(describe('modules')).action(() => result('modules', modules));
   const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
-  for (const resource of ['teams','customers','projects','inquiries','quotes'] as const) {
-    const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',inquiries:'询价评估',quotes:'客户报价'}[resource]);
+  for (const resource of ['teams','customers','projects','followups','inquiries','quotes'] as const) {
+    const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',followups:'客户跟进',inquiries:'询价评估',quotes:'客户报价'}[resource]);
+    if(resource==='followups'){const spec=salesWriteCommands.find(c=>c.name==='sales followups create')!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().salesWrite().execute('followup-create',options.input,'',options.requestId)));}
     if (resource === 'customers') for (const spec of salesWriteCommands.filter(c=>c.name.startsWith('sales customers '))) {
       const action=spec.name.endsWith('profile-update')?'profile-update':'schedule-set';
       group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本，可为 0').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,options.version,options.requestId)));

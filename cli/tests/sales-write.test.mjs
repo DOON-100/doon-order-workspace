@@ -40,3 +40,16 @@ test('create readback compares supplied project and inquiry fields',async()=>{
   }
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('followup creation checks nested identifiers before writing and verifies the saved checklist',async()=>{
+ const dir=await fs.mkdtemp(path.join(os.tmpdir(),'doon-w1-followup-'));
+ try{
+  const state=new StateStore(path.join(dir,'state'),testCodec());await state.setup('https://employee.test',false);await state.saveSession(session('https://employee.test'));
+  const file=path.join(dir,'input.json'),token='33333333-3333-4333-8333-333333333333';let posts=0;
+  const input={ownerId:'a',title:'Followup',checklist:[{id:'  item',text:'Check',checked:false}]};await fs.writeFile(file,JSON.stringify(input));
+  const service=new SalesWriteService(state,async(_url,init)=>{if(init.method==='POST'){posts++;return Response.json({ok:true,item:{id:'f1',ownerId:'a'}});}return Response.json({followups:[{id:'f1',ownerId:'a',title:'Followup',version:1,checklist:[{id:'item',text:'Changed',checked:false}]}]});});
+  await assert.rejects(service.execute('followup-create',file,'',token),{code:'INVALID_INPUT'});assert.equal(posts,0);
+  input.checklist[0].id='item';await fs.writeFile(file,JSON.stringify(input));
+  await assert.rejects(service.execute('followup-create',file,'',token),{code:'READBACK_FAILED'});assert.equal(posts,1);
+ }finally{await fs.rm(dir,{recursive:true,force:true});}
+});

@@ -11,6 +11,8 @@ export const routes = {
   '/api/workspace/customer-project-communication': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-data': {method: 'GET', business: true},
+  '/api/workspace/customer-project-followup-data': {method: 'GET', business: true},
+  '/api/workspace/customer-project-followup-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-history': {method: 'GET', business: true, query: ['projectId']},
   '/api/workspace/process-save': {method: 'POST', business: true, write: true},
   '/api/workspace/process-data': {method: 'GET', business: true, query: ['type']},

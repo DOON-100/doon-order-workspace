@@ -4,7 +4,7 @@ import {StateStore} from './state.js';
 import {CliError} from './errors.js';
 import type {Route} from './routes.js';
 
-export type Resource = 'teams' | 'customers' | 'projects' | 'inquiries' | 'quotes';
+export type Resource = 'teams' | 'customers' | 'projects' | 'followups' | 'inquiries' | 'quotes';
 export type Action = 'list' | 'show' | 'history' | 'version' | 'export-completed';
 export type SalesOptions = {team?: string; customer?: string; search?: string; limit?: string; offset?: string; output?: string};
 const customerFields = fields('legalName shortName website brandIntroduction backgroundResearch contactPerson contactTitle phone email whatsapp wechat contacts companyAddress billingAddress shippingAddress defaultPaymentMethod defaultTradeTerms ndaStatus packagingRequirements documentRequirements longTermNotes type source stage orderHistory firstListedOn lastOrderOn');
@@ -20,7 +20,7 @@ export class SalesService {
   constructor(private store: StateStore, private transport: typeof fetch = fetch) {}
 
   async execute(resource: Resource, action: Action, options: SalesOptions = {}, rawId?: string, rawVersion?: string) {
-    if (!['teams','customers','projects','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed'].includes(action) ||
+    if (!['teams','customers','projects','followups','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed'].includes(action) || resource==='followups'&&!['list','show'].includes(action) ||
       (['version','export-completed'].includes(action) && resource !== 'quotes') || resource === 'teams' && action !== 'list') throw new CliError('UNSUPPORTED_OPERATION', '该业务命令尚未开放。', 2);
     const team = identifier(options.team, '业务组'), customer = identifier(options.customer, '客户'), id = identifier(rawId, '记录', !['list','export-completed'].includes(action));
     const window = pagination(options), search = options.search?.trim() || '';
@@ -41,6 +41,13 @@ export class SalesService {
       catch (error) { if (error instanceof CliError && error.code === 'AUTH_REQUIRED') await this.store.clearSession(); throw error; }
     };
     const matches = (row: Row, keys: string[], customerKey = 'customerId') => (!customer || row[customerKey] === customer) && (!search || keys.some(key => typeof row[key] === 'string' && row[key].toLocaleLowerCase().includes(search.toLocaleLowerCase())));
+    if(resource==='followups'){
+      if(team)throw new CliError('UNSUPPORTED_FILTER','客户跟进不支持业务组筛选。',2);
+      const data=await read('/api/workspace/customer-project-followup-data');
+      const rows=collection(data,'followups').filter(row=>matches(row,['id','title','notes','nextAction']));
+      const project=(row:Row)=>({...pick(row,fields('id version ownerId customerId projectId title category stars status followUpDate notes nextAction canWrite createdAt updatedAt')),checklist:Array.isArray(row.checklist)?row.checklist.map((item:Row)=>pick(item,fields('id text checked'))):[]});
+      return action==='list'?{scope,page:page(rows.map(project),window),members:collection(data,'members').map(row=>pick(row,fields('id name role')))}:{scope,record:project(find(rows,id!))};
+    }
     if (resource === 'teams') {
       const rows = collection(await read('/api/workspace/business-team-data'), 'teams');
       if (team && team !== '__ungrouped') find(rows, team);

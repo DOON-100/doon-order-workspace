@@ -6,7 +6,7 @@
 2. 用 `doon whoami --json` 核对身份。AUTH_REQUIRED 时让员工本人回到终端登录；mustChange=true 时让员工在网页修改初始密码。
 3. 机器调用统一加 `--json`，检查进程退出码和 ok。只把 data 当作结果，不把 stdout 的出现当成功。
 4. 登录由员工交互完成；不要索要、读取配置文件中的会话、复制凭据、把密码写入参数/环境/脚本/提示词。
-5. 已支持业务组、客户、项目、询价、报价、订单、销售原单、PI、客服单据、生产交接、工程、样品、PMC、采购和外协查询，以及报价总表和单张销售原单导出。已支持客户资料字段更新、跟进排程、创建客户项目和询价记录、追加项目款色、轮次与沟通；其他业务写入、采购修改或审批尚未开放。不要猜测命令或用 HTTP/SQL/本机运维脚本补做缺少的功能。
+5. 已支持业务组、客户、项目、询价、报价、订单、销售原单、PI、客服单据、生产交接、工程、样品、PMC、采购和外协查询，以及报价总表和单张销售原单导出。已支持客户资料字段更新、跟进排程、创建客户项目和询价记录、追加项目款色、轮次、沟通与客户跟进；其他业务写入、采购修改或审批尚未开放。不要猜测命令或用 HTTP/SQL/本机运维脚本补做缺少的功能。
 6. RATE_LIMITED 时按提示等待，避免并行重试与循环轮询。其他错误按 code 处理；POST 的 outcomeUnknown 不表示未执行。
 
 该说明约束使用方式，不能代替服务器权限控制。首版 CLI 会话沿用员工原有权限，没有新增独立只读令牌。正式接入模型参与的业务写入时，继续按项目规则人工确认并由服务器执行和回读。
@@ -25,4 +25,4 @@ IE 报价不能用 `--team`，按服务器授权及可选客户ID读取，含工
 
 ## W1 客户资料与排程
 
-对于已经明确的操作，使用 `sales customers profile-update` 、`sales customers schedule-set` 、`sales projects create` 、`sales inquiries create`、`sales projects item-add` 或 `sales projects communication-add` 或 `sales projects round-add`，按业务部说明准备 JSON 文件和操作 UUID，更新操作提供当前版本；CLI 不增加确认逻辑。不要更改未指定的资料字段，不用命令行传入账号密码或会话。出现 `outcomeUnknown` 或 `READBACK_FAILED` 时先查询原结果，不自行生成新 UUID 重复提交。仅同一操作、同一内容可使用原 UUID 复核重放；无权限或版本变化时停止并报告。
+对于已经明确的操作，使用 `sales customers profile-update` 、`sales customers schedule-set` 、`sales projects create` 、`sales inquiries create`、`sales projects item-add` 或 `sales projects communication-add` 或 `sales projects round-add` 或 `sales followups create`，按业务部说明准备 JSON 文件和操作 UUID，更新操作提供当前版本；CLI 不增加确认逻辑。不要更改未指定的资料字段，不用命令行传入账号密码或会话。出现 `outcomeUnknown` 或 `READBACK_FAILED` 时先查询原结果，不自行生成新 UUID 重复提交。仅同一操作、同一内容可使用原 UUID 复核重放；无权限或版本变化时停止并报告。
