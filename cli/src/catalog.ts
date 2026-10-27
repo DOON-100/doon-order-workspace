@@ -1,4 +1,4 @@
-export const version = '0.30.0';
+export const version = '0.31.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -95,13 +95,42 @@ export const developmentReadCommands=[{name:'sales projects development-show',us
 export const attachmentCommands=[{name:'sales attachments list',usage:'sales attachments list --customer <id> [--project <id>]',description:'查询客户或项目附件',effect:'business-read-and-session-last-seen'},{name:'sales attachments download',usage:'sales attachments download <id> --customer <id> [--project <id>] --output <file>',description:'校验并下载授权附件',effect:'local-file-and-session-last-seen'},{name:'sales attachments upload',usage:'sales attachments upload --input <file> --file <file> --request-id <uuid>',description:'上传客户或项目附件并回读',effect:'business-write'},{name:'sales attachments update',usage:'sales attachments update --input <file> --version <number> --request-id <uuid>',description:'修改或归档附件资料并回读',effect:'business-write'}] as const;
 export const transferCommands=[{name:'sales customers transfers',usage:'sales customers transfers',description:'查询客户流转与公海工作台',effect:'business-read-and-session-last-seen'},{name:'sales customers transfer',usage:'sales customers transfer --action <action> --input <file> --version <number> --request-id <uuid>',description:'执行客户流转的指定业务动作并回读',effect:'business-write'}] as const;
 export const customerTaskCommands=[{name:'sales customer-tasks list',usage:'sales customer-tasks list [--customer <id>]',description:'查询客户任务与负责人',effect:'business-read-and-session-last-seen'},{name:'sales customer-tasks history',usage:'sales customer-tasks history <id>',description:'查询客户任务历史',effect:'business-read-and-session-last-seen'},{name:'sales customer-tasks save',usage:'sales customer-tasks save --input <file> --version <number> --request-id <uuid>',description:'新增或修改客户任务并回读',effect:'business-write'}] as const;
+export const priceArchiveCommands=[
+{name:'sales prices schema',usage:'sales prices schema --type dataset|selection|source',description:'查询价格档案表单字段',effect:'local-read'},
+{name:'sales prices list',usage:'sales prices list [--customer <id>] [--view sku|history]',description:'查询授权历史价格及发票依据',effect:'business-read-and-session-last-seen'},
+{name:'sales prices archive',usage:'sales prices archive <id>',description:'管理员核对档案摘要与来源目录',effect:'business-read-and-session-last-seen'},
+{name:'sales prices import',usage:'sales prices import --input <file>',description:'迁入新价格档案并核对摘要',effect:'business-write'},
+{name:'sales prices selection-save',usage:'sales prices selection-save --input <file> --version <number>',description:'保存发票价格规则并回读',effect:'business-write'},
+{name:'sales prices source-upload',usage:'sales prices source-upload --input <file> --file <file>',description:'按来源摘要归档价格原件',effect:'business-write'},
+{name:'sales prices source-download',usage:'sales prices source-download <archiveId> <fileId> --output <file>',description:'管理员核验并下载价格原件',effect:'local-file-and-session-last-seen'},
+{name:'sales prices export',usage:'sales prices export [--customer <id>] [--view sku|history] --output <file.xlsx>',description:'导出授权价格摘录',effect:'local-file-and-session-last-seen'}
+];
+export const quoteFileCommands=['sales quotes','engineering ie-quotes'].flatMap(prefix=>[
+{name:prefix+' file-schema',namespace:prefix.split(' ')[0],usage:prefix+' file-schema --type <type>',description:'查询文件上传字段',effect:'local-read'},
+{name:prefix+' file-list',namespace:prefix.split(' ')[0],usage:prefix+' file-list <quoteId> --version <number>',description:'查询指定报价版本的文件与模板状态',effect:'business-read-and-session-last-seen'},
+{name:prefix+' file-upload',namespace:prefix.split(' ')[0],usage:prefix+' file-upload --type <type> --input <file> --file <file> [--version <number>]',description:'上传指定类别报价文件并回读',effect:'business-write'},
+{name:prefix+' file-action',namespace:prefix.split(' ')[0],usage:prefix+' file-action --action <action> --input <file> --version <number>',description:'维护文件引用或应用模板并回读',effect:'business-write'},
+{name:prefix+' file-download',namespace:prefix.split(' ')[0],usage:prefix+' file-download <quoteId> --type <type> [--id <id>] --version <number> --output <file>',description:'核验并下载报价文件',effect:'local-file-and-session-last-seen'},
+{name:prefix+' file-export',namespace:prefix.split(' ')[0],usage:prefix+' file-export <quoteId> --type <type> --version <number> --output <file>',description:prefix.startsWith('sales')?'导出客户模板并按原权限归档成品':'导出内部报价文件',effect:prefix.startsWith('sales')?'business-write':'local-file-and-session-last-seen'},
+...(prefix.startsWith('sales')?[{name:'sales quotes record-sent',namespace:'sales',usage:'sales quotes record-sent --input <file> --version <number> --request-id <uuid>',description:'登记已发送事实，不发送消息',effect:'business-write'},{name:'sales quotes templates',namespace:'sales',usage:'sales quotes templates --customer <id>',description:'查询客户报价模板',effect:'business-read-and-session-last-seen'}]:[])
+]);
+export const quoteReferenceCommands=[
+{name:'engineering ie-quotes handoffs',usage:'engineering ie-quotes handoffs [id] [--quote <id>]',description:'查询工程交接目录或详情',effect:'business-read-and-session-last-seen'},
+{name:'engineering ie-quotes handoff',usage:'engineering ie-quotes handoff --action push|accept --input <file> --version <number>',description:'下推工程报价或本人接收并回读',effect:'business-write'},
+{name:'engineering ie-quotes names-schema',usage:'engineering ie-quotes names-schema',description:'查询材料名称资料导入字段',effect:'local-read'},
+{name:'engineering ie-quotes names',usage:'engineering ie-quotes names [--search <text>] [--limit <number>] [--offset <number>]',description:'查询授权材料名称和来源行',effect:'business-read-and-session-last-seen'},
+{name:'engineering ie-quotes names-import',usage:'engineering ie-quotes names-import --input <file> --version <number> --request-id <uuid>',description:'迁入独立材料名称资料并回读',effect:'business-write'},
+{name:'engineering ie-quotes reference-schema',usage:'engineering ie-quotes reference-schema --type catalog|preset|tooling',description:'查询基价、预设或模具表单字段',effect:'local-read'},
+{name:'engineering ie-quotes reference-list',usage:'engineering ie-quotes reference-list --type catalog|preset|tooling [--include-inactive]',description:'查询授权报价参考资料',effect:'business-read-and-session-last-seen'},
+{name:'engineering ie-quotes reference-save',usage:'engineering ie-quotes reference-save --type catalog|preset|tooling --input <file> [--version <number>]',description:'新增或修改报价参考资料并回读',effect:'business-write'}
+];
 export const quoteWriteCommands=['sales quotes','engineering ie-quotes'].flatMap(prefix=>[
  {name:prefix+' schema',namespace:prefix.split(' ')[0],usage:prefix+' schema',description:'查询报价表单与动作字段',effect:'local-read'},
- {name:prefix+' form',namespace:prefix.split(' ')[0],usage:prefix+' form <id>',description:'读取授权的可编辑报价字段',effect:'business-read-and-session-last-seen'},
+ {name:prefix+' form',namespace:prefix.split(' ')[0],usage:prefix+' form <id> [--version <number>]',description:'读取授权的可编辑报价字段',effect:'business-read-and-session-last-seen'},
  {name:prefix+' save',namespace:prefix.split(' ')[0],usage:prefix+' save --input <file> [--version <number>]',description:'新增报价或更新指定字段并回读',effect:'business-write'},
  {name:prefix+' action',namespace:prefix.split(' ')[0],usage:prefix+' action --type <type> --input <file> --version <number>',description:'执行既有报价业务动作并回读',effect:'business-write'}
 ]);
-export const commands = [...foundationCommands, ...quoteWriteCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const commands = [...foundationCommands, ...priceArchiveCommands, ...quoteFileCommands, ...quoteReferenceCommands, ...quoteWriteCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...attachmentCommands, ...transferCommands, ...customerTaskCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -109,4 +138,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...quoteWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id==='sales'?priceArchiveCommands.map(c=>c.name):[]),...quoteFileCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id==='engineering'?quoteReferenceCommands.map(c=>c.name):[]),...quoteWriteCommands.filter(c=>c.namespace===id).map(c=>c.name),...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name),...attachmentCommands.map(c=>c.name),...transferCommands.map(c=>c.name),...customerTaskCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import * as XLSX from 'xlsx';
-import {all,newId,now,type Entity,type Member,type State} from './domain';
+import {all,clean,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha,makeWorkbook} from './workbooks';
 import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
@@ -21,7 +21,11 @@ async function filtered(s:State,m:Member,url:URL){
  return {view,selections,canManageSelection:isCustomerQuoteAdministrator(m,s),customers:customers.map(({id,customer,customerCode})=>({id,customer,customerCode})),rows,summary:{products:rows.length,skus:rows.filter(r=>r.product.sku).length,verified:rows.filter(r=>r.status==='verified').length,needsReview:rows.filter(r=>r.status==='needs_review').length,missingPrice:rows.filter(r=>r.status==='missing_price').length},canSeeInternal:canSeeCustomerQuoteInternal(s,m)};
 }
 export async function customerPriceArchiveGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['customer-price-archive','customer-price-archive-export','customer-price-archive-file'].includes(action))return null;allowed(s,m);const url=new URL(req.url);
+ if(!['customer-price-archive','customer-price-archive-info','customer-price-archive-export','customer-price-archive-file'].includes(action))return null;allowed(s,m);const url=new URL(req.url);
+ if(action==='customer-price-archive-info'){
+  const archive=archiveFor(s,url.searchParams.get('archiveId')||'');if(!canReadPriceArchive(s,m,archive)||!isCustomerQuoteAdministrator(m,s))throw new AppError('仅报价管理员可核对原始价格档案摘要。',403);
+  return json({id:archive.id,customerAccountId:archive.customerAccountId,datasetSha256:archive.datasetSha256,products:archive.dataset.products.length,prices:archive.dataset.prices.length,files:archive.dataset.files.map(file=>({id:file.id,filename:archive.files?.[file.id]?.filename||clean(file.relativePath).split(/[\\/]/).pop()||file.id,sha256:file.sha256||null,hasFile:!!archive.files?.[file.id],storedSha256:archive.files?.[file.id]?.sha256||null}))});
+ }
  if(action==='customer-price-archive-file'){
   const archive=archiveFor(s,url.searchParams.get('archiveId')||'');if(!canReadPriceArchive(s,m,archive)||!isCustomerQuoteAdministrator(m,s))throw new AppError('原件可能包含内部核价或其他客户资料，仅报价管理员可下载；请查询已核对的销售价摘录。',403);
   const file=archive.files?.[url.searchParams.get('fileId')||''];if(!file)throw new AppError('该来源目前仅有位置记录，尚未归档原件。',404);const object=await bucket().get(file.fileKey);if(!object)throw new AppError('归档原件缺失。',404);

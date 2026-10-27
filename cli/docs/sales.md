@@ -126,4 +126,32 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 
 `sales quotes schema`查询允许字段，`form <id>`读取有权编辑的字段，`save --input <JSON> [--version <当前版本>]`统一新增与修改。新增不提供id和已有版本；修改JSON提供id，只填写改变的顶层字段，CLI先读取授权当前记录并核对版本后合并保存。数组须提供完整替换内容和稳定行ID，不能把一行当成整个明细数组。服务器校验字段、金额、来源、角色、状态并保留隐藏内容；不提供没有服务端支持的请求UUID或自动重试。
 
-`action --type confirm|revise|adopt-ie --input <JSON> --version <当前版本>`执行现有业务动作，字段见schema。confirm中的acknowledgeEnglish是网站原有最终英文核对字段；审批身份继续由服务器决定。采用IE必须显式传工程版本、款式对应和适用范围。结果不明先查询，不能假设未保存。附件、模板、已发送登记等W2剩余动作尚未接入。
+`action --type confirm|revise|adopt-ie --input <JSON> --version <当前版本>`执行现有业务动作，字段见schema。confirm中的acknowledgeEnglish是网站原有最终英文核对字段；审批身份继续由服务器决定。采用IE必须显式传工程版本、款式对应和适用范围。结果不明先查询，不能假设未保存。附件、模板、已发送登记等命令见下文，整阶段验收状态以进度计划为准。
+
+
+## 报价原件、图片、客户模板与成品（0.31.0）
+
+`file-schema --type source|media|template|archive`给出JSON字段，`file-list <报价ID> --version <版本>`读取该版本的文件与成品摘要。上传统一使用`file-upload --type <类型> --input <JSON> --file <原件> [--version <版本>]`，本组文件上限10MiB，具体格式由服务器核验。
+
+| 类型 | 输入字段 | 版本与权限 |
+| --- | --- | --- |
+| source | quoteId | 当前草稿版本；原件下载仍仅报价管理员，普通上传不等于获准读取内部原件 |
+| media | quoteId、category、可选lineId/title/drawingNo | 明确报价版本；image/drawing关联产品行，sent_quote/evidence属于已确认整份版本，不填行ID |
+| template | customerAccountId、brand、businessType、title | 仅报价管理员登记客户XLSX模板，此操作不提供报价版本 |
+| archive | quoteId | 指定已确认且绑定模板的版本，实际对客XLSX须通过物料、价格、计价口径与版式核验 |
+
+`templates --customer <客户ID>`读取授权模板。`file-action --action apply-template --input <JSON> --version <当前版本>`的JSON为quoteId、templateId，服务器生成待核对草稿，保留来源模板和原件；价格、单位及范围仍需按业务要求核对后保存。
+
+`file-download <报价ID> --type source|media|output [--id <文件ID>] --version <版本> --output <新文件>`校验原件摘要并拒绝覆盖；source不填文件ID，沿用网站的当前原报价附件接口，不用当前文件冒充已变化的历史原件。`file-export <报价ID> --type template --version <已确认版本> --output <新.xlsx>`对有维护权限人员可能同时归档成品，命令按可能写入处理；中断或结果不明先查询该版本的file-list，不盲目重试。若本地输出失败，服务器可能已归档，错误附带报价ID/版本供核查。
+
+`record-sent --input <JSON> --version <已确认版本> --request-id <UUID>`只登记已发生的发送事实，JSON包括quoteId、sentDate、recipient、channel（email/whatsapp/wechat/other）及可选mediaIds；不实际发送邮件或消息。来源版本、权限、日期和请求内容去重由服务器校验。
+
+## 历史价格档案和发票价格规则
+
+统一使用`sales prices`。`schema --type dataset|selection|source`返回输入结构和数据集字段；`list [--customer <ID>] --view sku|history`读取授权摘录，支持search/state/currency及客户端limit/offset分页；`export`使用同样筛选、可选team及新输出路径。历史摘录保留数量档、币种、单位、来源、待核查和价格冲突，不拿旧价猜补未知价格。
+
+管理员使用`import --input <JSON>`，JSON为customerAccountId和dataset（schemaVersion、customer、files、products、prices等），CLI计算规范化摘要，服务器校验后以独立档案保存；相同内容复用，不覆盖原档案。只有此接口允许最大64MiB的JSON，其他普通JSON仍限1MiB。服务器去除私有本机路径，CLI不按数据集中的路径扫描或读取本地文件。
+
+`archive <档案ID>`仅管理员核对摘要和来源目录，支持limit/offset。`source-upload --input <JSON> --file <原件>`的JSON为archiveId、fileId；文件不超过64MiB，必须与已登记来源摘要相同，不覆盖既有原件。`source-download <档案ID> <来源ID> --output <新文件>`继续限制报价管理员并校验摘要。
+
+`selection-save --input <JSON> --version <当前版本>`由管理员维护发票价格规则；JSON包括customerAccountId、invoicePreference（rx/solar/highest/both/null）及可选configurationNotes（rx和solar文字）。CLI先读取当前版本和规则摘要，服务器再次核对；未提供说明则保留原说明，不伪造请求幂等或自动重试。

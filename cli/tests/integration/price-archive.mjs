@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {createHash} from 'node:crypto';
+
+export async function verifyPriceArchive({services,dir}){
+ const admin=services.admin_test.foundation.priceArchives(),sales=services.sales_a.foundation.priceArchives();
+ const original=Buffer.from('SYNTHETIC PRICE ORIGINAL'),sourceFile=path.join(dir,'synthetic-price.txt');await fs.writeFile(sourceFile,original);
+ const dataset={schemaVersion:1,customer:{code:'C1',name:'Synthetic Alpha'},files:[{id:'synthetic-price-source',relativePath:'synthetic-price.txt',sha256:createHash('sha256').update(original).digest('hex'),category:'invoice',status:'included'}],products:[{id:'synthetic-price-product',sku:'SYNTHETIC-PRICE-NEW',factoryModel:'SYNTHETIC-PRICE-MODEL',productType:'frame',sourceRefs:[{fileId:'synthetic-price-source',sheet:'Synthetic sheet',cell:'A1'}]}],prices:[{id:'synthetic-price-record',productId:'synthetic-price-product',scope:'sku',documentType:'invoice',documentNo:'SYNTHETIC-INVOICE',documentDate:'2026-10-20',currency:'USD',unit:'pair',quantity:10,quantityBasis:'Synthetic 10 pairs',unitPrice:9.5,toolingFee:0,reviewStatus:'verified',sentStatus:'unknown',sourceRefs:[{fileId:'synthetic-price-source',sheet:'Synthetic sheet',cell:'B1'}]}],issues:[],excluded:[]};
+ const inputFile=path.join(dir,'price-import.json');await fs.writeFile(inputFile,JSON.stringify({customerAccountId:'c1',dataset}));await assert.rejects(sales.import(inputFile),{code:'FORBIDDEN'});const imported=await admin.import(inputFile);assert.equal(imported.record.products,1);assert.equal(imported.record.prices,1);assert.equal(imported.alreadyPresent,false);const replay=await admin.import(inputFile);assert.equal(replay.alreadyPresent,true);assert.deepEqual(replay.record,imported.record);
+ const list=await sales.list({customer:'c1',view:'history',search:'SYNTHETIC-PRICE-NEW'});assert.equal(list.page.total,1);assert.equal(list.page.rows[0].history[0].unitPrice,9.5);await assert.rejects(sales.archive(imported.record.id),{code:'FORBIDDEN'});
+ const sourceInput=path.join(dir,'price-source.json');await fs.writeFile(sourceInput,JSON.stringify({archiveId:imported.record.id,fileId:'synthetic-price-source'}));await assert.rejects(sales.upload(sourceInput,sourceFile),{code:'FORBIDDEN'});const uploaded=await admin.upload(sourceInput,sourceFile);assert.equal(uploaded.record.hasFile,true);assert.equal((await admin.upload(sourceInput,sourceFile)).alreadyPresent,true);
+ const different=path.join(dir,'changed-price.txt');await fs.writeFile(different,'SYNTHETIC DIFFERENT');await assert.rejects(admin.upload(sourceInput,different),{code:'INVALID_INPUT'});
+ const downloaded=path.join(dir,'price-copy.txt');await admin.download(imported.record.id,'synthetic-price-source',downloaded);assert.deepEqual(await fs.readFile(downloaded),original);await assert.rejects(admin.download(imported.record.id,'synthetic-price-source',downloaded),{code:'OUTPUT_EXISTS'});await assert.rejects(sales.download(imported.record.id,'synthetic-price-source',path.join(dir,'denied-price.txt')),{code:'FORBIDDEN'});
+ const selectionInput=path.join(dir,'price-selection.json');await fs.writeFile(selectionInput,JSON.stringify({customerAccountId:'c1',invoicePreference:'rx',configurationNotes:{rx:'Synthetic RX',solar:'Synthetic SOLAR'}}));await assert.rejects(sales.selection(selectionInput,'0'),{code:'FORBIDDEN'});const selection=await admin.selection(selectionInput,'0');assert.equal(selection.record.version,1);assert.equal((await admin.selection(selectionInput,'1')).alreadyPresent,true);await assert.rejects(admin.selection(selectionInput,'0'),{code:'CONFLICT'});
+ await fs.writeFile(selectionInput,JSON.stringify({customerAccountId:'c1',invoicePreference:'both'}));const changed=await admin.selection(selectionInput,'1');assert.equal(changed.record.version,2);assert.deepEqual(changed.record.configurationNotes,selection.record.configurationNotes);
+ await sales.export({customer:'c1',view:'history'},path.join(dir,'synthetic-prices.xlsx'));
+ return async(run,adminState)=>{
+  const importedCli=run(['sales','prices','import','--input',inputFile],adminState);assert.equal(importedCli.command,'sales prices import');assert.equal(importedCli.data.record.id,imported.record.id);
+  await fs.writeFile(selectionInput,JSON.stringify({customerAccountId:'c1',invoicePreference:'solar'}));const selected=run(['sales','prices','selection-save','--input',selectionInput,'--version','2'],adminState);assert.equal(selected.command,'sales prices selection-save');assert.equal(selected.data.record.version,3);
+  const uploadedCli=run(['sales','prices','source-upload','--input',sourceInput,'--file',sourceFile],adminState);assert.equal(uploadedCli.command,'sales prices source-upload');assert.equal(uploadedCli.data.record.storedSha256,uploaded.record.storedSha256);
+  return [importedCli.command,selected.command,uploadedCli.command];
+ };
+}

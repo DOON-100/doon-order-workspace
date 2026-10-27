@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {randomUUID} from 'node:crypto';
+import {unzipSync,zipSync,strFromU8,strToU8} from 'fflate';
+import {syntheticIeTemplate} from '../../../tests/ie-quote-workbook-cases.mjs';
+import {syntheticCustomerQuoteTemplate} from '../../../tests/customer-quote-template-cases.mjs';
+
+export async function verifyQuoteFiles({services,dir,customerFields,ieFields}){
+ const a=services.sales_a.foundation,admin=services.admin_test.foundation,b=services.sales_b.foundation;
+ const files=a.quoteFiles(),adminFiles=admin.quoteFiles(),writer=a.quoteWrite();
+ const inputFile=path.join(dir,'quote-file-input.json'),input=async value=>{await fs.writeFile(inputFile,JSON.stringify(value));return inputFile;};
+ const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lXcAAAAASUVORK5CYII=','base64'),pngFile=path.join(dir,'synthetic-drawing.png'),pdfFile=path.join(dir,'synthetic-source.pdf');await fs.writeFile(pngFile,png);await fs.writeFile(pdfFile,'%PDF-1.4\nSYNTHETIC SOURCE ONLY\n%%EOF\n');
+ const ie=await writer.save('ie',await input({...ieFields,quoteNo:'SYNTHETIC-FILE-IE'}),'0'),ieId=ie.record.id,lineId=ie.record.lines[0].id;
+ await assert.rejects(services.unassigned.foundation.quoteFiles().upload('ie','drawing',await input({quoteId:ieId,lineId}),pngFile,'1'),{code:'FORBIDDEN'});
+ const drawing=await files.upload('ie','drawing',inputFile,pngFile,'1');assert.equal(drawing.version,2);assert.equal(drawing.record.size,png.length);
+ const ieDownload=path.join(dir,'ie-original.png');await files.download('ie','drawing',ieId,'2',drawing.record.id,ieDownload);assert.deepEqual(await fs.readFile(ieDownload),png);await assert.rejects(files.download('ie','drawing',ieId,'2',drawing.record.id,ieDownload),{code:'OUTPUT_EXISTS'});
+ const removed=await files.action('ie','remove',await input({id:ieId,lineId,attachmentId:drawing.record.id}),'2');assert.equal(removed.record.version,3);assert.equal(removed.files.length,0);
+ const rebound=await files.action('ie','bind',await input({id:ieId,lineId,attachmentId:drawing.record.id,acknowledgeDrawingRevision:true}),'3');assert.equal(rebound.record.version,4);assert.equal(rebound.files[0].sha256,drawing.record.sha256);
+ const originalTemplate=unzipSync(syntheticIeTemplate({count:1,history:true}));for(const key of Object.keys(originalTemplate))if(key.endsWith('.xml'))originalTemplate[key]=strToU8(strFromU8(originalTemplate[key]).replaceAll('SYNTHETIC-CUSTOMER','C1').replaceAll('SYNTHETIC-MODEL-1',ieFields.lines[0].model));
+ const ieTemplateFile=path.join(dir,'synthetic-ie-template.xlsx');await fs.writeFile(ieTemplateFile,zipSync(originalTemplate,{level:6}));const ieTemplateInput=await input({quoteId:ieId,acknowledgeRemoveUnmapped:true,sheetBindings:[{sheetName:'STYLE1',lineId}]});
+ await assert.rejects(files.upload('ie','template',ieTemplateInput,ieTemplateFile,'4'),{code:'FORBIDDEN'});const ieTemplate=await adminFiles.upload('ie','template',ieTemplateInput,ieTemplateFile,'4');assert(ieTemplate.templateStatus.verified);
+ await files.export('ie','draft',ieId,'4',path.join(dir,'ie-draft.xlsx'));await writer.action('ie','submit',await input({id:ieId}),'4');await b.quoteWrite().action('ie','review',await input({id:ieId,decision:'approve',reason:'Synthetic file approval'}),'5');await files.export('ie','released',ieId,'6',path.join(dir,'ie-released.xlsx'));
+ const customer=await writer.save('customer',await input({...customerFields,quoteNo:'SYNTHETIC-FILE-CUSTOMER',brand:'Synthetic Brand',businessType:'spare_parts'}),'0'),customerId=customer.record.id;
+ const source=await files.upload('customer','source',await input({quoteId:customerId}),pdfFile,'1');assert.equal(source.record.version,2);await assert.rejects(files.download('customer','source',customerId,'2','',path.join(dir,'denied-source.pdf')),{code:'NOT_IN_SCOPE'});
+ const sourceCopy=path.join(dir,'source-copy.pdf');await adminFiles.download('customer','source',customerId,'2','',sourceCopy);assert.deepEqual(await fs.readFile(sourceCopy),await fs.readFile(pdfFile));
+ const mediaInput={quoteId:customerId,lineId:customer.record.lines[0].id,category:'image',title:'Synthetic image',drawingNo:'SYN-DRAWING'},image=await files.upload('customer','media',await input(mediaInput),pngFile,'2');assert.equal(image.version,3);assert.equal(image.record.size,png.length);const repeated=await files.upload('customer','media',inputFile,pngFile,'3');assert.equal(repeated.record.id,image.record.id);assert.equal(repeated.version,3);
+ const mediaCopy=path.join(dir,'customer-image.png');await files.download('customer','media',customerId,'3',image.record.id,mediaCopy);assert.deepEqual(await fs.readFile(mediaCopy),png);
+ const customerTemplateFile=path.join(dir,'synthetic-customer-template.xlsx');await fs.writeFile(customerTemplateFile,syntheticCustomerQuoteTemplate());
+ const templateInput=await input({customerAccountId:'c1',brand:'Synthetic Brand',businessType:'spare_parts',title:'Synthetic customer template'});await assert.rejects(files.upload('customer','template',templateInput,customerTemplateFile),{code:'FORBIDDEN'});const customerTemplate=await adminFiles.upload('customer','template',templateInput,customerTemplateFile);assert(customerTemplate.record.id);assert((await files.templates('c1')).templates.some(row=>row.id===customerTemplate.record.id));
+ const applied=await files.action('customer','apply-template',await input({quoteId:customerId,templateId:customerTemplate.record.id}),'3');assert.equal(applied.record.version,4);
+ const form=(await writer.form('customer',customerId)).record,lines=form.lines.map(row=>({...row,unit:'piece',supplyStage:row.supplyStage==='unknown'?'raw':row.supplyStage,scopeReviewed:true,scopeNotesZh:'合成明确范围',scopeNotesEn:'Synthetic explicit scope',unitPrice:1,toolingFee:0,quantityBasisZh:'每件',quantityBasisEn:'per piece'}));
+ const priced=await writer.save('customer',await input({id:customerId,lines,currency:'USD',pricingBasis:'row_item',currencyReviewed:true,reviewNotes:[],terms:form.terms.map(row=>({...row,needsReview:false}))}),'4');assert.equal(priced.record.version,5);await admin.quoteWrite().action('customer','confirm',await input({id:customerId,acknowledgeEnglish:true}),'5');
+ const exported=path.join(dir,'customer-output.xlsx'),exportResult=await files.export('customer','template',customerId,'6',exported);assert.equal(exportResult.serverMayArchive,true);
+ const outputs=(await files.list('customer',customerId,'6')).templateOutputs;assert(outputs.some(row=>row.sourceHash===exportResult.file.sha256));
+ const archive=await files.upload('customer','archive',await input({quoteId:customerId}),exported,'6');assert.equal(archive.record.sourceHash,exportResult.file.sha256);
+ const outputCopy=path.join(dir,'customer-output-copy.xlsx');await files.download('customer','output',customerId,'6',archive.record.id,outputCopy);assert.deepEqual(await fs.readFile(outputCopy),await fs.readFile(exported));
+ const sentFile=path.join(dir,'quote-sent.json'),sentInput={quoteId:customerId,sentDate:'2026-10-20',recipient:'synthetic@example.test',channel:'other',mediaIds:[]};await fs.writeFile(sentFile,JSON.stringify(sentInput));const sentToken=randomUUID();await assert.rejects(b.quoteFiles().recordSent(sentFile,'6',randomUUID()),{code:'FORBIDDEN'});const sent=await files.recordSent(sentFile,'6',sentToken);assert.equal(sent.record.quoteVersion,6);assert.deepEqual(await files.recordSent(sentFile,'6',sentToken),sent);await fs.writeFile(sentFile,JSON.stringify({...sentInput,recipient:'changed@example.test'}));await assert.rejects(files.recordSent(sentFile,'6',sentToken),{code:'CONFLICT'});await fs.writeFile(sentFile,JSON.stringify(sentInput));
+ return async run=>{
+  const tested=[];await writer.action('ie','revise',await input({id:ieId}),'6');
+  const drawing=run(['engineering','ie-quotes','file-upload','--type','drawing','--input',await input({quoteId:ieId,lineId}),'--file',pngFile,'--version','7']);assert.equal(drawing.command,'engineering ie-quotes file-upload');assert.equal(drawing.data.version,8);tested.push(drawing.command);
+  const removed=run(['engineering','ie-quotes','file-action','--action','remove','--input',await input({id:ieId,lineId,attachmentId:drawing.data.record.id}),'--version','8']);assert.equal(removed.command,'engineering ie-quotes file-action');assert.equal(removed.data.record.version,9);tested.push(removed.command);
+  await writer.action('customer','revise',await input({id:customerId}),'6');
+  const source=run(['sales','quotes','file-upload','--type','source','--input',await input({quoteId:customerId}),'--file',pdfFile,'--version','7']);assert.equal(source.command,'sales quotes file-upload');assert.equal(source.data.record.version,8);tested.push(source.command);
+  const applied=run(['sales','quotes','file-action','--action','apply-template','--input',await input({quoteId:customerId,templateId:customerTemplate.record.id}),'--version','8']);assert.equal(applied.command,'sales quotes file-action');assert.equal(applied.data.record.version,9);tested.push(applied.command);
+  const exported=run(['sales','quotes','file-export',customerId,'--type','template','--version','6','--output',path.join(dir,'cli-customer-output.xlsx')]);assert.equal(exported.command,'sales quotes file-export');assert(exported.data.file.sha256);tested.push(exported.command);
+  const sent=run(['sales','quotes','record-sent','--input',sentFile,'--version','6','--request-id',randomUUID()]);assert.equal(sent.command,'sales quotes record-sent');assert.equal(sent.data.record.quoteVersion,6);tested.push(sent.command);
+  return tested;
+ };
+}

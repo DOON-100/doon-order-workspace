@@ -4,6 +4,7 @@ import {CliError} from './errors.js';
 import {quoteSchemas} from './quote-schemas.js';
 import {readWriteInput,validateWriteInput,type WriteSchema,type WriteField} from './write-input.js';
 import {isDeepStrictEqual} from 'node:util';
+import {pick,fields} from './business.js';
 export type QuoteKind='ie'|'customer';
 const specs={ie:{route:'/api/workspace/ie-quote-save',actions:{submit:'/api/workspace/ie-quote-submit',review:'/api/workspace/ie-quote-review',revise:'/api/workspace/ie-quote-revise'}},customer:{route:'/api/workspace/customer-quote-save',actions:{confirm:'/api/workspace/customer-quote-confirm',revise:'/api/workspace/customer-quote-revise','adopt-ie':'/api/workspace/customer-quote-adopt-ie'}}} as const;
 const ref={type:'string',min:1,max:120} as const;
@@ -15,13 +16,13 @@ export class QuoteWriteService{
  constructor(private store:StateStore,private transport:typeof fetch=fetch){}
  private async client(){const config=await this.store.config(),session=await this.store.session(config);if(!session)throw new CliError('AUTH_REQUIRED','请先运行 doon login。',4);return {api:new ApiClient(config,this.transport,30000),session};}
  schema(kind:QuoteKind){if(!Object.hasOwn(specs,kind))throw new CliError('UNSUPPORTED_OPERATION','报价类型未接入。',2);return {scope:{},type:kind,fields:quoteSchemas[kind],actions:Object.fromEntries(Object.keys(specs[kind].actions).map(action=>[action,actions[action]])),semantics:'服务器负责精确计算、业务和权限校验；保存指定顶层字段，数组须提供完整替换内容'};}
- private async current(kind:QuoteKind,id:string){
+ private async current(kind:QuoteKind,id:string,version?:number){
   const {api,session}=await this.client();
-  const data=kind==='ie'?(await api.request('/api/workspace/ie-quote',session,undefined,{query:{id}})).data:(await api.request('/api/workspace/customer-quotes',session)).data;
-  const row=kind==='ie'?data?.quote:data?.quotes?.find((value:any)=>value.id===id);
-  if(!row||row.id!==id||!Number.isSafeInteger(row.version))throw new CliError('NOT_IN_SCOPE','报价不存在或不在当前授权范围。',7);return row;
+  const data=kind==='ie'?(await api.request('/api/workspace/ie-quote',session,undefined,{query:{id,...(version?{version:String(version)}:{})}})).data:version?(await api.request('/api/workspace/customer-quote-version',session,undefined,{query:{quoteId:id,quoteVersion:String(version)}})).data:(await api.request('/api/workspace/customer-quotes',session)).data;
+  const row=kind==='ie'||version?data?.quote:data?.quotes?.find((value:any)=>value.id===id);
+  if(!row||row.id!==id||!Number.isSafeInteger(row.version)||version!==undefined&&row.version!==version)throw new CliError('NOT_IN_SCOPE','报价或指定版本不存在，或不在当前授权范围。',7);return row;
  }
- async form(kind:QuoteKind,id:string){const schema=this.schema(kind).fields,row=await this.current(kind,id);return {scope:{customerId:row.customerAccountId},status:row.status,version:row.version,record:project(row,{type:'object',properties:schema}),capabilities:Object.fromEntries(Object.entries(row).filter(([key,value])=>key.startsWith('can')&&typeof value==='boolean'))};}
+ async form(kind:QuoteKind,id:string,rawVersion?:string){const schema=this.schema(kind).fields,row=await this.current(kind,id,rawVersion?versionNumber(rawVersion,1):undefined);return {scope:{customerId:row.customerAccountId},status:row.status,version:row.version,record:project(row,{type:'object',properties:schema}),capabilities:Object.fromEntries(Object.entries(row).filter(([key,value])=>key.startsWith('can')&&typeof value==='boolean')),...(kind==='ie'?{handoffCandidates:(row.handoffCandidates||[]).map((value:any)=>pick(value,fields('memberId name reason')))}:{})};}
  async save(kind:QuoteKind,file:string,rawVersion:string){
   const schema=this.schema(kind).fields as WriteSchema,version=versionNumber(rawVersion,0);
   const allowed=Object.fromEntries(Object.entries(schema).filter(([key])=>key!=='version').map(([key,field])=>[key,{...field,required:false}]));

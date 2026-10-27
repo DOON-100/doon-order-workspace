@@ -3,12 +3,16 @@ import {TextDecoder} from 'node:util';
 import {CliError} from './errors.js';
 
 // Infrastructure only: no routes, commands or server-side permissions are registered here.
-export type WriteField = {type: 'string' | 'number' | 'boolean' | 'object' | 'array'; required?: boolean; nullable?: boolean; properties?: WriteSchema; items?: WriteField; enum?: readonly (string | number | boolean)[]; integer?: boolean; min?: number; max?: number};
+export type WriteField = {type: 'string' | 'number' | 'boolean' | 'object' | 'array' | 'json'; required?: boolean; nullable?: boolean; properties?: WriteSchema; items?: WriteField; enum?: readonly (string | number | boolean)[]; integer?: boolean; min?: number; max?: number};
 export type WriteSchema = Readonly<Record<string, WriteField>>;
 export type WriteObject = Record<string, unknown>;
 const maxInputBytes = 1024 * 1024;
 
 function validateField(item: unknown, field: WriteField): void {
+  if(field.type==='json'){
+    const valid=(value:unknown,depth=0):boolean=>depth<=64&&(value===null||typeof value==='string'||typeof value==='boolean'||typeof value==='number'&&Number.isFinite(value)||Array.isArray(value)&&value.every(child=>valid(child,depth+1))||!!value&&typeof value==='object'&&Object.getPrototypeOf(value)===Object.prototype&&Object.values(value).every(child=>valid(child,depth+1)));
+    if(!valid(item))throw new CliError('INVALID_INPUT','来源资料必须为有限深度的纯JSON；业务字段由服务器独立校验。',2);return;
+  }
   if (item === null && field.nullable) return;
   const valid = field.type === 'array' ? Array.isArray(item) : field.type === 'object'
     ? !!item && typeof item === 'object' && !Array.isArray(item) && Object.getPrototypeOf(item) === Object.prototype
@@ -42,22 +46,23 @@ export function validateWriteInput(value: unknown, schema: WriteSchema): WriteOb
   return data;
 }
 
-export async function readWriteInput(file: string, schema: WriteSchema): Promise<WriteObject> {
+export async function readWriteInput(file: string, schema: WriteSchema,limit=maxInputBytes): Promise<WriteObject> {
+  if(!Number.isSafeInteger(limit)||limit<1||limit>64*1024*1024)throw new CliError('INVALID_SCHEMA','该接口输入限制无效。',2);
   if (!file || file.includes('\0')) throw new CliError('INVALID_INPUT', '请提供有效的输入文件。', 2);
   let handle;
   try {
     handle = await open(file, 'r');
     const info = await handle.stat();
-    if (!info.isFile() || info.size > maxInputBytes) throw new CliError('INVALID_INPUT', '输入文件须为不超过 1 MiB 的普通文件。', 2);
+    if (!info.isFile() || info.size > limit) throw new CliError('INVALID_INPUT', `输入文件须为不超过 ${limit/1024/1024} MiB 的普通文件。`, 2);
     // A bounded read also handles files that grow after stat.
-    const buffer = Buffer.alloc(maxInputBytes + 1);
+    const buffer = Buffer.alloc(limit + 1);
     let size = 0;
     while (size < buffer.length) {
       const {bytesRead} = await handle.read(buffer, size, buffer.length - size, null);
       if (!bytesRead) break;
       size += bytesRead;
     }
-    if (size > maxInputBytes) throw new CliError('INVALID_INPUT', '输入文件超过 1 MiB。', 2);
+    if (size > limit) throw new CliError('INVALID_INPUT', `输入文件超过 ${limit/1024/1024} MiB。`, 2);
     let data: unknown;
     try { data = JSON.parse(new TextDecoder('utf-8', {fatal: true}).decode(buffer.subarray(0, size))); }
     catch { throw new CliError('INVALID_INPUT', '输入文件必须为 UTF-8 编码的 JSON。', 2); }

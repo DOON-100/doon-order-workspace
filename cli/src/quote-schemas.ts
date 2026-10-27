@@ -846,5 +846,371 @@ export const quoteSchemas={
       "max": 50,
       "required": true
     }
+  },
+  "prices": {
+    "schemaVersion": {
+      "type": "number",
+      "enum": [
+        1
+      ],
+      "required": true
+    },
+    "customer": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "min": 1,
+          "max": 240,
+          "required": true
+        },
+        "name": {
+          "type": "string",
+          "min": 1,
+          "max": 240,
+          "required": true
+        }
+      },
+      "required": true
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "min": 1,
+            "max": 240,
+            "required": true
+          },
+          "relativePath": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "path": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "sha256": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          }
+        },
+        "required": true
+      },
+      "max": 20000,
+      "required": true
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "min": 1,
+            "max": 240,
+            "required": true
+          },
+          "factoryModel": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "customerModel": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "productName": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "productType": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "frameColor": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "lens": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "material": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "size": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "specVersion": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "activity": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fileId": {
+                  "type": "string",
+                  "min": 1,
+                  "max": 240,
+                  "required": true
+                },
+                "sheet": {
+                  "type": "string",
+                  "max": 8000,
+                  "nullable": true
+                },
+                "cell": {
+                  "type": "string",
+                  "max": 8000,
+                  "nullable": true
+                },
+                "page": {
+                  "type": "number",
+                  "integer": true,
+                  "min": 0,
+                  "nullable": true
+                }
+              },
+              "required": true
+            },
+            "max": 1000
+          }
+        },
+        "required": true
+      },
+      "max": 100000,
+      "required": true
+    },
+    "prices": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "min": 1,
+            "max": 240,
+            "required": true
+          },
+          "productId": {
+            "type": "string",
+            "min": 1,
+            "max": 240,
+            "required": true
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "sku",
+              "model"
+            ],
+            "required": true
+          },
+          "documentType": {
+            "type": "string",
+            "enum": [
+              "invoice",
+              "quote",
+              "order",
+              "internal",
+              "charge"
+            ],
+            "required": true
+          },
+          "documentNo": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "version": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "documentDate": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "unit": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "configuration": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "lensVariant": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "invoiceKind": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "quantity": {
+            "type": "number",
+            "min": 0,
+            "max": 1000000000000,
+            "nullable": true
+          },
+          "quantityMin": {
+            "type": "number",
+            "min": 0,
+            "max": 1000000000000,
+            "nullable": true
+          },
+          "quantityMax": {
+            "type": "number",
+            "min": 0,
+            "max": 1000000000000,
+            "nullable": true
+          },
+          "quantityBasis": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "unitPrice": {
+            "type": "number",
+            "min": 0,
+            "max": 1000000000000,
+            "nullable": true
+          },
+          "toolingFee": {
+            "type": "number",
+            "min": 0,
+            "max": 1000000000000,
+            "nullable": true
+          },
+          "otherCharges": {
+            "type": "json"
+          },
+          "terms": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "needs_review"
+            ],
+            "required": true
+          },
+          "sentStatus": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "sent"
+            ],
+            "required": true
+          },
+          "sourceRefs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "fileId": {
+                  "type": "string",
+                  "min": 1,
+                  "max": 240,
+                  "required": true
+                },
+                "sheet": {
+                  "type": "string",
+                  "max": 8000,
+                  "nullable": true
+                },
+                "cell": {
+                  "type": "string",
+                  "max": 8000,
+                  "nullable": true
+                },
+                "page": {
+                  "type": "number",
+                  "integer": true,
+                  "min": 0,
+                  "nullable": true
+                }
+              },
+              "required": true
+            },
+            "max": 1000
+          },
+          "notes": {
+            "type": "string",
+            "max": 8000,
+            "nullable": true
+          }
+        },
+        "required": true
+      },
+      "max": 100000,
+      "required": true
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "json",
+        "nullable": true
+      },
+      "max": 100000
+    },
+    "excluded": {
+      "type": "array",
+      "items": {
+        "type": "json",
+        "nullable": true
+      },
+      "max": 20000
+    }
   }
 } satisfies Record<string,WriteSchema>;

@@ -5,9 +5,20 @@ import {randomUUID} from 'node:crypto';
 import {StateStore} from '../dist/state.js';
 
 export const root = fileURLToPath(new URL('../../', import.meta.url));
+const generated=new Set();
+// Clean only fresh directories created by this test process, including unit fixtures.
+process.on('beforeExit',()=>{
+  if(!generated.size)return;
+  const targets=[...generated];generated.clear();
+  Promise.all(targets.map(async directory=>{
+    const base=path.resolve(root,'test-output'),target=path.resolve(directory);
+    if(path.dirname(target)!==base||!path.basename(target).startsWith('cli-test-'))throw Error('Unsafe generated fixture cleanup');
+    await fs.rm(target,{recursive:true,force:true});
+  })).catch(()=>{process.stderr.write('Failed to remove generated CLI test fixtures.\n');process.exitCode=1;});
+});
 export async function temporary() {
   const base = path.join(root, 'test-output'); await fs.mkdir(base, {recursive: true});
-  return fs.mkdtemp(path.join(base, 'cli-test-'));
+  const directory=await fs.mkdtemp(path.join(base,'cli-test-'));generated.add(directory);return directory;
 }
 export function testCodec() {
   const values = new Map();

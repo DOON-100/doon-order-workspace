@@ -50,13 +50,14 @@ export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise
   const q=ieQuoteVersion(s,quoteId,v),current=currentIeQuote(s,quoteId);if(!q||!current||current.customerAccountId!==q.customerAccountId||!canReadIeQuote(s,m,current)||!canReadIeQuote(s,m,q))throw new AppError('工程报价版本不存在或无权查看。',403);return json({quote:publicIeQuote(s,m,q)});
  }
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(a=>a.active&&canReadIeAccount(s,m,a)).map(({id,customer,customerCode})=>({id,customer,customerCode}));
+ const includeInactive=url.searchParams.get('includeInactive')==='1';if(includeInactive&&!isIeEngineeringMember(s,m))throw new AppError('只有工程维护人员可查询已停用的基价和工艺预设。',403);
  const visibleCustomers=new Set(customers.map(a=>a.id));
  const toolingChargeSources=(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).flatMap(q=>{const released=latestReleasedIeVersion(s,q.id);return released&&released.customerAccountId===q.customerAccountId&&canReadIeQuote(s,m,released)&&released.tooling.some(t=>t.chargeMode==='charge')?[publicIeQuote(s,m,released)]:[];});
  return json({canUse:true,quotes:(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicIeQuote(s,m,q)),customers,capabilities:ieCapabilities(s,m),policy:publicIePolicy(s,m),
  toolingChargeSources,
  toolingRegistry:(all(s,'ie_quote_tooling') as IeTooling[]).filter(t=>visibleCustomers.has(t.customerAccountId)).map(publicTooling),
- catalog:(all(s,'ie_quote_catalog') as IeCatalog[]).filter(c=>c.active).map(({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})=>({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})),
- processPresets:all(s,'ie_quote_process_preset').filter(p=>p.active).map(({id,version,name,description,processes,active,updatedAt,updatedBy})=>({id,version,name,description,processes,active,updatedAt,updatedBy})),
+ catalog:(all(s,'ie_quote_catalog') as IeCatalog[]).filter(c=>c.active||includeInactive).map(({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})=>({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})),
+ processPresets:all(s,'ie_quote_process_preset').filter(p=>p.active||includeInactive).map(({id,version,name,description,processes,active,updatedAt,updatedBy})=>({id,version,name,description,processes,active,updatedAt,updatedBy})),
  });
 }
 export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{

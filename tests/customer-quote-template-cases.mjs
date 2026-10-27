@@ -23,6 +23,7 @@ function fixture({conflict=false,formula=false}={}){
  const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'Customer Sheet');
  return new Uint8Array(XLSX.write(book,{type:'array',bookType:'xlsx',compression:true}));
 }
+export function syntheticCustomerQuoteTemplate(options={}){return fixture(options);}
 function edit(bytes,path,fn){const files=unzipSync(bytes);files[path]=strToU8(fn(strFromU8(files[path])));return zipSync(files,{level:6});}
 function withFile(bytes,path,value){const files=unzipSync(bytes);files[path]=typeof value==='string'?strToU8(value):value;return zipSync(files,{level:6});}
 async function moduleUnderTest(){

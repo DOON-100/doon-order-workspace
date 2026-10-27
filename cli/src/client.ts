@@ -16,16 +16,16 @@ export class ApiClient {
 
   private async perform(route: Route, session: SavedSession | null | undefined, body: unknown, options: RequestOptions) {
     if (!Object.hasOwn(routes, route)) throw new CliError('UNSUPPORTED_OPERATION', '该操作尚未接入客户端。', 2);
-    const spec = routes[route] as {method: string; business?: boolean; write?: boolean; query?: readonly string[]; binary?: boolean | 'file'; multipart?: boolean};
-    const method = spec.method, headers: Record<string, string> = {'Accept': spec.binary==='file' ? 'application/octet-stream' : spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
+    const spec = routes[route] as {method: string;path?:string;maxInputBytes?:number; business?: boolean; write?: boolean; query?: readonly string[]; binary?: boolean | 'file'; multipart?: boolean};
+    const method = spec.method, mutating=method==='POST'||spec.write===true, headers: Record<string, string> = {'Accept': spec.binary==='file' ? 'application/octet-stream' : spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json', 'User-Agent': 'doon-cli/' + version};
     if (spec.business && !session) throw new CliError('AUTH_REQUIRED', '请先运行 doon login。', 4);
     if (spec.business && ((method !== 'GET' && !spec.write) || (body !== undefined && (!spec.write || method !== 'POST')))) throw new CliError('UNSUPPORTED_OPERATION', '该业务写入尚未接入客户端。', 2);
-    if (spec.business && spec.write && (method !== 'POST' || !body || typeof body !== 'object' || Array.isArray(body))) throw new CliError('INVALID_INPUT', '业务写入必须使用结构化对象。', 2);
+    if (spec.business && spec.write && method==='POST' && (!body || typeof body !== 'object' || Array.isArray(body))) throw new CliError('INVALID_INPUT', '业务写入必须使用结构化对象。', 2);
     if (options.team) {
       if (!spec.business || options.team.length > 160 || /[\u0000-\u001f\u007f]/.test(options.team)) throw new CliError('INVALID_SCOPE', '业务组编号无效。', 2);
       headers['X-Workspace-Team'] = options.team;
     }
-    const url = new URL(this.config.origin + route);
+    const url = new URL(this.config.origin + (spec.path||route));
     for (const [key, value] of Object.entries(options.query || {})) {
       if (!spec.query?.includes(key) || typeof value !== 'string' || value.length > 160 || /[\u0000-\u001f\u007f]/.test(value)) throw new CliError('INVALID_QUERY', '该接口不接受此查询参数。', 2);
       if (route === '/api/workspace/process-data' && (key !== 'type' || !['rfq','iqc','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release','supplier-reconciliation','complaint'].includes(value))) throw new CliError('UNSUPPORTED_OPERATION', '该流程类型尚未开放查询。', 2);
@@ -37,17 +37,18 @@ export class ApiClient {
       if (session.origin !== this.config.origin || !new RegExp('^' + name + '=[\\w-]{43}$').test(session.cookie)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);
       headers.Cookie = session.cookie;
     }
-    if (method === 'POST') { headers.Origin = this.config.origin; if(!spec.multipart)headers['Content-Type'] = 'application/json'; }
+    if(mutating)headers.Origin=this.config.origin;
+    if(method==='POST'&&!spec.multipart)headers['Content-Type']='application/json';
     let encoded: string | FormData | undefined;
     if (method === 'POST') {
       if(spec.multipart){if(!(body instanceof FormData))throw new CliError('INVALID_INPUT','附件上传需要文件表单。',2);encoded=body;}
       else {try { encoded = JSON.stringify(body ?? {}); } catch { throw new CliError('INVALID_INPUT', '输入不能转换为 JSON。', 2); }
-      if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > 1024 * 1024)) throw new CliError('INVALID_INPUT', '业务输入超过 1 MiB 或格式无效。', 2);}
+      if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > (spec.maxInputBytes||1024 * 1024))) throw new CliError('INVALID_INPUT', '业务输入超过该接口大小限制或格式无效。', 2);}
     }
     const signal = AbortSignal.timeout(this.timeout);
     try {
       const response = await this.transport(url.href, {method, headers, body: encoded, redirect: 'manual', signal});
-      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5, method === 'POST' && spec.write ? {outcomeUnknown: true} : {}); }
+      if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5, mutating ? {outcomeUnknown: true} : {}); }
       if (!response.ok) {
         await response.body?.cancel();
         const status = response.status, retry = response.headers.get('retry-after');
@@ -57,7 +58,7 @@ export class ApiClient {
         if (status === 404) throw new CliError('NOT_FOUND', '记录或接口不存在，请核对编号和服务器版本。', 7, {status});
         if (status === 409 && spec.write) throw new CliError('CONFLICT', '记录状态或版本发生冲突，请重新读取并核对。', 2, {status});
         if (status === 429) throw new CliError('RATE_LIMITED', '服务器当前繁忙或请求过于频繁，请稍后再试。', 6, {status, retryable: !spec.write, ...(seconds !== undefined ? {retryAfterSeconds: seconds} : {})});
-        throw new CliError(status >= 500 ? 'SERVER_UNAVAILABLE' : 'REQUEST_REJECTED', status >= 500 ? '服务器暂时无法完成操作。' : '服务器未接受请求，请核对配置与客户端版本。', status >= 500 ? 5 : 2, {status, retryable: method === 'GET' && status >= 500, ...(method === 'POST' && status >= 500 ? {outcomeUnknown: true} : {})});
+        throw new CliError(status >= 500 ? 'SERVER_UNAVAILABLE' : 'REQUEST_REJECTED', status >= 500 ? '服务器暂时无法完成操作。' : '服务器未接受请求，请核对配置与客户端版本。', status >= 500 ? 5 : 2, {status, retryable: !mutating && method === 'GET' && status >= 500, ...(mutating && status >= 500 ? {outcomeUnknown: true} : {})});
       }
       const expectedType = spec.binary ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/json';
       if (spec.binary!=='file'&&!response.headers.get('content-type')?.toLowerCase().includes(expectedType)) { await response.body?.cancel(); throw new CliError('INVALID_RESPONSE', '服务地址未返回预期接口，请检查配置。', 5); }
@@ -82,10 +83,10 @@ export class ApiClient {
       return {data, headers: response.headers};
     } catch (error) {
       if (error instanceof CliError) {
-        if (method === 'POST' && ['INVALID_RESPONSE', 'RESPONSE_TOO_LARGE'].includes(error.code)) error.details.outcomeUnknown = true;
+        if (mutating && ['INVALID_RESPONSE', 'RESPONSE_TOO_LARGE'].includes(error.code)) error.details.outcomeUnknown = true;
         throw error;
       }
-      throw new CliError(signal.aborted ? 'REQUEST_TIMEOUT' : 'CONNECTION_FAILED', signal.aborted ? '请求超时，请检查连接；客户端没有自动重试。' : '无法连接公司服务器，请检查网络、地址和 HTTPS 证书。', 5, {retryable: method === 'GET', ...(method === 'POST' ? {outcomeUnknown: true} : {})});
+      throw new CliError(signal.aborted ? 'REQUEST_TIMEOUT' : 'CONNECTION_FAILED', signal.aborted ? '请求超时，请检查连接；客户端没有自动重试。' : '无法连接公司服务器，请检查网络、地址和 HTTPS 证书。', 5, {retryable: !mutating && method === 'GET', ...(mutating ? {outcomeUnknown: true} : {})});
     }
   }
 }

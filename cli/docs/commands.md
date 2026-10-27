@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.30.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.31.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,12 +11,42 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon sales prices schema --type dataset|selection|source` | 查询价格档案表单字段 | local-read |
+| `doon sales prices list [--customer <id>] [--view sku|history]` | 查询授权历史价格及发票依据 | business-read-and-session-last-seen |
+| `doon sales prices archive <id>` | 管理员核对档案摘要与来源目录 | business-read-and-session-last-seen |
+| `doon sales prices import --input <file>` | 迁入新价格档案并核对摘要 | business-write |
+| `doon sales prices selection-save --input <file> --version <number>` | 保存发票价格规则并回读 | business-write |
+| `doon sales prices source-upload --input <file> --file <file>` | 按来源摘要归档价格原件 | business-write |
+| `doon sales prices source-download <archiveId> <fileId> --output <file>` | 管理员核验并下载价格原件 | local-file-and-session-last-seen |
+| `doon sales prices export [--customer <id>] [--view sku|history] --output <file.xlsx>` | 导出授权价格摘录 | local-file-and-session-last-seen |
+| `doon sales quotes file-schema --type <type>` | 查询文件上传字段 | local-read |
+| `doon sales quotes file-list <quoteId> --version <number>` | 查询指定报价版本的文件与模板状态 | business-read-and-session-last-seen |
+| `doon sales quotes file-upload --type <type> --input <file> --file <file> [--version <number>]` | 上传指定类别报价文件并回读 | business-write |
+| `doon sales quotes file-action --action <action> --input <file> --version <number>` | 维护文件引用或应用模板并回读 | business-write |
+| `doon sales quotes file-download <quoteId> --type <type> [--id <id>] --version <number> --output <file>` | 核验并下载报价文件 | local-file-and-session-last-seen |
+| `doon sales quotes file-export <quoteId> --type <type> --version <number> --output <file>` | 导出客户模板并按原权限归档成品 | business-write |
+| `doon sales quotes record-sent --input <file> --version <number> --request-id <uuid>` | 登记已发送事实，不发送消息 | business-write |
+| `doon sales quotes templates --customer <id>` | 查询客户报价模板 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes file-schema --type <type>` | 查询文件上传字段 | local-read |
+| `doon engineering ie-quotes file-list <quoteId> --version <number>` | 查询指定报价版本的文件与模板状态 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes file-upload --type <type> --input <file> --file <file> [--version <number>]` | 上传指定类别报价文件并回读 | business-write |
+| `doon engineering ie-quotes file-action --action <action> --input <file> --version <number>` | 维护文件引用或应用模板并回读 | business-write |
+| `doon engineering ie-quotes file-download <quoteId> --type <type> [--id <id>] --version <number> --output <file>` | 核验并下载报价文件 | local-file-and-session-last-seen |
+| `doon engineering ie-quotes file-export <quoteId> --type <type> --version <number> --output <file>` | 导出内部报价文件 | local-file-and-session-last-seen |
+| `doon engineering ie-quotes handoffs [id] [--quote <id>]` | 查询工程交接目录或详情 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes handoff --action push|accept --input <file> --version <number>` | 下推工程报价或本人接收并回读 | business-write |
+| `doon engineering ie-quotes names-schema` | 查询材料名称资料导入字段 | local-read |
+| `doon engineering ie-quotes names [--search <text>] [--limit <number>] [--offset <number>]` | 查询授权材料名称和来源行 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes names-import --input <file> --version <number> --request-id <uuid>` | 迁入独立材料名称资料并回读 | business-write |
+| `doon engineering ie-quotes reference-schema --type catalog|preset|tooling` | 查询基价、预设或模具表单字段 | local-read |
+| `doon engineering ie-quotes reference-list --type catalog|preset|tooling [--include-inactive]` | 查询授权报价参考资料 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes reference-save --type catalog|preset|tooling --input <file> [--version <number>]` | 新增或修改报价参考资料并回读 | business-write |
 | `doon sales quotes schema` | 查询报价表单与动作字段 | local-read |
-| `doon sales quotes form <id>` | 读取授权的可编辑报价字段 | business-read-and-session-last-seen |
+| `doon sales quotes form <id> [--version <number>]` | 读取授权的可编辑报价字段 | business-read-and-session-last-seen |
 | `doon sales quotes save --input <file> [--version <number>]` | 新增报价或更新指定字段并回读 | business-write |
 | `doon sales quotes action --type <type> --input <file> --version <number>` | 执行既有报价业务动作并回读 | business-write |
 | `doon engineering ie-quotes schema` | 查询报价表单与动作字段 | local-read |
-| `doon engineering ie-quotes form <id>` | 读取授权的可编辑报价字段 | business-read-and-session-last-seen |
+| `doon engineering ie-quotes form <id> [--version <number>]` | 读取授权的可编辑报价字段 | business-read-and-session-last-seen |
 | `doon engineering ie-quotes save --input <file> [--version <number>]` | 新增报价或更新指定字段并回读 | business-write |
 | `doon engineering ie-quotes action --type <type> --input <file> --version <number>` | 执行既有报价业务动作并回读 | business-write |
 | `doon sales teams list` | 查询本人可见业务组 | business-read-and-session-last-seen |
@@ -166,4 +196,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-查询阶段共接入 98 个业务查询/导出命令；W1 已接入客户主档创建及指定字段更新、客户资料更新、跟进排程、项目创建及更新、询价创建及更新、项目款色、轮次、沟通、待办与客户跟进新增及更新写入，其他写入仍待开发。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W2阶段验收中，W3及后续写入待开发。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

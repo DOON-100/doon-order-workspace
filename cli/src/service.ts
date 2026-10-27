@@ -6,8 +6,12 @@ import {SalesWriteService} from './sales-write.js';
 import {ProjectEntryService} from './project-entries.js';
 import {FollowupActionService} from './followup-actions.js';
 import {QuoteWriteService} from './quote-write.js';
+import {QuoteResourceService} from './quote-resources.js';
+import {QuoteHandoffService} from './quote-handoffs.js';
+import {QuoteFileService} from './quote-files.js';
+import {PriceArchiveService} from './price-archive.js';
 import {SalesService} from './sales.js';
-import {quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
+import {priceArchiveCommands, quoteFileCommands, quoteReferenceCommands, quoteWriteCommands, salesCommands, salesWriteCommands, developmentReadCommands, attachmentCommands, transferCommands, customerTaskCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands} from './catalog.js';
 import {OrderService} from './orders.js';
 import {EngineeringService} from './engineering.js';
 import {PlanningService} from './planning.js';
@@ -31,6 +35,10 @@ export class FoundationService {
   projectEntries() { return new ProjectEntryService(this.store, this.transport); }
   followupActions() { return new FollowupActionService(this.store, this.transport); }
   quoteWrite() { return new QuoteWriteService(this.store, this.transport); }
+  quoteResources() { return new QuoteResourceService(this.store, this.transport); }
+  quoteHandoffs() { return new QuoteHandoffService(this.store, this.transport); }
+  quoteFiles() { return new QuoteFileService(this.store, this.transport); }
+  priceArchives() { return new PriceArchiveService(this.store, this.transport); }
   projectChildWrite() { return new ProjectChildWriteService(this.store, this.transport); }
   projectTaskWrite() { return new ProjectTaskWriteService(this.store, this.transport); }
   projectRecycle() { return new ProjectRecycleService(this.store, this.transport); }
@@ -106,6 +114,6 @@ export class FoundationService {
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
-      installedBusinessCommands: quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
+      installedBusinessCommands: priceArchiveCommands.length + quoteFileCommands.length + quoteReferenceCommands.length + quoteWriteCommands.length + salesCommands.length + salesWriteCommands.length + developmentReadCommands.length + attachmentCommands.length + transferCommands.length + customerTaskCommands.length + orderCommands.length + engineeringCommands.length + planningCommands.length + operationsCommands.length + financeCommands.length, businessCommandsAvailable: null};
   }
 }

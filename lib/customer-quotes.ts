@@ -130,8 +130,8 @@ export function customerQuoteMedia(s:State,m:Member,q:CustomerQuote){
  return (all(s,'customer_quote_media') as CustomerQuoteMedia[]).filter(media=>media.quoteId===q.id&&sameMediaCustomer(media,q)&&(!media.lineId||lineIds.has(media.lineId))&&(media.supplement?media.quoteVersion===q.version:included.has(media.id)&&media.quoteVersion<=q.version)).sort((a,b)=>a.uploadedAt.localeCompare(b.uploadedAt));
 }
 export function publicCustomerQuoteMedia(media:CustomerQuoteMedia){
- const {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,title,drawingNo,uploadedAt,uploadedBy,supplement}=media;
- return {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,title,drawingNo,uploadedAt,uploadedBy,supplement,url:'/api/workspace/customer-quote-media-file?id='+encodeURIComponent(id)};
+ const {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,sha256,title,drawingNo,uploadedAt,uploadedBy,supplement}=media;
+ return {id,quoteId,quoteVersion,lineId,category,filename,contentType,size,sha256,title,drawingNo,uploadedAt,uploadedBy,supplement,url:'/api/workspace/customer-quote-media-file?id='+encodeURIComponent(id)};
 }
 export function customerQuoteSentHistory(s:State,m:Member,q:CustomerQuote){
  if(q.status!=='confirmed'||!customerQuoteVersion(s,m,q.id,q.version))return [];

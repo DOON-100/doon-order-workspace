@@ -31,4 +31,21 @@ IE 报价接口没有可靠的业务组筛选协议，本批不提供 `--team`�
 
 `engineering ie-quotes schema|form <id>`提供字段和授权当前表单；`save --input <JSON> [--version <当前版本>]`新增或修改报价。修改JSON提供id和改变的顶层字段，版本为当前版本；未提供字段从授权当前表单保留，数组按完整内容替换。材料、工艺、外协、一次性费用及人工价格调整使用网站原有字段；精确计算、原因和来源签名校验由服务器承担。
 
-`action --type submit|review|revise --input <JSON> --version <当前版本>`复用既有动作；review需id、decision（approve/return）、reason，其他需id。填报人与审核人分离、补充资料及修订规则保持有效。无客户端重复确认、无虚假请求幂等或自动重试。目录、物料名称维护、附件、模板及业务交接尚在W2后续清单。
+`action --type submit|review|revise --input <JSON> --version <当前版本>`复用既有动作；review需id、decision（approve/return）、reason，其他需id。填报人与审核人分离、补充资料及修订规则保持有效。无客户端重复确认、无虚假请求幂等或自动重试。目录、物料名称、附件、模板及交接命令见下文；W2整阶段验收记录以进度计划为准。
+
+
+## 工程报价参考资料与业务交接（0.31.0）
+
+`reference-schema/list/save --type catalog|preset|tooling`分别管理基价目录、工艺预设、稳定模具登记。保存新增用版本0，修改在JSON提供id并用当前版本，未提供顶层字段保留、数组完整替换。工程人员可用list的`--include-inactive`回读停用目录和预设；普通读取不会因此扩大范围。模具实际收费仍限服务器绑定的复核人员并须凭证，已收费记录不能直接撤销。
+
+`names-schema`给出名称资料结构，`names-import --input <JSON> --version <当前版本> --request-id <UUID>`由管理员迁入独立名称资料。JSON的catalog包括sourceFilename、sourceSha256、entries；每行保留id、code、name、可选nameEn、sourceSheet、sourceRow。`names --search <文字> --limit <1-100> --offset <0-2000>`使用服务器分页。引用已保存报价的名称时保留catalogId、catalogVersion、entryId；改名须按网站规则清除旧引用。
+
+`form <报价ID> --version <已发布版本>`返回有权查看的完整字段和handoffCandidates。`handoff --action push --input <JSON> --version <已发布报价版本>`的JSON是id（报价ID）、recipientMemberIds。服务器只允许下推最新已复核版本，收件人须已有该客户报价责任，并排除工程填报、复核和最终审批人员。`handoffs [交接ID] [--quote <报价ID>]`读取目录或详情；`handoff --action accept`的JSON只有id（交接ID），版本指交接记录版本，且必须由指定收件人本人操作。该交接不发送邮件。
+
+## 工程文件与模板
+
+`file-schema --type drawing|template`给出上传字段；`file-list <报价ID> --version <版本>`读取该版本的附件摘要、图纸匹配状态和模板状态。`file-upload --type drawing --input <JSON> --file <原件> --version <当前版本>`的JSON是quoteId、lineId、可选replaceAttachmentId；不超过12MiB，格式和内容由服务器核验。上传或替换都生成新版本，原件保留。
+
+`file-action --action remove|bind --input <JSON> --version <当前版本>`使用id（报价ID）、lineId、attachmentId；bind还需网站原有的acknowledgeDrawingRevision=true业务字段。remove只移除当前引用，bind恢复或重绑同款式原件，均保留历史。`file-download <报价ID> --type drawing --id <附件ID> --version <版本> --output <新文件>`按大小和SHA-256校验并拒绝覆盖。
+
+`file-upload --type template`仅管理员使用，JSON包括quoteId、sheetBindings（sheetName与lineId逐款对应）以及网站既有的acknowledgeRemoveUnmapped=true字段。原Excel私有保留，打印副本移除未映射表；CLI不新增确认提示，也不自动补业务字段。`file-export <报价ID> --type draft|released --version <版本> --output <新.xlsx>`由服务器按模板、当前权限和数据完整性导出，未发布草稿保持其原有标记，不会冒充已复核版本。

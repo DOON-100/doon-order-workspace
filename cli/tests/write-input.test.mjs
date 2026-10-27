@@ -6,6 +6,12 @@ import path from 'node:path';
 import {readWriteInput, validateWriteInput} from '../dist/write-input.js';
 
 const schema = {title: {type: 'string', required: true}, quantity: {type: 'number'}, details: {type: 'object', properties:{a:{type:'number'}}}};
+test('source JSON admits data but rejects executable or excessive nesting',()=>{
+ const schema={dataset:{type:'json',required:true}},value={dataset:{records:[{amount:0,unknown:null}],label:'Synthetic'}};assert.deepEqual(validateWriteInput(value,schema),value);
+ for(const value of [Infinity,new Date(),()=>1])assert.throws(()=>validateWriteInput({dataset:value},schema),{code:'INVALID_INPUT'});
+ let nested=null;for(let i=0;i<66;i++)nested=[nested];assert.throws(()=>validateWriteInput({dataset:nested},schema),{code:'INVALID_INPUT'});
+ assert.throws(()=>validateWriteInput({dataset:{},url:'not-an-open-route'},schema),{code:'INVALID_INPUT'});
+});
 test('nullable numbers distinguish unknown from zero without allowing null elsewhere',()=>{
  const fields={quantity:{type:'number',required:true,nullable:true,integer:true,min:0}};
  assert.deepEqual(validateWriteInput({quantity:null},fields),{quantity:null});

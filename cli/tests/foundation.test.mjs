@@ -8,6 +8,17 @@ import {ApiClient} from '../dist/client.js';
 import {FoundationService} from '../dist/service.js';
 import {temporary, store, user, token, signed, session} from './helpers.mjs';
 
+test('an export GET that archives output is not marked retryable after a lost response',async()=>{
+ const config=serverConfig('https://employee.test',false);let calls=0;
+ const client=new ApiClient(config,async(url,init)=>{calls++;assert.equal(new URL(url).pathname,'/api/workspace/customer-quote-template-export');assert.equal(init.method,'GET');assert.equal(init.headers.Origin,config.origin);throw Error('Synthetic lost response');});
+ await assert.rejects(client.request('/api/workspace/customer-quote-template-export',session(config.origin),undefined,{query:{quoteId:'synthetic',quoteVersion:'1'}}),error=>error.code==='CONNECTION_FAILED'&&error.details.outcomeUnknown===true&&error.details.retryable===false);assert.equal(calls,1);
+});
+
+test('fixed logical handoff reads use GET on the existing dual-method URL',async()=>{
+ const config=serverConfig('https://employee.test',false),client=new ApiClient(config,async(url,init)=>{assert.equal(new URL(url).pathname,'/api/workspace/ie-quote-handoff');assert.equal(init.method,'GET');return Response.json({handoff:{id:'synthetic'}});});
+ assert.equal((await client.request('/api/workspace/ie-quote-handoff-read',session(config.origin),undefined,{query:{id:'synthetic'}})).data.handoff.id,'synthetic');
+});
+
 test('HTTPS origins, loopback-only opt-in, switching and credential origin binding', async () => {
   for (const url of ['http://employee.test', 'https://a:b@employee.test', 'https://employee.test/path', 'https://employee.test?q=1', 'https://employee.test#fragment']) assert.throws(() => serverConfig(url), {code: 'INVALID_SERVER'});
   assert.throws(() => serverConfig('http://192.168.1.10', true), {code: 'INVALID_SERVER'});
@@ -72,7 +83,7 @@ test('doctor checks only foundation routes, reports unknown build and unauthenti
     return Response.json(url.endsWith('/health') ? {ok: true, service: 'Synthetic'} : {readOnly: false});
   }).doctor();
   assert.deepEqual(routes, ['/health', '/api/review-mode']);
-  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, 138);
+  assert.equal(result.authenticated, false); assert.equal(result.serverBuild, null); assert.equal(result.businessCommandsAvailable, null); assert.equal(result.installedBusinessCommands, 168);
 });
 
 test('limited errors, no automatic POST retries, timeout and bounded response', async () => {

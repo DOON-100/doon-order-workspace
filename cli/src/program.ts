@@ -27,9 +27,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分功能' : '待接入'}\n`);
       else if (['sales ','service ','engineering ','planning ','purchasing ','operations ','finance '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
-        process.stdout.write(`业务组: ${clean(value.scope.teamId || '全部获授权范围')}  客户: ${clean(value.scope.customerId || value.scope.customerCode || '全部获授权客户')}\n`);
+        process.stdout.write(`业务组: ${clean(value.scope?.teamId || '全部获授权范围')}  客户: ${clean(value.scope?.customerId || value.scope?.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
-          process.stdout.write(`匹配 ${value.page.total} 条，本页 ${value.page.rows.length} 条；下一偏移 ${value.page.nextOffset ?? '无'}（客户端分页）\n`);
+          process.stdout.write(`匹配 ${value.page.total} 条，本页 ${value.page.rows.length} 条；下一偏移 ${value.page.nextOffset ?? '无'}（${value.scope.pagination==='server'?'服务器':'客户端'}分页）\n`);
           for (const row of value.page.rows) process.stdout.write(Object.entries(row).map(([k,v]) => `${k}: ${clean(v !== null && typeof v === 'object' ? JSON.stringify(v) : v)}`).join('  ') + '\n');
         } else process.stdout.write(JSON.stringify(value, null, 2) + '\n');
       }
@@ -67,13 +67,32 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
   function registerQuoteWrites(group:Command,kind:'ie'|'customer',prefix:string){
     group.command('schema').description('查询报价表单与业务动作字段').action(()=>result(prefix+' schema',foundation().quoteWrite().schema(kind)));
-    group.command('form <id>').description('读取可编辑报价字段').action(async id=>result(prefix+' form',await foundation().quoteWrite().form(kind,id)));
+    group.command('form <id>').description('读取授权报价字段或指定历史版本').option('--version <number>','指定历史版本').action(async(id,options)=>result(prefix+' form',await foundation().quoteWrite().form(kind,id,options.version)));
     group.command('save').description('新增报价或更新指定字段').requiredOption('--input <file>','JSON输入文件').option('--version <number>','修改的当前版本，新增0','0').action(async options=>result(prefix+' save',await foundation().quoteWrite().save(kind,options.input,options.version)));
     group.command('action').description('执行既有报价业务动作').requiredOption('--type <type>',kind==='ie'?'submit|review|revise':'confirm|revise|adopt-ie').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','报价当前版本').action(async options=>result(prefix+' action',await foundation().quoteWrite().action(kind,options.type,options.input,options.version)));
+  }
+  const prices=sales.command('prices').description('客户历史价格档案与发票价格规则');
+  prices.command('schema').description('查询价格档案表单字段').requiredOption('--type <type>','dataset|selection|source').action(options=>result('sales prices schema',foundation().priceArchives().schema(options.type)));
+  for(const action of ['list','export'] as const){const command=prices.command(action).description(action==='list'?'查询权限内历史价格与发票依据':'导出授权历史价格摘录').option('--customer <id>','客户ID').option('--view <view>','sku|history','sku').option('--search <text>','摘要搜索').option('--state <state>','状态筛选').option('--currency <code>','币种');if(action==='list')command.option('--limit <number>','每页1至100','20').option('--offset <number>','起始偏移','0');else command.option('--team <id>','导出业务组').requiredOption('--output <file.xlsx>','新输出文件');command.action(async options=>result('sales prices '+action,action==='list'?await foundation().priceArchives().list(options):await foundation().priceArchives().export(options,options.output)));}
+  prices.command('archive <id>').description('管理员核对原始档案摘要与来源目录').option('--limit <number>','每页1至100','20').option('--offset <number>','起始偏移','0').action(async(id,options)=>result('sales prices archive',await foundation().priceArchives().archive(id,options)));
+  prices.command('import').description('管理员迁入新历史价格档案，不覆盖原档案').requiredOption('--input <file>','资料JSON').action(async options=>result('sales prices import',await foundation().priceArchives().import(options.input)));
+  prices.command('selection-save').description('维护发票价格规则').requiredOption('--input <file>','规则JSON').requiredOption('--version <number>','当前规则版本，首次0').action(async options=>result('sales prices selection-save',await foundation().priceArchives().selection(options.input,options.version)));
+  prices.command('source-upload').description('管理员按已登记摘要归档原件').requiredOption('--input <file>','档案和来源ID的JSON').requiredOption('--file <file>','原件路径').action(async options=>result('sales prices source-upload',await foundation().priceArchives().upload(options.input,options.file)));
+  prices.command('source-download <archiveId> <fileId>').description('管理员核验并下载价格原件').requiredOption('--output <file>','新输出文件').action(async(archiveId,fileId,options)=>result('sales prices source-download',await foundation().priceArchives().download(archiveId,fileId,options.output)));
+  function registerQuoteFiles(group:Command,kind:'ie'|'customer',prefix:string){
+    group.command('file-schema').description('查询报价文件上传字段').requiredOption('--type <type>',kind==='ie'?'drawing|template':'source|media|template|archive').action(options=>result(prefix+' file-schema',foundation().quoteFiles().schema(kind,options.type)));
+    group.command('file-list <quoteId>').description('查询指定版本文件与模板状态').requiredOption('--version <number>','报价版本').action(async(id,options)=>result(prefix+' file-list',await foundation().quoteFiles().list(kind,id,options.version)));
+    group.command('file-upload').description('上传报价原件、图纸、模板或归档文件').requiredOption('--type <type>',kind==='ie'?'drawing|template':'source|media|template|archive').requiredOption('--input <file>','文件资料JSON').requiredOption('--file <file>','原件路径').option('--version <number>','报价版本，客户模板登记不提供').action(async options=>result(prefix+' file-upload',await foundation().quoteFiles().upload(kind,options.type,options.input,options.file,options.version||'')));
+    group.command('file-action').description('维护附件引用或应用客户模板').requiredOption('--action <action>',kind==='ie'?'remove|bind':'apply-template').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','当前报价版本').action(async options=>result(prefix+' file-action',await foundation().quoteFiles().action(kind,options.action,options.input,options.version)));
+    group.command('file-download <quoteId>').description('核验并下载报价文件').requiredOption('--type <type>',kind==='ie'?'drawing':'source|media|output').option('--id <id>','附件或成品文件ID，原报价不填').requiredOption('--version <number>','报价版本').requiredOption('--output <file>','新输出文件').action(async(id,options)=>result(prefix+' file-download',await foundation().quoteFiles().download(kind,options.type,id,options.version,options.id||'',options.output)));
+    group.command('file-export <quoteId>').description(kind==='ie'?'导出指定版本内部报价':'导出客户模板并按原权限归档成品').requiredOption('--type <type>',kind==='ie'?'draft|released':'template').requiredOption('--version <number>','报价版本').requiredOption('--output <file>','新输出文件').action(async(id,options)=>result(prefix+' file-export',await foundation().quoteFiles().export(kind,options.type,id,options.version,options.output)));
+    if(kind==='customer')group.command('templates').description('查询授权客户的报价模板').requiredOption('--customer <id>','客户档案ID').action(async options=>result('sales quotes templates',await foundation().quoteFiles().templates(options.customer)));
+    if(kind==='customer')group.command('record-sent').description('登记已发送事实，不发送邮件或消息').requiredOption('--input <file>','发送登记JSON').requiredOption('--version <number>','已确认报价版本').requiredOption('--request-id <uuid>','登记请求UUID').action(async options=>result('sales quotes record-sent',await foundation().quoteFiles().recordSent(options.input,options.version,options.requestId)));
   }
   for (const resource of ['teams','customers','projects','followups','inquiries','quotes'] as const) {
     const group = sales.command(resource).description({teams:'业务组目录',customers:'客户资料',projects:'客户项目',followups:'客户跟进',inquiries:'询价评估',quotes:'客户报价'}[resource]);
     if(resource==='quotes')registerQuoteWrites(group,'customer','sales quotes');
+    if(resource==='quotes')registerQuoteFiles(group,'customer','sales quotes');
     if(resource==='followups'){
       group.command('action').description('跟进转项目或邮件归属登记').requiredOption('--type <type>','promote|classify').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','操作UUID').action(async options=>result('sales followups action',await foundation().followupActions().execute(options.type,options.input,options.version,options.requestId)));
       group.command('mailbox [id]').description('查询邮件档案目录或指定正文').action(async id=>result('sales followups mailbox',await foundation().followupActions().mailbox(id)));
@@ -157,6 +176,17 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   for(const resource of ['drawings','sops','samples','ie-quotes'] as const){
     const group=engineering.command(resource);
     if(resource==='ie-quotes')registerQuoteWrites(group,'ie','engineering ie-quotes');
+    if(resource==='ie-quotes')registerQuoteFiles(group,'ie','engineering ie-quotes');
+    if(resource==='ie-quotes'){
+      group.command('handoffs [id]').description('查询工程报价交接目录或详情').option('--quote <id>','按工程报价筛选').action(async(id,options)=>result('engineering ie-quotes handoffs',await foundation().quoteHandoffs().list(id,options.quote)));
+      group.command('handoff').description('下推已复核工程报价或本人接收').requiredOption('--action <action>','push|accept').requiredOption('--input <file>','JSON输入文件').requiredOption('--version <number>','工程报价或交接记录版本').action(async options=>result('engineering ie-quotes handoff',await foundation().quoteHandoffs().execute(options.action,options.input,options.version)));
+      group.command('names-schema').description('查询材料名称资料导入字段').action(()=>result('engineering ie-quotes names-schema',foundation().quoteHandoffs().namesSchema()));
+      group.command('names').description('查询材料名称与来源行').option('--search <text>','名称或编码').option('--limit <number>','每页1至100条','20').option('--offset <number>','起始偏移0至2000','0').action(async options=>result('engineering ie-quotes names',await foundation().quoteHandoffs().names(options)));
+      group.command('names-import').description('管理员迁入独立材料名称资料').requiredOption('--input <file>','来源与名称资料JSON').requiredOption('--version <number>','当前资料版本，首次0').requiredOption('--request-id <uuid>','操作UUID').action(async options=>result('engineering ie-quotes names-import',await foundation().quoteHandoffs().importNames(options.input,options.version,options.requestId)));
+      group.command('reference-schema').description('查询基价、工艺预设或模具登记字段').requiredOption('--type <type>','catalog|preset|tooling').action(options=>result('engineering ie-quotes reference-schema',foundation().quoteResources().schema(options.type)));
+      group.command('reference-list').description('查询报价参考资料').requiredOption('--type <type>','catalog|preset|tooling').option('--include-inactive','包含停用目录，须工程维护权限').option('--search <text>','摘要搜索').option('--limit <number>','每页1至100条','20').option('--offset <number>','起始偏移','0').action(async options=>result('engineering ie-quotes reference-list',await foundation().quoteResources().list(options.type,options)));
+      group.command('reference-save').description('新增或修改报价参考资料').requiredOption('--type <type>','catalog|preset|tooling').requiredOption('--input <file>','JSON输入文件').option('--version <number>','修改的当前版本，新增0','0').action(async options=>result('engineering ie-quotes reference-save',await foundation().quoteResources().save(options.type,options.input,options.version)));
+    }
     for(const spec of engineeringCommands.filter(c=>c.resource===resource)){
       const command=group.command(spec.action).description(spec.description).option('--customer <id>','精确客户档案编号').option('--limit <number>','客户端每页1–100条','20').option('--offset <number>','客户端起始偏移','0');
       if(resource!=='ie-quotes')command.option('--team <id>','业务组编号');

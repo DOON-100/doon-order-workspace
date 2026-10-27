@@ -90,14 +90,14 @@ test('server contract drift/team not applied, auth revocation and invalid comman
   await assert.rejects(new SalesService(f.state,async()=>Response.json({}, {status:401})).execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await f.state.hasSession(),false);
 });
 
-test('business transport forbids writes, unknown query keys, all-process access and anonymous access',async()=>{
+test('business transport rejects unregistered actions, read-route bodies, unknown queries and anonymous access',async()=>{
   const cfg=serverConfig('https://employee.test'), saved=session(cfg.origin), api=new ApiClient(cfg,async()=>{throw Error('Must not be called');});
   await assert.rejects(api.request('/api/workspace/customer-quotes'),{code:'AUTH_REQUIRED'});
   await assert.rejects(api.request('/api/workspace/customer-quotes',saved,{actor:'spoof'}),{code:'UNSUPPORTED_OPERATION'});
   await assert.rejects(api.request('/api/workspace/customer-quotes',saved,undefined,{query:{actor:'spoof'}}),{code:'INVALID_QUERY'});
   await assert.rejects(api.request('/api/workspace/process-data',saved),{code:'INVALID_QUERY'});
   await assert.rejects(api.request('/api/workspace/process-data',saved,undefined,{query:{type:'warehouse'}}),{code:'UNSUPPORTED_OPERATION'});
-  await assert.rejects(api.request('/api/workspace/customer-quote-template-export',saved),{code:'UNSUPPORTED_OPERATION'});
+  await assert.rejects(api.request('/api/workspace/experimental-price-overwrite',saved),{code:'UNSUPPORTED_OPERATION'});
 });
 
 test('business response cap cancels oversized stream and binary protocol rejects HTML and bad signatures',async()=>{
