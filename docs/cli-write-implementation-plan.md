@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1功能与本地成品验收完成；W2本地成品验收完成；W3进行中；W4–W11未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main` 的 `3b44c0b`，CLI 0.7.0。状态：**W0 基础开发和隔离验收完成；W1功能与本地成品验收完成；W2本地成品验收完成；W3功能、本地成品及GitHub下载来源验收完成；W4–W11未开始**。本计划是待核验的实施清单，不代表接口已接入 CLI、功能已经可用或获准上线。查询阶段和既有验收见 [CLI 实施计划](cli-implementation-plan.md) 与 [执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -45,7 +45,7 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W0 | 写入框架、登录与权限复用、输入校验、限定接口、错误处理、回读、隔离测试、入口与分发方案 | [入口覆盖清单](cli-write-coverage.md)已登记；真实处理器合成写入验证员工权限、回读、去重和原记录保全；d5a7bde 下载包 88 条命令通过隔离验收。业务写入命令从 W1 开始接入；隔离安装残留因执行策略受阻待清理 | 基础开发与隔离验收完成 |
 | W1 | S01–S02 客户、联系人/客户资料、客户开发、项目、款式、轮次、任务、沟通、跟进、需求与询价 | 客户主档及目录、通用/专属资料、流转、附件、客户任务、项目/跟进/询价增改、普通表单统一保存、项目原件与跟进转项目/邮件归属已接入；145条命令安装包本地验收通过，远端同步与CI下载来源复核待网络恢复 | 本地验收完成 |
 | W2 | S03 成本、IE 报价、客户报价、报价版本和历史档案；模板/附件 | 已接入IE/客户报价schema、可编辑字段查询、统一新增/增量修改及提交/评审/修订/确认/采用IE等固定动作。其余新版本 IE 图纸附件及业务交接接口 `ie-quote-handoff` / `ie-quote-handoff-accept`、`customer-quote-save/revise/confirm/media-upload/record-sent/adopt-ie`、`customer-price-archive-*`、`customer-quote-template-*`；保存、审批、登记已发送与真实外发区分 | 本地验收完成 |
-| W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，金蝶真实上传保留协议缺口，阶段验收中 | 进行中 |
+| W3 | S04 客户订单、PI、订单评审、客服单证和内部订单交接 | `sales-order-sources-import`、`kingdee-sales-source-preview/commit`、`kingdee-sales-prepare/save/confirm/upload/reconcile/validate`、`factory-order-save`、`factory-order-table-preview/commit`、`handoff-business-*`、`edit-order`；已接入33条命令，208条成品验收及GitHub下载来源核验通过，金蝶真实上传保留协议缺口 | 本地验收完成 |
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；确认、上传和修改要保留来源版本 | 未开始 |
 | W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | `pmc-save/round`、`planning-control-*`、`purchase-preview/commit/save/receipt/archive`、`purchase-change-*`、`supplier-save`、`supplier-quote-save`、`outsource-approve/cancel`、`finished-supplier-*`；预览与正式提交分开核验 | 未开始 |
 | W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | `process-save` 按实际类型复用；`purchase-receipt`、`finished-supplier-*`、现有生产/损耗操作处理器；采购、库存、质检和流程跟踪不是同一业务记录，缺口待审计/补接口 | 未开始 |
@@ -87,7 +87,7 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 跟进转项目、邮件归属登记复用 `action --type promote|classify`；邮件档案和跟进/归属历史提供显式查询，不发送邮件。
 - [x] W1源码阶段：业务总回归382项、类型检查、服务器原生运行时17项通过；137条命令实际进程验收通过（含48组真实处理器检查），原记录和原件保全。
 - [x] CLI 0.30.0已构建、实际安装并通过145条已支持命令验收（49组合成处理器检查），本次安装、会话及数据已清理；见[W1本地成品验收](cli-write-w1-acceptance.md)。
-- [ ] GitHub连接失败，远端推送、CI来源下载复核及员工分发仍待完成；本次明确为本地构建包验收。
+- [x] W1代码已随9bd16ca推送main；0.32.0合并版覆盖W1并完成GitHub下载来源核验。原0.30.0记录仍是本地构建验收，员工分发按W11。
 - [x] W1范围边界已归档：客户停用限管理员、不增加物理删除；项目图纸/签样/下单按W4，历史工作台导入及模板/组织配置按W10继续，不伪装已覆盖。
 - [ ] 检查前次执行策略阻止清理的隔离安装目录，并在可用的合法方式下清理；不得绕过执行策略。
 
@@ -114,7 +114,7 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 人员绑定、个人邮箱配置及真实SMTP发送归W10独立通讯/配置验收；本批的交接和已发送登记不对外发送邮件。
 - [x] W2源码阶段业务回归382项、类型、服务器运行时17项通过；66项CLI测试经一次过期断言修正与对应文件复测通过；49组合成链路验证16条W2写入命令的真实CLI进程。
 - [x] 0.31.0版本化安装包实际安装后175条命令及53组合成处理器检查通过，测试安装、数据及凭据已清理；见[W2本地成品验收](cli-write-w2-acceptance.md)。
-- [ ] GitHub同步及CI下载来源核验待网络恢复；W3现已开始，不宣称全站写入完成。
+- [x] W2代码已随9bd16ca推送main；0.32.0合并版覆盖W2并完成GitHub下载来源核验。原0.31.0记录保留其本地验收含义，不宣称全站写入完成。
 
 
 ## W3 当前执行顺序
@@ -137,5 +137,5 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 金蝶草稿准备/修改/校验/客服确认/模板导出；上传和核查复用既有受控接口，真实上传仍有现有服务端协议缺口，不绕过。
 - [x] 前32条W3新命令真实CLI进程检查通过，越权、旧版本、UUID复用、双版本、并发及原件保全合成链路通过；新增中英表格导出纳入成品阶段，总计33条新命令。正式服务器和真实ERP请求为0。
 - [x] W3集中业务回归382项、类型检查、68项CLI测试和17项原生服务器HTTP检查通过；静态表单生成及命令说明一致性通过。
-- [ ] 0.32.0版本化安装包全208条命令实际安装验收。
-- [ ] GitHub同步和CI来源下载验收待网络恢复；不将本地包称为远端下载成品。
+- [x] 0.32.0版本化安装包全208条命令实际安装验收及64组合成检查通过；测试安装、会话及数据已清理，正式服务器请求0。详见[W3验收](cli-write-w3-acceptance.md)。
+- [x] 9bd16ca及此前W1/W2提交已推送main，CLI CI通过；GitHub成品已下载安装并核验程序文件与已验收本地包相同（手册仅换行差异），来源和本地完整测试分别留痕。
