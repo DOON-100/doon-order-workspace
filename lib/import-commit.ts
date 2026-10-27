@@ -6,10 +6,11 @@ import {isLedgerDrawingExtra,matchesOrderIdentity} from './order-identity';
 import {assertHandoffProductionGate,requiresProductionGate} from './handoff-production-gate';
 
 export async function commitImport(body:unknown,s:State,m:Member){
- const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional()}).parse(body);
+ const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional(),contract:z.literal('production-mes-v1').optional(),sourceHash:z.string().regex(/^[a-f0-9]{64}$/).optional()}).parse(body);
  const job=s.records.find(r=>r.id===input.id&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权提交此导入批次。',403);
  const progress=()=>json({ok:true,reused:true,count:job.applied||0,offset:job.offset||job.applied||0,total:job.selected?.length||0,status:job.status});
- if(job.status==='已提交')return progress();
+ if(input.contract&&(job.importType!=='mes'||!input.sourceHash||input.sourceHash!==job.hash))throw new AppError('MES 导入来源已变化或类型不符，请重新预览。',409);
+ if(job.status==='已提交'){const selected=[...new Set(input.selected)].sort((a,b)=>a-b);if(selected.length!==input.selected.length||JSON.stringify(job.selected)!==JSON.stringify(selected)||job.reviewReason!==input.reason)throw new AppError('已提交批次不能更改选择范围或核对依据。',409);return progress();}
  if(Date.now()-Date.parse(job.createdAt)>24*3600000)throw new AppError('预览已超过 24 小时，请重新上传核对。已成功合并的记录已保留。');
  const selected=[...new Set(input.selected)].sort((a,b)=>a-b),selectedSet=new Set(selected),allRows=(job.rows as PreviewRow[]).filter(r=>selectedSet.has(r.index));
  if(selected.length!==input.selected.length||allRows.length!==selected.length)throw new AppError('选择包含重复或不存在的行，请重新核对预览。');

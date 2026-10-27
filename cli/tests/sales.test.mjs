@@ -96,7 +96,7 @@ test('business transport rejects unregistered actions, read-route bodies, unknow
   await assert.rejects(api.request('/api/workspace/customer-quotes',saved,{actor:'spoof'}),{code:'UNSUPPORTED_OPERATION'});
   await assert.rejects(api.request('/api/workspace/customer-quotes',saved,undefined,{query:{actor:'spoof'}}),{code:'INVALID_QUERY'});
   await assert.rejects(api.request('/api/workspace/process-data',saved),{code:'INVALID_QUERY'});
-  await assert.rejects(api.request('/api/workspace/process-data',saved,undefined,{query:{type:'warehouse'}}),{code:'UNSUPPORTED_OPERATION'});
+  await assert.rejects(api.request('/api/workspace/process-data',saved,undefined,{query:{type:'unregistered-process'}}),{code:'UNSUPPORTED_OPERATION'});
   await assert.rejects(api.request('/api/workspace/experimental-price-overwrite',saved),{code:'UNSUPPORTED_OPERATION'});
 });
 

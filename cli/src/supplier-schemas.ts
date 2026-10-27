@@ -13,5 +13,10 @@ export const supplierSchemas:Record<string,WriteSchema>={
  'task-create':{lineId:id,supplierId:id,template:{type:'string',required:true,enum:['metal','acetate','custom']},steps:{type:'array',required:true,min:1,max:20,items:{type:'object',properties:{id:required(40),label:required(40)}}},dueDate:{...date,required:true},baseline:{type:'object',required:true,properties:{cutoffDate:required(10),confirmed:{type:'boolean',required:true},...counts,note:{...required(),min:3}}}},
  'baseline-confirm':{taskId:id,orderVersion:positive,date:required(10),note:{...required(),min:3},baseline:{type:'object',required:true,properties:{confirmed:{type:'boolean',required:true,enum:[true]},stock:{...qty(),required:true},...Object.fromEntries(Object.entries(counts).map(([k,v])=>[k,{...v,required:true}]))}}},
  'baseline-stage':{taskId:id,date:required(10),note:{...required(),min:3},stageId:id,quantity:{...qty(),required:true}},
+ receive:{taskId:id,shipmentId:id,date:required(10),quantity:positive,note:text()},
+ qc:{taskId:id,shipmentId:id,date:required(10),accepted:{...qty(),required:true},rejected:{...qty(),required:true},note:text()},
+ stock:{taskId:id,shipmentId:id,date:required(10),quantity:positive,orderVersion:positive,note:text()},
+ return:{taskId:id,shipmentId:text(800),date:required(10),quantity:positive,reference:required(100),orderVersion:positive,note:{...required(),min:3}},
+ close:{taskId:id,date:required(10),orderVersion:positive,note:{...required(),min:3}},
 };
 export const partialSchema=(schema:WriteSchema,requiredKeys:string[]=[])=>Object.fromEntries(Object.entries(schema).map(([key,value])=>[key,{...value,required:requiredKeys.includes(key)}]));

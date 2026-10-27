@@ -1,4 +1,6 @@
 import {PurchaseWriteService} from './purchase-write.js';
+import {ProcessRecordService} from './process-write.js';
+import {ProductionWriteService} from './production-write.js';
 import {PlanningWriteService} from './planning-write.js';
 import {SupplierWriteService} from './supplier-write.js';
 import {EngineeringWriteService} from './engineering-write.js';
@@ -64,6 +66,8 @@ export class FoundationService {
   engineeringRecords() { return new EngineeringRecordService(this.store,this.transport); }
   engineering() { return new EngineeringService(this.store, this.transport); }
   planning() { return new PlanningService(this.store, this.transport); }
+  processRecords() { return new ProcessRecordService(this.store,this.transport); }
+  productionWrite() { return new ProductionWriteService(this.store,this.transport); }
   purchaseWrite() { return new PurchaseWriteService(this.store,this.transport); }
   planningWrite() { return new PlanningWriteService(this.store,this.transport); }
   supplierWrite() { return new SupplierWriteService(this.store,this.transport); }

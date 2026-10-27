@@ -280,3 +280,20 @@ CLI 0.34.0新增42条命令；字段以各schema命令和CLI白名单为准。�
 | 成品外发准备 | operations finished schema/form/references/action；finished-supplier-order-confirm/task-create/baseline-confirm/baseline-stage | 员工分类/建账/期初；订单和任务独立版本及UUID，明确未知/0 | 分类、待核定到核定、工序null到0、旧版拒绝，源订单身份数量保全 |
 
 金蝶采购源表purchase-preview/commit/held继续暂缓；预览保存批次和原件，不能称只读。purchase-change-*为网站提案确认，CLI不读取或传递批准；直接员工业务请求使用原采购接口，模型业务提案保留已有人工审批边界。成品供应商接单/复期、进度、来料仓储、生产及品质按W6继续；无物理删除、任意HTTP/Shell/数据库入口或正式部署。
+
+## W6 生产、质量、仓储与成品收发对应
+
+新增40条及2条既有入口扩展；字段来自production-write.ts、process-schemas.ts、supplier-schemas.ts及schema命令，验收见[W6记录](cli-write-w6-acceptance.md)。
+
+| 页面/表单 | CLI/接口 | 边界 | 合成检查 |
+| --- | --- | --- | --- |
+| 部门原表工序 | operations ledger schema/form/history/save；ledger-edit/production-workspace-* | 服务器返回部门可写列，订单版本与原投产门禁，AP/BB自动日期 | 指定列、越权/版本、原身份数量、历史 |
+| 累计损耗与冲减 | operations losses schema/list/form/history/save/export；loss-record/export | 部门、订单版本、previousId、累计数量和UUID，patch不绕投产 | 0/null/平衡、冲减、来源凭据、异kind标识碰撞/原记录保全 |
+| MES报工及更正 | operations reports/corrections schema/form/history/action等；production-report-action | 报告/订单/更正各自版本及原子UUID，不直接改报工量 | 关联、更正/审核不改数量、新导出审批一致才核验、重放/越权 |
+| MES原件 | reports import-preview/import-show/import-commit/source-download；preview/job/commit-import/file | 保存原件和任务是写入；绑定摘要、选择及来源版本，真实MES请求0 | 原件字节、选择变化拒绝、旧来源/重放与导入结果回读 |
+| 工序外协收货 | operations receipts schema/file-upload/save/file-download；receipt-photo/confirm/ledger-file | 外协+订单双版本、凭证和UUID身份内容绑定，不等于采购核数 | 收货/不良、旧双版本、异内容/身份、原件及未涉及记录 |
+| 质量/齐料/仓储 | quality/warehouse records schema/list/form/references/history/save；process-data/history/save | IQC/首件/过程/外协质检、material-kit/warehouse；原角色/客户/组/状态，独立证据不自动库存 | 6型增量/显式恢复未知/完成/取消恢复/7版历史、数量/来源/越权/回读未知 |
+| 成品员工收发 | operations finished action/schema --type receive/qc/stock/return/close；finished-supplier-* | 任务UUID及写角色，库存/结单额外源订单版本，旧服务器缺新契约在写前拒绝 | 两套分批/返工/退货、BF/BG/结单回读、撤权重放、越量与未知期初 |
+| 成品原件 | finished files/file-upload/file-download；finished-supplier-attachment/file | 完整性契约、不可变任务/文件id、字节数及SHA-256 | 原件追加、摘要/归属、旧服务器拒绝、已有本地文件不覆盖 |
+
+供应商专属accept/promise/progress/exception/shipment/rework-confirm仍使用既有门户，员工CLI不代行；无任意Shell/数据库、物理删除、真实MES/ERP/物流外发或正式部署。包装/发运及财务按W7/W8继续。

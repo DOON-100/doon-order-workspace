@@ -8,7 +8,7 @@ export class SupplierWriteService{
  private async request(route:Route,body?:any,query?:Record<string,string>){const {api,session}=await this.client();return (await api.request(route,session,body,{query})).data;}
  private async contract(){const data=await this.request('/api/workspace/supplier-write-contract');if(data?.protocol!=='doon-supplier-write-v1'||data.quoteExpectedVersion!==true||data.outsourceOrderVersion!==true)throw new CliError('SERVER_UPGRADE_REQUIRED','服务器尚不支持供应商写入版本契约。',5);}
  private async workspace(){const data=await this.request('/api/workspace/data');if(!Array.isArray(data?.suppliers)||!Array.isArray(data?.supplierQuotes)||!Array.isArray(data?.outsource))throw new CliError('INVALID_RESPONSE','供应商工作台响应无效。',5);return data;}
- schema(type:string){const schema=supplierSchemas[type];if(!schema)throw new CliError('UNSUPPORTED_OPERATION','供应商或成品协作表单类型未接入。',2);return {fields:schema,updateFields:['master','quote','outsource-update'].includes(type)?partialSchema(schema,type==='master'?['id']:type==='outsource-update'?['id','note']:['quoteGroupId']):undefined,semantics:type==='quote'?'首次版本0；修订以quoteGroupId和当前版本追加新记录；原报价保留。修改只指定变更字段。':type==='master'?'新增版本0；修改带id和当前版本，只指定变更字段；停用不删除。':type.startsWith('outsource')?'复用既有外发与主管审批；创建核对源订单版本，修改合并指定字段；不实际向供应商发送。':'只接员工业务分类、发布协作任务及核定期初；供应商接单与进度/收发/品质在后续批次。stepCompleted为工序ID到非负整数或null的对象，由服务器校验。'};}
+ schema(type:string){const schema=supplierSchemas[type];if(!schema)throw new CliError('UNSUPPORTED_OPERATION','供应商或成品协作表单类型未接入。',2);return {fields:schema,updateFields:['master','quote','outsource-update'].includes(type)?partialSchema(schema,type==='master'?['id']:type==='outsource-update'?['id','note']:['quoteGroupId']):undefined,semantics:type==='quote'?'首次版本0；修订以quoteGroupId和当前版本追加新记录；原报价保留。修改只指定变更字段。':type==='master'?'新增版本0；修改带id和当前版本，只指定变更字段；停用不删除。':type.startsWith('outsource')?'复用既有外发与主管审批；创建核对源订单版本，修改合并指定字段；不实际向供应商发送。':'员工按现有权限建账、核定期初、收货、验收、入仓、退货及足量结单。接单/复期/进度/发货/返工确认须供应商门户身份，员工CLI不代行。stepCompleted由服务器核验；收发品质须期初已核定且供应商已接单。'};}
  private project(type:'master'|'quote',row:any){return {...projectFields(row,supplierSchemas[type]),...pick(row,metadata)};}
  async list(type:'master'|'quote',options:{limit?:string;offset?:string;search?:string}={}){const data=await this.workspace(),rows=(type==='master'?data.suppliers:data.supplierQuotes).filter((row:any)=>!options.search||[row.name,row.supplier,row.itemName,row.itemCode].some(value=>typeof value==='string'&&value.toLowerCase().includes(options.search!.toLowerCase())));return {scope:{},page:page(rows.map((row:any)=>this.project(type,row)),pagination(options))};}
  async form(type:'master'|'quote'|'outsource',id:string){const data=await this.workspace(),row=(type==='master'?data.suppliers:type==='quote'?data.supplierQuotes:data.outsource).find((row:any)=>row.id===id);if(!row)throw new CliError('NOT_IN_SCOPE','供应商记录不在当前权限范围。',7);return {scope:{},record:type==='outsource'?pick(row,outsourceFields):this.project(type,row)};}
@@ -25,5 +25,55 @@ export class SupplierWriteService{
  private async finishedData(){const data=await this.request('/api/workspace/finished-supplier-data');if(!Array.isArray(data?.tasks))throw new CliError('INVALID_RESPONSE','成品外发工作台响应无效。',5);return data;}
  async finishedForm(id:string){const data=await this.finishedData(),row=data.tasks.find((row:any)=>row.id===id);if(!row)throw new CliError('NOT_IN_SCOPE','成品任务不在当前授权范围。',7);return {scope:{},record:row};}
  async finishedReferences(){const data=await this.finishedData();return {scope:{},suppliers:(data.supplierMasters||[]).map((row:any)=>pick(row,fields('id name'))),orders:(data.availableOrders||[]).map((row:any)=>pick(row,fields('id version orderNo drawing color lens productType quantity unit businessType warehouse factoryName plannedDate requestedDate'))),templates:data.templates};}
- async finished(action:string,file:string,rawVersion:string,token:string){if(!['order-confirm','task-create','baseline-confirm','baseline-stage'].includes(action))throw new CliError('UNSUPPORTED_OPERATION','W5只支持公司建账与期初核定；进度和收发品质按后续批次。',2);const version=integer(rawVersion),input=await readWriteInput(file,supplierSchemas[action]);if(!token)throw new CliError('INVALID_ARGUMENT','成品协作须提供UUID请求编号。',2);const creating=['order-confirm','task-create'].includes(action),body={...input,...(creating?{orderVersion:version}:{version}),token},routes:Record<string,Route>={'order-confirm':'/api/workspace/finished-supplier-order-confirm','task-create':'/api/workspace/finished-supplier-task-create','baseline-confirm':'/api/workspace/finished-supplier-baseline-confirm','baseline-stage':'/api/workspace/finished-supplier-baseline-stage'},data=await this.request(routes[action],body);if(data?.ok!==true)throw new CliError('INVALID_RESPONSE','成品建账响应无法核对。',5,{outcomeUnknown:true});try{if(action==='order-confirm'){const refs=await this.finishedReferences(),row=refs.orders.find((row:any)=>row.id===input.lineId);if(!row||row.version!==data.order?.version||row.productType!==input.productType||row.unit!==input.unit||row.businessType!==input.businessType)throw Error('changed');return {scope:{},record:row};}const current=await this.finishedForm(data.task?.id);if((input.taskId&&data.task.id!==input.taskId)||(input.lineId&&data.task.lineId!==input.lineId)||!isDeepStrictEqual(current.record,data.task))throw Error('changed');return current;}catch{throw new CliError('READBACK_FAILED','成品建账已响应，回读未完成；请核查原任务，不要盲目重试。',5,{outcomeUnknown:true});}}
+ async finishedFiles(taskId:string,options:{limit?:string;offset?:string}={}){
+  const data=await this.finishedData();this.finishedFileContract(data);
+  if(!data.tasks.some((row:any)=>row.id===taskId))throw new CliError('NOT_IN_SCOPE','成品任务不在当前授权范围。',7);
+  return {scope:{},taskId,integrity:'sha256',page:page((data.attachments||[]).filter((row:any)=>row.taskId===taskId).map((row:any)=>pick(row,fields('id taskId filename contentType size hash createdAt'))),pagination(options))};
+ }
+ private finishedFileContract(data:any){if(data.attachmentIntegrity!=='sha256'||!Array.isArray(data.attachments))throw new CliError('SERVER_UPGRADE_REQUIRED','服务器尚不支持成品协作原件摘要核验，请先更新服务器。',5);}
+ async finishedUpload(file:string,filePath:string,token:string){
+  const input=await readWriteInput(file,{taskId:{type:'string',required:true,min:1,max:800}});
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token||''))throw new CliError('INVALID_ARGUMENT','成品附件请求编号须为UUID。',2);
+  const before=await this.finishedData();this.finishedFileContract(before);if(!before.tasks.some((row:any)=>row.id===input.taskId))throw new CliError('NOT_IN_SCOPE','成品任务不在当前授权范围。',7);
+  const bytes=await readQuoteFile(filePath,10*1024*1024),hash=createHash('sha256').update(bytes).digest('hex'),form=new FormData();form.set('taskId',String(input.taskId));form.set('token',token);form.set('file',new File([Uint8Array.from(bytes)],basename(filePath)));
+  const data=await this.request('/api/workspace/finished-supplier-attachment',form),item=data?.item;
+  if(data?.ok!==true||item?.id!=='finished_attachment_'+token||item.taskId!==input.taskId||item.hash!==hash||item.size!==bytes.length)throw new CliError('INVALID_RESPONSE','成品协作原件上传响应无法核对。',5,{outcomeUnknown:true});
+  try{const current=await this.finishedData();this.finishedFileContract(current);const row=current.attachments.find((row:any)=>row.id===item.id&&row.taskId===input.taskId);if(!row||!isDeepStrictEqual(row,item))throw Error('missing');return {scope:{},file:row,semantics:'只归档当前任务证据，不登记接单、发货或实际收货'};}catch{throw new CliError('READBACK_FAILED','成品协作原件已响应，回读未完成；请先查询任务附件。',5,{outcomeUnknown:true});}
+ }
+ async finishedDownload(taskId:string,fileId:string,output:string){
+  const data=await this.finishedData();this.finishedFileContract(data);if(!data.tasks.some((row:any)=>row.id===taskId))throw new CliError('NOT_IN_SCOPE','成品任务不在当前授权范围。',7);
+  const file=data.attachments.find((row:any)=>row.id===fileId&&row.taskId===taskId);if(!file)throw new CliError('NOT_IN_SCOPE','附件不属于此成品任务。',7);
+  if(typeof file.hash!=='string'||!/^[a-f0-9]{64}$/.test(file.hash)||!Number.isSafeInteger(file.size)||file.size<1)throw new CliError('INVALID_RESPONSE','成品原件缺少有效大小或摘要。',5);
+  const bytes=await this.request('/api/workspace/finished-supplier-file',undefined,{id:fileId}) as Buffer;if(bytes.length!==file.size||createHash('sha256').update(bytes).digest('hex')!==file.hash)throw new CliError('INVALID_RESPONSE','成品协作原件大小或摘要不一致。',5);
+  return {scope:{},taskId,file:await writeNewQuoteFile(bytes,output)};
+ }
+ async finished(action:string,file:string,rawVersion:string,token:string){
+  const employeeActions=['receive','qc','stock','return','close'],supported=['order-confirm','task-create','baseline-confirm','baseline-stage',...employeeActions];
+  if(!supported.includes(action))throw new CliError('UNSUPPORTED_OPERATION','此成品协作动作不属于员工CLI；接单、复期、进度、发货和返工确认须使用供应商门户身份。',2);
+  const version=integer(rawVersion),input=await readWriteInput(file,supplierSchemas[action]);if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token||''))throw new CliError('INVALID_ARGUMENT','成品协作请求编号须为UUID。',2);
+  if(employeeActions.includes(action)&&(await this.finishedData()).companyWriteContract!=='finished-company-write-v1')throw new CliError('SERVER_UPGRADE_REQUIRED','服务器尚不支持成品员工动作的当前权限与重放保护，请先更新服务器。',5);
+  const creating=['order-confirm','task-create'].includes(action),body={...input,...(creating?{orderVersion:version}:{version}),token},routes:Record<string,Route>={'order-confirm':'/api/workspace/finished-supplier-order-confirm','task-create':'/api/workspace/finished-supplier-task-create','baseline-confirm':'/api/workspace/finished-supplier-baseline-confirm','baseline-stage':'/api/workspace/finished-supplier-baseline-stage',receive:'/api/workspace/finished-supplier-receive',qc:'/api/workspace/finished-supplier-qc',stock:'/api/workspace/finished-supplier-stock',return:'/api/workspace/finished-supplier-return',close:'/api/workspace/finished-supplier-close'},data=await this.request(routes[action],body);
+  if(data?.ok!==true)throw new CliError('INVALID_RESPONSE','成品协作响应无法核对。',5,{outcomeUnknown:true});
+  try{
+   if(action==='order-confirm'){const refs=await this.finishedReferences(),row=refs.orders.find((row:any)=>row.id===input.lineId);if(!row||row.version!==data.order?.version||row.productType!==input.productType||row.unit!==input.unit||row.businessType!==input.businessType)throw Error('changed');return {scope:{},record:row};}
+   const current=await this.finishedData(),task=current.tasks.find((row:any)=>row.id===data.task?.id);
+   if(!task||(input.taskId&&task.id!==input.taskId)||(input.lineId&&task.lineId!==input.lineId)||!isDeepStrictEqual(task,data.task))throw Error('changed');
+   if(!employeeActions.includes(action))return {scope:{},record:task};
+   const event=(current.events||[]).find((row:any)=>row.id==='finished_event_'+token&&row.taskId===task.id&&row.action===action);
+   if(!event||event.date!==input.date||event.note!==String(input.note||'').trim())throw Error('missing event');
+   for(const [key,value]of Object.entries(input)){if(['taskId','date','note'].includes(key))continue;const expected=key==='reference'?String(value).trim():value;if(!isDeepStrictEqual(event.data?.[key],expected))throw Error('event changed');}
+   let item:any;
+   if(action!=='close'){
+    item=action==='return'?(current.reworks||[]).find((row:any)=>row.taskId===task.id&&row.source==='return'&&String(row.reference).trim().toUpperCase()===String(input.reference).trim().toUpperCase()):(current.shipments||[]).find((row:any)=>row.id===input.shipmentId&&row.taskId===task.id);
+    if(!item||(action==='return'&&item.sourceShipmentId!==(input.shipmentId||''))||(data.item&&!isDeepStrictEqual(item,data.item)))throw Error('missing item');
+   }
+   if(['stock','return','close'].includes(action)){
+    const workspace=await this.workspace(),order=(workspace.orders||[]).find((row:any)=>row.id===task.lineId),stock=order?.ledger?.columns?.BF;
+    if(!order||order.version!==task.orderVersion||stock===undefined||stock===null||String(stock).trim()===''||Number(stock)!==task.stocked)throw Error('order balance mismatch');
+    if(action==='stock'&&order.ledger.columns.BG!==input.date)throw Error('stock date mismatch');
+    if(action==='close'&&(!task.closedAt||order.lifecycle!=='archived'||order.closedDate!==input.date||order.ledger.columns.BH!==input.date))throw Error('close mismatch');
+   }
+   return {scope:{},record:task,...(item?{item}:{}),event:{...pick(event,fields('id taskId action date note actor actorType createdAt')),data:event.data},reused:data.reused===true};
+  }catch{throw new CliError('READBACK_FAILED','成品协作已响应，任务、业务明细或源订单回读未完成；请核查原动作，不要盲目重试。',5,{outcomeUnknown:true});}
+ }
 }

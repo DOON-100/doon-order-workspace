@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.34.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.35.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,43 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon quality records schema --type <type>` | 查询流程凭据表单及未知数量规则 | local-read |
+| `doon quality records list --type <type> [--team <id>] [--customer <id>] [--order <id>] [--limit <number>] [--offset <number>]` | 查询权限内流程记录 | business-read-and-session-last-seen |
+| `doon quality records form <id> --type <type> [--team <id>]` | 读取流程当前字段、权限及版本 | business-read-and-session-last-seen |
+| `doon quality records references --type <type> [--team <id>] [--limit <number>] [--offset <number>]` | 查询关联客户、订单和现有负责人 | business-read-and-session-last-seen |
+| `doon quality records history <id> --type <type> [--team <id>] [--limit <number>] [--offset <number>]` | 查询原类型和关联下的流程历史 | business-read-and-session-last-seen |
+| `doon quality records save --type <type> --input <file> --version <number> --request-id <id> [--team <id>] [--replace-details]` | 新增或增量保存流程凭据并回读 | business-write |
+| `doon warehouse records schema --type <type>` | 查询流程凭据表单及未知数量规则 | local-read |
+| `doon warehouse records list --type <type> [--team <id>] [--customer <id>] [--order <id>] [--limit <number>] [--offset <number>]` | 查询权限内流程记录 | business-read-and-session-last-seen |
+| `doon warehouse records form <id> --type <type> [--team <id>]` | 读取流程当前字段、权限及版本 | business-read-and-session-last-seen |
+| `doon warehouse records references --type <type> [--team <id>] [--limit <number>] [--offset <number>]` | 查询关联客户、订单和现有负责人 | business-read-and-session-last-seen |
+| `doon warehouse records history <id> --type <type> [--team <id>] [--limit <number>] [--offset <number>]` | 查询原类型和关联下的流程历史 | business-read-and-session-last-seen |
+| `doon warehouse records save --type <type> --input <file> --version <number> --request-id <id> [--team <id>] [--replace-details]` | 新增或增量保存流程凭据并回读 | business-write |
+| `doon operations ledger schema` | 查询原表工序字段，实际可写列由服务器表单返回 | local-read |
+| `doon operations ledger form <id>` | 读取授权订单的部门工序、版本和损耗候选 | business-read-and-session-last-seen |
+| `doon operations ledger history <id> [--limit <number>] [--offset <number>]` | 读取当前权限内的原表工序历史 | business-read-and-session-last-seen |
+| `doon operations ledger save --input <file> --version <number>` | 按当前版本保存指定部门工序字段 | business-write |
+| `doon operations losses schema` | 查询累计损耗、凭证及冲减字段 | local-read |
+| `doon operations losses list [--order <id>] [--process <id>] [--month <month>] [--limit <number>] [--offset <number>]` | 查询授权独立损耗记录 | business-read-and-session-last-seen |
+| `doon operations losses form <id>` | 读取单笔累计损耗与增减依据 | business-read-and-session-last-seen |
+| `doon operations losses history <orderId> [--process <id>] [--limit <number>] [--offset <number>]` | 查询订单损耗追加链及历史冲减 | business-read-and-session-last-seen |
+| `doon operations losses save --input <file> --version <number> --request-id <uuid>` | 登记部门累计损耗、MES凭证或冲减更正 | business-write |
+| `doon operations losses export --month <month> --output <file> [--department <id>] [--customer <code>] [--search <text>]` | 下载授权部门损耗月报 | business-read-and-session-last-seen |
+| `doon operations reports schema --type <type>` | 查询报工关联、更正及核验或导入字段 | local-read |
+| `doon operations reports form <id>` | 读取授权MES包装报工表单 | business-read-and-session-last-seen |
+| `doon operations reports history <id> [--limit <number>] [--offset <number>]` | 读取报工导入和关联的限定历史 | business-read-and-session-last-seen |
+| `doon operations reports action --type <type> --input <file> --version <number> --request-id <uuid>` | 按来源版本关联报工、申请更正或审核核验 | business-write |
+| `doon operations reports import-preview --input <file> --file <file>` | 保存MES原始工作表与隔离预览，不提交报工 | business-write |
+| `doon operations reports import-show <id>` | 读取MES预览状态及差异 | business-read-and-session-last-seen |
+| `doon operations reports import-commit --input <file>` | 复核来源摘要、选择范围和版本后提交MES报工 | business-write |
+| `doon operations reports source-download <id> --output <file>` | 核验摘要并下载MES原始工作表 | business-read-and-session-last-seen |
+| `doon operations corrections list [--order <id>] [--limit <number>] [--offset <number>]` | 查询权限内报工更正申请 | business-read-and-session-last-seen |
+| `doon operations corrections form <id>` | 读取报工更正申请及真实处理状态 | business-read-and-session-last-seen |
+| `doon operations corrections history <id> [--limit <number>] [--offset <number>]` | 读取更正申请、审核和导出核验历史 | business-read-and-session-last-seen |
+| `doon operations receipts schema` | 查询工序外协收货双版本字段 | local-read |
+| `doon operations receipts file-upload --file <file>` | 归档工序送货单原件，不更新数量 | business-write |
+| `doon operations receipts save --input <file> --request-id <uuid>` | 按外发及订单版本登记工序合格和不良收货 | business-write |
+| `doon operations receipts file-download <id> --output <file>` | 核验摘要并下载工序送货单原件 | business-read-and-session-last-seen |
 | `doon purchasing suppliers schema` | 查询供应商主档字段 | local-read |
 | `doon purchasing suppliers list [--search <text>] [--limit <number>] [--offset <number>]` | 查询授权供应商主档 | business-read-and-session-last-seen |
 | `doon purchasing suppliers form <id>` | 读取授权供应商完整编辑字段 | business-read-and-session-last-seen |
@@ -30,10 +67,13 @@
 | `doon purchasing outsource references` | 查询有效供应商、采购跟进人和授权订单 | business-read-and-session-last-seen |
 | `doon purchasing outsource history <id> [--limit <number>] [--offset <number>]` | 查询复期和取消留痕 | business-read-and-session-last-seen |
 | `doon purchasing outsource action --type <type> --input <file> --version <number> [--request-id <uuid>]` | 新增外发、指定字段跟进、主管审批或取消 | business-write |
-| `doon operations finished schema --type <type>` | 查询成品外发分类、任务和期初字段 | local-read |
+| `doon operations finished schema --type <type>` | 查询成品外发准备、收发品质与结单字段 | local-read |
 | `doon operations finished form <id>` | 读取成品外发任务及完整期初字段 | business-read-and-session-last-seen |
 | `doon operations finished references` | 查询建账可用订单、供应商与固定工序 | business-read-and-session-last-seen |
-| `doon operations finished action --type <type> --input <file> --version <number> --request-id <uuid>` | 公司核定业务分类、发布任务或核定期初 | business-write |
+| `doon operations finished action --type <type> --input <file> --version <number> --request-id <uuid>` | 公司核定任务、收货、验收、入仓、退货或足量结单 | business-write |
+| `doon operations finished files <taskId> [--limit <number>] [--offset <number>]` | 查询成品协作原件与SHA-256摘要 | business-read-and-session-last-seen |
+| `doon operations finished file-upload --input <file> --file <file> --request-id <uuid>` | 归档成品协作证据并按摘要回读 | business-write |
+| `doon operations finished file-download <taskId> <fileId> --output <file>` | 核验大小和摘要后下载成品原件 | business-read-and-session-last-seen |
 | `doon planning orders schema` | 查询订单排期回填字段 | local-read |
 | `doon planning orders form <id>` | 读取授权订单当前排期及PMC原表字段 | business-read-and-session-last-seen |
 | `doon planning orders save --input <file> --version <number>` | 增量回填订单排期、物料状态及交期 | business-write |
@@ -295,4 +335,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6—W11待开发。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7—W11待开发。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

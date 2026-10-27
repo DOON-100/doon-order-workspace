@@ -1,4 +1,6 @@
 import {registerPurchaseWrites} from './purchase-write-program.js';
+import {registerProcessWrites} from './process-write-program.js';
+import {registerProductionWrites} from './production-write-program.js';
 import {registerPlanningWrites} from './planning-write-program.js';
 import {registerSupplierWrites} from './supplier-write-program.js';
 import {registerEngineeringWrites} from './engineering-write-program.js';
@@ -30,7 +32,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     else {
       if (command === 'commands') for (const row of commands) process.stdout.write(`doon ${row.usage}\n  ${row.description}\n`);
       else if (command === 'modules') for (const row of modules) process.stdout.write(`${row.label}\t${row.id}\t${row.status === 'partial' ? '已接部分功能' : '待接入'}\n`);
-      else if (['sales ','service ','engineering ','planning ','purchasing ','operations ','finance '].some(prefix=>command.startsWith(prefix))) {
+      else if (['sales ','service ','engineering ','planning ','purchasing ','operations ','quality ','warehouse ','finance '].some(prefix=>command.startsWith(prefix))) {
         const value = data as any;
         process.stdout.write(`业务组: ${clean(value.scope?.teamId || '全部获授权范围')}  客户: ${clean(value.scope?.customerId || value.scope?.customerCode || '全部获授权客户')}\n`);
         if (value.page) {
@@ -240,6 +242,8 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   registerPurchaseWrites(program,foundation,result);
   registerPlanningWrites(program,foundation,result);
   registerSupplierWrites(program,foundation,result);
+  registerProcessWrites(program,foundation,result);
+  registerProductionWrites(program,foundation,result);
   try {
     await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});

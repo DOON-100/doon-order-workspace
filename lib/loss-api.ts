@@ -6,6 +6,8 @@ import {all,canRead,now,strictDate,type State,type Member,type Order} from './do
 import {AppError,audit,commit,json} from './store';
 import {today} from './ledger';
 import {applyLedgerPatch} from './ledger-edit';
+import {assertHandoffProductionGate,requiresProductionGate} from './handoff-production-gate';
+import {assertLegacyFinishedMutation} from './finished-supplier-api';
 import {departmentName,processName,lossProcesses,latestLoss,goodQuantity,mayRecordLoss,filterLosses,summarizeLosses,type LossRecord} from './losses';
 const quantity=z.number().int().min(0).max(10000000);
 export async function lossPost(action:string,req:Request,s:State,m:Member){
@@ -14,8 +16,8 @@ export async function lossPost(action:string,req:Request,s:State,m:Member){
  const o=all(s,'order').find(o=>o.id===p.lineId) as Order|undefined,def=lossProcesses.find(d=>d.id===p.process);
  if(!o||!mayRecordLoss(m,o,p.department))throw new AppError('权限受限：仅本部门文员、PMC、生产管理人员或管理员可确认损耗。',403);
  if(!def||!def.departments.includes(p.department))throw new AppError('请选择此工序对应的责任部门。');
- const records=all(s,'loss') as LossRecord[],fingerprint=JSON.stringify(p),retry=records.find(r=>r.id==='loss_'+p.token);
- if(retry){if(retry.actorId!==m.id||retry.fingerprint!==fingerprint)throw new AppError('重复提交标识不一致，请刷新后核对。',409);return json({ok:true,item:retry,repeated:true});}
+ const records=all(s,'loss') as LossRecord[],fingerprint=JSON.stringify(p),retry=s.records.find(r=>r.id==='loss_'+p.token);
+ if(retry){if(retry.kind!=='loss'||retry.actorId!==m.id||retry.fingerprint!==fingerprint)throw new AppError('重复提交标识不一致或已被其他记录占用，请刷新后核对。',409);return json({ok:true,item:retry,repeated:true});}
  if(o.version!==p.version)throw new AppError('订单报工已更新，请刷新并重新核对投入、完成和在制数。',409);
  const prior=latestLoss(records,o.id,p.process);
  if((prior?.id||'')!==p.previousId)throw new AppError('同事已登记此工序的损耗，请刷新后核对，避免重复记账。',409);
@@ -23,7 +25,7 @@ export async function lossPost(action:string,req:Request,s:State,m:Member){
  try{p.reportDate=strictDate(p.reportDate);if(!p.reportDate)throw new Error('日期不能为空');}catch{throw new AppError('损耗确认日期：请选择日历，填写完整、有效的年-月-日。');}
  if(p.reportDate>today())throw new AppError('损耗确认日期不能晚于今天。');
  if(prior&&p.reportDate<prior.reportDate)throw new AppError('确认日期不能早于本工序上次记录；历史错误请在当前日期登记冲减更正。');
- const changed=Object.keys(p.patch).length>0,next=changed?applyLedgerPatch(o,m,p.patch):o,good=goodQuantity(next,def);
+ const changed=Object.keys(p.patch).length>0;if(changed)assertLegacyFinishedMutation(s,'ledger-edit',{id:o.id,patch:p.patch});const next=changed?applyLedgerPatch(o,m,p.patch):o,good=goodQuantity(next,def);if(changed&&requiresProductionGate(o,next))assertHandoffProductionGate(s,m,o);
  if(p.source==='balance'&&(good===null||p.input===null||p.wip===null))throw new AppError('请填写累计投入、合格完成和仍在制数；空白和不适用不能作为零损耗。');
  if(p.source==='mes'&&(p.reportedLoss===null||p.sourceRef.length<3))throw new AppError('请填写 MES 已确认的累计报废损耗及报工/处理凭证；不良数不能直接当作报废。');
  const loss=p.source==='mes'?p.reportedLoss!:p.input!-good!-p.wip!;if(loss<0)throw new AppError('投入数不足：合格完成数与仍在制数之和不能超过累计投入数。');
