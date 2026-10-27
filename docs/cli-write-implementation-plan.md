@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main`的`3b44c0b`，CLI0.7.0。当前：**W0—W8本地成品及相应GitHub来源完成；W9已接入、集中验收中；W10合并候选与文档已保存、待接入；W11待办；金蝶暂缓**。候选未应用不代表完成，提交同步不代表正式上线。查询及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main`的`3b44c0b`，CLI0.7.0。当前：**W0—W8本地成品及GitHub来源完成；W9源码/CI通过、成品收尾待办；W10合并候选已保存、未接入；W11只读审计已准备、阶段未验；金蝶暂缓；额度剩4%已停止开发**。候选未应用不代表完成，提交同步不代表正式上线。查询及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -227,7 +227,13 @@ W8未纳入W9售后退款或W10授权配置，金蝶12条按用户指示继续�
 - W10管理：`w10-admin-prepared/HOOKS.md`、`apply-manifest.json`及`patches/`，6条统一命令；业务成员资料不创建或重置登录账号。
 - W10通讯：`w10-communication-prepared/hooks-and-acceptance.txt`、`baseline-manifest.json`，9条统一命令；知识维护无API如实只读，测试SMTP只用本机合成传输。
 - W10任务/导入/固定工具：`w10-tools-prepared/integration-notes.json`、`apply-manifest.json`，15条统一命令；精确负责人分派、原版导入和费用决定沿用服务端版本/来源，不接对话批准。
-- W10合并候选：`w10-merged-prepared/integration-notes.json`、`apply-manifest.json`，59目标、9份文档须局部合并；0.39.0候选396条/384非金蝶，合并类型/目录及集中71组/30命令通过，另记通讯13组/9命令含sales_approval本机合成正向。未应用、未通过完整CLI/全站/HTTP/成品/CI；实际接入时核rootReviewTodo目录分组与旧测试假设。
+- W10合并候选：`w10-merged-prepared/integration-notes.json`、`apply-manifest.json`，61目标、9份文档须局部合并；0.39.0候选396条/384非金蝶，合并类型/目录、私有CLI91项及集中71组/30命令通过，另记通讯13组/9命令含sales_approval本机合成正向。未应用、未通过完整CLI/全站/HTTP/成品/CI；实际接入时核rootReviewTodo目录分组与旧测试假设。
 - W10共享framework API及AR/项目财务/付款规则文件须合并各块局部补丁；权限配置保留未知原字段和全局ID类型保护。不接私有运行路径、实际模型执行、调度、备份或部署。
 
 用户要求额度剩余低于5%时停止；接续前读取账号实际额度，不能通过免费重置或其他额度操作自行延长本轮。
+
+## 2026-10-28 额度停止检查点
+
+实际额度96%已用、剩4%，按用户要求停止继续开发，不启动新验收。W9源码local c1eab58与main b7c0e80树一致，88CLI/类型/字段/命令、402全站及全部独立子套件、17HTTP、两套CI成功；0.38.0本地354条安装验收已启动，停止时最终报告尚未收取，GitHub下载包外层摘要匹配，程序/安装来源核验待接续，不能标W9阶段完成。测试使用隔离数据，已启动检查按原finally清理，不触正式服务。
+
+W10候选61目标与文档、补丁、哈希和检查记录保存在本机；未应用，实际全站/HTTP/成品/CI仍待。W11只读审计位于`test-output/w11-coverage-review/audit.json`及`CONTINUE.txt`；`missing-actions.json`记录两项初步线索在额度触线前未完成复核，不能当作已证明缺失。员工安装、真实Codex/WorkBuddy联动及容量仍须验收。
