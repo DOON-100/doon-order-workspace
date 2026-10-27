@@ -1,4 +1,4 @@
-export const version = '0.10.0';
+export const version = '0.11.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -20,6 +20,7 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales projects round-add', usage:'sales projects round-add --input <file> --request-id <uuid>', description:'新增项目轮次并回读', effect:'business-write'},
   {name:'sales projects item-add', usage:'sales projects item-add --input <file> --request-id <uuid>', description:'新增项目款色并回读', effect:'business-write'},
   {name:'sales projects communication-add', usage:'sales projects communication-add --input <file> --request-id <uuid>', description:'新增项目沟通记录并回读', effect:'business-write'},
   {name:'sales inquiries create', usage:'sales inquiries create --input <file> --request-id <uuid>', description:'创建询价需求记录并回读', effect:'business-write'},

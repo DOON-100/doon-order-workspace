@@ -17,7 +17,7 @@ async function fixture(overrides = {}) {
     'business-team-data':{customers:[{id:'c1',customer:'Alpha',customerCode:'A'},{id:'c2',customer:'Beta',customerCode:'B'}],teams:[{id:'t1',name:'One',active:true,customerIds:['c1']}]},
     'customer-workflow-data':{customers:['c1','c2'].map(id=>({id,profile:{version:1,fields:{stage:'报价'}},workflow:null,reminder:'待安排'}))},
     'customer-workflow-history':{events:[{id:'e1',action:'更新',actor:'Synthetic',before:{bank:'BANK-SECRET'}}]},
-    'customer-project-data':{projects:[{id:'p1',customerId:'c1',teamId:'t1',title:'Alpha project',canWrite:true},{id:'p2',customerId:'c2',title:'Beta project'}],items:[{id:'i1',projectId:'p1',customerId:'c1',quantity:0,fileKey:'FILE-SECRET'},{id:'bad',projectId:'p1',customerId:'c2',model:'WRONG-CUSTOMER'}],rounds:[],tasks:[],communications:[]},
+    'customer-project-data':{projects:[{id:'p1',customerId:'c1',teamId:'t1',title:'Alpha project',canWrite:true},{id:'p2',customerId:'c2',title:'Beta project'}],items:[{id:'i1',projectId:'p1',customerId:'c1',quantity:0,fileKey:'FILE-SECRET'},{id:'bad',projectId:'p1',customerId:'c2',model:'WRONG-CUSTOMER'}],rounds:[{id:'r1',projectId:'p1',customerId:'c1',title:'Round',scope:[{itemId:'i1',quantity:3,secret:'ROUND-SECRET'}]},{id:'r2',projectId:'p1',customerId:'c2',scope:[{itemId:'bad',quantity:1}]}],tasks:[],communications:[]},
     'customer-project-history':{history:[{id:'h1',action:'更新',after:{password:'HISTORY-SECRET'}}]},
     'process-data':{records:[{id:'r1',type:'rfq',customerId:'c1',title:'Alpha RFQ',details:{quantity:null,requirement:'资料待核对',private:'DETAIL-SECRET'}},{id:'r2',type:'rfq',customerId:'c2',title:'Beta RFQ',details:{}}]},
     'process-history':{history:[{id:'rrev',recordId:'r1',version:1,requestToken:'TOKEN-SECRET',snapshot:{id:'r1',type:'rfq',customerId:'c1',details:{quantity:0}}}]},
@@ -57,7 +57,7 @@ test('customer detail/history omit bank, courier, raw snapshots and verify selec
 });
 
 test('project detail filters association and projects history is summary only',async()=>{
-  const {service}=await fixture();const detail=await service.execute('projects','show',{},'p1');assert.equal(detail.items.total,1);assert.equal(detail.items.rows[0].quantity,0);assert(!JSON.stringify(detail).includes('SECRET'));
+  const {service}=await fixture();const detail=await service.execute('projects','show',{},'p1');assert.equal(detail.items.total,1);assert.equal(detail.items.rows[0].quantity,0);assert.deepEqual(detail.rounds.rows[0].scope,[{itemId:'i1',quantity:3}]);assert.equal(detail.rounds.total,1);assert(!JSON.stringify(detail).includes('SECRET'));
   assert.equal((await service.execute('projects','list',{customer:'c2'})).page.rows[0].id,'p2');
   assert(!JSON.stringify(await service.execute('projects','history',{},'p1')).includes('HISTORY-SECRET'));
 });

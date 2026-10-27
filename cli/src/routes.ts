@@ -7,6 +7,7 @@ export const routes = {
   '/api/workspace/customer-workflow-data': {method: 'GET', business: true, query: ['customerId']},
   '/api/workspace/customer-workflow-history': {method: 'GET', business: true, query: ['customerId']},
   '/api/workspace/customer-project-item-save': {method: 'POST', business: true, write: true},
+  '/api/workspace/customer-project-round-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-communication': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-project-data': {method: 'GET', business: true},

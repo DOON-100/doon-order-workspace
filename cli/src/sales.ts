@@ -64,8 +64,13 @@ export class SalesService {
       const record = find(rows, id!);
       if (action === 'history') return {scope, projectId: id, page: page(collection(await read('/api/workspace/customer-project-history', {projectId: id!}), 'history').map(row => pick(row, fields('id action actor createdAt targetId'))), window)};
       const related = (key: string, keys: string[]) => page(collection(data, key).filter(row => row.projectId === id && row.customerId === record.customerId).map(row => pick(row, keys)), window);
+      const rounds=collection(data,'rounds').filter(row=>row.projectId===id&&row.customerId===record.customerId).map(row=>{
+        const result=pick(row,fields('id version title type stage status dueDate reason parentRoundId requiredDrawingTypes requireQuote requiredSampleIds sampleGateStage sampleGateNote'));
+        if(Array.isArray(row.scope))result.scope=row.scope.map((line:any)=>pick(line,fields('itemId quantity')));
+        return result;
+      });
       return {scope, record: pick(record, projectFields), items: related('items', fields('id version model customerModel drawing color lens material requirements quantity')),
-        rounds: related('rounds', fields('id version title type stage status dueDate reason')), tasks: related('tasks', fields('id version title description ownerId dueDate status result canSubmit canReviewService canReviewSales')),
+        rounds: page(rounds,window), tasks: related('tasks', fields('id version title description ownerId dueDate status result canSubmit canReviewService canReviewSales')),
         communications: related('communications', fields('id version channel contact occurredAt content nextAction ownerId dueDate visibility'))};
     }
     if (resource === 'inquiries') {
