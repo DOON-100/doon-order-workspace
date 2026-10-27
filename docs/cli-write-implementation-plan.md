@@ -1,6 +1,6 @@
 # 员工 CLI 写入阶段计划与进度
 
-基线：2026-10-27，`origin/main`的`3b44c0b`，CLI0.7.0。当前：**W0—W6本地成品及相应GitHub来源完成；W7已接入、集中验收中；W8/W9独立候选已准备；W10审计及候选准备；W11待办；金蝶暂缓**。候选未应用不代表完成，提交同步不代表正式上线。查询及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
+基线：2026-10-27，`origin/main`的`3b44c0b`，CLI0.7.0。当前：**W0—W7本地成品及相应GitHub来源完成；W8已接入、集中验收中；W9及W10独立候选已保存于本机、待接入；W11待办；金蝶暂缓**。候选未应用不代表完成，提交同步不代表正式上线。查询及既有验收见[CLI实施计划](cli-implementation-plan.md)与[执行记录](cli-execution-log.md)。
 
 ## 目标和范围
 
@@ -49,10 +49,10 @@ doon <业务组> <资源> <业务动作> <编号> ...
 | W4 | S05 工程图纸、SOP、项目款式与样品、签样、工程变更及版本冻结 | `drawing-import/save/review/event-review`、`sop-change/prepare/mes-upload/confirm`、`customer-project-*` 样品/图纸/确认动作、`process-save`；24条新命令及本期220条成品验收通过，12条金蝶暂缓；确认、登记和修改保留来源版本 | 本地验收完成 |
 | W5 | S06 订单计划、产能、齐套、采购、供应商和外协；采购变更 | 42条新命令；0.34.0本期262条及102组合成成品验收通过，GitHub来源/程序文件核验通过；金蝶源表及CLI提案确认边界保留 | 本地与GitHub来源验收完成 |
 | W6 | S07–S09 来料、仓储收发、齐套、生产报工、损耗、外协进度；来料/首件/过程/外协品质 | 40条新增；0.35.0成品302条/129组及GitHub程序/安装来源通过；各记录独立，供应商专属动作留门户 | 本地与GitHub来源完成 |
-| W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | 10条新增，扩OQC/包装/放行及production_shipment；62组开发、80CLI/类型/17HTTP和402项全站通过；无承运商/签收API不冒充 | 成品与来源验收中 |
-| W8 | S12 应收、收款、分配、对账、付款条件、供应商结算、发票及财务单据 | `project-finance-entry-save`、`project-charge-*`、`project-receipt-verify/reverse`、`project-allocation/allocation-release`、`project-adjustment`、`project-credit-apply`、`project-document-*`、`service-receipt/reverse`、`ar-*`、`payment-terms-*`、流程供应商对账；金额、币种、核销和冲销分别校验 | 未开始 |
-| W9 | S13 客诉、售后、整改、退货/补发、售后费用和退款，关联客户回访 | `process-save` 客诉类型、`project-after-sale-save/cost`、`project-refund-request/execute/cancel`、`service-save`、项目跟进接口；登记与真实退款/外部动作区别对待 | 未开始 |
-| W10 | 全栏目收尾：总览/任务、规则、导入、成员/角色、业务组、模板、通讯、知识、系统配置及遗漏页面；权限内查询和支持的维护 | `member`、`task`、`framework-*`、`ar-access-grant-save`、`project-finance-grant-save`、`payment-terms-*` 及实际页面对应入口；账号与权限管理须管理员权限和独立审计；外发、同步、备份等核清真实副作用后分项设计 | 未开始 |
+| W7 | S10–S11 成品检验、包装入仓、出货放行、发运、物流跟进、单证 | 10条新增；0.36.0成品312条/147组及GitHub程序/安装来源通过；无承运商/签收API不冒充 | 本地与GitHub来源完成 |
+| W8 | S12 应收、收款、分配、对账、付款条件、供应商结算、发票及财务单据 | `project-finance-entry-save`、`project-charge-*`、`project-receipt-verify/reverse`、`project-allocation/allocation-release`、`project-adjustment`、`project-credit-apply`、`project-document-*`、`service-receipt/reverse`、`ar-*`、`payment-terms-*`、流程供应商对账；金额、币种、核销和冲销分别校验 | 已接入，集中验收中 |
+| W9 | S13 客诉、售后、整改、退货/补发、售后费用和退款，关联客户回访 | `process-save` 客诉类型、`project-after-sale-save/cost`、`project-refund-request/execute/cancel`、`service-save`、项目跟进接口；登记与真实退款/外部动作区别对待 | 本机独立候选已准备，待接入 |
+| W10 | 全栏目收尾：总览/任务、规则、导入、成员/角色、业务组、模板、通讯、知识、系统配置及遗漏页面；权限内查询和支持的维护 | `member`、`task`、`framework-*`、`ar-access-grant-save`、`project-finance-grant-save`、`payment-terms-*` 及实际页面对应入口；账号与权限管理须管理员权限和独立审计；外发、同步、备份等核清真实副作用后分项设计 | 本机三块候选已准备，待接入 |
 | W11 | 端到端覆盖验收、员工安装升级、命令说明、Codex/WorkBuddy 实机联动及容量评估 | 覆盖矩阵与导航/表单对照；可下载的版本化安装包、版本兼容检查、回滚说明；测试环境并发与服务器限制实测 | 未开始 |
 
 W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写入，而当前 CLI 路由表按路径登记单一方法。实施该功能时需以固定逻辑操作区分 GET 和 POST，不能为此开放任意 URL 或任意方法；图纸附件和交接权限也须以服务器及合成测试核实。
@@ -193,4 +193,28 @@ W2 衔接最新代码：`ie-quote-handoff` 同一路径分别提供读取和写�
 - [x] 原结单/恢复权限和版本、成品专用保护；production_shipment精确来源到packing/waybill/Invoice，原件保留，不实际外发。
 - [x] 62组开发、80CLI、类型/字段/命令及17HTTP通过，正式/承运商请求0。
 - [x] 全站402项及全部独立子套件退出0。
-- [ ] 0.36.0成品312条及GitHub来源、最终提交同步。详见[W7验收](cli-write-w7-acceptance.md)。
+- [x] 0.36.0成品312条/147组、CLI与Native CI、GitHub来源及非强制main同步通过。详见[W7验收](cli-write-w7-acceptance.md)。
+
+## W8 当前进度（实际接入，集中验收中）
+
+- [x] W7 main64400a9基线下三块候选按manifest核对，完成共享固定路由、service/program/catalog、服务器AR派发、打包白名单和w8-only。
+- [x] 项目财务7条、AR10条、付款条件/客服应收/供应商对账20条，共37条新增；0.37.0登记361条，其中349条非金蝶。
+- [x] 合并CLI及服务器类型通过；真实隔离原生处理器、进程内Commander集中71组/37条新增命令通过，原记录与原件保全，测试目录清理，正式请求0。
+- [x] 精确元文本/整数分、历史原件、来源/记录版本、UUID去重、分范围导出、指定授权人降权及结果不明回读已覆盖。
+- [x] 85项CLI、网站/CLI类型、流程/AR字段与命令文档、隔离构建后17项HTTP通过。
+- [x] 本批402项全站业务回归及全部独立子套件退出0。
+- [ ] Windows版本化成品实际安装、349条本期命令及GitHubCI/成品来源验收；提交推送和部署分别处理。
+
+W8未纳入W9售后退款或W10授权配置，金蝶12条按用户指示继续暂缓。详见[W8验收记录](cli-write-w8-acceptance.md)。
+
+## 本机后续候选交接
+
+以下材料仅保存在被忽略的本机`test-output/`，未纳入公开提交，不能代替接入后的阶段验收。接续时先核候选清单和实际基线SHA；有后续改动的文件只合并局部补丁，保留当前版本，不能整文件覆盖。
+
+- W9售后/费用/退款：`w9-after-sale-prepared/HOOKS.md`、`apply-manifest.json`；W9客诉：`w9-complaint-prepared/hooks-and-acceptance.txt`、`baseline-manifest.json`。退款只是原生账务凭据登记，无银行动作；不新增客户接受或结案条件。
+- W10管理：`w10-admin-prepared/HOOKS.md`、`apply-manifest.json`及`patches/`，6条统一命令；业务成员资料不创建或重置登录账号。
+- W10通讯：`w10-communication-prepared/hooks-and-acceptance.txt`、`baseline-manifest.json`，9条统一命令；知识维护无API如实只读，测试SMTP只用本机合成传输。
+- W10任务/导入/固定工具：`w10-tools-prepared/integration-notes.json`、`apply-manifest.json`，15条统一命令；精确负责人分派、原版导入和费用决定沿用服务端版本/来源，不接对话批准。
+- W10共享framework API及AR/项目财务/付款规则文件须合并各块局部补丁；权限配置保留未知原字段和全局ID类型保护。不接私有运行路径、实际模型执行、调度、备份或部署。
+
+用户要求额度剩余低于5%时停止；接续前读取账号实际额度，不能通过免费重置或其他额度操作自行延长本轮。

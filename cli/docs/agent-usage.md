@@ -42,3 +42,10 @@ W5按[PMC与采购说明](planning.md)获取字段、关联和版本，使用指
 W6按[生产与交付说明](operations.md)使用各类schema/form/references及精确版本。原表工序、累计损耗、采购核数、工序外协收货、质量/仓储凭据和成品入仓分别执行；不相互冒充。流程details默认增量合并，明确清除已知数值时才用--replace-details。MES预览保存原件和任务，申请/批准更正不改报工数量，必须新导出回读核验；CLI不实际操作MES。成品接单/复期/进度/发货/返工确认是供应商专属，员工CLI拒绝代行。任何请求重放均须保留原UUID与完整原载荷，撤权后不因旧成功记录而放行。
 
 W7的OQC、包装/放行凭据、入仓、结单、生产出货来源、装箱单/运单/Invoice和发运登记是不同事实。按[交付说明](operations.md)准备原版本及依据；done/checked不推断承运商已收或客户签收。service shipments保存需原记录UUID/版本及关联订单当前版本，不能替换客户、猜数量或擅自重发；原件上传无UUID时先查询核查。引用业务成员从references取memberId，不把whoami登录身份当成员编号。
+
+
+## W8财务固定程序
+
+按[财务说明](finance.md)使用`finance project`、`finance ar`、`finance payment-terms`、`finance receivables`和`finance reconciliations`。先读schema/form/references再准备明确字段；沿用员工原权限，不从目录或管理员身份推断核款、指定业务授权或负责人审批资格。元文本、整数分、null及负数按各原接口保留，不自动换算。来源版本/哈希、记录版本和UUID重放必须使用原载荷。
+
+AR总表精确选集preview只读；文件导入保存原件与批次，单据开立可能按原规则生成应收和付款计划。历史累计核对与当前到账分别记录，已发送事实/HTML下载不执行外发。AR导出逐范围执行，canExport不代表所有读取范围都可导出。写后回读失败先核查，禁止空成功响应替代业务结果。W8开发合成通过，全站/HTTP/成品/CI仍待验收；W9退款售后和W10权限配置未混入本批，金蝶继续暂缓。

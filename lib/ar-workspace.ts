@@ -4,7 +4,7 @@ import {serviceReceivedCents} from './service-workspace';
 
 export const arCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
 export const arUngrouped='__ungrouped';
-export type ArScope={company:boolean;teamIds:string[];readOnly:boolean;canConfigure:boolean;canExport:boolean;allowed:boolean};
+export type ArScope={company:boolean;teamIds:string[];readOnly:boolean;canConfigure:boolean;canExport:boolean;exportCompany:boolean;exportTeamIds:string[];allowed:boolean};
 export type ArQuery={teamId?:string;customerId?:string;currency?:string;periodType?:'month'|'quarter'|'year';period?:string};
 export type ArRow={id:string;sourceKind:string;sourceId:string;canonicalKey:string;customerId:string;customer:string;customerCode:string;teamId:string;teamName:string;title:string;currency:string;amountCents:number|null;date:string;issues:string[];[key:string]:any};
 const list=(v:unknown):string[]=>Array.isArray(v)?v.filter((x):x is string=>typeof x==='string'):[];
@@ -12,13 +12,32 @@ const cents=(v:unknown):number|null=>typeof v==='number'&&Number.isSafeInteger(v
 export function arDay(v:unknown){const d=typeof v==='string'?v:'';if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return '';const t=new Date(d+'T00:00:00Z');return Number.isFinite(+t)&&t.toISOString().slice(0,10)===d?d:'';}
 export function arToday(){return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());}
 export function arReadOnly(s:State,m:Member){return all(s,'ar_access_grant').some(g=>g.active===true&&g.memberId===m.id&&g.readOnly===true);}
+/** Export grants remain scoped independently from read grants. Reading another team never extends export rights. */
+export function arExportAccess(s:State,m:Member){
+ const valid=m.active&&m.role!=='supplier',teams=all(s,'customer_project_team').filter(t=>t.active===true);
+ const grants=valid?all(s,'ar_access_grant').filter(g=>g.active===true&&g.memberId===m.id&&list(g.capabilities).includes('read')&&list(g.capabilities).includes('export')):[];
+ const company=valid&&(m.role==='admin'||grants.some(g=>g.scopeType==='company'));
+ const teamIds=valid?[...new Set([...teams.filter(t=>['leaderIds','salesMemberIds','serviceMemberIds'].some(k=>list(t[k]).includes(m.id))).map(t=>t.id),...grants.filter(g=>g.scopeType==='team').flatMap(g=>list(g.teamIds))])].filter(id=>teams.some(t=>t.id===id)):[];
+ return {company,teamIds};
+}
+export function arExportRowsAllowed(s:State,m:Member,rows:Record<string,any>[]){
+ const scope=arExportAccess(s,m);return scope.company||rows.length>0&&rows.every(row=>!!row.teamId&&scope.teamIds.includes(row.teamId));
+}
+/** The selected read scope and every exported row must both fit the caller's current export scope. */
+export function arExportAllowed(s:State,m:Member,teamId:string,rows:Record<string,any>[]){
+ const scope=arExportAccess(s,m);if(scope.company)return true;
+ if(!scope.teamIds.length)return false;
+ if(teamId){if(!scope.teamIds.includes(teamId))return false;}
+ else{const read=arAccess(s,m);if(read.company||read.teamIds.some(id=>!scope.teamIds.includes(id)))return false;}
+ return rows.every(row=>!!row.teamId&&scope.teamIds.includes(row.teamId));
+}
 export function arAccess(s:State,m:Member):ArScope{
  const readOnly=arReadOnly(s,m),valid=m.active&&m.role!=='supplier';
  const grants=valid?all(s,'ar_access_grant').filter(g=>g.active===true&&g.memberId===m.id&&list(g.capabilities).includes('read')):[];
  const company=valid&&(m.role==='admin'||grants.some(g=>g.scopeType==='company'));
  const teams=all(s,'customer_project_team').filter(t=>t.active===true);
  const teamIds=valid?[...new Set([...teams.filter(t=>['leaderIds','salesMemberIds','serviceMemberIds'].some(k=>list(t[k]).includes(m.id))).map(t=>t.id),...grants.filter(g=>g.scopeType==='team').flatMap(g=>list(g.teamIds))])].filter(id=>teams.some(t=>t.id===id)):[];
- return {company,teamIds,readOnly,canConfigure:valid&&m.role==='admin'&&!readOnly,canExport:company||teamIds.length>0,allowed:company||teamIds.length>0};
+ const exported=arExportAccess(s,m);return {company,teamIds,readOnly,canConfigure:valid&&m.role==='admin'&&!readOnly,canExport:exported.company||exported.teamIds.length>0,exportCompany:exported.company,exportTeamIds:exported.teamIds,allowed:company||teamIds.length>0};
 }
 export function arBinding(s:State,r:Entity){return all(s,'ar_source_binding').find(b=>b.active!==false&&b.sourceKind===r.kind&&b.sourceId===r.id);}
 function shiftDate(date:string,days:number){if(!arDay(date)||!Number.isInteger(days))return '';const d=new Date(date+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+days);return d.toISOString().slice(0,10);}

@@ -22,18 +22,20 @@ function requireWrite(s:State,m:Member,name:Action,before?:PaymentTerm){
  else if(!can.authorize)throw new AppError('仅管理员明确指定的业务负责人可授权或停用付款条件。',403);
 }
 export function paymentTermsGet(action:string,_req:Request,s:State,m:Member):Response|null{
- if(action!=='payment-terms-data')return null;requireRead(m);
+ if(!['payment-terms-data','payment-terms-history'].includes(action))return null;requireRead(m);
  const capabilities=paymentTermsCapabilities(s,m),authority=paymentTermAuthority(s);
+ const visible=(term:any)=>term?.kind===paymentTermKind&&(term.status!=='draft'||term.createdById===m.id||capabilities.authorize||capabilities.configure);
+ if(action==='payment-terms-history'){const id=new URL(_req.url).searchParams.get('id')||'',term=paymentTermById(s,id);if(!term||!visible(term))throw new AppError('付款条件不在当前可见范围。',403);return json({item:term,history:all(s,'audit').filter(row=>row.targetId===id&&visible(row.after)).map(row=>({id:row.id,action:row.action,actor:row.actor,createdAt:row.createdAt,before:visible(row.before)?row.before:null,after:row.after}))});}
  const result:PaymentTermsFeed={terms:(all(s,paymentTermKind) as PaymentTerm[]).filter(t=>t.status!=='draft'||t.createdById===m.id||capabilities.authorize||capabilities.configure).sort((a,b)=>a.name.localeCompare(b.name)||b.termVersion-a.termVersion),capabilities,authorizerMemberIds:authority?.authorizerMemberIds||[],authorityVersion:authority?.version||0,members:capabilities.configure?(all(s,'member') as Member[]).filter(v=>eligiblePaymentTermAuthorizer(s,v)).map(v=>({id:v.id,name:v.name,role:v.role})):[]};
- return json(result);
+ return json({...result,writeContract:'payment-terms-version-token-v1'});
 }
 export async function paymentTermsPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!action.startsWith('payment-terms-'))return null;const name=action.slice('payment-terms-'.length) as Action;if(!Object.prototype.hasOwnProperty.call(schemas,name))return null;
  const parsed=schemas[name].safeParse(await req.json());if(!parsed.success)throw new AppError(parsed.error.issues.slice(0,4).map(i=>`${i.path.join('.')}: ${i.message}`).join('；'));
  const input=parsed.data as any,before=input.id?paymentTermById(s,input.id):undefined;
  if(input.id&&!before)throw new AppError('付款条件不存在。',404);requireWrite(s,m,name,before);
- const fingerprint=await sha(JSON.stringify({action,input})),requestId=requestKind+'_'+input.token,previous=all(s,requestKind).find(r=>r.id===requestId);
- if(previous){if(previous.actorId!==m.id||previous.action!==action||previous.fingerprint!==fingerprint)throw new AppError('请求编号已用于不同内容。',409);return json({ok:true,idempotent:true,item:s.records.find(r=>r.id===previous.targetId)});}
+ const fingerprint=await sha(JSON.stringify({action,input})),requestId=requestKind+'_'+input.token,previous=s.records.find(r=>r.id===requestId);
+ if(previous){if(previous.kind!==requestKind||previous.actorId!==m.id||previous.action!==action||previous.fingerprint!==fingerprint)throw new AppError('请求编号已用于不同内容。',409);return json({ok:true,idempotent:true,item:s.records.find(r=>r.id===previous.targetId)});}
  const at=now();let item:PaymentTerm|PaymentTermAuthority;
  if(name==='authorizers-save'){
   const old=paymentTermAuthority(s);if((old?.version||0)!==input.version)throw new AppError('授权名单已变化，请刷新后核对。',409);

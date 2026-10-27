@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
-import {arAccess,arCurrencies,arDay} from './ar-workspace';
+import {arAccess,arExportAllowed,arCurrencies,arDay} from './ar-workspace';
 import {arMasterActiveLinks,arMasterBases,arMasterBoundary,arMasterData,arMasterDto,arMasterFormalTarget,arMasterMoneyLimit,arMasterRegistrationPlan,arMasterRequire,arMasterSourceCurrent,arMasterSourceHash,arMasterTarget,arMasterTargetKinds,type ArMasterQuery} from './ar-master-ledger';
 
 const id=z.string().trim().min(1).max(160),token=z.string().uuid(),hash=z.string().regex(/^[a-f0-9]{64}$/),version=z.number().int().positive(),reason=z.string().trim().min(2).max(3000);
@@ -18,8 +18,8 @@ function writer(s:State,m:Member){if(!arAccess(s,m).canConfigure)throw new AppEr
 function current(row:Entity,v:number){if(row.version!==v)throw new AppError('总表版本已变化，请刷新重新核对。',409);}
 async function sourceCurrent(s:State,row:Entity,hash:string){if(row.sourceHash!==hash||!await arMasterSourceCurrent(s,row))throw new AppError('原暂存记录或来源哈希已变化，不能沿用旧预览。请核对来源差异。',409);}
 function replay(s:State,m:Member,action:string,inputToken:string,fingerprint:string){
- const prior=all(s,'ar_master_request').find(r=>r.id==='ar_master_request_'+inputToken);if(!prior)return null;
- if(prior.actorId!==m.id||prior.action!==action||prior.fingerprint!==fingerprint)throw new AppError('请求标识已用于不同内容。',409);
+ const prior=s.records.find(r=>r.id==='ar_master_request_'+inputToken);if(!prior)return null;
+ if(prior.kind!=='ar_master_request'||prior.actorId!==m.id||prior.action!==action||prior.fingerprint!==fingerprint)throw new AppError('请求标识已用于不同内容。',409);
  return json({...prior.result,idempotent:true});
 }
 async function write(s:State,m:Member,action:string,inputToken:string,fingerprint:string,items:Entity[],result:Record<string,unknown>,before:Entity|null=null){
@@ -35,7 +35,7 @@ export async function arMasterLedgerGet(action:string,req:Request,s:State,m:Memb
  if(Object.values(query).some(v=>typeof v==='string'&&v.length>160))throw new AppError('筛选条件过长。');
  if(p.has('invoiceCustomerIds'))query.invoiceCustomerIds=parse(z.array(id).max(100),(p.get('invoiceCustomerIds')||'').split(',').filter(Boolean));
  const data=await arMasterData(s,m,query);if(action==='ar-master-data')return json(data);
- if(!data.scope.canExport)throw new AppError('没有总表导出权限。',403);
+ if(!arExportAllowed(s,m,query.teamId||'',data.rows))throw new AppError('所选总表范围含未授权导出的组或公司资料，请选择有导出权限的业务组。',403);
  const quoted=(v:unknown)=>'"'+String(v??'').replace(/^(\s*)([=+@\-\t\r])/,'$1\t$2').replaceAll('"','""')+'"';
  const amount=(v:number|null)=>v===null?'待核对':(v/100).toFixed(2);
  const sourceText=(source:Entity)=>[source.customerLabel,source.title,'原金额='+String(source.originalAmountDecimal??'未填写'),'币种='+String(source.currency||'待核对'),'原PO/PL='+String(source.poPlRaw||'未填写'),'付款条件='+String(source.paymentTermsRaw||'未填写'),'工作表='+String(source.sourceSheet||source.source?.sheet||''),'行='+String(source.sourceRow??source.source?.rowNumber??''),'原发票日期='+String(source.invoiceDateRaw||'未填写'),'原到期日='+String(source.dueDateRaw||'未填写'),'原备注='+String(source.remarkRaw||'')].join(' | ');

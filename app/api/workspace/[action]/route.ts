@@ -1,3 +1,4 @@
+import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
 import {productionWorkspaceGet,productionWorkspacePost} from '@/lib/production-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
@@ -161,6 +162,7 @@ export async function GET(req:Request,ctx:Context){try{
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
 }catch(e){return failure(e);}}
 async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Member){
+ const cliAr=await arCliGet(action,req,s,m);if(cliAr)return cliAr;
  const production=await productionWorkspaceGet(action,req,s,m);if(production)return production;
  const salesSources=await salesOrderSourcesGet(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsGet(action,req,s,m);if(colorFields)return colorFields;
@@ -183,6 +185,7 @@ export async function POST(req:Request,ctx:Context){try{
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;
+ const cliAr=await arCliPost(action,req,s,m);if(cliAr)return cliAr;
  const kingdeeSales=await kingdeeSalesPost(action,req,s,m);if(kingdeeSales)return kingdeeSales;
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;

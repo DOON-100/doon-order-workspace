@@ -84,7 +84,7 @@ export async function serviceWorkspaceGet(action:string,req:Request,s:State,m:Me
   const records=(all(s,'service_record') as ServiceRecord[]).filter(record=>canReadServiceRecord(s,m,record)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
   const ids=new Set(records.map(row=>row.id)),customers=serviceCustomerAccounts(s,m);
   const customerKeys=new Set(customers.flatMap(account=>serviceOrderCustomerKeys(s,account).map(key=>clean(key).toLowerCase())));
-  return json({writeContract:'service-save-version-token-v1',saveToken:true,sourceOrderVersion:true,orders:(all(s,'order') as Order[]).filter(order=>canRead(m,order)&&customerKeys.has(clean(order.customer).toLowerCase())).map(order=>({id:order.id,version:order.version,customer:order.customer,orderNo:order.orderNo,drawing:order.drawing,color:order.color,quantity:order.quantity})),records:records.map(record=>publicServiceRecord(s,record)),
+  return json({receiptDatePolicy:'not-future-asia-shanghai',writeContract:'service-save-version-token-v1',saveToken:true,sourceOrderVersion:true,orders:(all(s,'order') as Order[]).filter(order=>canRead(m,order)&&customerKeys.has(clean(order.customer).toLowerCase())).map(order=>({id:order.id,version:order.version,customer:order.customer,orderNo:order.orderNo,drawing:order.drawing,color:order.color,quantity:order.quantity})),records:records.map(record=>publicServiceRecord(s,record)),
    receipts:(all(s,'service_receipt') as ServiceReceipt[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceReceipt),
    attachments:(all(s,'service_attachment') as ServiceAttachment[]).filter(row=>ids.has(row.recordId)&&canReadServiceRecord(s,m,row)).map(publicServiceAttachment),
    customers:customers.map(account=>({id:account.id,customer:account.customer,customerCode:account.customerCode,active:account.active,salesName:account.salesName,serviceName:account.serviceName,orderKeys:serviceOrderCustomerKeys(s,account)})),
@@ -157,7 +157,8 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
   const next=await persist(s,m,record,before,before?'更新客服业务记录':'新增客服业务记录',request);return json({ok:true,record:publicServiceRecord(next,record)});
  }
  if(action==='service-receipt'){
-  const input=parse(serviceReceiptSchema,await req.json()),before=editable(s,m,input.recordId);financial(before);
+  const input=parse(serviceReceiptSchema,await req.json()),before=editable(s,m,input.recordId);financial(before);serviceTeam(req,s,m,before);
+  const today=new Date(Date.parse(now())+8*60*60*1000).toISOString().slice(0,10);if(input.date>today)throw new AppError('实际到账日期不能晚于今天。');
   const id='service_receipt_'+input.token,requestFingerprint=await fingerprint({action,...input}),repeat=repeatReceipt(s,m,id,requestFingerprint,before);if(repeat)return repeat;
   current(before,input.version);if(before.status==='cancelled')throw new AppError('已取消的应收不能确认到账。');
   if(input.amount>Number(before.details.amountCents)-serviceReceivedCents(s,before.id))throw new AppError('本次到账金额超过未收余额；请核对金额，不能重复或超额核销。');
@@ -169,7 +170,7 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
  if(action==='service-receipt-reverse'){
   const input=parse(serviceReceiptReverseSchema,await req.json()),original=all(s,'service_receipt').find(row=>row.id===input.receiptId) as ServiceReceipt|undefined;
   if(!original||original.entryType!=='payment')throw new AppError('原到账凭证不存在或不是可冲销的到账凭证。',404);
-  const before=editable(s,m,original.recordId);financial(before);
+  const before=editable(s,m,original.recordId);financial(before);serviceTeam(req,s,m,before);
   if(original.customerId!==before.customerId||original.currency!==before.details.currency)throw new AppError('原到账凭证与应收客户或币种不一致，请由管理员核对。',409);
   const id='service_receipt_'+input.token,requestFingerprint=await fingerprint({action,...input}),repeat=repeatReceipt(s,m,id,requestFingerprint,before);if(repeat)return repeat;
   current(before,input.version);

@@ -1,0 +1,23 @@
+const specs=[
+ ['payment-terms','schema','schema','查询付款条件字段与授权动作','local-read'],
+ ['payment-terms','list','list [--limit <number>] [--offset <number>]','查询可见付款条件及原版本','business-read-and-session-last-seen'],
+ ['payment-terms','form','form <id>','读取付款条件当前真实版本','business-read-and-session-last-seen'],
+ ['payment-terms','history','history <id> [--limit <number>] [--offset <number>]','读取可见付款条件历史','business-read-and-session-last-seen'],
+ ['payment-terms','save','save --input <file> --version <number> --request-id <uuid>','保存草稿或建立独立付款条件新版本','business-write'],
+ ['payment-terms','action','action --type <type> --input <file> --version <number> --request-id <uuid>','按现有授权执行authorize或disable','business-write'],
+ ['receivables','schema','schema [--type <type>]','查询应收、实际到账及冲销字段','local-read'],
+ ['receivables','form','form <id> [--team <id>]','读取客服应收原字段及整数分余额','business-read-and-session-last-seen'],
+ ['receivables','references','references [--team <id>] [--customer <id>] [--limit <number>] [--offset <number>]','查询现有客户、订单版本和职责候选','business-read-and-session-last-seen'],
+ ['receivables','revisions','revisions <id> [--team <id>] [--limit <number>] [--offset <number>]','读取客服应收详细原版本','business-read-and-session-last-seen'],
+ ['receivables','save','save --input <file> --version <number> --request-id <uuid> [--order-version <number>] [--team <id>]','增量保存客服应收并核对来源版本','business-write'],
+ ['receivables','action','action --type <type> --input <file> --version <number> --request-id <uuid> [--team <id>]','登记receipt或reverse并回读原凭据和余额','business-write'],
+ ['receivables','files','files <id> [--team <id>]','查询客服应收不可变证据目录','business-read-and-session-last-seen'],
+ ['receivables','file-upload','file-upload --input <file> --file <file> --version <number> [--team <id>]','保存客服应收原始证据并回读','business-write'],
+ ['receivables','file-download','file-download <id> <fileId> --output <file> [--team <id>]','核验大小与摘要后下载应收原件','local-file-and-session-last-seen'],
+ ['reconciliations','schema','schema','查询供应商对账流程证据字段','local-read'],
+ ['reconciliations','form','form <id> [--team <id>]','读取供应商对账流程当前字段','business-read-and-session-last-seen'],
+ ['reconciliations','references','references [--team <id>] [--limit <number>] [--offset <number>]','查询对账现有关联与负责人','business-read-and-session-last-seen'],
+ ['reconciliations','revisions','revisions <id> [--team <id>] [--limit <number>] [--offset <number>]','读取供应商对账原流程历史','business-read-and-session-last-seen'],
+ ['reconciliations','save','save --input <file> --version <number> --request-id <id> [--team <id>] [--replace-details]','保存对账依据，不执行支付或开票','business-write'],
+];
+export const collectionWriteCommands=specs.map(([resource,action,usage,description,effect])=>({name:`finance ${resource} ${action}`,namespace:'finance',usage:`finance ${resource} ${usage}`,description,effect}));

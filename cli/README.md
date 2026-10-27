@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本0.36.0，累计324条命令；W5计划采购供应商、W6生产质量仓储、W7发运物流及结单已接入相应固定动作。W0—W6本地成品及GitHub来源验收完成，W7最新状态见执行记录；原权限、版本与业务门禁继续由服务器校验。金蝶暂缓，未自动部署。详见[业务部](docs/sales.md)、[订单及单据](docs/orders.md)、[工程](docs/engineering.md)、[PMC与采购](docs/planning.md)、[生产与交付](docs/operations.md)和[财务](docs/finance.md)。
+版本0.37.0，登记361条命令，其中12条金蝶命令继续暂缓，本期349条非金蝶命令。W8新增37条项目财务、AR、付款条件、客服应收和供应商对账固定命令；合并开发验收71组及37条新增命令通过。W8全站、独立HTTP、Windows成品、CI来源与安装验收待完成，尚未授权正式更新或财务操作。W7及此前状态以执行记录为准。详见[财务说明](docs/finance.md)及[W8阶段验收](../docs/cli-write-w8-acceptance.md)。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 

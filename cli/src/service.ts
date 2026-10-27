@@ -1,3 +1,6 @@
+import {ProjectFinanceWriteService} from './project-finance-write.js';
+import {ArWriteService} from './ar-write.js';
+import {CollectionWriteService} from './collection-write.js';
 import {PurchaseWriteService} from './purchase-write.js';
 import {DeliveryWriteService} from './delivery-write.js';
 import {ProcessRecordService} from './process-write.js';
@@ -41,6 +44,9 @@ function userFrom(data: any) {
 }
 
 export class FoundationService {
+ projectFinanceWrite(){return new ProjectFinanceWriteService(this.store,this.transport);}
+ arWrite(){return new ArWriteService(this.store,this.transport);}
+ collectionWrite(){return new CollectionWriteService(this.store,this.transport);}
   constructor(public store = new StateStore(), private transport: typeof fetch = fetch) {}
   sales() { return new SalesService(this.store, this.transport); }
   salesWrite() { return new SalesWriteService(this.store, this.transport); }

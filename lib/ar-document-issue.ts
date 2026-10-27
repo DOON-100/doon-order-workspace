@@ -62,8 +62,8 @@ export async function arDocumentPost(action:string,req:Request,s:State,m:Member)
  const input=parsed.data,d=s.records.find(r=>r.kind===input.sourceKind&&r.id===input.sourceId);if(!d)throw new AppError('PI 不存在或不可访问。',403);
  if(!(action==='ar-document-review'?arCanReviewDocument(s,m,d):canWrite(s,m,d)))throw new AppError(action==='ar-document-review'?'仅本客户或项目明确指定的业务审核人可审核。':'没有此 PI 的签发权限。',403);
  const scope=arAccess(s,m);if(!scope.company&&!scope.teamIds.includes(input.teamId))throw new AppError('没有此组单据操作权限。',403);
- const requestId='ar_document_request_'+input.token,fp=JSON.stringify({action,input}),repeated=all(s,'ar_document_request').find(r=>r.id===requestId);
- if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fp)throw new AppError('请求标识已用于其他操作。',409);return json({...repeated.result,idempotent:true});}
+ const requestId='ar_document_request_'+input.token,fp=JSON.stringify({action,input}),repeated=s.records.find(r=>r.id===requestId);
+ if(repeated){if(repeated.kind!=='ar_document_request'||repeated.actorId!==m.id||repeated.fingerprint!==fp)throw new AppError('请求标识已用于其他操作。',409);return json({...repeated.result,idempotent:true});}
  if(d.version!==input.expectedVersion)throw new AppError('PI 版本已变化，请重新核对。',409);
  const already=all(s,'ar_document_issue').find(i=>i.sourceKind===d.kind&&i.sourceId===d.id);if(already)throw new AppError('此 PI 已签发归集，请在原应收核对；不能再新增一份。',409);
  const term=activePaymentTerm(s,input.paymentTermId),reasons=sourceReasons(s,d,input.teamId,term,input.category);if(reasons.length)throw new AppError(reasons.join('；'));
@@ -87,14 +87,15 @@ export async function arDocumentPost(action:string,req:Request,s:State,m:Member)
  await commit(s.revision,[...updates,audit(m,item,null,action,'应收工作空间'),{id:requestId,kind:'ar_document_request',actorId:m.id,fingerprint:fp,result,createdAt:at}]);return json(result);
 }
 const day=z.string().trim().refine(v=>!v||!!arDay(v),'日期须为有效 YYYY-MM-DD').default('');
-const milestoneSchema=z.object({token:z.string().uuid(),sourceKind:z.literal('project_billing_document'),sourceId:id,version:z.number().int().positive().optional(),plannedShipDate:day,actualShipDate:day}).strict();
+const milestoneSchema=z.object({token:z.string().uuid(),sourceKind:z.literal('project_billing_document'),sourceId:id,sourceVersion:z.number().int().positive().optional(),version:z.number().int().positive().optional(),plannedShipDate:day,actualShipDate:day}).strict();
 async function saveMilestone(req:Request,s:State,m:Member){
  const parsed=milestoneSchema.safeParse(await req.json());if(!parsed.success)throw new AppError(parsed.error.issues.map(x=>x.message).join('；'));const v=parsed.data;
  const issue=all(s,'ar_document_issue').find(r=>r.sourceKind===v.sourceKind&&r.sourceId===v.sourceId),source=s.records.find(r=>r.id===v.sourceId&&r.kind===v.sourceKind),scope=arAccess(s,m);
  if(!issue||!source||!canWrite(s,m,source)||!scope.company&&!scope.teamIds.includes(issue.teamId))throw new AppError('没有该已签发 PI 的出货日期维护权限。',403);
+ if(v.sourceVersion!==undefined&&v.sourceVersion!==source.version)throw new AppError('PI 来源版本已变化，请重新核对出货日期依据。',409);
  if(v.actualShipDate&&v.actualShipDate>arToday())throw new AppError('实际出货日期不能晚于今天。');
- const requestId='ar_document_request_'+v.token,fingerprint=JSON.stringify({action:'ar-document-milestone',input:v}),repeated=all(s,'ar_document_request').find(r=>r.id===requestId);
- if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已被用于其他请求。',409);return json({...repeated.result,idempotent:true});}
+ const requestId='ar_document_request_'+v.token,fingerprint=JSON.stringify({action:'ar-document-milestone',input:v}),repeated=s.records.find(r=>r.id===requestId);
+ if(repeated){if(repeated.kind!=='ar_document_request'||repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已被用于其他请求。',409);return json({...repeated.result,idempotent:true});}
  const before=all(s,'ar_document_milestone').find(r=>r.sourceKind===v.sourceKind&&r.sourceId===v.sourceId);if(before?before.version!==v.version:v.version!==undefined)throw new AppError('出货日期已更新，请刷新后重试。',409);
  const item={id:before?.id||newId('ar_milestone'),kind:'ar_document_milestone',sourceKind:v.sourceKind,sourceId:v.sourceId,customerId:issue.customerId,teamId:issue.teamId,plannedShipDate:v.plannedShipDate,actualShipDate:v.actualShipDate,version:(before?.version||0)+1,createdAt:before?.createdAt||now(),updatedAt:now(),updatedById:m.id};
  const result={ok:true,item};await commit(s.revision,[item,audit(m,item,before||null,'更新 PI 出货日期并触发账期','应收工作空间'),{id:requestId,kind:'ar_document_request',actorId:m.id,fingerprint,result,createdAt:now()}]);return json(result);

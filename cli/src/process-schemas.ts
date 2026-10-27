@@ -436,5 +436,36 @@ export const processDetails={
       "type": "string",
       "max": 3000
     }
+  },
+  "supplier-reconciliation": {
+    "gateReason": {
+      "type": "string",
+      "max": 3000
+    },
+    "documentRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "supplierName": {
+      "type": "string",
+      "max": 3000
+    },
+    "statementRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "invoiceRef": {
+      "type": "string",
+      "max": 3000
+    },
+    "currency": {
+      "type": "string",
+      "max": 12
+    },
+    "amount": {
+      "type": "number",
+      "min": 0,
+      "max": 1000000000
+    }
   }
 } satisfies Record<string,WriteSchema>;

@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.36.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.37.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,43 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon finance project schema --type <type>` | 查询项目收费、独立登记及正式账务动作字段 | local-read |
+| `doon finance project form <id> --kind <kind>` | 读取授权完整表单及服务器实际版本 | business-read-and-session-last-seen |
+| `doon finance project references [--kind <kind>] [--customer <id>] [--project <id>] [--limit <number>] [--offset <number>]` | 查询授权客户、项目、轮次与账务关联 | business-read-and-session-last-seen |
+| `doon finance project save --type <type> --input <file> --version <number> --request-id <uuid>` | 新增或指定字段修改收费、独立记录、通知及单据 | business-write |
+| `doon finance project action --type <type> --input <file> [--version <number>] --request-id <uuid>` | 按原权限核实、分配、释放、调整、抵扣及单据动作 | business-write |
+| `doon finance project history <id> --kind <kind> [--limit <number>] [--offset <number>]` | 查询项目财务原版本与留痕 | business-read-and-session-last-seen |
+| `doon finance project print <id> --version <number> --output <file.html>` | 导出授权版本生成的HTML，不实际打印或发送 | business-read-and-session-last-seen |
+| `doon finance ar schema --type <type>` | 查询应收固定表单及整数分金额语义 | local-read |
+| `doon finance ar list --resource <resource> [--customer <id>] [--team <id>] [--limit <number>] [--offset <number>]` | 查询授权应收、单据、历史发票及总表 | business-read-and-session-last-seen |
+| `doon finance ar form <id> --resource <resource> [--customer <id>] [--invoice <id>]` | 读取应收当前表单、版本与来源哈希 | business-read-and-session-last-seen |
+| `doon finance ar references --resource <resource> [--customer <id>] [--invoice <id>] [--id <id>]` | 查询应收归属、模板、原来源及待登记候选 | business-read-and-session-last-seen |
+| `doon finance ar history <id> [--limit <number>] [--offset <number>]` | 读取应收记录的权限内历史 | business-read-and-session-last-seen |
+| `doon finance ar save --type <type> --input <file> --request-id <uuid>` | 按原权限、版本和来源依据执行应收固定动作 | business-write |
+| `doon finance ar preview --input <file>` | 只读计算所选历史来源的总表登记预览 | business-read-and-session-last-seen |
+| `doon finance ar file-upload --type <type> --input <file> --file <file> --request-id <uuid>` | 归档历史发票原件或付款证据，不生成现金事件 | business-write |
+| `doon finance ar file-download <id> --type <type> --output <file>` | 核验下载历史原件或冻结对账草稿 | business-read-and-session-last-seen |
+| `doon finance ar export --resource <resource> --output <file> [--customer <id>] [--team <id>]` | 导出权限内应收或历史总表CSV | business-read-and-session-last-seen |
+| `doon finance payment-terms schema` | 查询付款条件字段与授权动作 | local-read |
+| `doon finance payment-terms list [--limit <number>] [--offset <number>]` | 查询可见付款条件及原版本 | business-read-and-session-last-seen |
+| `doon finance payment-terms form <id>` | 读取付款条件当前真实版本 | business-read-and-session-last-seen |
+| `doon finance payment-terms history <id> [--limit <number>] [--offset <number>]` | 读取可见付款条件历史 | business-read-and-session-last-seen |
+| `doon finance payment-terms save --input <file> --version <number> --request-id <uuid>` | 保存草稿或建立独立付款条件新版本 | business-write |
+| `doon finance payment-terms action --type <type> --input <file> --version <number> --request-id <uuid>` | 按现有授权执行authorize或disable | business-write |
+| `doon finance receivables schema [--type <type>]` | 查询应收、实际到账及冲销字段 | local-read |
+| `doon finance receivables form <id> [--team <id>]` | 读取客服应收原字段及整数分余额 | business-read-and-session-last-seen |
+| `doon finance receivables references [--team <id>] [--customer <id>] [--limit <number>] [--offset <number>]` | 查询现有客户、订单版本和职责候选 | business-read-and-session-last-seen |
+| `doon finance receivables revisions <id> [--team <id>] [--limit <number>] [--offset <number>]` | 读取客服应收详细原版本 | business-read-and-session-last-seen |
+| `doon finance receivables save --input <file> --version <number> --request-id <uuid> [--order-version <number>] [--team <id>]` | 增量保存客服应收并核对来源版本 | business-write |
+| `doon finance receivables action --type <type> --input <file> --version <number> --request-id <uuid> [--team <id>]` | 登记receipt或reverse并回读原凭据和余额 | business-write |
+| `doon finance receivables files <id> [--team <id>]` | 查询客服应收不可变证据目录 | business-read-and-session-last-seen |
+| `doon finance receivables file-upload --input <file> --file <file> --version <number> [--team <id>]` | 保存客服应收原始证据并回读 | business-write |
+| `doon finance receivables file-download <id> <fileId> --output <file> [--team <id>]` | 核验大小与摘要后下载应收原件 | local-file-and-session-last-seen |
+| `doon finance reconciliations schema` | 查询供应商对账流程证据字段 | local-read |
+| `doon finance reconciliations form <id> [--team <id>]` | 读取供应商对账流程当前字段 | business-read-and-session-last-seen |
+| `doon finance reconciliations references [--team <id>] [--limit <number>] [--offset <number>]` | 查询对账现有关联与负责人 | business-read-and-session-last-seen |
+| `doon finance reconciliations revisions <id> [--team <id>] [--limit <number>] [--offset <number>]` | 读取供应商对账原流程历史 | business-read-and-session-last-seen |
+| `doon finance reconciliations save --input <file> --version <number> --request-id <id> [--team <id>] [--replace-details]` | 保存对账依据，不执行支付或开票 | business-write |
 | `doon service shipments schema` | 查询发运登记字段及来源版本规则 | local-read |
 | `doon service shipments list [--team <id>] [--customer <id>] [--order <id>] [--limit <number>] [--offset <number>]` | 查询授权发运及物流跟进记录 | business-read-and-session-last-seen |
 | `doon service shipments references [--team <id>] [--customer <id>] [--limit <number>] [--offset <number>]` | 查询发运关联订单、版本与责任候选 | business-read-and-session-last-seen |
@@ -345,4 +382,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | pending |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8—W11按计划继续。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8新增项目财务、AR、付款条件、客服应收和供应商对账37条固定命令，合并开发71组通过；全站、HTTP、成品和CI待验收。W9—W11按计划继续。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

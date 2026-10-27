@@ -15,3 +15,11 @@
 service shipment是员工登记的发运/物流事实，done要求shipDate并限制已完成分批合计；取消/重新打开不是承运商撤单。接口没有承运商实时查询、外发或大货签收字段，不把草稿、单据checked、发运登记或样办签收混为客户已签收。
 
 提交与同步不代表部署；正式8787、数据、账号权限、运行配置与调度未改。测试及后续成品继续使用独立数据/端口，员工安装升级与实际工具联动按W11。
+
+## 成品及GitHub来源完成
+
+本地源码`018551eac5e42a42917f1b94a7387dd76220f9a0`的0.36.0干净包，实际安装后312条唯一命令、147组合成检查通过，12条金蝶跳过；原记录和原件保全，测试数据/安装/会话清理，PATH未改。ZIP SHA-256 `eb5e1580e9a31112752edf735f876f788cadeb7b04b48b7ed874f39b68875ab8`。
+
+已授权GitHub连接非强制同步main为`64400a9a1b937f30763c217e1d1345354ab20a4d`，完整树`8f0bc97654d3ef5a5b6ff6a185ec255e34b6b50e`与本地一致；旧本地分支保留。[CLI CI 40544342360](https://github.com/DOON-100/doon-order-workspace/actions/runs/40544342360)和[Native CI 40544342286](https://github.com/DOON-100/doon-order-workspace/actions/runs/40544342286)成功。
+
+官方连接下载artifact12752586728，外层SHA-256 `3f7c864ecddb1cd64dff4be752025b7191b40d2c9fae0c37f6e59729a4587105`与GitHub一致，内层ZIP `60d00f887ec5c38d33233a7327424b87644719e6acc9dce50acf6a6e90ec1628`与清单一致；实际安装、324条目录和全部程序/运行时字节核验通过，5份手册仅换行差异。下载核验不重复宣称执行312条业务命令。机器报告见本机忽略目录`test-output/cli-0.36-local-package-acceptance.json`、`test-output/cli-0.36-ci-download-verification.json`。未部署。

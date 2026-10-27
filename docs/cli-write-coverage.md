@@ -103,13 +103,13 @@
 | 品质部 | `process-outsourcing-quality` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
 | 品质部 | `process-oqc` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
 | 品质部 | `process-shipment-release` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 财务部 | `payment-terms` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
-| 财务部 | `supplier-reconciliation` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
-| 财务部 | `process-supplier-reconciliation` | W8 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 财务部 | `ar-workspace` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
-| 财务部 | `service-receivables` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
-| 财务部 | `project-finance` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
-| 财务部 | `finance-documents` | W8 | 待核验 | 候选源码：lib/customer-project-finance-api.ts、lib/ar-workspace-api.ts、lib/payment-terms-api.ts | 待核验 | 待核验 |
+| 财务部 | `payment-terms` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `supplier-reconciliation` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `process-supplier-reconciliation` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `ar-workspace` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `service-receivables` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `project-finance` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `finance-documents` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
 | 系统管理 | `business-rules` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
 | 系统管理 | `imports` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
 | 系统管理 | `settings` | W10 | 待核验 | 候选源码：app/api/workspace/[action]/route.ts、lib/handoff-framework-api.ts | 待核验 | 待核验 |
@@ -309,3 +309,17 @@ CLI 0.34.0新增42条命令；字段以各schema命令和CLI白名单为准。�
 | 物流单据 | documents generate/save/action | packing/waybill无价格，Invoice当前PI及行价/累计数量，负责销售核对；超量、过期、管理员代签拒绝通过 |
 
 BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登记、承运商接收和客户签收分别表达，不用样办签收冒充大货。字段和当前结果见[W7验收](cli-write-w7-acceptance.md)。
+
+### W8 财务、应收和结算对应矩阵（合并开发通过，阶段待验）
+
+| 页面/表单 | 固定入口 | 权限及真实语义 | 合成覆盖 |
+| --- | --- | --- | --- |
+| 项目费用、通知、独立账务与单据 | finance project schema/form/references/history/save/action/print | 原客户/项目/轮次授权；独立草稿与核实到账区分；指定记录版本、UUID；核实/冲销、分配/释放、减免/抵扣独立，已签发PI锁定 | 精确元文本、历史版本重放、余额联动、跨客户/撤权、发送版本、关联凭据回读 |
+| AR工作台及单据 | finance ar统一10入口，来源绑定/业务核对/开立/里程碑 | 管理员配置与指定业务本人核对分开；来源版本/哈希；开立遵循原应收/付款计划副作用 | 来源过期、空成功拒绝、版本/UUID、混合范围导出、原始关联保全 |
+| 发票档案、原件及历史累计核对 | ar-invoice-import/proof/note/reconcile/statement及原件/HTML下载 | 整数分、null，历史累计不生成现金；原件保留；新UUID内容去重也留痕；statement逐源export权限 | 原件字节、同UUID异载荷、历史精度/0/null、只读账号/分组导出 |
+| 客户展示、来源引用及总表 | ar-customer-profile/source-link/extra、ar-master选择预览/登记/维护/导出 | 精确选集previewHash；字段/目标版本；总表负贷项与未知保留；原件读取权与导出权独立 | 选择变更、sourceHash/targetVersion过期、关联取消历史、负数与原来源 |
+| 公司付款条件 | finance payment-terms六入口 | 草稿创建人/指定授权人；当前角色eligible、readOnly优先，已授权版本派生；名单配置W10 | 授权人降权的新请求及旧UUID均拒绝，版本/比例/历史、原条款保全 |
+| 客服应收、到账与冲销 | finance receivables新增9入口，复用service-save/receipt/reverse | UUID/真实版本、所选组及源订单版本；上海当日实际日期；原凭证保留 | 0.01精度、超收/跨组/旧版本、未来日期、冲销、原件、结果不明 |
+| 供应商对账 | finance reconciliations新增5入口，固定supplier-reconciliation | 管理员/PMC/财务维护、原价格读取范围；登记凭据不执行付款 | 精度/null、版本/历史、销售仅有价格读权仍拒绝写入 |
+
+候选0.37.0新增37条，登记361条，非金蝶349条。合并CLI/服务器类型和集中71组合成开发验收通过；W8全站、独立HTTP、Windows成品及CI来源验收待办。未混入W9退款售后或W10权限管理，正式请求0。

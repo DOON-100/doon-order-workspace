@@ -17,7 +17,7 @@ export type PaymentTermsFeed={terms:PaymentTerm[];capabilities:{create:boolean;a
 /** Explicit account-ID restriction takes priority even over administrator roles. */
 export function paymentTermsReadOnly(s:State,m:Member){return all(s,'ar_access_grant').some(r=>r.active===true&&r.memberId===m.id&&r.readOnly===true);}
 export function paymentTermAuthority(s:State){return all(s,'payment_term_authority').find(r=>r.id===paymentTermAuthorityId) as PaymentTermAuthority|undefined;}
-export function paymentTermsCapabilities(s:State,m:Member){const readOnly=paymentTermsReadOnly(s,m),internal=m.active&&m.role!=='supplier',write=internal&&!readOnly;return {readOnly,create:write&&['admin','sales','clerk'].includes(m.role),authorize:write&&!!paymentTermAuthority(s)?.authorizerMemberIds.includes(m.id),configure:write&&m.role==='admin'};}
+export function paymentTermsCapabilities(s:State,m:Member){const readOnly=paymentTermsReadOnly(s,m),internal=m.active&&m.role!=='supplier',write=internal&&!readOnly;return {readOnly,create:write&&['admin','sales','clerk'].includes(m.role),authorize:write&&eligiblePaymentTermAuthorizer(s,m)&&!!paymentTermAuthority(s)?.authorizerMemberIds.includes(m.id),configure:write&&m.role==='admin'};}
 export function eligiblePaymentTermAuthorizer(s:State,m:Member){return m.active&&['admin','sales'].includes(m.role)&&!paymentTermsReadOnly(s,m);}
 export function paymentTermById(s:State,id:string){return all(s,paymentTermKind).find(t=>t.id===id) as PaymentTerm|undefined;}
 export function activePaymentTerm(s:State,id:string){const t=paymentTermById(s,id);return t?.status==='active'&&paymentTermContentSchema.safeParse({name:t.name,bulk:t.bulk,sample:t.sample,mold:t.mold,note:t.note}).success?t:undefined;}

@@ -1,14 +1,14 @@
 import {z} from 'zod';
 import {all,clean,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
-import {arAccess,arCurrencies,arDay,arWorkspaceData,type ArQuery} from './ar-workspace';
+import {arAccess,arExportAllowed,arCurrencies,arDay,arWorkspaceData,type ArQuery} from './ar-workspace';
 import {arDocumentCandidates,arDocumentPost} from './ar-document-issue';
 
 const id=z.string().trim().min(1).max(160),text=z.string().trim().max(500).default('');
 const base={token:z.string().uuid(),id:id.optional(),version:z.number().int().positive().optional()};
 const grantSchema=z.object({...base,memberId:id,scopeType:z.enum(['company','team']),teamIds:z.array(id).max(100).default([]),capabilities:z.array(z.enum(['read','export'])).min(1).max(2),readOnly:z.boolean().default(true),active:z.boolean(),reason:z.string().trim().min(2).max(1000)}).strict();
 const sourceKinds=['project_charge','project_receipt','project_refund','project_allocation','service_record','service_receipt','handoff_business_source'] as const;
-const bindingSchema=z.object({...base,sourceKind:z.enum(sourceKinds),sourceId:id,customerId:id,teamId:z.string().trim().max(160).default(''),canonicalKey:text,reason:z.string().trim().min(2).max(1000),shipmentVerified:z.boolean().default(false),shipmentAmountCents:z.number().int().nonnegative().max(100_000_000_000).optional(),currency:z.enum(arCurrencies).optional()}).strict();
+const bindingSchema=z.object({...base,sourceKind:z.enum(sourceKinds),sourceId:id,sourceVersion:z.number().int().positive().optional(),customerId:id,teamId:z.string().trim().max(160).default(''),canonicalKey:text,reason:z.string().trim().min(2).max(1000),shipmentVerified:z.boolean().default(false),shipmentAmountCents:z.number().int().nonnegative().max(100_000_000_000).optional(),currency:z.enum(arCurrencies).optional()}).strict();
 function parse<T extends z.ZodTypeAny>(schema:T,raw:unknown):z.infer<T>{const result=schema.safeParse(raw);if(!result.success)throw new AppError(result.error.issues.slice(0,4).map(x=>`${x.path.join('.')}：${x.message}`).join('；'));return result.data;}
 function current(before:Entity|undefined,version:number|undefined){if(before?(version!==before.version):version!==undefined)throw new AppError('配置已更新或缺少当前版本，请刷新后重试。',409);}
 function admin(s:State,m:Member){if(!arAccess(s,m).canConfigure)throw new AppError('仅有权管理员可配置应收读取范围与已核实来源归属；只读取数账号不能修改。',403);}
@@ -23,7 +23,7 @@ export async function arWorkspaceGet(action:string,req:Request,s:State,m:Member)
  let data:ReturnType<typeof arWorkspaceData>;try{data=arWorkspaceData(s,m,query);}catch(e){throw new AppError((e as Error).message,(e as {status?:number}).status||400);}
  const documents=arDocumentCandidates(s,m,query.teamId||'').filter(d=>!query.customerId||d.customerId===query.customerId);
  if(action==='ar-export'){
-  if(!data.scope.canExport)throw new AppError('没有导出权限。',403);
+  if(!arExportAllowed(s,m,query.teamId||'',data.receivables))throw new AppError('所选范围含未授权导出的组或公司资料，请选择有导出权限的业务组。',403);
   const quote=(v:unknown)=>'"'+String(v??'').replace(/^([=+@\-])/,'\t$1').replace(/"/g,'""')+'"';
   const rows=[['来源类型','来源ID','客户','所属组','费用','币种','净应收','已核销','未结','到期日','状态'],...data.receivables.map(r=>[r.sourceKind,r.sourceId,r.customer,r.teamName,r.title,r.currency,r.amountCents===null?'待核实':(r.amountCents/100).toFixed(2),r.receivedCents===null?'待核实':(r.receivedCents/100).toFixed(2),r.balanceCents===null?'待核实':(r.balanceCents/100).toFixed(2),r.dueDate,r.status])];
   return new Response('\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n'),{headers:{'Content-Type':'text/csv; charset=utf-8','Content-Disposition':'attachment; filename="ar-workspace.csv"','Cache-Control':'no-store'}});
@@ -34,8 +34,8 @@ export async function arWorkspacePost(action:string,req:Request,s:State,m:Member
  const document=await arDocumentPost(action,req,s,m);if(document)return document;
  if(!['ar-access-grant-save','ar-source-binding-save'].includes(action))return null;
  admin(s,m);const raw=await req.json(),input=action==='ar-access-grant-save'?parse(grantSchema,raw):parse(bindingSchema,raw);
- const fingerprint=JSON.stringify({action,input}),requestId='ar_request_'+input.token,repeated=all(s,'ar_request').find(r=>r.id===requestId);
- if(repeated){if(repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);return json({ok:true,item:repeated.result,idempotent:true});}
+ const fingerprint=JSON.stringify({action,input}),requestId='ar_request_'+input.token,repeated=s.records.find(r=>r.id===requestId);
+ if(repeated){if(repeated.kind!=='ar_request'||repeated.actorId!==m.id||repeated.fingerprint!==fingerprint)throw new AppError('操作标识已用于其他请求。',409);return json({ok:true,item:repeated.result,idempotent:true});}
  let before:Entity|undefined,item:Entity;
  if(action==='ar-access-grant-save'){
   const v=input as z.infer<typeof grantSchema>,target=all(s,'member').find(x=>x.id===v.memberId&&x.active&&x.role!=='supplier');if(!target)throw new AppError('请选择唯一有效内部成员账号。');
@@ -46,10 +46,11 @@ export async function arWorkspacePost(action:string,req:Request,s:State,m:Member
  }else{
   const v=input as z.infer<typeof bindingSchema>,source=s.records.find(r=>r.id===v.sourceId&&r.kind===v.sourceKind);
   if(!source||source.customerId!==v.customerId||!all(s,'customer_account').some(c=>c.id===v.customerId))throw new AppError('来源与客户必须明确对应。');
+  if(v.sourceVersion!==undefined&&v.sourceVersion!==(source.version||1))throw new AppError('原来源版本已变化，请重新核对归属依据。',409);
   if(v.teamId&&!all(s,'customer_project_team').some(t=>t.id===v.teamId))throw new AppError('原归属组不存在。');
   if(v.shipmentVerified){if(!(source.kind==='service_record'&&source.type==='shipment'||source.kind==='handoff_business_source'&&source.type==='production_shipment')||v.shipmentAmountCents===undefined||!v.currency||!arDay(source.actualShipDate||source.fields?.date||source.details?.shipDate))throw new AppError('出货核实须有实际出货来源、日期、原币种及明确金额。');}
   before=all(s,'ar_source_binding').find(r=>r.sourceKind===v.sourceKind&&r.sourceId===v.sourceId);if(v.id&&before?.id!==v.id)throw new AppError('来源归属配置不存在。',409);current(before,v.version);
-  item={id:before?.id||newId('ar_binding'),kind:'ar_source_binding',sourceKind:v.sourceKind,sourceId:v.sourceId,customerId:v.customerId,teamId:v.teamId,canonicalKey:clean(v.canonicalKey),reason:v.reason,shipmentVerified:v.shipmentVerified,...(v.shipmentVerified?{shipmentAmountCents:v.shipmentAmountCents,currency:v.currency}:{}),active:true,version:(before?.version||0)+1,createdAt:before?.createdAt||now(),updatedAt:now(),updatedById:m.id};
+  item={id:before?.id||newId('ar_binding'),kind:'ar_source_binding',sourceKind:v.sourceKind,sourceId:v.sourceId,sourceVersion:source.version||1,customerId:v.customerId,teamId:v.teamId,canonicalKey:clean(v.canonicalKey),reason:v.reason,shipmentVerified:v.shipmentVerified,...(v.shipmentVerified?{shipmentAmountCents:v.shipmentAmountCents,currency:v.currency}:{}),active:true,version:(before?.version||0)+1,createdAt:before?.createdAt||now(),updatedAt:now(),updatedById:m.id};
  }
  await commit(s.revision,[item,audit(m,item,before||null,action,'应收工作空间'),{id:requestId,kind:'ar_request',actorId:m.id,fingerprint,result:item,createdAt:now()}]);return json({ok:true,item});
 }
