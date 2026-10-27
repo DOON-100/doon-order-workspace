@@ -5,7 +5,7 @@ import {CliError} from './errors.js';
 import type {Route} from './routes.js';
 
 export type Resource = 'teams' | 'customers' | 'projects' | 'followups' | 'inquiries' | 'quotes';
-export type Action = 'list' | 'show' | 'history' | 'version' | 'export-completed' | 'master' | 'recycle';
+export type Action = 'list' | 'show' | 'history' | 'version' | 'export-completed' | 'master' | 'sensitive' | 'recycle';
 export type SalesOptions = {team?: string; customer?: string; search?: string; limit?: string; offset?: string; output?: string};
 const customerFields = fields('legalName shortName website brandIntroduction backgroundResearch contactPerson contactTitle phone email whatsapp wechat contacts companyAddress billingAddress shippingAddress defaultPaymentMethod defaultTradeTerms ndaStatus packagingRequirements documentRequirements longTermNotes type source stage orderHistory firstListedOn lastOrderOn');
 const projectFields = fields('id version customerId teamId code title description salesMemberId serviceMemberId serviceMemberIds serviceReviewerId salesReviewerId dueDate status updatedAt updatedBy canWrite canManageTasks canManageAssignments');
@@ -20,7 +20,7 @@ export class SalesService {
   constructor(private store: StateStore, private transport: typeof fetch = fetch) {}
 
   async execute(resource: Resource, action: Action, options: SalesOptions = {}, rawId?: string, rawVersion?: string) {
-    if (!['teams','customers','projects','followups','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed','master','recycle'].includes(action) || action==='recycle'&&resource!=='projects' || action==='master'&&resource!=='customers' || resource==='followups'&&!['list','show'].includes(action) ||
+    if (!['teams','customers','projects','followups','inquiries','quotes'].includes(resource) || !['list','show','history','version','export-completed','master','sensitive','recycle'].includes(action) || action==='recycle'&&resource!=='projects' || ['master','sensitive'].includes(action)&&resource!=='customers' || resource==='followups'&&!['list','show'].includes(action) ||
       (['version','export-completed'].includes(action) && resource !== 'quotes') || resource === 'teams' && action !== 'list') throw new CliError('UNSUPPORTED_OPERATION', '该业务命令尚未开放。', 2);
     const team = identifier(options.team, '业务组'), customer = identifier(options.customer, '客户'), id = identifier(rawId, '记录', !['list','recycle','export-completed'].includes(action));
     const window = pagination(options), search = options.search?.trim() || '';
@@ -54,6 +54,7 @@ export class SalesService {
       return {scope: {...scope, teamFilter: 'directory-filter'}, page: page(rows.filter(row => (!team || row.id === team) && (!customer || Array.isArray(row.customerIds) && row.customerIds.includes(customer)) && (!search || String(row.name || '').toLocaleLowerCase().includes(search.toLocaleLowerCase()))).map(row => pick(row, fields('id name active customerIds'))), window)};
     }
     if (resource === 'customers') {
+      if(action==='sensitive'){if(team||customer)throw new CliError('UNSUPPORTED_FILTER','此资料不支持额外范围筛选。',2);const data=await read('/api/workspace/customer-workflow-data',{customerId:id!});if(data?.customer?.id!==id)return failResponse();return {scope,record:{customerId:id,version:object(data.profile).version,fields:pick(object(data.profile).fields,fields('bankPaymentInfo courierAccount'))},capabilities:pick(data.capabilities,fields('readBank writeBank writeProfile'))};}
       if(action==='master'){if(team||customer)throw new CliError('UNSUPPORTED_FILTER','客户主档不支持额外范围筛选。',2);const data=await read('/api/workspace/customer-master-data',{id:id!});if(data?.customer?.id!==id)return failResponse();return {scope,record:pick(data.customer,fields('id version customer customerCode notes active'))};}
       const data = await read('/api/workspace/customer-workflow-data'), rows = collection(data, 'customers');
       const directory = await read('/api/workspace/business-team-data'), names = new Map(collection(directory, 'customers').map(row => [row.id, row]));

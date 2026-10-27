@@ -1,4 +1,4 @@
-export const version = '0.27.0';
+export const version = '0.28.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -14,6 +14,7 @@ export const salesCommands = [
   ['teams','list','list','查询本人可见业务组'],
   ['customers','list','list','查询客户清单'], ['customers','show','show <id>','查看客户资料与跟进'], ['customers','history','history <id>','查询客户历史摘要'],
   ['customers','master','master <id>','查看可维护的客户主档'],
+  ['customers','sensitive','sensitive <id>','按权限查看客户付款和快递账号资料'],
   ['projects','list','list','查询开发项目'], ['projects','show','show <id>','查看项目与款色、轮次、任务'], ['projects','history','history <id>','查询项目历史摘要'],
   ['projects','recycle','recycle','查询授权项目回收站'],
   ['followups','list','list','查询客户跟进'], ['followups','show','show <id>','查看客户跟进'],
@@ -23,6 +24,7 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales customers sensitive-update', usage:'sales customers sensitive-update --input <file> --version <number> --request-id <uuid>', description:'按服务器权限更新客户付款或快递资料', effect:'business-write'},
   {name:'sales projects document-save', usage:'sales projects document-save --input <file> --version <number> --request-id <uuid>', description:'保存项目资料文档并回读', effect:'business-write'},
   {name:'sales projects development-save', usage:'sales projects development-save --input <file> --version <number> --request-id <uuid>', description:'维护项目开发阶段并回读', effect:'business-write'},
   {name:'sales projects development-log', usage:'sales projects development-log --input <file> --version <number> --request-id <uuid>', description:'登记项目开发进展并回读', effect:'business-write'},
