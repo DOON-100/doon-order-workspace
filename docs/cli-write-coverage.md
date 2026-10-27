@@ -2,7 +2,19 @@
 
 基线：`2cd873e`，2026-10-27。本页由 `lib/department-workspace-navigation.ts` 的 `departmentRouteOrder` 明确列出的入口逐一登记；动态生成或落入管理组的旧入口仍待逐页扫描。清单是盘点起点，不表示这些页面可见于每个员工，也不表示已完成逐表单/字段/接口/权限核验。字段、动作、角色与范围、依赖和验收均须在对应批次补齐；不能将页面入口数量当作完成数量。页面表中的候选源码是按栏目归集的排查入口，不表示每个源码均适用于该页面，必须逐项核对。
 
-业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询覆盖与实际 `cli/src/catalog.ts` 对照。W1 已接入客户资料更新、跟进排程、项目及询价创建，以及项目款色和沟通新增，其余写入未开放；候选接口及批次见 [写入阶段计划](cli-write-implementation-plan.md)，处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
+业务接口入口为 `app/api/workspace/[action]/route.ts`；具体限制以各处理器和数据模型为准。已有 CLI 查询和写入以 `cli/src/catalog.ts` 及 [写入阶段计划](cli-write-implementation-plan.md) 为准，W1 已部分接入客户主档、跟进、项目及询价，尚未覆盖全部字段和动作；处理器初筛见 [API 源码索引](cli-write-api-index.md)，部分 schema 的顶层字段线索见 [字段源码索引](cli-write-field-index.md)。从界面枚举实际按钮、隐含表单、动态角色入口、附件和外部动作，是后续逐批必须完成的工作。所有空缺必须显式登记，不能由页面名称推断权限或 CRUD。
+
+### W1 当前已接入范围与缺口
+
+| 表单或动作 | 当前支持 | 尚待核对或实现 |
+| --- | --- | --- |
+| 客户主档 | 创建；名称、编号、备注按版本更新 | 其他主档字段、PMC 和管理员专属责任/启停操作 |
+| 客户资料和跟进 | 通用资料指定字段、排程、沟通记录；项目跟进创建和完整表单更新 | 银行等专属字段、客户附件及流转操作 |
+| 客户项目 | 创建、完整表单更新、回收和恢复；款色、轮次和沟通新增 | 款色与轮次修改、附件及其余项目记录 |
+| 项目待办 | 创建、调整、取消、提交和审核 | 完整角色、状态及重放验收 |
+| 询价 | 查询、创建及完整表单更新 | 完整状态与页面字段验收 |
+
+以上是当前命令覆盖，不是整个 W1 验收结论；服务器权限和业务状态始终有效，新增客户主档接口需服务器代码更新后才能使用。
 
 | 栏目 | 页面/入口标识 | 计划批次 | 表单与字段 | 动作/接口 | 角色与记录范围 | 验收 |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -13,7 +25,7 @@
 | 工作总览 | `reports` | W10 | 待核验 | 候选源码：app/workspace.tsx | 待核验 | 待核验 |
 | 业务部 | `customers` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-projects` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
-| 业务部 | `process-rfq` | W1–W3 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| 业务部 | `process-rfq` | W1–W3 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 已接入询价创建与更新；阶段验收待完成 |
 | 业务部 | `sales` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-quotes` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-price-archive` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
