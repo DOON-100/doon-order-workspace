@@ -1,4 +1,4 @@
-export const version = '0.22.0';
+export const version = '0.23.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -23,6 +23,8 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales projects development-save', usage:'sales projects development-save --input <file> --version <number> --request-id <uuid>', description:'维护项目开发阶段并回读', effect:'business-write'},
+  {name:'sales projects development-log', usage:'sales projects development-log --input <file> --version <number> --request-id <uuid>', description:'登记项目开发进展并回读', effect:'business-write'},
   {name:'sales projects item-update', usage:'sales projects item-update --input <file> --version <number> --request-id <uuid>', description:'修改项目款色并回读', effect:'business-write'},
   {name:'sales projects round-update', usage:'sales projects round-update --input <file> --version <number> --request-id <uuid>', description:'修改项目轮次并回读', effect:'business-write'},
   {name:'sales customers followup-add', usage:'sales customers followup-add --input <file> --version <number> --request-id <uuid>', description:'登记客户沟通与跟进并回读', effect:'business-write'},
@@ -79,7 +81,8 @@ export const financeCommands=[
  ['reconciliations','list','list','查询供应商对账记录'],['reconciliations','show','show <id>','查看供应商对账'],['reconciliations','history','history <id>','查看供应商对账历史'],
  ['complaints','list','list','查询客户投诉记录'],['complaints','show','show <id>','查看客户投诉'],['complaints','history','history <id>','查看客户投诉历史'],
 ].map(([resource,action,usage,description])=>({name:`finance ${resource} ${action}`,resource,action,usage:`finance ${resource} ${usage}`,description,effect:'business-read-and-session-last-seen'}));
-export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
+export const developmentReadCommands=[{name:'sales projects development-show',usage:'sales projects development-show <id> --customer <id>',description:'查询项目开发阶段与进展',effect:'business-read-and-session-last-seen'}] as const;
+export const commands = [...foundationCommands, ...salesCommands, ...salesWriteCommands, ...developmentReadCommands, ...orderCommands, ...engineeringCommands, ...planningCommands, ...operationsCommands, ...financeCommands];
 
 // Match the middle-platform navigation; presentation order never grants permission.
 export const modules = [
@@ -87,4 +90,4 @@ export const modules = [
   ['engineering', '工程部'], ['planning', 'PMC 计划'], ['purchasing', '采购与外协'],
   ['warehouse', '仓储物流'], ['production', '生产车间'], ['quality', '品质部'],
   ['finance', '财务部'], ['management', '系统管理'],
-].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));
+].map(([id, label]) => ({id, label, status: ['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(id) ? 'partial' : 'pending', commands: [...(id === 'sales' ? [...salesCommands.map(c => c.name),...salesWriteCommands.map(c => c.name),...developmentReadCommands.map(c=>c.name)] : []), ...orderCommands.filter(c => c.namespace === id).map(c => c.name),...(id==='engineering'?engineeringCommands.map(c=>c.name):[]),...planningCommands.filter(c=>c.namespace===id).map(c=>c.name),...operationsCommands.filter(c=>id==='production'&&['reports','finished'].includes(c.resource)||id==='quality'&&c.resource==='quality'||id==='warehouse'&&['packaging','releases','shipments'].includes(c.resource)).map(c=>c.name),...(id==='finance'?financeCommands.map(c=>c.name):[])]}));

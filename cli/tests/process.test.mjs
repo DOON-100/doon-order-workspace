@@ -13,11 +13,17 @@ async function invoke(args, env = {}) {
   catch (error) { return {code: error.code, stdout: error.stdout, stderr: error.stderr}; }
 }
 
+test('business version options are not intercepted by the global CLI version',async()=>{
+  const result=await invoke(['sales','projects','update','--input','synthetic.json','--version','1','--request-id','11111111-1111-4111-8111-111111111111','--json']);
+  assert.notEqual(result.code,0);const value=JSON.parse(result.stdout);assert.equal(value.ok,false);assert.notEqual(value.command,'version');
+  const version=await invoke(['--version','--json']);assert.equal(version.code,0);assert.equal(JSON.parse(version.stdout).command,'version');
+});
+
 test('machine catalogs report implemented sales queries and keep other modules pending', async () => {
   const result = await invoke(['commands', '--json']); assert.equal(result.code, 0); assert.equal(result.stderr, '');
   const parsed = JSON.parse(result.stdout); assert.equal(parsed.schema, 'doon-cli-output-v1'); assert(parsed.ok);
   assert.deepEqual(parsed.data.slice(0,7).map(row => row.name), ['setup', 'login', 'logout', 'whoami', 'doctor', 'commands', 'modules']);
-  assert.equal(parsed.data.length, 114); assert(parsed.data.some(row => row.name === 'sales quotes version')); assert(parsed.data.some(row=>row.name==='service pi version'));assert(parsed.data.some(row=>row.name==='engineering ie-quotes version'));assert(parsed.data.some(row=>row.name==='purchasing purchases history'));assert(parsed.data.some(row=>row.name==='operations shipments history'));assert(parsed.data.some(row=>row.name==='finance records history'));
+  assert.equal(parsed.data.length, 117); assert(parsed.data.some(row => row.name === 'sales quotes version')); assert(parsed.data.some(row=>row.name==='service pi version'));assert(parsed.data.some(row=>row.name==='engineering ie-quotes version'));assert(parsed.data.some(row=>row.name==='purchasing purchases history'));assert(parsed.data.some(row=>row.name==='operations shipments history'));assert(parsed.data.some(row=>row.name==='finance records history'));
   const groups = JSON.parse((await invoke(['modules', '--json'])).stdout).data;
   assert.equal(groups.length, 11); assert.equal(groups.find(row => row.id === 'sales').status, 'partial');
   assert.equal(groups.find(row=>row.id==='service').status,'partial');

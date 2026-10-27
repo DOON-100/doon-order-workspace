@@ -45,6 +45,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     }
   }
   const program = new Command().name('doon').description('度昂员工 CLI；业务部与客服单据查询').version(version)
+    .enablePositionalOptions()
     .option('--json', '输出稳定 JSON；日志与提示写入 stderr')
     .showHelpAfterError().exitOverride()
     .configureOutput({writeOut: text => { if (!json) process.stdout.write(text); }, writeErr: text => { if (!json) process.stderr.write(text); }});
@@ -80,6 +81,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     if(resource==='projects')for(const action of ['item-update','round-update'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects ${action}`)!;group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().projectChildWrite().execute(action,options.input,options.requestId,options.version)));}
     if(resource==='projects')for(const action of ['create','update','submit','review'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects task-${action}`)!;const command=group.command(`task-${action}`).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID');if(action!=='create')command.requiredOption('--version <number>','当前版本');command.action(async options=>result(spec.name,await foundation().projectTaskWrite().execute(action,options.input,options.version||'',options.requestId)));}
     if(resource==='projects')for(const action of ['trash','restore'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects ${action}`)!;group.command(action).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','当前版本').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().projectRecycle().execute(action,options.input,options.version,options.requestId)));}
+    if(resource==='projects'){group.command('development-show <id>').description('查询项目开发阶段与进展').requiredOption('--customer <id>','客户编号').action(async (id,options)=>result('sales projects development-show',await foundation().projectDevelopment().show(options.customer,id)));for(const action of ['save','log'] as const){const spec=salesWriteCommands.find(c=>c.name===`sales projects development-${action}`)!;group.command(`development-${action}`).description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--version <number>','开发资料当前版本，可为 0').requiredOption('--request-id <uuid>','本次操作 UUID').action(async options=>result(spec.name,await foundation().projectDevelopment().execute(action,options.input,options.version,options.requestId)));}}
     if(resource==='projects'||resource==='inquiries'){const action=resource==='projects'?'project-create':'inquiry-create';const spec=salesWriteCommands.find(c=>c.name===`sales ${resource} create`)!;group.command('create').description(spec.description).requiredOption('--input <file>','JSON 输入文件').requiredOption('--request-id <uuid>','本次操作 UUID，结果不明时保留').action(async options=>result(spec.name,await foundation().salesWrite().execute(action,options.input,'',options.requestId)));}
     for (const spec of salesCommands.filter(c => c.resource === resource)) {
       const command = group.command(spec.action).description(spec.description).option('--team <id>', '业务组编号；不填表示全部获授权范围');
@@ -167,7 +169,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
     }
   }
   try {
-    await program.parseAsync(argv, {from: 'user'});
+    await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});
     else if (!argv.length) program.outputHelp();
     return 0;
