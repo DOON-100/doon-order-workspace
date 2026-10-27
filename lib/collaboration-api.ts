@@ -66,6 +66,11 @@ function orderFor(s:State,id:string){const o=all(s,'order').find(v=>v.id===id) a
 function customerRows(bytes:ArrayBuffer){const book=openWorkbook(bytes),sheetName=book.SheetNames[0];let header=1;for(let i=1;i<=30;i++){const h=sheetRows(book,sheetName,i).headers.map(clean);if(h.some(v=>['客户','客户名称'].includes(v))&&h.some(v=>['业务员','业务负责人','业务'].includes(v))){header=i;break;}}const {headers,body}=sheetRows(book,sheetName,header);const find=(names:string[])=>headers.findIndex(h=>names.includes(clean(h))),indexes={customer:find(['客户','客户名称']),customerCode:find(['客户编码','客户代码']),salesName:find(['业务员','业务负责人','业务']),serviceName:find(['客服','客服负责人']),pmcName:find(['PMC','PMC跟进人']),notes:find(['备注','说明']),expectedVersion:find(['当前版本','版本'])};for(const k of ['customer','salesName','serviceName','pmcName'] as const)if(indexes[k]<0)throw new AppError(`客户清单缺少“${{customer:'客户',salesName:'业务员',serviceName:'客服',pmcName:'PMC'}[k]}”列。`);return body.map(r=>({customer:clean(r.values[indexes.customer]),customerCode:indexes.customerCode<0?undefined:clean(r.values[indexes.customerCode]),salesName:clean(r.values[indexes.salesName]),serviceName:clean(r.values[indexes.serviceName]),pmcName:clean(r.values[indexes.pmcName]),notes:indexes.notes<0?undefined:clean(r.values[indexes.notes]),expectedVersion:indexes.expectedVersion<0?undefined:Number(clean(r.values[indexes.expectedVersion]))})).filter(r=>r.customer);}
 
 export async function collaborationGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ if(action==='customer-master-data'){
+  const id=new URL(req.url).searchParams.get('id')||'',customer=all(s,'customer_account').find(row=>row.id===id) as CustomerAccount|undefined;
+  if(!customer||paymentTermsReadOnly(s,m)||!customerMasterCapabilities(s,m,customer).master)throw new AppError('客户不存在或没有主档维护权限。',403);
+  return json({customer:{id:customer.id,version:customer.version,customer:customer.customer,customerCode:customer.customerCode||'',notes:customer.notes||'',active:customer.active}});
+ }
  if(action==='customer-master-capabilities'&&paymentTermsReadOnly(s,m))return json({policyVersion:customerMasterPolicyVersion,create:false,master:false,directory:false,responsibility:false,quoteMembers:false,activation:false,customers:[]});
  if(action==='customer-master-capabilities')return json({policyVersion:customerMasterPolicyVersion,...customerMasterCapabilities(s,m),customers:(all(s,'customer_account') as CustomerAccount[]).flatMap(c=>{const rights=customerMasterCapabilities(s,m,c);return rights.master||rights.directory?[{id:c.id,...rights}]:[];})});
  if(action==='factory-order-table-export'){
@@ -94,6 +99,17 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
 }
 
 export async function collaborationPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ if(action==='customer-master-patch'){
+  const parsed=z.object({id:z.string().trim().min(1).max(160),version:z.number().int().positive(),patch:z.object({customer:z.string().trim().min(1).max(120).optional(),customerCode:z.string().trim().max(80).optional(),notes:z.string().max(1000).optional()}).strict().refine(v=>Object.keys(v).length>0)}).strict().safeParse(await req.json());
+  if(!parsed.success)throw new AppError('客户主档字段或版本无效。');
+  const {id,version,patch}=parsed.data,before=all(s,'customer_account').find(row=>row.id===id) as CustomerAccount|undefined;
+  if(!before||paymentTermsReadOnly(s,m)||!customerMasterCapabilities(s,m,before).master)throw new AppError('客户不存在或没有主档维护权限。',403);
+  if(before.version!==version)throw new AppError('客户资料已更新，请刷新后重试。',409);
+  const item:CustomerAccount={...before,...patch,version:before.version+1,updatedAt:now(),updatedBy:m.name};
+  if(conflictingCustomerIdentity(s,id,item.customer,item.customerCode))throw new AppError('客户名称或编号与其他客户的当前/历史身份冲突。',409);
+  await commit(s.revision,[item,...customerIdentityChanges(s,m,before,item),audit(m,item,before,'维护客户主档')]);
+  return json({ok:true,customer:{id:item.id,version:item.version,customer:item.customer,customerCode:item.customerCode||'',notes:item.notes||'',active:item.active}});
+ }
  if(action==='factory-order-template'){
   if(!roles(m))throw new AppError('无权维护订单模板。',403);const form=await req.formData(),file=form.get('file'),customer=clean(form.get('customer'));
   if(!customer||(!broad(m)&&!m.customers.includes(customer)))throw new AppError('请填写你负责的客户。',403);

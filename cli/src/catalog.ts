@@ -1,4 +1,4 @@
-export const version = '0.18.0';
+export const version = '0.19.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -13,6 +13,7 @@ export const foundationCommands = [
 export const salesCommands = [
   ['teams','list','list','查询本人可见业务组'],
   ['customers','list','list','查询客户清单'], ['customers','show','show <id>','查看客户资料与跟进'], ['customers','history','history <id>','查询客户历史摘要'],
+  ['customers','master','master <id>','查看可维护的客户主档'],
   ['projects','list','list','查询开发项目'], ['projects','show','show <id>','查看项目与款色、轮次、任务'], ['projects','history','history <id>','查询项目历史摘要'],
   ['followups','list','list','查询客户跟进'], ['followups','show','show <id>','查看客户跟进'],
   ['inquiries','list','list','查询询价与需求评估'], ['inquiries','show','show <id>','查看询价依据与未知项'], ['inquiries','history','history <id>','查询询价历史版本'],
@@ -21,6 +22,7 @@ export const salesCommands = [
 ].map(([resource, action, usage, description]) => ({name: `sales ${resource} ${action}`, resource, action, usage: `sales ${resource} ${usage}`,
   description, effect: action === 'export-completed' ? 'local-file-and-session-last-seen' : 'business-read-and-session-last-seen'}));
 export const salesWriteCommands = [
+  {name:'sales customers master-update', usage:'sales customers master-update --input <file> --version <number>', description:'更新客户主档指定字段并回读', effect:'business-write'},
   {name:'sales customers create', usage:'sales customers create --input <file>', description:'创建客户主档并回读', effect:'business-write'},
   {name:'sales projects task-update', usage:'sales projects task-update --input <file> --version <number> --request-id <uuid>', description:'调整或取消项目待办并回读', effect:'business-write'},
   {name:'sales inquiries update', usage:'sales inquiries update --input <file> --version <number> --request-id <uuid>', description:'更新询价需求并回读', effect:'business-write'},
