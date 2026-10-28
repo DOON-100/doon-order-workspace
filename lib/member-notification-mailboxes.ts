@@ -15,18 +15,20 @@ export function memberNotificationMailboxGet(action:string,s:State,m:Member):Res
  if(action!=='member-notification-mailboxes')return null;administrator(m);
  return json({canConfigure:true,mailboxes:(all(s,'member') as Member[]).filter(v=>v.role!=='supplier').map(v=>({...publicMailbox(memberNotificationMailbox(s,v.id),v.id),name:v.name,active:v.active}))});
 }
-const mailboxInput=z.object({memberId:z.string().trim().min(1).max(120),email:z.string().trim().max(254),expectedVersion:z.number().int().nonnegative(),confirmed:z.literal(true)}).strict();
+const mailboxInput=z.object({memberId:z.string().trim().min(1).max(120),email:z.string().trim().max(254),expectedVersion:z.number().int().nonnegative(),confirmed:z.literal(true),token:z.string().uuid().optional()}).strict();
 export async function memberNotificationMailboxPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['member-notification-mailbox','ie-quote-notification-mailbox'].includes(action))return null;administrator(m);
  const parsed=mailboxInput.safeParse(await req.json());if(!parsed.success)throw new AppError('请明确成员、通知邮箱及当前版本后保存，不能附带账号或权限字段。');
  const input=parsed.data,email=input.email.toLowerCase();
+ const requestId=input.token?'member_notification_mailbox_request_'+input.token:'',fingerprint=JSON.stringify({...input,email}),prior=requestId?s.records.find(r=>r.id===requestId):undefined;
  if(email&&(!z.string().email().safeParse(email).success||!validMemberNotificationEmail(email)))throw new AppError('请填写真实通知邮箱，不能使用 .local / .invalid / localhost 等占位地址。');
  if(!all(s,'member').some(v=>v.id===input.memberId&&v.role!=='supplier'))throw new AppError('只能为已存在的内部成员维护通知邮箱。');
+ if(prior){if(prior.kind!=='member_notification_mailbox_request'||prior.actorId!==m.id||prior.action!==action||prior.fingerprint!==fingerprint)throw new AppError('通知邮箱请求编号已用于不同内容。',409);return json({ok:true,mailbox:prior.result,idempotent:true});}
  const records=memberNotificationMailboxRecords(s),same=records.filter(v=>v.memberId===input.memberId);
  if(same.length>1)throw new AppError('通知邮箱记录重复，请核查后处理；不会猜测或覆盖其他记录。',409);
  const before=same[0]||null;if((before?.version||0)!==input.expectedVersion)throw new AppError('通知邮箱已更新，请刷新后核对。',409);
  if(email&&records.some(v=>v.memberId!==input.memberId&&v.email.toLowerCase()===email))throw new AppError('该通知邮箱已绑定其他成员，请核对人员与邮箱对应关系。',409);
  const mailbox:MemberNotificationMailbox={id:before?.id||newId('member_notification_mailbox'),kind:before?.kind||'member_notification_mailbox',memberId:input.memberId,email,version:(before?.version||0)+1,confirmed:!!email,updatedAt:now(),updatedBy:m.name};
- await commit(s.revision,[mailbox,audit(m,mailbox,before,email?'更新成员通知邮箱':'清空成员通知邮箱','成员与权限',mailbox)]);
+ await commit(s.revision,[mailbox,audit(m,mailbox,before,email?'更新成员通知邮箱':'清空成员通知邮箱','成员与权限',mailbox),...(requestId?[{id:requestId,kind:'member_notification_mailbox_request',actorId:m.id,action,fingerprint,result:publicMailbox(mailbox,input.memberId),createdAt:now()}]:[])]);
  return json({ok:true,mailbox:publicMailbox(mailbox,input.memberId)});
 }

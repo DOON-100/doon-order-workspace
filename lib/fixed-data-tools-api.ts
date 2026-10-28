@@ -82,7 +82,7 @@ async function workbook(req:Request,s:State,m:Member){
  const filename=(file.name.split(/[\\/]/).pop()||'workbook.xlsx').replace(/[\u0000-\u001f\u007f]/g,'_').slice(0,180);
  const bytes=await file.arrayBuffer(),sourceHash=await fixedToolBytesHash(bytes),{requestKey,...options}=input;
  const operation=`workbook-${input.operation}`,requestHash=await fixedToolHash({operation,options,filename,sourceHash,ruleVersion:fixedToolRuleVersion});
- const existing=findFixedToolRequest(s,m,requestKey,requestHash);if(existing)return json({ok:true,alreadyPresent:true,job:await verifiedJob(s,existing)});
+ const existing=await findFixedToolRequest(s,m,requestKey,requestHash);if(existing)return json({ok:true,alreadyPresent:true,job:await verifiedJob(s,existing)});
  const result=inspectFixedWorkbook(bytes,options);
  if(sourceHash!==await fixedToolBytesHash(bytes))throw new AppError('原件一致性检查未通过。',409);
  const job:FixedToolJob={id:await fixedToolJobId(m,requestKey),kind:'fixed_tool_job',operation,actorId:m.id,customerIds:[],createdAt:now(),requestKey,requestHash,ruleVersion:fixedToolRuleVersion,status:'completed',filename,sourceHash,preview:workbookPreview(result)};
@@ -97,7 +97,7 @@ async function ownership(req:Request,s:State,m:Member){
  const input=parseFixedTool(z.object({requestKey:fixedToolRequestKey,customerIds:fixedToolIds.refine(ids=>ids.length>0,'必须明确选择客户'),memberIds:fixedToolIds.default([])}).strict(),await readFixedToolJson(req));
  const customerIds=[...input.customerIds].sort(),memberIds=[...input.memberIds].sort(),accounts=fixedToolCustomers(s,m,customerIds);
  const operation='ownership-export',requestHash=await fixedToolHash({operation,customerIds,memberIds,ruleVersion:fixedToolRuleVersion});
- const existing=findFixedToolRequest(s,m,input.requestKey,requestHash);if(existing)return json({ok:true,alreadyPresent:true,job:await verifiedJob(s,existing)});
+ const existing=await findFixedToolRequest(s,m,input.requestKey,requestHash);if(existing)return json({ok:true,alreadyPresent:true,job:await verifiedJob(s,existing)});
  const members=all(s,'member') as Member[];
  const member=(id:string)=>{const found=members.find(v=>v.id===id&&v.role!=='supplier');if(!found)throw new AppError('客户责任记录引用了不存在的成员，请先核对原记录。',409);return {id:found.id,name:found.name};};
  for(const id of memberIds)member(id);

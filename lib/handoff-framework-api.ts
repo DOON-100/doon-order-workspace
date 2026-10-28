@@ -12,6 +12,7 @@ import {businessEvidenceCurrent} from './handoff-business-evidence';
 import {businessAccess} from './handoff-business';
 import {assertProjectNotTrashed,isProjectTrashed} from './customer-projects';
 import {frameworkFinanceTaskGet,frameworkFinanceTaskPost} from './framework-finance-task';
+import {communicationCliGet} from './communication-cli-api';
 
 const manager=(m:Member)=>m.active&&['admin','programmer'].includes(m.role);
 const text=(n:number)=>z.string().trim().max(n).default('');
@@ -36,13 +37,15 @@ function viewMessage(s:State,m:Member,row:Entity):Entity{const side=row.kind==='
 function configKey(type:string,key:string){return `framework_configuration_${type}_${key}`;}
 const templateKeys=['quotation','pi','invoice','packing','waybill','paymentrequest','production','receipt-check','reconciliation'];
 function knownConfig(type:string,key:string){return type==='agent'?Object.hasOwn(handoffCatalog.agents,key):type==='method'?Object.hasOwn(handoffCatalog.methods,key):type==='flow'?Object.hasOwn(handoffCatalog.flows,key):templateKeys.includes(key);}
-async function replay(s:State,m:Member,action:string,input:{token:string}){const row=s.records.find(r=>r.id==='framework_request_'+input.token);if(!row)return null;if(row.actorId!==m.id||row.action!==action||row.hash!==await hash(input))throw new AppError('请求标识已被其他内容使用。',409);return json({ok:true,id:row.targetId,idempotent:true});}
+async function replay(s:State,m:Member,action:string,input:{token:string}){const row=s.records.find(r=>r.id==='framework_request_'+input.token);if(!row)return null;if(row.kind!=='framework_request'||row.actorId!==m.id||row.action!==action||row.hash!==await hash(input))throw new AppError('请求标识已被其他内容使用。',409);return json({ok:true,id:row.targetId,idempotent:true});}
+function bindingIdentity(s:State,id:string){const row=s.records.find(r=>r.id==='framework_channel_binding_'+id);if(row&&row.kind!=='framework_channel_binding')throw new AppError('渠道绑定标识已由其他记录占用。',409);}
 async function persist(s:State,m:Member,action:string,input:{token:string},row:Entity,extra:Entity[]=[],before?:Entity){
  const hist={id:newId('framework_history'),kind:'framework_history',targetId:row.id,targetKind:row.kind,version:row.version,actorId:m.id,actor:m.name,createdAt:now(),snapshot:structuredClone(row)};
  const request={id:'framework_request_'+input.token,kind:'framework_request',actorId:m.id,action,hash:await hash(input),targetId:row.id,createdAt:now()};
  await commit(s.revision,[row,...extra,hist,audit(m,row,before||null,action,'交接框架人工操作'),request]);return json({ok:true,id:row.id,version:row.version});
 }
 export async function frameworkGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ const cli=await communicationCliGet(action,req,s,m);if(cli)return cli;
  if(action.startsWith('framework-finance-task'))return frameworkFinanceTaskGet(action,req,s,m);
  if(action.startsWith('framework-offboarding'))return frameworkOffboardingGet(action,req,s,m);
  if(!['framework-settings','framework-channels','framework-channel-history','framework-channel-context','framework-knowledge','framework-knowledge-document','framework-notices'].includes(action))return null;actorAllowed(m);
@@ -98,13 +101,14 @@ export async function frameworkPost(action:string,req:Request,s:State,m:Member):
   if(!manager(m))throw new AppError('没有配置维护权限。',403);const input=parse(configSchema,body);if(!knownConfig(input.type,input.key))throw new AppError('未知配置项目。');
   if(input.ownerId&&!all(s,'member').some(a=>a.id===input.ownerId&&a.active&&a.role!=='supplier'))throw new AppError('负责人必须为在职内部成员。');
   if(/sk-[A-Za-z0-9_-]{12,}|BEGIN .*PRIVATE KEY/i.test([input.modelName,input.extraRules,input.integrationNotes].join(' ')))throw new AppError('此处只登记配置说明，不保存密钥。');
-  const before=s.records.find(r=>r.id===configKey(input.type,input.key)),prior=await replay(s,m,action,input);if(prior)return prior;matchesVersion(before,input.expectedVersion);
-  const {token:_,expectedVersion:__,...fields}=input,row={...fields,id:configKey(input.type,input.key),kind:'framework_configuration',version:input.expectedVersion+1,updatedAt:now(),updatedBy:m.name,updatedById:m.id,executionEnabled:false};return persist(s,m,action,input,row,[],before);
+  const before=s.records.find(r=>r.id===configKey(input.type,input.key));if(before&&before.kind!=='framework_configuration')throw new AppError('配置标识已由其他记录占用。',409);const prior=await replay(s,m,action,input);if(prior)return prior;matchesVersion(before,input.expectedVersion);
+  const {token:_,expectedVersion:__,...fields}=input,row={...before,...fields,id:configKey(input.type,input.key),kind:'framework_configuration',version:input.expectedVersion+1,updatedAt:now(),updatedBy:m.name,updatedById:m.id,executionEnabled:false};return persist(s,m,action,input,row,[],before);
  }
  if(action==='framework-account-save'){
   if(!manager(m))throw new AppError('没有渠道账号配置权限。',403);const input=parse(accountSchema,body),before=input.id?all(s,'framework_channel_account').find(a=>a.id===input.id):undefined;
   if(input.id&&!before)throw new AppError('账号配置不存在。');if(!all(s,'member').some(a=>a.id===input.ownerId&&a.active&&a.role!=='supplier')&&!(before?.ownerId===input.ownerId&&all(s,'member').some(a=>a.id===before.continuityMemberId&&a.active&&a.role!=='supplier')))throw new AppError('请选择在职内部账号负责人；原负责人离岗后的已有账号须保留原身份并通过有效持续负责人管理。');
   if(input.channel==='email'?!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.address):!/^\+[1-9]\d{6,14}$/.test(input.address))throw new AppError('请填写有效邮箱地址或带国家区号的WhatsApp号码。');
+  const accountReplay=await replay(s,m,action,input);if(accountReplay)return accountReplay;
   if(all(s,'framework_channel_account').some(a=>a.id!==input.id&&a.channel===input.channel&&a.address.toLowerCase()===input.address.toLowerCase()))throw new AppError('该渠道账号已登记，请维护原账号。');
   for(const [memberId,grant] of Object.entries(input.grants)){if(!all(s,'member').some(a=>a.id===memberId&&a.active&&a.role!=='supplier'))throw new AppError('授权对象须为在职内部成员。');if((grant.draft||grant.send)&&!grant.view)throw new AppError('草稿与发送计划权限必须同时具备查看权限。');}
   if(before&&[...all(s,'framework_channel_binding'),...all(s,'framework_channel_inquiry')].some(b=>b.accountId===before.id)&&['channel','address','ownerId'].some(k=>before[k]!==input[k as keyof typeof input]))throw new AppError('该账号已有业务来源，类型、地址和负责人不能直接变更；可调整授权或新建账号。',409);
@@ -122,11 +126,11 @@ export async function frameworkPost(action:string,req:Request,s:State,m:Member):
   if(before.kind!=='unified_communication'||binding(s,before.id))throw new AppError('只能绑定尚未登记账号的人工沟通。',409);
   if(before.channel!==acct.channel)throw new AppError('账号渠道与原消息不一致。');
   if(before.draftText||before.lastSubmissionId||before.version>1)throw new AppError('已有草稿或历史版本的来源不得直接改绑账号，请先核实处理。',409);
-  const row={id:'framework_channel_binding_'+before.id,kind:'framework_channel_binding',communicationId:before.id,accountId:acct.id,version:1,reason:input.reason,direction:'incoming',conversationType:'direct',processed:false,createdAt:now(),updatedAt:now(),updatedBy:m.name};return persist(s,m,action,input,row,[],undefined);
+  bindingIdentity(s,before.id);const row={id:'framework_channel_binding_'+before.id,kind:'framework_channel_binding',communicationId:before.id,accountId:acct.id,version:1,reason:input.reason,direction:'incoming',conversationType:'direct',processed:false,createdAt:now(),updatedAt:now(),updatedBy:m.name};return persist(s,m,action,input,row,[],undefined);
  }
- let input:z.infer<typeof messageSchema>,inquiry:Entity|undefined;
+ let input:z.infer<typeof messageSchema>,inquiry:Entity|undefined,linkInput:z.infer<typeof linkSchema>|undefined;
  if(action==='framework-message-link'){
-  const link=parse(linkSchema,body);inquiry=sourceRecord(s,m,link.id,true);if(inquiry.kind!=='framework_channel_inquiry')throw new AppError('只可关联尚未归属客户的询单。',409);
+  const link=parse(linkSchema,body);linkInput=link;inquiry=sourceRecord(s,m,link.id,true);if(inquiry.kind!=='framework_channel_inquiry')throw new AppError('只可关联尚未归属客户的询单。',409);
   if(inquiry.linkedCommunicationId){const target=sourceRecord(s,m,inquiry.linkedCommunicationId,true);if(target.customerId!==link.customerId)throw new AppError('询单已关联其他客户。',409);const prior=await replay(s,m,action,link);if(prior)return prior;throw new AppError('该询单已关联，请打开统一沟通记录。',409);}matchesVersion(inquiry,link.expectedVersion);
   input={token:link.token,expectedVersion:0,accountId:inquiry.accountId,customerId:link.customerId,projectId:link.projectId,orderId:link.orderId,direction:inquiry.direction,sender:inquiry.sender,recipient:inquiry.recipient,conversationType:inquiry.conversationType,conversation:inquiry.conversation,occurredAt:inquiry.occurredAtPrecise,title:inquiry.title,sourceText:inquiry.sourceText,draftText:inquiry.draftText,sourceNote:inquiry.sourceNote,missingInfo:inquiry.missingInfo};
  }else input=parse(messageSchema,body);
@@ -144,13 +148,13 @@ export async function frameworkPost(action:string,req:Request,s:State,m:Member):
  if(input.conversationType!=='direct'&&!input.conversation)throw new AppError('群聊记录必须填写群名。');
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?$/.test(input.occurredAt)||Number.isNaN(Date.parse(input.occurredAt)))throw new AppError('请填写有效发生时间。');try{strictDate(input.occurredAt.slice(0,10));}catch{throw new AppError('请填写真实存在的发生日期。');}
  if(!input.sourceText.trim()&&!input.draftText.trim())throw new AppError('请录入原文或草稿。');
- const prior=await replay(s,m,action,body as {token:string});if(prior)return prior;matchesVersion(before,input.expectedVersion);
+ const prior=await replay(s,m,action,linkInput||body as {token:string});if(prior)return prior;matchesVersion(before,input.expectedVersion);
  const stamp=now(),side={accountId:acct.id,sender:input.sender,recipient:input.recipient,direction:input.direction,conversationType:input.conversationType,conversation:input.conversation,occurredAtPrecise:input.occurredAt,sourceNote:input.sourceNote,missingInfo:input.missingInfo,processed:false};
  if(!input.customerId){const row={...side,id:before?.id||newId('framework_channel_inquiry'),kind:'framework_channel_inquiry',channel:acct.channel,title:input.title,sourceText:input.sourceText,draftText:input.draftText,customerId:'',status:'draft',version:(before?.version||0)+1,createdAt:before?.createdAt||stamp,createdById:before?.createdById||m.id,updatedAt:stamp,updatedBy:m.name};return persist(s,m,action,input,row,[],before);}
  const fields={customerId:input.customerId,projectId:input.projectId,orderId:input.orderId,channel:acct.channel,title:input.title,sourceText:input.sourceText,sourceReference:input.sourceNote,occurredAt:input.occurredAt.slice(0,10),draftText:input.draftText,internalNote:before?.internalNote||''};
  const sourceHash=await hash({channel:fields.channel,title:fields.title,sourceText:fields.sourceText,sourceReference:fields.sourceReference,occurredAt:fields.occurredAt,side}),row:Communication={...fields,id:before?.kind==='unified_communication'?before.id:newId('unified_communication'),kind:'unified_communication',inputMode:'manual',version:(before?.version||0)+1,status:'draft',sourceHash,sourceRevision:before?(before.sourceRevision||1)+Number(sourceHash!==before.sourceHash):1,contentHash:await hash(fields),requiresRecheck:!!before?.lastSubmissionId,lastSubmissionId:before?.lastSubmissionId||'',createdAt:before?.createdAt||stamp,createdBy:before?.createdBy||m.name,createdById:before?.createdById||m.id,updatedAt:stamp,updatedBy:m.name,updatedById:m.id};
- const channelBinding={...side,id:oldBinding?.kind==='framework_channel_binding'?oldBinding.id:'framework_channel_binding_'+row.id,kind:'framework_channel_binding',communicationId:row.id,version:(oldBinding?.version||0)+1,updatedAt:stamp};
+ bindingIdentity(s,row.id);const channelBinding={...side,id:oldBinding?.kind==='framework_channel_binding'?oldBinding.id:'framework_channel_binding_'+row.id,kind:'framework_channel_binding',communicationId:row.id,version:(oldBinding?.version||0)+1,updatedAt:stamp};
  const revision={id:newId('unified_communication_revision'),kind:'unified_communication_revision',recordId:row.id,customerId:row.customerId,version:row.version,action,actorId:m.id,actor:m.name,createdAt:stamp,snapshot:structuredClone(row),channelSnapshot:structuredClone(side)};
  const extras:Entity[]=[channelBinding,revision];if(inquiry)extras.push({...inquiry,linkedCommunicationId:row.id,version:inquiry.version+1,linkReason:(body as any).reason,updatedAt:stamp});
- return persist(s,m,action,body as {token:string},row,extras,before);
+ return persist(s,m,action,linkInput||body as {token:string},row,extras,before);
 }

@@ -1,6 +1,6 @@
 # 度昂员工 CLI
 
-版本0.38.0，登记366条命令，其中12条金蝶继续暂缓，本期354条非金蝶。W9新增5条投诉命令并复用项目财务入口接入售后、费用和退款凭据；合并开发59组、14个实际入口验证通过。此前W8全部财务能力、权限和精度保护保留。W9完整CLI/全站/独立HTTP/Windows成品/CI验收待完成，尚未授权正式更新或真实业务。既有批次验收以执行记录为准。详见[财务说明](docs/finance.md)及[W9阶段验收](../docs/cli-write-w9-acceptance.md)。
+版本0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。 W10候选未应用，先前批次以执行记录为准，W8 main4cb613f与local8e8fe15树一致但0.37成品仍待结果。
 
 实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
 
@@ -65,3 +65,14 @@ npm run package:windows
 首版持久凭据仅支持 Windows；Linux/macOS 可构建和运行无凭据基础命令，持久登录支持留待后续批次。所有依赖许可证随 Windows 包提供。
 
 金蝶相关操作已按用户要求暂缓，后续单独安排；本批保持既有代码，金蝶命令不纳入W4业务操作验收。
+
+
+## W10固定入口
+
+`admin management schema/references/form/save/action/history`提供11种固定save及4种离岗动作。沿用管理员或原框架配置角色，完整表单携带真实version、完整来源hash和UUID；重放重核当前身份，保全未知字段、既有userId/邮箱/创建时间。业务成员新增是未绑定身份，不写认证账号表。AR读取grant、项目财务核实grant、付款授权名单、IE/客价/双签政策分别按原规则维护，不从目录可见推断核实权限。离岗由指定接收人本人确认，管理员完成时重核库存/来源hash，原子转交并停用，保留全部历史；不能代接收或自动接受。
+
+`management communications schema/list/references/form/history/context/preview/save/action`按固定resource/type复用人工email/WhatsApp、统一沟通、通知、知识和通知邮箱。原客户、渠道、项目/订单与版本/来源/内容hash继续有效；手工稿、processed、本人接收、负责销售内部核对和发送各自独立。新CLI写邮箱要求UUID，登录身份不改；知识22键只读全文，缺失保持缺失，没有导入/维护或Shell补齐入口。
+
+`system workspace schema/list/form/references/history/save/action/inspect/preview/commit/workbook/ownership/report/template/file-download`覆盖原跟进待办、财务协作任务、普通/原版导入、精确owner绑定和固定工具。comment要求订单版本+UUID，task要求完整原hash/版本；财务任务save/submit/accept/return/review/cancel只做协作，不产生现金。owner按明确ID/版本与previewHash一次原子提交，不循环姓名/30行旧接口。普通导入每批200行、原版35行，绑定原件hash、原选择/原因/offset及计划行摘要；旧原版缺rowsHash/writeContract只回读和下载，不补造历史摘要去提交。报表生成归档hash/ID；旧报表未存摘要时明示为本次只读计算的当前原件hash。
+
+保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。 IE内部通知仅固定原生协议，服务器决定收件人/邮箱与原Excel附件；engineering与sales_approval正向均经本地合成transport验证；sales_approval补充独立通讯套件13组/9命令通过，Windows成品仍待验。sending/unknown先查原历史，不自动重发；不宣称真实SMTP已验证。 详见[W10验收](../docs/cli-write-w10-acceptance.md)。

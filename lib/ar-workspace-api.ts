@@ -42,7 +42,7 @@ export async function arWorkspacePost(action:string,req:Request,s:State,m:Member
   if(new Set(v.teamIds).size!==v.teamIds.length||v.teamIds.some(teamId=>!all(s,'customer_project_team').some(t=>t.id===teamId&&t.active)))throw new AppError('授权组包含重复、不存在或已停用组。');
   if(v.scopeType==='team'&&!v.teamIds.length||v.scopeType==='company'&&v.teamIds.length)throw new AppError('组范围须选择组，公司范围不填写组清单。');if(!v.capabilities.includes('read')||new Set(v.capabilities).size!==v.capabilities.length)throw new AppError('读取能力必选，能力不能重复。');
   before=all(s,'ar_access_grant').find(r=>r.memberId===v.memberId);if(v.id&&before?.id!==v.id)throw new AppError('授权不存在或成员归属不一致。',409);current(before,v.version);
-  item={id:before?.id||newId('ar_grant'),kind:'ar_access_grant',memberId:v.memberId,scopeType:v.scopeType,teamIds:v.teamIds,capabilities:v.capabilities,readOnly:v.readOnly,active:v.active,version:(before?.version||0)+1,reason:v.reason,createdAt:before?.createdAt||now(),updatedAt:now(),updatedById:m.id};
+  item={...before,id:before?.id||newId('ar_grant'),kind:'ar_access_grant',memberId:v.memberId,scopeType:v.scopeType,teamIds:v.teamIds,capabilities:v.capabilities,readOnly:v.readOnly,active:v.active,version:(before?.version||0)+1,reason:v.reason,createdAt:before?.createdAt||now(),updatedAt:now(),updatedById:m.id};
  }else{
   const v=input as z.infer<typeof bindingSchema>,source=s.records.find(r=>r.id===v.sourceId&&r.kind===v.sourceKind);
   if(!source||source.customerId!==v.customerId||!all(s,'customer_account').some(c=>c.id===v.customerId))throw new AppError('来源与客户必须明确对应。');

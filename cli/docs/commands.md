@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.38.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.39.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,36 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon admin management schema --type <type>` | 查询人员、授权、配置和离岗动作字段 | local-read |
+| `doon admin management references --type <type> [--id <id>] [--member <id>] [--incoming] [--limit <number>] [--offset <number>]` | 查询有权维护的资料和真实人员候选 | business-read-and-session-last-seen |
+| `doon admin management form --type <type> [--id <id>]` | 读取完整可编辑资料及版本或原配置哈希 | business-read-and-session-last-seen |
+| `doon admin management save --type <type> --input <file> --request-id <uuid>` | 按完整表单维护业务资料、授权和固定配置 | business-write |
+| `doon admin management action --type <type> --input <file> --request-id <uuid>` | 显式草拟、本人接收、取消或完成离岗交接 | business-write |
+| `doon admin management history --type <type> [--id <id>] [--limit <number>] [--offset <number>]` | 读取有权限的管理资料和离岗原件历史 | business-read-and-session-last-seen |
+| `doon management communications schema --type <type>` | 查询真实通讯字段、核对边界与知识22类只读范围 | local-read |
+| `doon management communications list --resource <resource> [--channel <channel>]` | 按当前权限读取渠道、通知、知识或邮箱目录 | business-read-and-session-last-seen |
+| `doon management communications references --resource <resource> [--channel <channel>]` | 读取当前可关联客户、项目、订单及成员 | business-read-and-session-last-seen |
+| `doon management communications form <id> --resource <resource> [--channel <channel>]` | 读取原字段与当前版本或知识全文 | business-read-and-session-last-seen |
+| `doon management communications history <id> --resource <resource> [--version <number>] [--target <target>]` | 读取当前权限内原历史与通知发送结果 | business-read-and-session-last-seen |
+| `doon management communications context <id>` | 读取同客户与原会话的授权上下文 | business-read-and-session-last-seen |
+| `doon management communications preview <id> --version <number> [--target <target>]` | 预览固定内部收件人及当前报价附件哈希，不发送 | business-read-and-session-last-seen |
+| `doon management communications save --type <type> --input <file> --version <number> --request-id <uuid> [--channel <channel>]` | 按真实权限保存人工记录或成员通知邮箱并回读 | business-write |
+| `doon management communications action --type <type> --input <file> --version <number> --request-id <uuid> [--channel <channel>]` | 执行原状态动作或已预览的固定内部通知并核对结果 | business-write |
+| `doon system workspace schema --type <type>` | 查询任务、导入和固定工具精确字段 | local-read |
+| `doon system workspace list --type <type>` | 查询本人授权任务、批次或归档 | business-read |
+| `doon system workspace form <id> --type <type>` | 读取当前任务或批次 | business-read |
+| `doon system workspace references --type <type>` | 读取固定候选和人员，不授予额外权限 | business-read |
+| `doon system workspace history <id> --type <type>` | 查询跟进或财务任务历史 | business-read |
+| `doon system workspace save --type <type> --input <file> --request-id <uuid>` | 保存跟进、待办、精确负责人绑定或财务协作草稿 | business-write |
+| `doon system workspace action --type <type> --input <file> [--request-id <uuid>]` | 按原权限执行财务任务阶段或显式费用决定 | business-write |
+| `doon system workspace inspect --input <file> --file <file>` | 只读解析普通订单工作表 | business-read |
+| `doon system workspace preview --type <type> --input <file> [--file <file>]` | 准备订单、原表、负责人或报价费用固定预览 | business-write-or-read-by-type |
+| `doon system workspace commit --type orders|ledger --input <file>` | 按来源摘要和固定选择提交一批原数据 | business-write |
+| `doon system workspace workbook --input <file> --file <file>` | 管理员固定工作簿解析，归档原件和结果 | business-write |
+| `doon system workspace ownership --input <file>` | 管理员固定客户归属核对，未知项保留 | business-write |
+| `doon system workspace report --input <file> --output <file.xlsx>` | 按原权限生成并归档新报表版本 | business-write |
+| `doon system workspace template --type orders|mes --output <file.xlsx>` | 下载空白导入模板，不导入数据 | local-file-and-session-last-seen |
+| `doon system workspace file-download <id> --type <type> --output <file>` | 核对摘要后下载本人有权访问的归档文件 | local-file-and-session-last-seen |
 | `doon finance complaints schema` | 查询投诉、整改和客户确认原证据字段 | local-read |
 | `doon finance complaints form <id> [--team <id>]` | 读取投诉原字段、版本及客户确认未知项 | business-read-and-session-last-seen |
 | `doon finance complaints references [--team <id>] [--limit <number>] [--offset <number>]` | 查询原客户、订单和负责人及关联边界 | business-read-and-session-last-seen |
@@ -375,7 +405,7 @@
 
 | 栏目 | 标识 | 状态 |
 | --- | --- | --- |
-| 工作总览 | overview | pending |
+| 工作总览 | overview | partial |
 | 业务部 | sales | partial |
 | 客服与单证 | service | partial |
 | 工程部 | engineering | partial |
@@ -385,6 +415,6 @@
 | 生产车间 | production | partial |
 | 品质部 | quality | partial |
 | 财务部 | finance | partial |
-| 系统管理 | management | pending |
+| 系统管理 | management | partial |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8新增项目财务、AR、付款条件、客服应收和供应商对账37条固定命令，合并开发71组通过；全站、HTTP、成品和CI待验收。W9已扩展售后/费用/退款凭据并新增5条投诉命令，合并开发59组/14入口通过；完整CLI、全站、HTTP、成品及CI待验收。W10—W11按计划继续。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8新增项目财务、AR、付款条件、客服应收和供应商对账37条固定命令，合并开发71组通过；全站、HTTP、成品和CI待验收。W9已扩展售后/费用/退款凭据并新增5条投诉命令，合并开发59组/14入口通过；完整CLI、全站、HTTP、成品及CI待验收。W10新增管理6条、通讯知识9条及任务导入工具15条，合并类型和集中71组/30命令通过；完整CLI、全站、HTTP、Windows及CI待验。engineering与sales_approval邮件正向均经本地合成transport验证，补充独立通讯套件13组/9命令通过；Windows成品仍待验。W11按计划继续。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

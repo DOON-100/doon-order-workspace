@@ -1,5 +1,7 @@
-import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
+import {adminManagementGet,adminManagementPost} from '@/lib/admin-management-api';
+import {workspaceToolsGet,workspaceToolsPost} from '@/lib/workspace-tools-api';
 import {businessFollowupGet,businessFollowupPost} from '@/lib/business-followup-api';
+import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
 import {productionWorkspaceGet,productionWorkspacePost} from '@/lib/production-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
@@ -65,7 +67,7 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
- // Followup contents inherit each exact source record's access, never broad order access.
+ // Followup records keep exact source permissions.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('business_followup')))return false;
  // Process snapshots are available only through their responsibility-scoped history.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
@@ -166,6 +168,8 @@ export async function GET(req:Request,ctx:Context){try{
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
 }catch(e){return failure(e);}}
 async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Member){
+ const adminManagement=await adminManagementGet(action,req,s,m);if(adminManagement)return adminManagement;
+ const tools=await workspaceToolsGet(action,req,s,m);if(tools)return tools;
  const cliAr=await arCliGet(action,req,s,m);if(cliAr)return cliAr;
  const production=await productionWorkspaceGet(action,req,s,m);if(production)return production;
  const salesSources=await salesOrderSourcesGet(action,req,s,m);if(salesSources)return salesSources;
@@ -191,6 +195,8 @@ export async function POST(req:Request,ctx:Context){try{
  const businessFollowup=await businessFollowupPost(action,req,s,m);if(businessFollowup)return businessFollowup;
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;
  const cliAr=await arCliPost(action,req,s,m);if(cliAr)return cliAr;
+ const adminManagement=await adminManagementPost(action,req,s,m);if(adminManagement)return adminManagement;
+ const tools=await workspaceToolsPost(action,req,s,m);if(tools)return tools;
  const kingdeeSales=await kingdeeSalesPost(action,req,s,m);if(kingdeeSales)return kingdeeSales;
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
@@ -239,7 +245,7 @@ export async function POST(req:Request,ctx:Context){try{
   let map:Record<string,string>,lensMap:Record<string,string>;try{map=z.record(z.string().max(200)).parse(JSON.parse(clean(form.get('mapping'))||'{}'));lensMap=z.record(z.string().max(50)).parse(JSON.parse(clean(form.get('lensMapping'))||'{}'));}catch{throw new AppError('字段映射无效。');}
   const kind=form.get('type')==='mes'?'mes':'orders';
   const rows=kind==='mes'?await previewReports(s,m,book,sheetName,header,lensMap,filename):await previewOrders(s,m,book,sheetName,header,map,filename);
-  const job={id:newId('import'),kind:'import',importType:kind,filename,hash:await sha(bytes),sheet:sheetName,header,mapping:map,lensMapping:lensMap,rows,actorId:m.id,actor:m.name,createdAt:now(),status:'待确认',fileKey:newId('source'),contentType:'application/octet-stream'};
+  const job={id:newId('import'),kind:'import',importType:kind,...(kind==='orders'?{writeContract:'workspace-orders-v1'}:{}),filename,hash:await sha(bytes),sheet:sheetName,header,mapping:map,lensMapping:lensMap,rows,actorId:m.id,actor:m.name,createdAt:now(),status:'待确认',fileKey:newId('source'),contentType:'application/octet-stream'};
   await bucket().put(job.fileKey,bytes);await commit(s.revision,[job]);return json(job);
  }
  const body=await req.json();
@@ -309,8 +315,8 @@ export async function POST(req:Request,ctx:Context){try{
    title='订单工作表';rows=orders.map(o=>({...Object.fromEntries(fields.map(([k,l])=>[l,k==='promiseConfirmed'?(o[k]?'是':'否'):k==='productType'?productTypeOf(o):o[k]])),...orderExportExtras(o),'_明细编号':o.id,'_版本':o.version,'_导出批次':exportId}));
   }else{title='订单进度汇总';rows=orders.map(o=>({'订单号':o.orderNo,'客户':o.customer,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'色号':o.color,'镜片类型':o.lens,'交货批次':o.batch,'负责人邮箱':o.ownerEmail,'订单数量':o.quantity,'包装完成数量':packed(o,allReports),'包装入仓数量':warehouse(o)??'未记录','剩余数量':Math.max(0,balance(o,allReports)??o.quantity),'状态':o.ledger?currentStage(o):progress(o,allReports),'客户要求交期':o.requestedDate,'数据截止时间':createdAt}));}
   const bytes=makeWorkbook(rows,title,rows.length?undefined:['当前筛选无数据']),filename=`${title}_${createdAt.slice(0,10)}.xlsx`,fileKey=newId('exportfile');
-  await bucket().put(fileKey,bytes);await commit(s.revision,[{id:exportId,kind:'export',reportType:input.type,filename,fileKey,actorId:m.id,actor:m.name,createdAt,filters:input.filters,count:rows.length,orderIds:orders.map(o=>o.id),lines:input.type==='working'?orders:[],revision:s.revision}]);
-  return fileResponse(bytes,filename);
+  await bucket().put(fileKey,bytes);await commit(s.revision,[{id:exportId,kind:'export',reportType:input.type,filename,fileKey,actorId:m.id,actor:m.name,createdAt,filters:input.filters,count:rows.length,hash:await sha(bytes),size:bytes.byteLength,orderIds:orders.map(o=>o.id),lines:input.type==='working'?orders:[],revision:s.revision}]);
+  const exported=fileResponse(bytes,filename);exported.headers.set('X-Workspace-Export-Id',exportId);exported.headers.set('X-Workspace-Export-Sha256',await sha(bytes));return exported;
  }
  throw new AppError('接口不存在。',404);
 }catch(e){if(e instanceof z.ZodError)return json({error:'提交内容格式不正确，请检查必填项、邮箱和数值。'},400);return failure(e);}}

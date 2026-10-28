@@ -41,8 +41,8 @@ export async function fixedToolBytesHash(bytes:ArrayBuffer){
 }
 export async function fixedToolHash(value:unknown){return fixedToolBytesHash(new TextEncoder().encode(canonical(value)).buffer);}
 export async function fixedToolJobId(m:Member,requestKey:string){return 'fixed_tool_job_'+await fixedToolHash({actorId:m.id,requestKey});}
-export function findFixedToolRequest(s:State,m:Member,requestKey:string,requestHash:string){
- const job=all(s,'fixed_tool_job').find(v=>v.actorId===m.id&&v.requestKey===requestKey) as FixedToolJob|undefined;
+export async function findFixedToolRequest(s:State,m:Member,requestKey:string,requestHash:string){
+ const expectedId=await fixedToolJobId(m,requestKey),collision=s.records.find(v=>v.id===expectedId);if(collision&&(collision.kind!=='fixed_tool_job'||collision.actorId!==m.id||collision.requestKey!==requestKey))throw new AppError('固定工具请求编号与原记录冲突。',409);const job=all(s,'fixed_tool_job').find(v=>v.actorId===m.id&&v.requestKey===requestKey) as FixedToolJob|undefined;
  if(job){assertFixedToolJobAccess(s,m,job);if(job.requestHash!==requestHash)throw new AppError('同一请求编号的内容已变化，请重新预览并使用新的请求编号。',409);}
  return job;
 }

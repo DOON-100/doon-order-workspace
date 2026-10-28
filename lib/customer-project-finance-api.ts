@@ -154,7 +154,7 @@ export async function customerProjectFinancePost(action:string,req:Request,s:Sta
   if(new Set(input.customerIds).size!==input.customerIds.length||input.customerIds.some((id:string)=>!all(s,'customer_account').some(c=>c.id===id&&c.active)))throw new AppError('客户范围包含重复或无效客户。');
   const before=input.id?all(s,'project_finance_grant').find(r=>r.id===input.id):null;if(input.id&&!before)throw new AppError('授权不存在。');if(before){current(before,input.version);if(before.memberId!==input.memberId)throw new AppError('不能换绑授权成员。');}
   if(all(s,'project_finance_grant').some(r=>r.id!==before?.id&&r.memberId===input.memberId))throw new AppError('该成员已有财务授权，请修改原记录。',409);
-  const record={id:before?.id||newId('project_finance_grant'),kind:'project_finance_grant',memberId:input.memberId,customerIds:input.customerIds,active:input.active,version:(before?.version||0)+1,...meta()};
+  const record={...before,id:before?.id||newId('project_finance_grant'),kind:'project_finance_grant',memberId:input.memberId,customerIds:input.customerIds,active:input.active,version:(before?.version||0)+1,...meta()};
   return save('',[record,{id:newId('project_finance_grant_history'),kind:'project_finance_grant_history',before,after:record,...meta()}],{record},before||null);
  }
  if(action==='project-finance-entry-save'){

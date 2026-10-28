@@ -1,3 +1,4 @@
+import {adminPolicyInput,adminPolicyReplay,adminPolicyReceipt} from './admin-policy-write';
 import {z} from 'zod';
 import {all,newId,now,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
@@ -104,12 +105,12 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
 }
 async function savePolicy(req:Request,s:State,m:Member){
  if(!canConfigureIeQuotes(m))throw new AppError('只有管理员可绑定工程报价角色。',403);
- const input=parse(iePolicyInput,await req.json()),before=ieQuotePolicy(s);if(all(s,'ie_quote_policy').length>1||(!before&&all(s,'ie_quote_policy').length))throw new AppError('角色配置重复或损坏，请核查配置记录。',409);if((before?.version||0)!==input.version)throw new AppError('角色绑定已更新，请刷新。',409);
+ const envelope=adminPolicyInput(await req.json()),input=parse(iePolicyInput,envelope.body),repeated=await adminPolicyReplay(s,m,'ie-quote-policy',envelope.token,input);if(repeated)return repeated;const before=ieQuotePolicy(s);if(all(s,'ie_quote_policy').length>1||(!before&&all(s,'ie_quote_policy').length))throw new AppError('角色配置重复或损坏，请核查配置记录。',409);if((before?.version||0)!==input.version)throw new AppError('角色绑定已更新，请刷新。',409);
  const ids=[input.engineerMemberId,input.reviewerMemberId,input.finalApproverMemberId];if(new Set(ids).size!==3)throw new AppError('工程主管、生产副总、总经理必须绑定三位不同成员。');
  if(ids.some(id=>!all(s,'member').some(v=>v.id===id&&v.active&&v.role!=='supplier')))throw new AppError('只能绑定有效的内部成员。');
  if(all(s,'ie_quote').some(q=>q.status==='submitted'))throw new AppError('存在待复核工程报价，请先完成或退回后再调整绑定，避免改变审批责任。',409);
- const p:IeQuotePolicy={...input,id:before?.id||newId('ie_quote_policy'),kind:'ie_quote_policy',version:input.version+1,updatedAt:now(),updatedBy:m.name};
- const records=[p,audit(m,p,before,'绑定工程报价角色','IE 工程报价',p)];await commit(s.revision,records);return json({ok:true,policy:publicIePolicy(mergeState(s,records),m)});
+ const p:IeQuotePolicy={...before,...input,id:before?.id||newId('ie_quote_policy'),kind:'ie_quote_policy',version:input.version+1,updatedAt:now(),updatedBy:m.name};
+ const records=[p,audit(m,p,before,'绑定工程报价角色','IE 工程报价',p),...await adminPolicyReceipt(m,'ie-quote-policy',envelope.token,input,p)];await commit(s.revision,records);return json({ok:true,policy:publicIePolicy(mergeState(s,records),m)});
 }
 async function saveTooling(req:Request,s:State,m:Member){
  if(!canFillIeQuote(s,m))throw new AppError('只有管理员及绑定的工程主管、生产副总、总经理可以登记共用模具。',403);

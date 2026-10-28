@@ -1,3 +1,6 @@
+import {AdminWriteService} from './admin-write.js';
+import {CommunicationWriteService} from './communication-write.js';
+import {WorkspaceToolsService} from './workspace-tools-write.js';
 import {ComplaintWriteService} from './complaint-write.js';
 import {ProjectFinanceWriteService} from './project-finance-write.js';
 import {ArWriteService} from './ar-write.js';
@@ -45,6 +48,9 @@ function userFrom(data: any) {
 }
 
 export class FoundationService {
+ adminWrite(){return new AdminWriteService(this.store,this.transport);}
+ communicationWrite(){return new CommunicationWriteService(this.store,this.transport);}
+ workspaceTools(){return new WorkspaceToolsService(this.store,this.transport);}
  complaintWrite(){return new ComplaintWriteService(this.store,this.transport);}
  projectFinanceWrite(){return new ProjectFinanceWriteService(this.store,this.transport);}
  arWrite(){return new ArWriteService(this.store,this.transport);}

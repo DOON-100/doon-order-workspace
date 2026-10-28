@@ -18,6 +18,7 @@ export type Communication=Entity & {
 export type CommunicationLinks={customerId:string;projectId:string;orderId:string;id?:string};
 const id=z.string().trim().min(1).max(160),text=(max:number)=>z.string().max(max).default('');
 const day=text(10).refine(value=>{try{return !value||/^\d{4}-\d{2}-\d{2}$/.test(value)&&strictDate(value)===value;}catch{return false;}},'日期须为有效 YYYY-MM-DD');
+const actionHashes={expectedSourceHash:z.string().regex(/^[a-f0-9]{64}$/).optional(),expectedContentHash:z.string().regex(/^[a-f0-9]{64}$/).optional()};
 export const communicationFields={
  customerId:id,projectId:text(160),orderId:text(160),channel:z.enum(communicationChannels),
  title:z.string().trim().min(1).max(300),sourceText:text(100000),sourceReference:text(3000),occurredAt:day,
@@ -29,9 +30,9 @@ export const communicationSchemas={
   if(!v.id&&v.expectedVersion!==undefined)c.addIssue({code:'custom',path:['expectedVersion'],message:'新记录不能带版本号'});
   if(!v.sourceText.trim()&&!v.draftText.trim())c.addIssue({code:'custom',path:['sourceText'],message:'请录入沟通原文或回复草稿'});
  }),
- submit:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),comment:text(6000)}).strict(),
- completeReview:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),comment:text(6000)}).strict(),
- return:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),comment:z.string().trim().min(1).max(6000)}).strict(),
+ submit:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),...actionHashes,comment:text(6000)}).strict(),
+ completeReview:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),...actionHashes,comment:text(6000)}).strict(),
+ return:z.object({token:z.string().uuid(),id,expectedVersion:z.number().int().positive(),...actionHashes,comment:z.string().trim().min(1).max(6000)}).strict(),
 };
 
 /** The customer is necessary but never sufficient when project/order links exist. */

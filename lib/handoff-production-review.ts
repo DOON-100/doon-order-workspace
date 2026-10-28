@@ -32,12 +32,13 @@ export async function productionReviewPost(action:string,req:Request,s:State,m:M
  const reviewerRole=role(s,m);if(!isPolicy&&!reviewerRole)throw new AppError('仅已配置画图组长或工程主管可签核，管理员不默认代签',403);
  if(!isPolicy){const source=all(s,'handoff_business_source').find(r=>r.id===input.sourceId&&r.type==='engineering_drawing');if(source?.projectId){const project=all(s,'customer_project').find(p=>p.id===source.projectId);if(project)assertProjectNotTrashed(project);}}
  const fingerprint=JSON.stringify({action,input}),prior=s.records.find(r=>r.id==='handoff_business_request_'+input.token);
- if(prior){if(prior.actorId!==m.id||prior.fingerprint!==fingerprint)throw new AppError('操作编号冲突',409);return json({ok:true,idempotent:true,...productionReviewData(s,m)});}
+ if(prior){if(prior.kind!=='handoff_business_request'||prior.actorId!==m.id||prior.fingerprint!==fingerprint)throw new AppError('操作编号冲突',409);return json({ok:true,idempotent:true,...productionReviewData(s,m)});}
  const p=policy(s);let updates:Entity[]=[];
  if(isPolicy){
+  if(s.records.some(r=>r.id===productionReviewPolicyId&&r.kind!=='handoff_business_policy'))throw new AppError('审核配置编号已被其他记录占用',409);
   if((p?.version||0)!==input.expectedVersion)throw new AppError('审核岗位配置已更新',409);
   if(input.drawingLeadMemberId===input.engineeringSupervisorMemberId||!active(s,input.drawingLeadMemberId)||!active(s,input.engineeringSupervisorMemberId))throw new AppError('两岗位须由不同有效内部成员担任');
-  const next={id:productionReviewPolicyId,kind:'handoff_business_policy',version:(p?.version||0)+1,drawingLeadMemberId:input.drawingLeadMemberId,engineeringSupervisorMemberId:input.engineeringSupervisorMemberId,updatedBy:m.name,updatedAt:now()};updates=[next,audit(m,next,p||null,'配置生产采用双签岗位')];
+  const next={...p,id:productionReviewPolicyId,kind:'handoff_business_policy',version:(p?.version||0)+1,drawingLeadMemberId:input.drawingLeadMemberId,engineeringSupervisorMemberId:input.engineeringSupervisorMemberId,updatedBy:m.name,updatedAt:now()};updates=[next,audit(m,next,p||null,'配置生产采用双签岗位')];
  }else{
   const source=all(s,'handoff_business_source').find(r=>r.id===input.sourceId&&r.type==='engineering_drawing') as BusinessRow|undefined;if(!source)throw new AppError('图纸版本不存在',403);if(source.version!==input.expectedVersion)throw new AppError('图纸资料已换版，请重新核对',409);
   if(input.expectedPolicyVersion!==p?.version)throw new AppError('审核岗位配置已变化，请重新核对',409);

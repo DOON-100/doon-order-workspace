@@ -1,15 +1,18 @@
+import {sha} from './workbooks';
 import {z} from 'zod';
 import {all,allowedFields,broad,businessKey,canRead,now,type Entity,type Member,type Order,type PreviewRow,type State} from './domain';
-import {AppError,audit,commit,json} from './store';
+import {AppError,audit,bucket,commit,json} from './store';
 import {syncFollowColumns} from './ledger-edit';
 import {isLedgerDrawingExtra,matchesOrderIdentity} from './order-identity';
 import {assertHandoffProductionGate,requiresProductionGate} from './handoff-production-gate';
 
 export async function commitImport(body:unknown,s:State,m:Member){
- const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional(),contract:z.literal('production-mes-v1').optional(),sourceHash:z.string().regex(/^[a-f0-9]{64}$/).optional()}).parse(body);
+ const input=z.object({id:z.string(),selected:z.array(z.number().int()).min(1).max(5000),reason:z.string().max(1000).default(''),offset:z.number().int().min(0).optional(),contract:z.enum(['production-mes-v1','workspace-orders-v1']).optional(),sourceHash:z.string().regex(/^[a-f0-9]{64}$/).optional()}).parse(body);
  const job=s.records.find(r=>r.id===input.id&&r.kind==='import');if(!job||(job.actorId!==m.id&&!broad(m)))throw new AppError('无权提交此导入批次。',403);
+ // Current MES write authority is checked before source validation or replay.
+ if(job.importType==='mes'&&!broad(m))throw new AppError('此操作需要 PMC 或管理员权限。',403);
  const progress=()=>json({ok:true,reused:true,count:job.applied||0,offset:job.offset||job.applied||0,total:job.selected?.length||0,status:job.status});
- if(input.contract&&(job.importType!=='mes'||!input.sourceHash||input.sourceHash!==job.hash))throw new AppError('MES 导入来源已变化或类型不符，请重新预览。',409);
+ if(input.contract){if(job.importType!==(input.contract==='production-mes-v1'?'mes':'orders')||!input.sourceHash||input.sourceHash!==job.hash)throw new AppError('导入来源已变化或类型不符，请重新预览。',409);const source=await bucket().get(job.fileKey);if(!source||await sha(await source.arrayBuffer())!==job.hash)throw new AppError('导入原件摘要不符，本次未合并。',409);}
  if(job.status==='已提交'){const selected=[...new Set(input.selected)].sort((a,b)=>a-b);if(selected.length!==input.selected.length||JSON.stringify(job.selected)!==JSON.stringify(selected)||job.reviewReason!==input.reason)throw new AppError('已提交批次不能更改选择范围或核对依据。',409);return progress();}
  if(Date.now()-Date.parse(job.createdAt)>24*3600000)throw new AppError('预览已超过 24 小时，请重新上传核对。已成功合并的记录已保留。');
  const selected=[...new Set(input.selected)].sort((a,b)=>a-b),selectedSet=new Set(selected),allRows=(job.rows as PreviewRow[]).filter(r=>selectedSet.has(r.index));
@@ -22,7 +25,7 @@ export async function commitImport(body:unknown,s:State,m:Member){
  if(offset&&input.offset===undefined)throw new AppError('请继续分批合并，不能重复提交已写入的行。',409);
  const rows=allRows.slice(offset,offset+200),updates:Entity[]=[],importType=job.importType;
  function validate(r:PreviewRow){
-  const current=s.records.find(x=>x.id===r.after.id);
+  const current=s.records.find(x=>x.id===r.after.id);if(current&&current.kind!==(importType==='mes'?'report':'order'))throw new AppError('导入目标编号已被其他类型记录占用，本批未写入。',409);
   if((current?.version||0)!==r.expectedVersion)throw new AppError(`第 ${r.index} 行在预览后已被修改，请重新预览。已合并 ${offset} 条保留，本批未写入。`,409);
   if(importType==='mes'){if(!broad(m))throw new AppError('此操作需要 PMC 或管理员权限。',403);}
   else {

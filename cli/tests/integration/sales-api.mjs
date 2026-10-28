@@ -1,3 +1,6 @@
+import {verifyAdminWrites} from './admin-writes.mjs';
+import {verifyCommunicationWrites} from './communication-writes.mjs';
+import {verifyWorkspaceToolsWrites} from './workspace-tools-writes.mjs';
 import {verifyAfterSaleWrites} from './after-sale-writes.mjs';
 import {verifyComplaintWrites} from './complaint-writes.mjs';
 import {verifyProjectFinanceWrites} from './project-finance-writes.mjs';
@@ -15,9 +18,9 @@ import {build} from 'esbuild';
 import * as XLSX from 'xlsx';
 import {StateStore, windowsCodec} from '../../dist/state.js';
 import {FoundationService} from '../../dist/service.js';
-import {commands,orderWriteCommands,engineeringWriteCommands,purchaseWriteCommands,planningWriteCommands,supplierWriteCommands,processWriteCommands,productionWriteCommands,deliveryWriteCommands,projectFinanceWriteCommands,arWriteCommands,collectionWriteCommands,complaintWriteCommands} from '../../dist/catalog.js';
+import {commands,orderWriteCommands,engineeringWriteCommands,purchaseWriteCommands,planningWriteCommands,supplierWriteCommands,processWriteCommands,productionWriteCommands,deliveryWriteCommands,projectFinanceWriteCommands,arWriteCommands,collectionWriteCommands,complaintWriteCommands,adminWriteCommands,communicationWriteCommands,workspaceToolsCommands} from '../../dist/catalog.js';
 import {verifyOrderWrites} from './order-writes.mjs';
-const orderWriteNames=new Set([...orderWriteCommands,...engineeringWriteCommands,...purchaseWriteCommands,...planningWriteCommands,...supplierWriteCommands,...processWriteCommands,...productionWriteCommands,...deliveryWriteCommands,...projectFinanceWriteCommands,...arWriteCommands,...collectionWriteCommands,...complaintWriteCommands].map(row=>row.name));
+const orderWriteNames=new Set([...orderWriteCommands,...engineeringWriteCommands,...purchaseWriteCommands,...planningWriteCommands,...supplierWriteCommands,...processWriteCommands,...productionWriteCommands,...deliveryWriteCommands,...projectFinanceWriteCommands,...arWriteCommands,...collectionWriteCommands,...complaintWriteCommands,...adminWriteCommands,...communicationWriteCommands,...workspaceToolsCommands].map(row=>row.name));
 import {verifyEngineeringWrites} from './engineering-writes.mjs';
 import {verifyPurchaseWrites} from './purchase-writes.mjs';
 import {verifyPlanningWrites} from './planning-writes.mjs';
@@ -265,7 +268,7 @@ try{
     }finally{if(originalRoute)routes[route]=originalRoute;else delete routes[route];}
   }
   // W1: current user, other customer denied, idempotent replay, and preserved private fields.
-  if(!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only')){
+  if(!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only')){
     const writeA=services.sales_a.foundation.salesWrite(),writeB=services.sales_b.foundation.salesWrite(),childA=services.sales_a.foundation.projectChildWrite(),childB=services.sales_b.foundation.projectChildWrite();
     const profileInput=path.join(dir,'profile-input.json'),scheduleInput=path.join(dir,'schedule-input.json'),projectInput=path.join(dir,'project-input.json'),inquiryInput=path.join(dir,'inquiry-input.json'),itemInput=path.join(dir,'item-input.json'),communicationInput=path.join(dir,'communication-input.json'),roundInput=path.join(dir,'round-input.json');
     const profileToken='11111111-1111-4111-8111-111111111111',scheduleToken='22222222-2222-4222-8222-222222222222',projectToken='55555555-5555-4555-8555-555555555555',inquiryToken='66666666-6666-4666-8666-666666666666';
@@ -433,7 +436,7 @@ try{
     pass();
   }
   // W2: exercise the shared quote adapter against real handlers with new records only.
-  if(!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only')){
+  if(!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only')){
     const beforeW2=snapshot(),quoteA=services.sales_a.foundation.quoteWrite(),quoteB=services.sales_b.foundation.quoteWrite(),quoteAdmin=services.admin_test.foundation.quoteWrite();
     const inputFile=path.join(dir,'w2-quote.json'),input=async value=>{await fs.writeFile(inputFile,JSON.stringify(value));return inputFile;};
     const customerFields=(await quoteA.form('customer','q1')).record;delete customerFields.id;delete customerFields.version;Object.assign(customerFields,{customerName:'Synthetic Alpha',customerCode:'C1',quoteNo:'SYNTHETIC-CLI-CUSTOMER',reviewNotes:[],terms:customerFields.terms.map(row=>({...row,needsReview:false}))});
@@ -487,14 +490,14 @@ try{
     const afterW2=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW2.records)assert.equal(afterW2.get(row.id),row.data,'Quote writes changed unrelated original records');
 
   }
-  if(!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w4-only')){
+  if(!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w4-only')){
     const beforeW3=snapshot();testedCommands.push(...await verifyOrderWrites({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState)}));
     const afterW3=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW3.records)assert.equal(afterW3.get(row.id),row.data,'W3 changed unrelated original records');
   }
-  if(!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')){
+  if(!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')){
     const beforeW4=snapshot();testedCommands.push(...await verifyEngineeringWrites({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState)}));const afterW4=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW4.records)assert.equal(afterW4.get(row.id),row.data,'W4 changed unrelated original records');
   }
-  if(!['--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w6-only','--w7-only'].some(flag=>process.argv.includes(flag))){
+  if(!['--w10-only','--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w6-only','--w7-only'].some(flag=>process.argv.includes(flag))){
     await fs.writeFile(path.join(runtime,'w5-seed.mjs'),`import {db,saveRecords} from './runtime.mjs';const at='2026-10-20T00:00:00.000Z',base=JSON.parse(db.prepare("SELECT data FROM records WHERE id='o1'").get().data);saveRecords([{...base,id:'w5-outs-order',orderNo:'SYNTHETIC-W5-OUT',stage:'生产中',workflowStatus:'生产中',quantity:10},{...base,id:'w5-finished-order',orderNo:'SYNTHETIC-W5-FINISHED',stage:'生产中',workflowStatus:'生产中',quantity:10,ledger:{columns:{A:'Synthetic W5 Supplier',W:'配件',BF:'',BG:'',BH:''},sourceRow:999,sheet:'Synthetic',filename:'synthetic.xlsx',sourceHash:'w5-finished',issues:[],ownerName:''},productType:'配件'},{id:'w5-outs-pending',kind:'outsource',version:1,lineId:'w5-outs-order',supplier:'Synthetic W5 Supplier',process:'plating',quantity:10,sentDate:'2026-10-20',dueDate:'2026-11-01',reference:'SYN-W5-PENDING',received:0,approvalStatus:'待主管审批',approverName:'Synthetic Admin',actor:'Synthetic',createdAt:at}]);db.close();`);
     execFileSync(process.execPath,[path.join(runtime,'w5-seed.mjs')],{env,windowsHide:true,stdio:'pipe'});
     const beforeW5=snapshot();
@@ -517,27 +520,31 @@ try{
     }
     assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();
   }
-  if(!['--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w5-only','--w7-only'].some(flag=>process.argv.includes(flag))){
+  if(!['--w10-only','--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w5-only','--w7-only'].some(flag=>process.argv.includes(flag))){
     const beforeW6=snapshot();
     for(const verify of [verifyProcessWrites,verifyProductionWrites,verifyFinishedWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
     const afterW6=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW6.records)assert.equal(afterW6.get(row.id),row.data,'W6 changed an unrelated original record');
     assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();
   }
-  if(!['--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w5-only','--w6-only'].some(flag=>process.argv.includes(flag))){
+  if(!['--w10-only','--w9-only','--w8-only','--w2-only','--w3-only','--w4-only','--w5-only','--w6-only'].some(flag=>process.argv.includes(flag))){
     const beforeW7=snapshot();
     for(const verify of [verifyDeliveryWrites,verifyLogisticsWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
     const afterW7=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW7.records)assert.equal(afterW7.get(row.id),row.data,'W7 changed an unrelated original record');
     assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();
   }
-  if(!['--w9-only','--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only'].some(flag=>process.argv.includes(flag))){
+  if(!['--w10-only','--w9-only','--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only'].some(flag=>process.argv.includes(flag))){
     const beforeW8=snapshot();for(const verify of [verifyProjectFinanceWrites,verifyArWrites,verifyCollectionWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
     const afterW8=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW8.records)assert.equal(afterW8.get(row.id),row.data,'W8 changed an unrelated original record');
   }
-  if(!['--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only','--w8-only'].some(flag=>process.argv.includes(flag))){
+  if(!['--w10-only','--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only','--w8-only'].some(flag=>process.argv.includes(flag))){
     const beforeW9=snapshot();for(const verify of [verifyAfterSaleWrites,verifyComplaintWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
     const afterW9=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW9.records)assert.equal(afterW9.get(row.id),row.data,'W9 changed an unrelated original record');
   }
-  if(processState&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(new Set(testedCommands).size,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);
+  if(!['--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only','--w8-only','--w9-only'].some(flag=>process.argv.includes(flag))){
+    const beforeW10=snapshot();for(const verify of [verifyCommunicationWrites,verifyAdminWrites,verifyWorkspaceToolsWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
+    const afterW10=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW10.records)assert.equal(afterW10.get(row.id),row.data,'W10 changed an unrelated original record');
+  }
+  if(processState&&!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(new Set(testedCommands).size,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{

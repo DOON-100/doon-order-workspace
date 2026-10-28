@@ -38,9 +38,9 @@ export async function paymentTermsPost(action:string,req:Request,s:State,m:Membe
  if(previous){if(previous.kind!==requestKind||previous.actorId!==m.id||previous.action!==action||previous.fingerprint!==fingerprint)throw new AppError('请求编号已用于不同内容。',409);return json({ok:true,idempotent:true,item:s.records.find(r=>r.id===previous.targetId)});}
  const at=now();let item:PaymentTerm|PaymentTermAuthority;
  if(name==='authorizers-save'){
-  const old=paymentTermAuthority(s);if((old?.version||0)!==input.version)throw new AppError('授权名单已变化，请刷新后核对。',409);
+  if(s.records.some(r=>r.id===paymentTermAuthorityId&&r.kind!=='payment_term_authority'))throw new AppError('付款授权配置编号被其他记录占用。',409);const old=paymentTermAuthority(s);if((old?.version||0)!==input.version)throw new AppError('授权名单已变化，请刷新后核对。',409);
   for(const memberId of input.authorizerMemberIds){const owner=all(s,'member').find(r=>r.id===memberId) as Member|undefined;if(!owner||!eligiblePaymentTermAuthorizer(s,owner))throw new AppError('请选择在职业务或管理员账号；取数只读账号不能被指定。',403);}
-  item={id:paymentTermAuthorityId,kind:'payment_term_authority',version:(old?.version||0)+1,authorizerMemberIds:input.authorizerMemberIds,reason:input.reason,updatedAt:at,updatedById:m.id};
+  item={...old,id:paymentTermAuthorityId,kind:'payment_term_authority',version:(old?.version||0)+1,authorizerMemberIds:input.authorizerMemberIds,reason:input.reason,updatedAt:at,updatedById:m.id};
  }else{
   if((before?.version||0)!==input.version)throw new AppError('付款条件已变化，请刷新后核对；未覆盖其他人的更改。',409);
   if(name==='save'){

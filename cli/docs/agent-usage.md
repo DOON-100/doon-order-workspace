@@ -56,3 +56,20 @@ AR总表精确选集preview只读；文件导入保存原件与批次，单据�
 按[财务说明](finance.md)使用项目财务after-sale/cost/entry-refunds及refund-request/execute/cancel类型；投诉使用finance complaints的schema/form/references/revisions/save。复用原角色、客户/项目/订单/业务组、版本、来源和UUID，未知字段不猜填。退款execute只登记原生中台凭据，返回bankTransferPerformed:false，不执行银行转账。
 
 处理完成、关口通过、客户确认文本已登记及客户接受各自核对，禁止自动推断。客户回访仅使用W1真实关联字段；投诉/售后/回访之间缺失的机器关联如实说明，原编号可留作文字证据，不添加虚构外键。W9合并开发59组/14入口通过，全站、HTTP、成品及CI仍待验收；W8金额精度、指定付款授权和导出边界继续生效，金蝶暂缓。
+
+
+## W10固定程序调用
+
+0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。
+
+先读取各组schema/references/form，准备明确完整字段、原版本或hash及同一UUID，不猜身份/金额/关联，不凭聊天推断业务批准。
+
+`admin management schema/references/form/save/action/history`提供11种固定save及4种离岗动作。沿用管理员或原框架配置角色，完整表单携带真实version、完整来源hash和UUID；重放重核当前身份，保全未知字段、既有userId/邮箱/创建时间。业务成员新增是未绑定身份，不写认证账号表。AR读取grant、项目财务核实grant、付款授权名单、IE/客价/双签政策分别按原规则维护，不从目录可见推断核实权限。离岗由指定接收人本人确认，管理员完成时重核库存/来源hash，原子转交并停用，保留全部历史；不能代接收或自动接受。
+
+`management communications schema/list/references/form/history/context/preview/save/action`按固定resource/type复用人工email/WhatsApp、统一沟通、通知、知识和通知邮箱。原客户、渠道、项目/订单与版本/来源/内容hash继续有效；手工稿、processed、本人接收、负责销售内部核对和发送各自独立。新CLI写邮箱要求UUID，登录身份不改；知识22键只读全文，缺失保持缺失，没有导入/维护或Shell补齐入口。 IE内部通知仅固定原生协议，服务器决定收件人/邮箱与原Excel附件；engineering与sales_approval正向均经本地合成transport验证；sales_approval补充独立通讯套件13组/9命令通过，Windows成品仍待验。sending/unknown先查原历史，不自动重发；不宣称真实SMTP已验证。
+
+`system workspace schema/list/form/references/history/save/action/inspect/preview/commit/workbook/ownership/report/template/file-download`覆盖原跟进待办、财务协作任务、普通/原版导入、精确owner绑定和固定工具。comment要求订单版本+UUID，task要求完整原hash/版本；财务任务save/submit/accept/return/review/cancel只做协作，不产生现金。owner按明确ID/版本与previewHash一次原子提交，不循环姓名/30行旧接口。普通导入每批200行、原版35行，绑定原件hash、原选择/原因/offset及计划行摘要；旧原版缺rowsHash/writeContract只回读和下载，不补造历史摘要去提交。报表生成归档hash/ID；旧报表未存摘要时明示为本次只读计算的当前原件hash。
+
+固定工作簿和客户归属工具仅管理员；未知归属不猜测。文件/费用预览可能保存任务和原件，inspect及owner预览只读。费用保留原报价单位/null，不能套AR整数分；fixed-decision须显式填写原job/previewHash及approve/reject/defer，由原程序重核版本、范围、规则和有效期，不接聊天批准、不自动approve。没有任意HTTP/SQL/Shell或SMTP兜底。结果不明先查询原请求/批次，不换UUID盲重提。
+
+保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。

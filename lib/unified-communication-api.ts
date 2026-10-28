@@ -73,6 +73,7 @@ export async function unifiedCommunicationPost(action:string,req:Request,s:State
  }
  const input=parse(communicationSchemas[name],body),before=record(s,m,input.id,true);
  if(name!=='submit'&&!canReviewCommunication(s,m,before))throw new AppError('仅现有明确负责销售可完成内部核对或退回这份沟通草稿。',403);
+ if(input.expectedSourceHash!==undefined&&input.expectedSourceHash!==before.sourceHash||input.expectedContentHash!==undefined&&input.expectedContentHash!==before.contentHash)throw new AppError('沟通来源或草稿内容已变化，请重新读取并核对。',409);
  const prior=await replay(s,m,action,input);if(prior)return prior;assertVersion(before,input.expectedVersion);
  if(name==='submit'&&(!['draft','returned'].includes(before.status)||!before.draftText.trim()))throw new AppError('请先保存非空回复草稿；仅草稿或已退回版本可提交。',409);
  if(name!=='submit'&&before.status!=='pending_check')throw new AppError('只有当前待核对草稿可以完成核对或退回修改。',409);

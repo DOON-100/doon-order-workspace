@@ -60,3 +60,20 @@ doon finance complaints save --input complaint.json --version 0 --request-id UUI
 `finance complaints`保留list/show/history，新增schema/form/references/revisions/save。投诉复用原`process-save`及当前客户/订单/业务组、负责人、期限、关口和证据规则；details默认增量，明确整对象替换用`--replace-details`。原因、整改、核验及原完成关口继续有效，原内部验证/不适用结案路径保留。客户确认文本的recorded只表示已登记文本，unknown保持待核实；完成、通过或回访完成不等于客户接受、退款或发货。
 
 客户回访复用W1：`sales customers followup-add`仅客户关联，`sales followups create/update`支持客户/项目。投诉记录没有projectId/afterSaleId，回访没有complaintId/orderId/afterSaleId；原编号可作为inputBasis/documentRef/notes等文字依据保存，不伪造机器外键或自动闭环。原关联、创建信息、未知字段、历史版本及附件原件保留。UUID重放保持原内容和指定历史基础版本，撤权或回读失败仍按原核查规则处理。
+
+
+## W10财务授权与协作
+
+0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。
+
+`admin management schema/references/form/save/action/history`提供11种固定save及4种离岗动作。沿用管理员或原框架配置角色，完整表单携带真实version、完整来源hash和UUID；重放重核当前身份，保全未知字段、既有userId/邮箱/创建时间。业务成员新增是未绑定身份，不写认证账号表。AR读取grant、项目财务核实grant、付款授权名单、IE/客价/双签政策分别按原规则维护，不从目录可见推断核实权限。离岗由指定接收人本人确认，管理员完成时重核库存/来源hash，原子转交并停用，保留全部历史；不能代接收或自动接受。
+
+AR显式授权导出仍需相同范围read/export；exportCompany/exportTeamIds独立于读取范围。付款授权人须保持当前在职admin/sales及非readOnly，名单保留不使降权者继续授权。财务核实权限与读取授权分开。
+
+`system workspace schema/list/form/references/history/save/action/inspect/preview/commit/workbook/ownership/report/template/file-download`覆盖原跟进待办、财务协作任务、普通/原版导入、精确owner绑定和固定工具。comment要求订单版本+UUID，task要求完整原hash/版本；财务任务save/submit/accept/return/review/cancel只做协作，不产生现金。owner按明确ID/版本与previewHash一次原子提交，不循环姓名/30行旧接口。普通导入每批200行、原版35行，绑定原件hash、原选择/原因/offset及计划行摘要；旧原版缺rowsHash/writeContract只回读和下载，不补造历史摘要去提交。报表生成归档hash/ID；旧报表未存摘要时明示为本次只读计算的当前原件hash。
+
+固定工作簿和客户归属工具仅管理员；未知归属不猜测。文件/费用预览可能保存任务和原件，inspect及owner预览只读。费用保留原报价单位/null，不能套AR整数分；fixed-decision须显式填写原job/previewHash及approve/reject/defer，由原程序重核版本、范围、规则和有效期，不接聊天批准、不自动approve。没有任意HTTP/SQL/Shell或SMTP兜底。结果不明先查询原请求/批次，不换UUID盲重提。
+
+保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。
+
+W10内部通知补验：engineering与sales_approval正向均经本机注入合成transport验证，补充独立通讯套件13组/9命令通过；固定总经理收件人与原Excel哈希、报价版本、内容fingerprint及UUID均核对，通知后客价仍为草稿。原集中71组/30命令未重跑；Windows成品及其他未过项仍待验，未验证真实SMTP。详见[W10验收](../../docs/cli-write-w10-acceptance.md)。

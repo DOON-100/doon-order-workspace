@@ -25,3 +25,7 @@
 2026-10-28额度已用96%、剩4%，按要求停止继续开发。源码local`c1eab58aecedcceca5db4765e0951eb61c21a144`与main`b7c0e802b144173dab7750baedb5596c9c1eee6a`完整树`70a831a3785070c38ef23d6ba00686596f3efbae`一致。CLI CI40555082701与Native CI40555082651成功。0.38.0干净包已启动354条实际安装后验收，最终报告尚未收取；官方artifact12757221357外层摘要`8bc83f9fd84acfd94f1e66e1c70adf060a0dd2a5a9f66f67029fb45b378f2dc0`匹配，程序字节/安装来源核验待执行，不能宣称成品阶段通过。
 
 接续先读取本机`test-output/cli-0.38-local-package-acceptance.json`及`cli-w9-package-acceptance.log`；完成来源核验后再接W10。停止后不再启动新测试，已启动隔离检查按原finally清理。
+
+## 恢复后收尾完成
+
+本地354条/189组及来源安装、目录、程序/运行时字节核验通过；test-output/cli-0.38-ci-download-verification.json已保存，临时安装/会话清理。W9完成，不代表部署；旧额度停止记录保留当时含义。

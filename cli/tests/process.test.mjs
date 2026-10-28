@@ -1,3 +1,4 @@
+import {fileURLToPath} from 'node:url';
 import {commands,foundationCommands} from '../dist/catalog.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +8,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {temporary, root} from './helpers.mjs';
 const exec = promisify(execFile);
-const binary = path.join(root, 'cli/dist/index.js');
+const binary = fileURLToPath(new URL('../dist/index.js', import.meta.url));
 async function invoke(args, env = {}) {
   const home = await temporary();
   try { return {code: 0, ...await exec(process.execPath, [binary, ...args], {windowsHide: true, env: {...process.env, DOON_CLI_HOME: home, ...env}})}; }
@@ -20,7 +21,7 @@ test('business version options are not intercepted by the global CLI version',as
   const version=await invoke(['--version','--json']);assert.equal(version.code,0);assert.equal(JSON.parse(version.stdout).command,'version');
 });
 
-test('machine catalogs report implemented sales queries and keep other modules pending', async () => {
+test('machine catalogs preserve foundation order and map current overview and management entries', async () => {
   const result = await invoke(['commands', '--json']); assert.equal(result.code, 0); assert.equal(result.stderr, '');
   const parsed = JSON.parse(result.stdout); assert.equal(parsed.schema, 'doon-cli-output-v1'); assert(parsed.ok);
   assert.deepEqual(parsed.data.slice(0,7).map(row => row.name), ['setup', 'login', 'logout', 'whoami', 'doctor', 'commands', 'modules']);
@@ -28,7 +29,7 @@ test('machine catalogs report implemented sales queries and keep other modules p
   const groups = JSON.parse((await invoke(['modules', '--json'])).stdout).data;
   assert.equal(groups.length, 11); assert.equal(groups.find(row => row.id === 'sales').status, 'partial');
   assert.equal(groups.find(row=>row.id==='service').status,'partial');
-  assert.equal(groups.find(row=>row.id==='engineering').status,'partial');assert(['planning','purchasing','production','quality','warehouse','finance'].every(id=>groups.find(row=>row.id===id).status==='partial'));assert(groups.filter(row => !['sales','service','engineering','planning','purchasing','production','quality','warehouse','finance'].includes(row.id)).every(row => row.status === 'pending' && row.commands.length === 0));
+  assert.equal(groups.find(row=>row.id==='engineering').status,'partial');assert(['planning','purchasing','production','quality','warehouse','finance'].every(id=>groups.find(row=>row.id===id).status==='partial'));const overview=groups.find(row=>row.id==='overview'),management=groups.find(row=>row.id==='management');assert.equal(overview.status,'partial');assert.equal(management.status,'partial');for(const name of ['system workspace list','system workspace save','system workspace report'])assert(overview.commands.includes(name));assert(!overview.commands.includes('system workspace commit'));assert(management.commands.includes('admin management form'));assert(management.commands.includes('management communications list'));assert(groups.every(group=>group.commands.every(name=>commands.some(command=>command.name===name))));
   assert.equal(groups[0].label, '工作总览'); assert(!/[^\x00-\x7f]/.test(result.stdout));
 });
 

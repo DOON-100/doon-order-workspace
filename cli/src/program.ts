@@ -1,3 +1,6 @@
+import {registerAdminWrites} from './admin-write-program.js';
+import {registerCommunicationWrites} from './communication-write-program.js';
+import {registerWorkspaceTools} from './workspace-tools-program.js';
 import {registerComplaintWrites} from './complaint-write-program.js';
 import {registerProjectFinanceWrites} from './project-finance-write-program.js';
 import {registerArWrites} from './ar-write-program.js';
@@ -254,6 +257,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   registerArWrites(program,foundation,result);
   registerCollectionWrites(program,foundation,result);
   registerComplaintWrites(program,foundation,result);
+  registerAdminWrites(program,foundation,result);
+  registerCommunicationWrites(program,foundation,result);
+  registerWorkspaceTools(program,foundation,result);
   try {
     await program.parseAsync(argv.filter(arg=>arg!=='--json'), {from: 'user'});
     if (json && !emitted) result('help', {version, commands});

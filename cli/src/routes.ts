@@ -1,4 +1,152 @@
 export const routes = {
+  "/api/workspace/framework-offboarding-finalize": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-offboarding-cancel": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-offboarding-accept": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-offboarding-draft": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/handoff-business-service-config": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-config-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/handoff-business-review-policy": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/customer-quote-access-update": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/ie-quote-policy": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/payment-terms-authorizers-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/project-finance-grant-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/ar-access-grant-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/customer-project-assignment-roster-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/customer-project-team-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/admin-member-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-offboarding-incoming": {"method": "GET", "business": true},
+
+  "/api/workspace/framework-offboarding": {"method": "GET", "business": true, "query": ["memberId"]},
+
+  "/api/workspace/admin-management-data": {"method": "GET", "business": true, "query": ["type", "id"]},
+
+  "/api/workspace/ie-quote-notification-push": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/member-notification-mailbox": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/unified-communication-complete-review": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/unified-communication-return": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/unified-communication-submit": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/unified-communication-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-notice-receive": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-message-bind": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-message-process": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-message-link": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-message-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-account-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/ie-quote-notification-history": {"method": "GET", "business": true, "query": ["id", "version", "target"]},
+
+  "/api/workspace/ie-quote-notification-preview": {"method": "GET", "business": true, "query": ["id", "version", "target"]},
+
+  "/api/workspace/framework-channels": {"method": "GET", "business": true, "query": ["channel"]},
+
+  "/api/workspace/unified-communication-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/framework-channel-context": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/framework-channel-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/framework-knowledge-document": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/communication-cli-mailbox-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/communication-cli-account-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/member-notification-mailboxes": {"method": "GET", "business": true},
+
+  "/api/workspace/unified-communication-data": {"method": "GET", "business": true},
+
+  "/api/workspace/framework-knowledge": {"method": "GET", "business": true},
+
+  "/api/workspace/framework-notices": {"method": "GET", "business": true},
+
+  "/api/workspace/communication-cli-accounts": {"method": "GET", "business": true},
+
+  "/api/workspace/communication-cli-contract": {"method": "GET", "business": true},
+
+  "/api/workspace/template": {"method": "GET", "business": true, "binary": true, "query": ["type"]},
+
+  "/api/workspace/export": {"method": "POST", "business": true, "write": true, "binary": true},
+
+  "/api/workspace/fixed-tool-file": {"method": "GET", "business": true, "binary": "file", "query": ["id", "requestKey", "artifact"]},
+
+  "/api/workspace/fixed-tool-workbook": {"method": "POST", "business": true, "write": true, "multipart": true},
+
+  "/api/workspace/ledger-preview": {"method": "POST", "business": true, "write": true, "multipart": true},
+
+  "/api/workspace/inspect": {"method": "POST", "business": true, "write": true, "multipart": true},
+
+  "/api/workspace/ledger-commit": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/fixed-tool-fees-decision": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/fixed-tool-fees-preview": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/fixed-tool-ownership": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-cancel": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-review": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-return": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-accept": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-submit": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/framework-finance-task-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/workspace-owner-assign": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/workspace-owner-preview": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/workspace-task-action": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/workspace-comment-save": {"method": "POST", "business": true, "write": true},
+
+  "/api/workspace/fixed-tool-quote": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/fixed-tool-job": {"method": "GET", "business": true, "query": ["id", "requestKey"]},
+
+  "/api/workspace/fixed-data-tools": {"method": "GET", "business": true, "query": []},
+
+  "/api/workspace/framework-finance-task-summary": {"method": "GET", "business": true, "query": ["customerId", "orderId", "type"]},
+
+  "/api/workspace/framework-finance-task-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/framework-finance-tasks": {"method": "GET", "business": true, "query": []},
+
+  "/api/workspace/workspace-report-file-info": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/workspace-tools-history": {"method": "GET", "business": true, "query": ["id"]},
+
+  "/api/workspace/workspace-tools-data": {"method": "GET", "business": true, "query": []},
+
 "/api/workspace/project-after-sale-save":{"method": "POST", "business": true, "write": true},
 "/api/workspace/project-after-sale-cost":{"method": "POST", "business": true, "write": true},
 "/api/workspace/project-refund-request":{"method": "POST", "business": true, "write": true},
@@ -65,13 +213,13 @@ export const routes = {
   "/api/workspace/ledger-edit": {"method":"POST","business":true,"write":true},
   "/api/workspace/loss-record": {"method":"POST","business":true,"write":true},
   "/api/workspace/loss-export": {"method":"GET","business":true,"binary":true,"query":["month","department","customer","q"]},
-  "/api/workspace/preview": {"method":"POST","business":true,"write":true,"multipart":true},
-  "/api/workspace/commit-import": {"method":"POST","business":true,"write":true},
-  "/api/workspace/job": {"method":"GET","business":true,"query":["id"]},
-  "/api/workspace/file": {"method":"GET","business":true,"binary":"file","query":["id"]},
+  "/api/workspace/preview": {"method": "POST", "business": true, "write": true, "multipart": true},
+  "/api/workspace/commit-import": {"method": "POST", "business": true, "write": true},
+  "/api/workspace/job": {"method": "GET", "business": true, "query": ["id"]},
+  "/api/workspace/file": {"method": "GET", "business": true, "binary": "file", "query": ["id"]},
   "/api/workspace/receipt-photo": {"method":"POST","business":true,"write":true,"multipart":true},
   "/api/workspace/receipt-confirm": {"method":"POST","business":true,"write":true},
-  "/api/workspace/ledger-file": {"method":"GET","business":true,"binary":"file","query":["id"]},
+  "/api/workspace/ledger-file": {"method": "GET", "business": true, "binary": "file", "query": ["id"]},
   "/api/workspace/finished-supplier-receive": {"method":"POST","business":true,"write":true},
   "/api/workspace/finished-supplier-qc": {"method":"POST","business":true,"write":true},
   "/api/workspace/finished-supplier-stock": {"method":"POST","business":true,"write":true},

@@ -107,7 +107,7 @@ export async function fixedToolFeesPost(action:string,req:Request,s:State,m:Memb
  assertFixedToolOwner(m);
  if(action==='fixed-tool-fees-preview'){
   const input=parseFixedTool(previewSchema,await readFixedToolJson(req)),{requestKey,...proposal}=input;
-  const requestHash=await fixedToolHash({operation,input}),existing=findFixedToolRequest(s,m,requestKey,requestHash);
+  const requestHash=await fixedToolHash({operation,input}),existing=await findFixedToolRequest(s,m,requestKey,requestHash);
   if(existing){
    if(existing.operation!==operation)throw new AppError('请求编号已用于其他操作。',409);
    if(existing.status==='completed')return verifiedResult(s,m,existing,true);
