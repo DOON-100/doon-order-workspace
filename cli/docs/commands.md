@@ -11,6 +11,29 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon system followups schema` | 查询独立业务沟通与原件字段 | local-read |
+| `doon system followups targets --module <module> [--project <id>] [--team <id>] [--limit <number>] [--offset <number>]` | 查询原权限内可跟进目标四元组 | business-read-and-session-last-seen |
+| `doon system followups list --input <file> [--team <id>] [--limit <number>] [--offset <number>]` | 读取指定目标不可变跟进记录 | business-read-and-session-last-seen |
+| `doon system followups show <id> --input <file> [--team <id>]` | 读取指定目标的单条跟进 | business-read-and-session-last-seen |
+| `doon system followups save --input <file> --request-id <uuid> [--files <paths...>] [--team <id>]` | 追加沟通及原件并回读，不修改原业务单据 | business-write |
+| `doon system followups files <entryId> --input <file> [--team <id>]` | 查询跟进记录的原件清单 | business-read-and-session-last-seen |
+| `doon system followups file-download <entryId> <fileId> --input <file> --output <file> [--team <id>]` | 校验并下载授权原件到新文件 | local-file-and-session-last-seen |
+| `doon system collaboration schema [--type <type>]` | 查询协作任务字段与真实动作规则 | local-read |
+| `doon system collaboration list [--project <id>] [--limit <number>] [--offset <number>]` | 查询本人任务或明确项目授权内任务 | business-read-and-session-last-seen |
+| `doon system collaboration references --project <id>` | 查询项目可指派人员及当前职责能力 | business-read-and-session-last-seen |
+| `doon system collaboration form <id>` | 按原任务权限读取字段与可编辑载荷 | business-read-and-session-last-seen |
+| `doon system collaboration history <id> [--limit <number>] [--offset <number>]` | 读取当前授权内协作任务事件 | business-read-and-session-last-seen |
+| `doon system collaboration save --input <file> --version <number> --request-id <uuid>` | 明确创建或完整修改/改派独立协作任务并回读 | business-write |
+| `doon system collaboration action --type <action> --input <file> --version <number> --request-id <uuid>` | 按原职责跟进/本人完成/取消/收阅并回读 | business-write |
+| `doon service records schema --type <customer_profile|followup|project|sample>` | 查询客服记录登记字段及来源版本规则 | local-read |
+| `doon service records list [--team <id>] [--customer <id>] [--order <id>] [--limit <number>] [--offset <number>] --type <customer_profile|followup|project|sample>` | 查询授权客服记录及物流跟进记录 | business-read-and-session-last-seen |
+| `doon service records references [--team <id>] [--customer <id>] [--limit <number>] [--offset <number>] --type <customer_profile|followup|project|sample>` | 查询客服记录关联订单、版本与责任候选 | business-read-and-session-last-seen |
+| `doon service records form <id> [--team <id>] --type <customer_profile|followup|project|sample>` | 读取当前客服记录字段和来源版本 | business-read-and-session-last-seen |
+| `doon service records history <id> [--team <id>] [--limit <number>] [--offset <number>] --type <customer_profile|followup|project|sample>` | 读取客服记录原记录历史 | business-read-and-session-last-seen |
+| `doon service records save --input <file> --version <number> --request-id <uuid> [--order-version <number>] [--team <id>] --type <customer_profile|followup|project|sample>` | 保存客服记录或物流跟进事实并回读 | business-write |
+| `doon service records files <id> [--team <id>] --type <customer_profile|followup|project|sample>` | 查询客服记录附件原件目录 | business-read-and-session-last-seen |
+| `doon service records file-upload --input <file> --file <file> --version <number> [--team <id>] --type <customer_profile|followup|project|sample>` | 保存不可变客服记录证据原件并回读 | business-write |
+| `doon service records file-download <id> <fileId> --output <file> [--team <id>] --type <customer_profile|followup|project|sample>` | 核验摘要并下载客服记录原件到新文件 | local-file-and-session-last-seen |
 | `doon admin management schema --type <type>` | 查询人员、授权、配置和离岗动作字段 | local-read |
 | `doon admin management references --type <type> [--id <id>] [--member <id>] [--incoming] [--limit <number>] [--offset <number>]` | 查询有权维护的资料和真实人员候选 | business-read-and-session-last-seen |
 | `doon admin management form --type <type> [--id <id>]` | 读取完整可编辑资料及版本或原配置哈希 | business-read-and-session-last-seen |
@@ -417,4 +440,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | partial |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8新增项目财务、AR、付款条件、客服应收和供应商对账37条固定命令，合并开发71组通过；全站、HTTP、成品和CI待验收。W9已扩展售后/费用/退款凭据并新增5条投诉命令，合并开发59组/14入口通过；完整CLI、全站、HTTP、成品及CI待验收。W10新增管理6条、通讯知识9条及任务导入工具15条，合并类型和集中71组/30命令通过；完整CLI、全站、HTTP、Windows及CI待验。engineering与sales_approval邮件正向均经本地合成transport验证，补充独立通讯套件13组/9命令通过；Windows成品仍待验。W11按计划继续。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8财务、W9售后及W10基础批已完成本地成品和GitHub来源核验，结果见仓库执行记录。W10基础批0.39本期384条命令、217组合成检查通过；engineering及sales_approval通知正向只用本机合成transport，无真实SMTP。0.40继续补齐客服独立资料/跟进/项目/样办及项目协作及通用业务附件/沟通23条命令，源码已接入、成品验收待完成。W11升级回退已通过，完整覆盖、容量和员工实际分发继续验收；WorkBuddy按用户指示停止实机操作，不标通过。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

@@ -73,3 +73,10 @@ AR总表精确选集preview只读；文件导入保存原件与批次，单据�
 固定工作簿和客户归属工具仅管理员；未知归属不猜测。文件/费用预览可能保存任务和原件，inspect及owner预览只读。费用保留原报价单位/null，不能套AR整数分；fixed-decision须显式填写原job/previewHash及approve/reject/defer，由原程序重核版本、范围、规则和有效期，不接聊天批准、不自动approve。没有任意HTTP/SQL/Shell或SMTP兜底。结果不明先查询原请求/批次，不换UUID盲重提。
 
 保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。
+# 客服独立记录与项目协作（0.40）
+
+`service records` 的必填 `--type` 只接受 `customer_profile|followup|project|sample`，分别是客服工作台的独立记录，不替代客户主档或客户项目。先查 `schema`、`references` 和 `form`，再用UTF-8 JSON文件执行 `save --version --request-id`；修改只指定需要更新的字段，保留其他原字段。关联订单必须显式提供 `--order-version`。文件入口只追加原件，下载要求新路径并核验摘要。
+
+`system collaboration` 是独立项目协作任务，区别于W1客户任务。`schema/list/references/form/history/save/action` 复用现有项目任务API；`action --type` 只接受 `followup|complete|cancel|acknowledge`。负责人本人完成，管理人改派、取消或收阅；收阅不等于审批。更新须显式提供完整可编辑字段和非空reason，并使用真实版本与本次UUID。旧服务器没有写入契约时拒绝写入，结果不明先查询原任务及历史，不自动重试。
+
+`system followups` 接入通用业务沟通及附件。先用 `schema` 和 `targets --module` 查询支持栏目及授权目标，再把服务器返回的 `module/collection/recordId/sectionKey` 四元组写入JSON。`list/show/files/file-download` 只查询该目标；`save --input --request-id [--files]` 的JSON额外提供note，只追加独立记录和原件，不改变原订单、审批或财务状态。单原件20MiB、最多10个、合计49MiB；下载校验摘要且不覆盖旧文件。项目目录/页签范围按原服务端校验；金蝶及采购源快照跟进暂缓。不存在改写、删除或真实外发入口。

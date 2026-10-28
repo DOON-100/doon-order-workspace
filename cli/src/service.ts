@@ -1,3 +1,5 @@
+import {BusinessFollowupWriteService} from './business-followup-write.js';
+import {ProjectCollaborationWriteService} from './project-collaboration-write.js';
 import {AdminWriteService} from './admin-write.js';
 import {CommunicationWriteService} from './communication-write.js';
 import {WorkspaceToolsService} from './workspace-tools-write.js';
@@ -6,7 +8,7 @@ import {ProjectFinanceWriteService} from './project-finance-write.js';
 import {ArWriteService} from './ar-write.js';
 import {CollectionWriteService} from './collection-write.js';
 import {PurchaseWriteService} from './purchase-write.js';
-import {DeliveryWriteService} from './delivery-write.js';
+import {DeliveryWriteService,type ServiceRecordKind} from './delivery-write.js';
 import {ProcessRecordService} from './process-write.js';
 import {ProductionWriteService} from './production-write.js';
 import {PlanningWriteService} from './planning-write.js';
@@ -83,6 +85,9 @@ export class FoundationService {
   planning() { return new PlanningService(this.store, this.transport); }
   processRecords() { return new ProcessRecordService(this.store,this.transport); }
   productionWrite() { return new ProductionWriteService(this.store,this.transport); }
+  serviceRecordWrite(kind:string) { if(!['customer_profile','followup','project','sample'].includes(kind))throw new CliError('UNSUPPORTED_OPERATION','未接入该客服记录类型。',2);return new DeliveryWriteService(this.store,this.transport,kind as ServiceRecordKind); }
+  businessFollowupWrite() {return new BusinessFollowupWriteService(this.store,this.transport);}
+  projectCollaborationWrite() {return new ProjectCollaborationWriteService(this.store,this.transport);}
   deliveryWrite() { return new DeliveryWriteService(this.store,this.transport); }
   purchaseWrite() { return new PurchaseWriteService(this.store,this.transport); }
   planningWrite() { return new PlanningWriteService(this.store,this.transport); }

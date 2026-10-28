@@ -1,4 +1,14 @@
 export const routes = {
+"/api/workspace/business-followup-targets":{"method":"GET","business":true,"query":["module","projectId"]},
+"/api/workspace/business-followup-data":{"method":"GET","business":true,"query":["module","collection","recordId","sectionKey"]},
+"/api/workspace/business-followup-download":{"method":"GET","business":true,"binary":"file","query":["id"]},
+"/api/workspace/business-followup-save":{"method":"POST","business":true,"write":true,"multipart":true},
+"/api/workspace/project-collaboration-data":{"method":"GET","business":true,"query":["projectId","taskId"]},
+"/api/workspace/project-collaboration-save":{"method":"POST","business":true,"write":true},
+"/api/workspace/project-collaboration-followup":{"method":"POST","business":true,"write":true},
+"/api/workspace/project-collaboration-complete":{"method":"POST","business":true,"write":true},
+"/api/workspace/project-collaboration-cancel":{"method":"POST","business":true,"write":true},
+"/api/workspace/project-collaboration-acknowledge":{"method":"POST","business":true,"write":true},
   "/api/workspace/framework-offboarding-finalize": {"method": "POST", "business": true, "write": true},
 
   "/api/workspace/framework-offboarding-cancel": {"method": "POST", "business": true, "write": true},

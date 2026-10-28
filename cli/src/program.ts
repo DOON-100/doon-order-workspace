@@ -1,3 +1,6 @@
+import {registerBusinessFollowupWrites} from './business-followup-write-program.js';
+import {registerProjectCollaborationWrites} from './project-collaboration-write-program.js';
+import {registerServiceRecordWrites} from './service-record-write-program.js';
 import {registerAdminWrites} from './admin-write-program.js';
 import {registerCommunicationWrites} from './communication-write-program.js';
 import {registerWorkspaceTools} from './workspace-tools-program.js';
@@ -253,6 +256,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   registerProcessWrites(program,foundation,result);
   registerProductionWrites(program,foundation,result);
   registerDeliveryWrites(program,foundation,result);
+  registerServiceRecordWrites(program,foundation,result);
+  registerProjectCollaborationWrites(program,foundation,result);
+  registerBusinessFollowupWrites(program,foundation,result);
   registerProjectFinanceWrites(program,foundation,result);
   registerArWrites(program,foundation,result);
   registerCollectionWrites(program,foundation,result);

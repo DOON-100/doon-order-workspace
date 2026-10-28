@@ -51,7 +51,7 @@
 | 工作总览 | `reports` | W10 | 待核验 | 候选源码：app/workspace.tsx | 待核验 | 待核验 |
 | 业务部 | `customers` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-projects` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
-| 业务部 | `process-rfq` | W1–W3 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 已接入询价创建与更新；阶段验收待完成 |
+| 业务部 | `process-rfq` | W1–W3 | 已接入schema/form及保存字段，见下方流程矩阵 | `sales inquiries`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 业务部 | `sales` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-quotes` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
 | 业务部 | `customer-price-archive` | W1–W3 | 待核验 | 候选源码：lib/customer-project-api.ts、lib/customer-workflow-api.ts、lib/customer-quote-api.ts | 待核验 | 待核验 |
@@ -66,16 +66,16 @@
 | 客服与单证 | `kingdee-sales` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 客服与单证 | `production-orders` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 客服与单证 | `documents` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
-| 客服与单证 | `process-complaint` | W3/W7/W9 | 已核对：下方W9矩阵 | process-data/history/save，finance complaints五入口 | 原客户/订单/组、角色及证据门槛 | 合并开发通过，阶段待验 |
+| 客服与单证 | `process-complaint` | W3/W7/W9 | 已接入schema/form及保存字段，见下方流程矩阵 | `finance complaints`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 客服与单证 | `completed` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 工程部 | `ie-quotes` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
 | 工程部 | `engineering-materials` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
 | 工程部 | `engineering-drawings` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
-| 工程部 | `process-sample` | W2/W4 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 工程部 | `process-engineering-change` | W2/W4 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| 工程部 | `process-sample` | W2/W4 | 已接入schema/form及保存字段，见下方流程矩阵 | `engineering records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 工程部 | `process-engineering-change` | W2/W4 | 已接入schema/form及保存字段，见下方流程矩阵 | `engineering records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | PMC 计划 | `production-planning` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
 | PMC 计划 | `pmc-handoff` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
-| PMC 计划 | `process-material-kit` | W5–W6 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| PMC 计划 | `process-material-kit` | W5–W6 | 已接入schema/form及保存字段，见下方流程矩阵 | `warehouse records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | PMC 计划 | `pmc` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
 | PMC 计划 | `planning-control` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
 | PMC 计划 | `orders` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
@@ -89,23 +89,23 @@
 | 采购与外协 | `finished-outsourcing` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 采购与外协 | `supplier-risk` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 仓储物流 | `receiving` | W6–W7 | 待核验 | 候选源码：lib/purchase-api.ts、lib/service-workspace-api.ts、lib/process-workspace-api.ts | 待核验 | 待核验 |
-| 仓储物流 | `process-warehouse` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 仓储物流 | `process-packaging` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| 仓储物流 | `process-warehouse` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `warehouse records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 仓储物流 | `process-packaging` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `warehouse records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 仓储物流 | `production-shipments` | W6–W7 | 待核验 | 候选源码：lib/purchase-api.ts、lib/service-workspace-api.ts、lib/process-workspace-api.ts | 待核验 | 待核验 |
 | 仓储物流 | `logistics-waybills` | W6–W7 | 待核验 | 候选源码：lib/purchase-api.ts、lib/service-workspace-api.ts、lib/process-workspace-api.ts | 待核验 | 待核验 |
 | 仓储物流 | `shipment-followups` | W6–W7 | 待核验 | 候选源码：lib/purchase-api.ts、lib/service-workspace-api.ts、lib/process-workspace-api.ts | 待核验 | 待核验 |
 | 生产车间 | `department` | W6 | 待核验 | 候选源码：lib/operations.ts、lib/loss-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 生产车间 | `mes` | W6 | 待核验 | 候选源码：lib/operations.ts、lib/loss-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 生产车间 | `losses` | W6 | 待核验 | 候选源码：lib/operations.ts、lib/loss-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
-| 品质部 | `process-iqc` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 品质部 | `process-first-article` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 品质部 | `process-process-quality` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 品质部 | `process-outsourcing-quality` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 品质部 | `process-oqc` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
-| 品质部 | `process-shipment-release` | W6–W7 | 已核对：下方 14 类流程矩阵 | `process-data` / `process-history` / `process-save` | 已核对：下方矩阵与服务端范围 | CLI 写入待实现 |
+| 品质部 | `process-iqc` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `quality records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 品质部 | `process-first-article` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `quality records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 品质部 | `process-process-quality` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `quality records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 品质部 | `process-outsourcing-quality` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `quality records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 品质部 | `process-oqc` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `quality records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
+| 品质部 | `process-shipment-release` | W6–W7 | 已接入schema/form及保存字段，见下方流程矩阵 | `warehouse records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 财务部 | `payment-terms` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
 | 财务部 | `supplier-reconciliation` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
-| 财务部 | `process-supplier-reconciliation` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
+| 财务部 | `process-supplier-reconciliation` | W8 | 已接入schema/form及保存字段，见下方流程矩阵 | `finance reconciliations`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 财务部 | `ar-workspace` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
 | 财务部 | `service-receivables` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
 | 财务部 | `project-finance` | W8 | 已核对：下方W8矩阵 | 原生财务/AR/付款条件及固定process/service接口 | 原权限、版本、金额和来源范围，见下方W8矩阵 | 合并开发通过，阶段待验 |
@@ -350,3 +350,14 @@ BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登
 | 总览及维护 | 复用此前业务查询和当前任务投影，原网站/doctor提供维护读取 | 不发明总览写API，不开放任意Shell/SQL/路由、认证维护或备份动作 |
 
 0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。 保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。 IE内部通知仅固定原生协议，服务器决定收件人/邮箱与原Excel附件；engineering与sales_approval正向均经本地合成transport验证；sales_approval补充独立通讯套件13组/9命令通过，Windows成品仍待验。sending/unknown先查原历史，不自动重发；不宣称真实SMTP已验证。 本候选未应用，后续文档局部合并保留root后来W8/W9验收。
+# 0.40覆盖补齐（2026-10-28，开发验收中）
+
+测试环境，不含正式业务数据；以下与原有相似记录分别维护，不宣称已完成成品验收。
+
+| 原生页面/模型 | CLI固定入口 | 接口/角色及范围 | 验证与边界 |
+| --- | --- | --- | --- |
+| 客服资料、跟进、项目、样办四类service_record | `service records schema/list/references/form/history/save/files/file-upload/file-download --type` | 原service-data/save/history/attachment/file；原客服角色、客户及业务组、来源订单版本 | 四种独立模型新增/增量修改/UUID/历史/原件回读；不替代客户主档或项目，原件保留 |
+| 项目独立协作任务customer_project_collaboration_task | `system collaboration schema/list/references/form/history/save/action` | project-collaboration-data/save/followup/complete/cancel/acknowledge；原项目管理人及指定负责人 | 当前权限在UUID重放前校验，改派撤销原负责人操作；仅负责人完成，管理人收阅；任务授权不扩大客户资料访问 |
+| 通用业务附件与沟通business_followup | `system followups schema/targets/list/show/save/files/file-download` | 固定business-followup-targets/data/save/download；原目标授权、业务组、客户/项目/订单及来源归属 | 独立追加、UUID绑定身份与内容及原件摘要、目录回读；跨目标/客户拒绝，原单据及附件不变；金蝶/源快照暂缓 |
+
+新增23条命令进入原成品全命令验收链，版本0.40登记419条、本期407条非金蝶。69组隔离API/Commander通过，包含可选小样本并发共70组；独立进程、完整回归、成品和远端CI结果另行追加。通用跟进只覆盖schema列出的24个固定栏目，不能代替原审批、执行或暂停的金蝶动作。

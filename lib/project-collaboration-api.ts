@@ -49,7 +49,7 @@ export function projectCollaborationGet(action:string,req:Request,s:State,m:Memb
  else tasks=tasks.filter(task=>{const parent=collaborationTaskProject(s,task);return !!parent&&(task.ownerId===m.id||task.status==='done'&&!task.acknowledgedAt&&canAssignProjectCollaboration(s,m,parent));});
  const canAssign=!!project&&canAssignProjectCollaboration(s,m,project);
  const result:ProjectCollaborationFeed={tasks:tasks.map(task=>projectCollaborationTaskDto(s,m,task)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id)),members:canAssign?(all(s,'member') as Member[]).filter(eligibleCollaborationOwner).map(owner=>({id:owner.id,name:owner.name,role:owner.role})):[],canAssign};
- return json(result);
+ return json({...result,writeContract:'project-collaboration-version-token-v1'});
 }
 
 export async function projectCollaborationPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
@@ -63,7 +63,8 @@ export async function projectCollaborationPost(action:string,req:Request,s:State
  if(!project)throw new AppError('任务项目关系异常，请管理员核对。',409);
  if(name==='save'&&before&&input.projectId!==before.projectId)throw new AppError('现有任务不能改绑到其他项目。',409);
  assertActionAccess(s,m,project,before,name,input);
- const fingerprint=await sha(JSON.stringify({action,input})),requestId=requestKind+'_'+input.token,previous=all(s,requestKind).find(row=>row.id===requestId);
+ const fingerprint=await sha(JSON.stringify({action,input})),requestId=requestKind+'_'+input.token,previous=s.records.find(row=>row.id===requestId);
+ if(previous&&previous.kind!==requestKind)throw new AppError('请求编号已被其他类型记录占用，本次未写入。',409);
  if(previous){
   if(previous.actorId!==m.id||previous.action!==action||previous.fingerprint!==fingerprint)throw new AppError('请求编号已用于其他内容，请核对后重试。',409);
   const current=findTask(s,previous.taskId);
