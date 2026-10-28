@@ -1,5 +1,5 @@
 import {verifyBusinessFollowupWrites} from './business-followup-writes.mjs';
-import {verifySyntheticCapacity} from './synthetic-capacity.mjs';
+import {verifySyntheticCapacity,prepareSyntheticCapacity} from './synthetic-capacity.mjs';
 import {verifyServiceRecords} from './service-record-writes.mjs';
 import {verifyProjectCollaborationWrites} from './project-collaboration-writes.mjs';
 import {verifyAdminWrites} from './admin-writes.mjs';
@@ -553,7 +553,7 @@ try{
     const afterCoverage=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeCoverage.records)assert.equal(afterCoverage.get(row.id),row.data,'Coverage tests changed unrelated original records');
   }
   if(processState&&!process.argv.includes('--coverage-only')&&!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(new Set(testedCommands).size,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);
-  if(process.argv.includes('--capacity-check')){const beforeLoad=snapshot();capacity=await verifySyntheticCapacity({services,origin,dir,env});assert.deepEqual(snapshot(),beforeLoad,'Read load changed business records');assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();}
+  if(process.argv.includes('--capacity-check')){const flag=process.argv.indexOf('--capacity-records'),records=flag<0?0:Number(process.argv[flag+1]);await prepareSyntheticCapacity({runtime,env,dir,records});const beforeLoad=snapshot();capacity=await verifySyntheticCapacity({services,origin,dir,env,records});assert.deepEqual(snapshot(),beforeLoad,'Read load changed business records');assert.deepEqual(await fs.readFile(path.join(env.DOON_DATA_DIR,'files/synthetic-original.bin')),original);pass();}
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{
