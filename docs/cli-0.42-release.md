@@ -14,6 +14,16 @@
 
 源码检查已通过：116项CLI单元测试、根目录TypeScript、402项主回归及全部独立子套件、18项隔离原生HTTP检查；生产历史专项及AR元数据、命令文档、72入口覆盖审计通过。工作台专项验证1000行预览、分页、完整JSON、末行选集提交及费用决定后的回读断线。
 
-安装包SHA-256及成品/升级验收结果在完成后登记到执行日志。发行包包含install.cmd、install.ps1、doon.cmd、README.md、docs、release.json、运行时和许可证；源码提交与成品分别核对。
+发行包包含install.cmd、install.ps1、doon.cmd、README.md、docs、release.json、运行时和许可证。解压后运行install.cmd，重新打开终端和Agent，再由员工本人配置服务器并交互登录。
+
+本机交付文件（位于被忽略的cli/artifacts目录，不提交二进制到源码仓库）：
+
+- 员工只需接收一个文件：`Doon-CLI-0.42.0-员工安装包-Windows-x64.zip`，内含下述安装ZIP、`使用说明.txt`和安装ZIP的校验文本；外层包SHA-256为`2d8ac9f3609c5b5a5cca2bafdaecc07958100aecc5fe6e7003dd66e4b8825182`。重新解包已核对内层安装ZIP字节不变。说明源码为[员工使用说明](cli-employee-guide.txt)。
+- 安装包：`doon-cli-0.42.0-eca05c49afc6-windows-x64.zip`。
+- SHA-256：`6c80b8cc7c3d13d09e9cd7371b2d585e19a6325daf59967a0fe9bc7191d1f6d9`。
+- 干净源码提交：`eca05c49afc65da295952d06a92313e6648f8e53`；包内清单为`sourceDirty: false`。
+- Agent说明位于仓库`cli/README.md`及安装包根目录`README.md`，完整命令说明位于包内`docs/commands.md`。
+
+初始0.42安装包已通过413条本期命令、250组合成业务检查，原记录及原件保全，测试业务、安装与会话全部清理。最终包只修正财务说明中的三处仓库外链接；逐文件核对仅`docs/finance.md`和构建清单不同，所有程序、运行时、安装器及其他文档字节一致。最终包另行通过解压、安装入口、重复安装保留配置、篡改拒绝及0.41→0.42→0.41升级回退。员工外层包再次解包，核对内层安装包摘要及使用说明原文一致。上述证据已汇总到本机`test-output/cli-0.42-final-acceptance-summary.json`及[执行记录](cli-execution-log.md)。
 
 本次不部署服务器。生产历史修复包含服务器代码；单独安装新CLI不会更新正式中台。员工实机、正式容量、代码签名及真实外部系统发送仍保留各自验收边界。安装包不包含账号密码、服务器私有地址、会话、数据库、业务文件或测试数据。
