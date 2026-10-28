@@ -1,6 +1,6 @@
 # 财务、应收与结算
 
-当前 CLI 0.42.0 登记425条唯一命令，其中413条属于本期范围，12条金蝶暂缓。财务入口涵盖项目财务、应收、付款条件、客服应收、供应商对账、投诉与售后；具体命令以 `doon commands --json` 为准。安装与错误处理见 [README](../README.md)，各版本验证结果见[执行记录](../../docs/cli-execution-log.md)。
+当前 CLI 0.42.0 登记425条唯一命令，其中413条属于本期范围，12条金蝶暂缓。财务入口涵盖项目财务、应收、付款条件、客服应收、供应商对账、投诉与售后；具体命令以 `doon commands --json` 为准。安装与错误处理见 [README](../README.md)，各版本验证结果见[执行记录](https://github.com/DOON-100/doon-order-workspace/blob/main/docs/cli-execution-log.md)。
 
 ## 项目财务
 
@@ -91,4 +91,4 @@ AR显式授权导出仍需相同范围read/export；exportCompany/exportTeamIds�
 
 保留AR导出范围、付款授权人当前角色及售后规则；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因CLI安装自动授权。
 
-内部通知的engineering与sales_approval正向检查使用本机合成传输；核对固定收件人、原Excel哈希、报价版本、内容fingerprint及UUID，通知后客价仍为草稿。这些检查不验证真实SMTP外发。成品与来源验证见[W10验收](../../docs/cli-write-w10-acceptance.md)，当前发布结果见[执行记录](../../docs/cli-execution-log.md)。
+内部通知的engineering与sales_approval正向检查使用本机合成传输；核对固定收件人、原Excel哈希、报价版本、内容fingerprint及UUID，通知后客价仍为草稿。这些检查不验证真实SMTP外发。成品与来源验证见[W10验收](https://github.com/DOON-100/doon-order-workspace/blob/main/docs/cli-write-w10-acceptance.md)，当前发布结果见[执行记录](https://github.com/DOON-100/doon-order-workspace/blob/main/docs/cli-execution-log.md)。
