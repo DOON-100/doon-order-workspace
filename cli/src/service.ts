@@ -1,3 +1,4 @@
+import {FollowupBackupService} from './followup-backup.js';
 import {BusinessFollowupWriteService} from './business-followup-write.js';
 import {ProjectCollaborationWriteService} from './project-collaboration-write.js';
 import {AdminWriteService} from './admin-write.js';
@@ -86,6 +87,7 @@ export class FoundationService {
   processRecords() { return new ProcessRecordService(this.store,this.transport); }
   productionWrite() { return new ProductionWriteService(this.store,this.transport); }
   serviceRecordWrite(kind:string) { if(!['customer_profile','followup','project','sample'].includes(kind))throw new CliError('UNSUPPORTED_OPERATION','未接入该客服记录类型。',2);return new DeliveryWriteService(this.store,this.transport,kind as ServiceRecordKind); }
+  followupBackup() {return new FollowupBackupService(this.store,this.transport);}
   businessFollowupWrite() {return new BusinessFollowupWriteService(this.store,this.transport);}
   projectCollaborationWrite() {return new ProjectCollaborationWriteService(this.store,this.transport);}
   deliveryWrite() { return new DeliveryWriteService(this.store,this.transport); }

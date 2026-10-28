@@ -1,4 +1,5 @@
 export const routes = {
+"/api/workspace/customer-project-followup-source-file":{"method":"GET","business":true,"binary":"file","query":["id"]},
 "/api/workspace/business-followup-targets":{"method":"GET","business":true,"query":["module","projectId"]},
 "/api/workspace/business-followup-data":{"method":"GET","business":true,"query":["module","collection","recordId","sectionKey"]},
 "/api/workspace/business-followup-download":{"method":"GET","business":true,"binary":"file","query":["id"]},

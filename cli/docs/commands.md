@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.40.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.41.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,12 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon sales followups backup-schema` | 查询历史原件、可见快照与旧浏览器恢复规则 | local-read |
+| `doon sales followups source-files [--owner <id>] [--limit <number>] [--offset <number>]` | 查询授权来源原件及完整性元数据 | business-read-and-session-last-seen |
+| `doon sales followups source-download <id> --output <file>` | 二次授权并校验摘要下载来源原件 | local-file-and-session-last-seen |
+| `doon sales followups backup-export --output <file> [--owner <id>]` | 导出当前可见跟进和邮件字段快照到新文件 | local-file-and-session-last-seen |
+| `doon sales followups backup-preview --input <file> --owner <id> --source-key <key> --output <file> [--limit <number>] [--offset <number>]` | 只读匹配旧备份并生成绑定来源版本的恢复计划 | local-file-and-session-last-seen |
+| `doon sales followups backup-apply --input <file> --plan <file> --preview-hash <sha256> --selection <file> --report <file>` | 仅恢复明确选中的旧跟进字段，逐条回读并追加执行日志 | business-write |
 | `doon system followups schema` | 查询独立业务沟通与原件字段 | local-read |
 | `doon system followups targets --module <module> [--project <id>] [--team <id>] [--limit <number>] [--offset <number>]` | 查询原权限内可跟进目标四元组 | business-read-and-session-last-seen |
 | `doon system followups list --input <file> [--team <id>] [--limit <number>] [--offset <number>]` | 读取指定目标不可变跟进记录 | business-read-and-session-last-seen |
@@ -440,4 +446,4 @@
 | 财务部 | finance | partial |
 | 系统管理 | management | partial |
 
-查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8财务、W9售后及W10基础批已完成本地成品和GitHub来源核验，结果见仓库执行记录。W10基础批0.39本期384条命令、217组合成检查通过；engineering及sales_approval通知正向只用本机合成transport，无真实SMTP。0.40继续补齐客服独立资料/跟进/项目/样办及项目协作及通用业务附件/沟通23条命令，源码已接入、成品验收待完成。W11升级回退已通过，完整覆盖、容量和员工实际分发继续验收；WorkBuddy按用户指示停止实机操作，不标通过。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。
+查询阶段共接入 111 个业务查询/导出命令；W1已接入客户/项目表单、资料、任务、流转及原件；W2已接入工程与客户报价、目录/模具/名称资料、交接、模板/附件、历史价格和已发送事实登记。W1/W2本地成品验收完成；W3已接入订单字段、交接、内部订单、原单、PI等单据及金蝶草稿，本地验收结果见仓库执行记录，W4已接入工程需求、审图/变更、SOP及凭证、项目图纸/样办和交接、签样/工程变更、图号更正，W5已接PMC排期、计划/齐套及有限产能、采购跟进核数存档、供应商报价原件、外协及成品准备，W6已接部门工序/损耗、MES来源导入及更正核验、工序外协收货、质量/齐料/仓储凭据和成品员工收发附件，W7已接OQC/包装放行、发运物流登记、结单恢复及生产出货来源，W8财务、W9售后及W10基础批已完成本地成品和GitHub来源核验，结果见仓库执行记录。W10基础批0.39本期384条命令、217组合成检查通过；engineering及sales_approval通知正向只用本机合成transport，无真实SMTP。0.40继续补齐客服独立资料/跟进/项目/样办及项目协作及通用业务附件/沟通23条命令，源码已接入、成品验收待完成。0.41新增来源原件、可见导出及旧浏览器备份预览/显式选集恢复6条，沿原跟进保存逐条执行与回读，成品待验；初始迁入维护工具不开放为员工命令。W11升级回退已通过，完整覆盖、容量和员工实际分发继续验收；WorkBuddy按用户指示停止实机操作，不标通过。金蝶相关操作按用户指示暂缓、另行安排，既有命令保留，后续业务成品验收继续跳过12条金蝶命令。新增查询及编辑表单不改变查询阶段原111条命令的范围。图纸、SOP、样品及既有业务查询支持业务组，IE报价不支持业务组筛选；查询使用客户端分页，列表额外支持搜索。订单/原单使用 customer-code 精确原值，单据使用 customer/order 的明确ID，不能混用。已完成总表导出仅支持业务组和新输出路径。参数见各命令 --help，范围与字段说明见 [业务部说明](sales.md)、[订单/单据说明](orders.md) 、[工程说明](engineering.md) 、[PMC与采购说明](planning.md) 、[生产与交付说明](operations.md) 和 [财务说明](finance.md)。密码只在员工交互终端输入，`--json` 不会使登录变为无人值守。

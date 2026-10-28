@@ -362,3 +362,7 @@ BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登
 | 通用业务附件与沟通business_followup | `system followups schema/targets/list/show/save/files/file-download` | 固定business-followup-targets/data/save/download；原目标授权、业务组、客户/项目/订单及来源归属 | 独立追加、UUID绑定身份与内容及原件摘要、目录回读；跨目标/客户拒绝，原单据及附件不变；金蝶/源快照暂缓 |
 
 新增23条命令进入原成品全命令验收链，版本0.40登记419条、本期407条非金蝶。69组隔离API/Commander通过，包含可选小样本并发共70组；独立进程69组、完整402回归及独立子套件、18HTTP、Windows407条/242组、两套CI和GitHub来源均通过，详见本批验收。通用跟进只覆盖schema列出的24个固定栏目，不能代替原审批、执行或暂停的金蝶动作。
+
+## 0.41历史跟进适配（开发检查通过）
+
+来源存档下载、当前可见快照导出、旧浏览器备份预览和显式选集恢复，复用网页原跟进保存；只修改状态/日期/备注/勾选，原来源和其他关联保留。106CLI、75组集中API/Commander、75组独立进程和最终6入口50组、18HTTP通过，完整回归和成品仍待。初始历史迁入是本机维护工具链，不等同网页备份恢复，未开放为员工CLI；详见[历史适配验收](cli-write-w10-history-acceptance.md)。

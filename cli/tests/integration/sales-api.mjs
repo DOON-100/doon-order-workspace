@@ -1,3 +1,4 @@
+import {verifyFollowupBackups} from './followup-backup.mjs';
 import {verifyBusinessFollowupWrites} from './business-followup-writes.mjs';
 import {verifySyntheticCapacity,prepareSyntheticCapacity} from './synthetic-capacity.mjs';
 import {verifyServiceRecords} from './service-record-writes.mjs';
@@ -22,9 +23,9 @@ import {build} from 'esbuild';
 import * as XLSX from 'xlsx';
 import {StateStore, windowsCodec} from '../../dist/state.js';
 import {FoundationService} from '../../dist/service.js';
-import {commands,businessFollowupWriteCommands,serviceRecordWriteCommands,projectCollaborationWriteCommands,orderWriteCommands,engineeringWriteCommands,purchaseWriteCommands,planningWriteCommands,supplierWriteCommands,processWriteCommands,productionWriteCommands,deliveryWriteCommands,projectFinanceWriteCommands,arWriteCommands,collectionWriteCommands,complaintWriteCommands,adminWriteCommands,communicationWriteCommands,workspaceToolsCommands} from '../../dist/catalog.js';
+import {commands,followupBackupCommands,businessFollowupWriteCommands,serviceRecordWriteCommands,projectCollaborationWriteCommands,orderWriteCommands,engineeringWriteCommands,purchaseWriteCommands,planningWriteCommands,supplierWriteCommands,processWriteCommands,productionWriteCommands,deliveryWriteCommands,projectFinanceWriteCommands,arWriteCommands,collectionWriteCommands,complaintWriteCommands,adminWriteCommands,communicationWriteCommands,workspaceToolsCommands} from '../../dist/catalog.js';
 import {verifyOrderWrites} from './order-writes.mjs';
-const orderWriteNames=new Set([...businessFollowupWriteCommands,...serviceRecordWriteCommands,...projectCollaborationWriteCommands,...orderWriteCommands,...engineeringWriteCommands,...purchaseWriteCommands,...planningWriteCommands,...supplierWriteCommands,...processWriteCommands,...productionWriteCommands,...deliveryWriteCommands,...projectFinanceWriteCommands,...arWriteCommands,...collectionWriteCommands,...complaintWriteCommands,...adminWriteCommands,...communicationWriteCommands,...workspaceToolsCommands].map(row=>row.name));
+const orderWriteNames=new Set([...followupBackupCommands,...businessFollowupWriteCommands,...serviceRecordWriteCommands,...projectCollaborationWriteCommands,...orderWriteCommands,...engineeringWriteCommands,...purchaseWriteCommands,...planningWriteCommands,...supplierWriteCommands,...processWriteCommands,...productionWriteCommands,...deliveryWriteCommands,...projectFinanceWriteCommands,...arWriteCommands,...collectionWriteCommands,...complaintWriteCommands,...adminWriteCommands,...communicationWriteCommands,...workspaceToolsCommands].map(row=>row.name));
 import {verifyEngineeringWrites} from './engineering-writes.mjs';
 import {verifyPurchaseWrites} from './purchase-writes.mjs';
 import {verifyPlanningWrites} from './planning-writes.mjs';
@@ -549,7 +550,7 @@ try{
     const afterW10=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeW10.records)assert.equal(afterW10.get(row.id),row.data,'W10 changed an unrelated original record');
   }
   if(!['--w2-only','--w3-only','--w4-only','--w5-only','--w6-only','--w7-only','--w8-only','--w9-only','--w10-only'].some(flag=>process.argv.includes(flag))){
-    const beforeCoverage=snapshot();for(const verify of [verifyServiceRecords,verifyProjectCollaborationWrites,verifyBusinessFollowupWrites])testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
+    const beforeCoverage=snapshot();for(const verify of (process.argv.includes('--backup-only')?[verifyFollowupBackups]:[verifyServiceRecords,verifyProjectCollaborationWrites,verifyBusinessFollowupWrites,verifyFollowupBackups]))testedCommands.push(...await verify({services,dir,origin,env,root,pass,nativeCommands:Boolean(processState),runtime}));
     const afterCoverage=new Map(snapshot().records.map(row=>[row.id,row.data]));for(const row of beforeCoverage.records)assert.equal(afterCoverage.get(row.id),row.data,'Coverage tests changed unrelated original records');
   }
   if(processState&&!process.argv.includes('--coverage-only')&&!process.argv.includes('--w10-only')&&!process.argv.includes('--w9-only')&&!process.argv.includes('--w8-only')&&!process.argv.includes('--w7-only')&&!process.argv.includes('--w5-only')&&!process.argv.includes('--w6-only')&&!process.argv.includes('--skip-command-sweep')&&!process.argv.includes('--w2-only')&&!process.argv.includes('--w3-only')&&!process.argv.includes('--w4-only'))assert.equal(new Set(testedCommands).size,commands.filter(row=>!process.argv.includes('--skip-kingdee')||!row.name.startsWith('sales kingdee ')).length);

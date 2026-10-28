@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {all,newId,now,strictDate,type Entity,type Member,type State} from './domain';
-import {AppError,audit,bucket,commit,json} from './store';
+import {AppError,audit,bucket,commit,json,snapshot,actor} from './store';
 import {sha} from './workbooks';
 import {assertProjectNotTrashed,isProjectTrashed,projectAccess,projectServiceMemberIds,type CustomerProject} from './customer-projects';
 import {followupAccess,followupMailAccess,followupCategories,followupStatuses,getVisibleProjectFollowups,customerProjectFollowupSummary} from './customer-project-followup';
@@ -36,7 +36,8 @@ function validateAssignment(s:State,m:Member,fields:any,before?:Entity){
  if(!fields.customerId&&m.role!=='admin'&&owner.id!==m.id)throw new AppError('仅跟进负责人或管理员可将记录退回待归属。',403);
 }
 async function replay(s:State,m:Member,action:string,input:any){
- const prior=all(s,'customer_project_followup_request').find(r=>r.id==='customer_project_followup_request_'+input.token);if(!prior)return null;
+ const prior=s.records.find(r=>r.id==='customer_project_followup_request_'+input.token);if(!prior)return null;
+ if(prior.kind!=='customer_project_followup_request')throw new AppError('请求编号已被其他类型记录占用，本次未写入。',409);
  if(prior.actorId!==m.id||prior.action!==action||prior.hash!==await sha(JSON.stringify(input)))throw new AppError('请求编号已用于其他内容。',409);
  for(const recordId of prior.resultIds||[]){const r=s.records.find(row=>row.id===recordId);if(!r)throw new AppError('原操作结果不存在。',409);if(['customer_project_followup','customer_project_followup_mail'].includes(r.kind))assertAccess(s,m,r);else if(r.kind==='customer_project_followup_source'&&m.role!=='admin'&&r.ownerId!==m.id)throw new AppError('无权读取原导入。',403);}
  if(prior.response?.item)assertAccess(s,m,prior.response.item);
@@ -54,7 +55,11 @@ export async function customerProjectFollowupGet(action:string,req:Request,s:Sta
  if(action==='customer-project-followup-source-file'){
   const row=record(s,'customer_project_followup_source',new URL(req.url).searchParams.get('id')||'');if(m.role!=='admin'&&row.ownerId!==m.id)throw new AppError('仅源工作台负责人及管理员可下载完整原始档案。',403);
   const object=await bucket().get(row.fileKey);if(!object)throw new AppError('原始档案暂不可用。',404);
-  return new Response(object.body,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(row.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
+  const bytes=await object.arrayBuffer();if(row.hash&&await sha(bytes)!==row.hash||row.size!==undefined&&bytes.byteLength!==row.size)throw new AppError('原始档案完整性校验未通过。',409);
+  const fresh=await snapshot(),current=await actor(fresh),latest=record(fresh,'customer_project_followup_source',row.id);
+  if(current.id!==m.id||!current.active||current.role!=='admin'&&latest.ownerId!==current.id)throw new AppError('来源档案授权已变化，请重新读取。',403);
+  if(latest.fileKey!==row.fileKey||latest.hash!==row.hash||latest.size!==row.size)throw new AppError('来源档案状态已变化，请重新读取。',409);
+  return new Response(bytes,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(latest.filename)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox"}});
  }
  if(action==='customer-project-followup-history'){
   const row=s.records.find(r=>r.id===new URL(req.url).searchParams.get('id')&&['customer_project_followup','customer_project_followup_mail'].includes(r.kind));if(!row)throw new AppError('记录不存在或无权限。',403);assertAccess(s,m,row);
@@ -70,7 +75,7 @@ export async function customerProjectFollowupGet(action:string,req:Request,s:Sta
  const teams=all(s,'customer_project_team').filter(t=>t.active&&t.customerIds.some((id:string)=>customers.some(c=>c.id===id))).map(t=>({id:t.id,name:t.name,active:t.active,customerIds:t.customerIds.filter((id:string)=>customers.some(c=>c.id===id)),salesMemberIds:t.salesMemberIds,leaderIds:t.leaderIds,serviceMemberIds:t.serviceMemberIds}));
  const projectById=new Map(projects.map(p=>[p.id,p]));
  const projectTasks=['customer_project_task','customer_project_collaboration_task'].flatMap(kind=>all(s,kind).filter(row=>projectById.get(row.projectId)?.customerId===row.customerId&&projectById.has(row.projectId)).map(row=>({id:row.id,projectId:row.projectId,customerId:row.customerId,roundId:row.roundId,title:row.title,ownerId:row.ownerId,ownerName:all(s,'member').find(member=>member.id===row.ownerId)?.name||'',dueDate:row.dueDate,status:row.status,source:kind==='customer_project_task'?'project':'collaboration'})));
- return json({followups,projectTasks,teams,summary:customerProjectFollowupSummary(followups,projects),mails:all(s,'customer_project_followup_mail').filter(r=>followupMailAccess(s,m,r)).map(r=>({...publicRecord(r),canClassify:followupMailAccess(s,m,r,true)})),sourceBundles:all(s,'customer_project_followup_source').filter(r=>m.role==='admin'||r.ownerId===m.id).map(publicRecord),customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),projects:projects.map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code,status:p.status,teamId:p.teamId,salesMemberId:p.salesMemberId,serviceMemberIds:projectServiceMemberIds(p as CustomerProject)})),people,members:members.map(r=>({id:r.id,name:r.name,role:r.role})),canImport:m.role==='admin'});
+ return json({followupRestoreContract:'scoped-source-version-token-v1',followupSourceFileContract:'metadata-hash-reauthorize-v1',followups,projectTasks,teams,summary:customerProjectFollowupSummary(followups,projects),mails:all(s,'customer_project_followup_mail').filter(r=>followupMailAccess(s,m,r)).map(r=>({...publicRecord(r),canClassify:followupMailAccess(s,m,r,true)})),sourceBundles:all(s,'customer_project_followup_source').filter(r=>m.role==='admin'||r.ownerId===m.id).map(publicRecord),customers:customers.map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),projects:projects.map(p=>({id:p.id,customerId:p.customerId,title:p.title,code:p.code,status:p.status,teamId:p.teamId,salesMemberId:p.salesMemberId,serviceMemberIds:projectServiceMemberIds(p as CustomerProject)})),people,members:members.map(r=>({id:r.id,name:r.name,role:r.role})),canImport:m.role==='admin'});
 }
 export async function customerProjectFollowupPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  const names:Record<string,keyof typeof customerProjectFollowupSchemas>={'customer-project-followup-save':'save','customer-project-followup-mail-classify':'classify','customer-project-followup-promote':'promote','customer-project-followup-import':'import'};

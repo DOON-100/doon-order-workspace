@@ -1,0 +1,10 @@
+import {Command} from 'commander';import {FoundationService} from './service.js';import {followupBackupCommands} from './followup-backup-catalog.js';
+export function registerFollowupBackups(program:Command,foundation:()=>FoundationService,result:(name:string,data:unknown)=>void){const sales=program.commands.find(c=>c.name()==='sales')!,group=sales.commands.find(c=>c.name()==='followups')!,api=()=>foundation().followupBackup(),name=(a:string)=>'sales followups '+a,pages=(c:Command)=>c.option('--limit <number>','每页1至100','20').option('--offset <number>','起始偏移','0');
+ group.command('backup-schema').action(()=>result(name('backup-schema'),api().schema()));
+ pages(group.command('source-files')).option('--owner <id>','原始工作台负责人').action(async o=>result(name('source-files'),await api().sourceFiles(o)));
+ group.command('source-download <id>').requiredOption('--output <file>','新原件文件').action(async(id,o)=>result(name('source-download'),await api().sourceDownload(id,o.output)));
+ group.command('backup-export').requiredOption('--output <file>','新可见字段快照').option('--owner <id>','当前负责人').action(async o=>result(name('backup-export'),await api().exportBackup(o.output,o)));
+ pages(group.command('backup-preview')).requiredOption('--input <file>','5MiB以内原浏览器JSON').requiredOption('--owner <id>','明确当前负责人').requiredOption('--source-key <key>','明确原来源').requiredOption('--output <file>','新计划文件').action(async o=>result(name('backup-preview'),await api().preview(o.input,o.owner,o.sourceKey,o.output,o)));
+ group.command('backup-apply').requiredOption('--input <file>','原始浏览器备份').requiredOption('--plan <file>','已生成的恢复计划').requiredOption('--preview-hash <sha256>','预览返回的文件摘要').requiredOption('--selection <file>','显式sourceIds选集JSON').requiredOption('--report <file>','新的追加执行日志').action(async o=>result(name('backup-apply'),await api().apply(o.plan,o.previewHash,o.selection,o.report,o.input)));
+ for(const row of followupBackupCommands)group.commands.find(c=>row.name.endsWith(' '+c.name()))!.description(row.description);
+}

@@ -1,6 +1,6 @@
 export class CliError extends Error {
   constructor(public code: string, message: string, public exitCode = 1,
-    public details: {status?: number; retryable?: boolean; retryAfterSeconds?: number; outcomeUnknown?: boolean} = {}) {
+    public details: {status?: number; retryable?: boolean; retryAfterSeconds?: number; outcomeUnknown?: boolean; operationReport?:{path:string;appliedCount:number;pendingCount:number;failedCode:string}} = {}) {
     super(message);
   }
 }

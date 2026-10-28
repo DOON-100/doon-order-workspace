@@ -155,3 +155,10 @@ doon sales customers schedule-set --input <文件> --version <当前版本> --re
 `archive <档案ID>`仅管理员核对摘要和来源目录，支持limit/offset。`source-upload --input <JSON> --file <原件>`的JSON为archiveId、fileId；文件不超过64MiB，必须与已登记来源摘要相同，不覆盖既有原件。`source-download <档案ID> <来源ID> --output <新文件>`继续限制报价管理员并校验摘要。
 
 `selection-save --input <JSON> --version <当前版本>`由管理员维护发票价格规则；JSON包括customerAccountId、invoicePreference（rx/solar/highest/both/null）及可选configurationNotes（rx和solar文字）。CLI先读取当前版本和规则摘要，服务器再次核对；未提供说明则保留原说明，不伪造请求幂等或自动重试。
+# 历史跟进和旧浏览器备份
+
+`sales followups backup-schema`说明两种格式：`backup-export`导出当前可见字段快照；`backup-preview/backup-apply`只接受原 `eyewear-france-workbench-v1` 浏览器备份。两者不能混用。完整历史原件用 `source-files/source-download` 按已有权限单独获取；旧原件缺摘要时不猜补、不覆盖文件。
+
+先用 `backup-preview --input --owner --source-key --output` 生成新计划，按明确负责人、来源和sourceId匹配当前记录。查看计划中的当前/恢复后状态、日期、备注和勾选结果，准备形如 `{"sourceIds":["明确的来源编号"]}` 的选集文件；不默认全选。执行使用 `backup-apply --input --plan --preview-hash --selection --report`，其中input必须仍是该原备份，preview-hash取预览返回值，report必须是新的私有执行日志路径。
+
+程序只修改四类恢复字段，保留其他原字段、来源、邮件关系和未选记录；备份/计划/选集或来源版本变化会停止。逐条保存和回读，不是整批原子事务。失败或结果不明先查日志与当前记录，已完成部分保留，不自动重试或用旧库回滚。JSON失败中的operationReport给出日志路径及已完成/待核查计数，不含业务备注。计划、备份、导出和日志应放在个人私有目录，禁止加入公开仓库。
