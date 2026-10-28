@@ -18,7 +18,7 @@
 
 本机交付文件（位于被忽略的cli/artifacts目录，不提交二进制到源码仓库）：
 
-- 员工只需接收一个文件：`Doon-CLI-0.42.0-员工安装包-Windows-x64.zip`，内含下述安装ZIP、`使用说明.txt`和安装ZIP的校验文本；外层包SHA-256为`2d8ac9f3609c5b5a5cca2bafdaecc07958100aecc5fe6e7003dd66e4b8825182`。重新解包已核对内层安装ZIP字节不变。说明源码为[员工使用说明](cli-employee-guide.txt)。
+- 员工只需接收一个文件：`Doon-CLI-0.42.0-员工安装包-Windows-x64-r2.zip`，内含下述安装ZIP、`使用说明.txt`和安装ZIP的校验文本；外层包SHA-256为`368a53632f4450d16912ab26472e69bf8b6f232946a98aa968476805de735eb3`。r2仅更新使用说明，已填入核实过的公司员工HTTPS根地址和完整setup命令，安装ZIP及其校验文本字节不变。公开仓库中的[使用说明模板](cli-employee-guide.txt)保留`{{DOON_EMPLOYEE_ORIGIN}}`，分发时替换为已核实的实际入口；实际员工包没有该占位符。
 - 安装包：`doon-cli-0.42.0-eca05c49afc6-windows-x64.zip`。
 - SHA-256：`6c80b8cc7c3d13d09e9cd7371b2d585e19a6325daf59967a0fe9bc7191d1f6d9`。
 - 干净源码提交：`eca05c49afc65da295952d06a92313e6648f8e53`；包内清单为`sourceDirty: false`。
