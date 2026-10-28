@@ -1,8 +1,8 @@
 # 度昂员工 CLI
 
-版本0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。 W10候选未应用，先前批次以执行记录为准，W8 main4cb613f与local8e8fe15树一致但0.37成品仍待结果。
+固定员工CLI，复用服务器现有身份、权限与业务规则。实际版本和可执行命令以 `doon --version`、`doon commands --json` 为准；源码接入、安装包验收、员工分发和正式部署分别记录，不由命令数量推断完成状态。金蝶12条命令按用户指示继续暂缓。
 
-实施范围和实际验收状态见仓库 [实施计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。
+实施范围和实际验收状态见仓库 [写入阶段计划](../docs/cli-write-implementation-plan.md)、[分发计划](../docs/cli-implementation-plan.md) 与 [执行记录](../docs/cli-execution-log.md)。命令准确列表见 [自动生成的目录](docs/commands.md)，Codex / WorkBuddy 使用约定见 [工具调用说明](docs/agent-usage.md)。Actions构建附件是带有效期的测试来源，正式下载入口及员工试点仍须安排；不把测试服务器链接作为正式入口。
 
 ## Windows 员工安装
 
@@ -18,6 +18,8 @@ doon whoami --json
 `workspace.example` 仅为占位地址，公司正式地址由管理员提供，公开包没有私有连接配置。密码输入不会显示，不接受密码参数、环境变量或管道。初始密码尚未修改时先在员工网站修改，再重新登录。
 
 程序保存在 `%LOCALAPPDATA%\Doon\CLI\programs`，命令入口在其 `bin` 目录。配置和加密会话保存在 `%LOCALAPPDATA%\Doon\CLI`；安装/升级只更新程序和入口。重新运行可信的新版安装包即可升级；安装旧版包可切回已保留版本。在线新版本提示、自动更新、代码签名和正式下载页待接入；首版只提供可验证的安装包。员工电脑的脚本执行策略需在试点验收，不自动改动系统策略。
+
+升级或回退前核对公司提供的版本、提交号、平台和SHA-256，使用同一Windows用户、同一安装目录运行对应可信包的安装助手，随后重开工具并检查版本。回退程序不恢复旧服务器数据库、不删除新业务记录，也不清空配置或会话；新动作仍需满足服务器保护契约。隔离升级验证覆盖0.38→0.39→0.38及0.39→0.40→0.39，保留旧程序和加密合成会话，不能代替员工实际试点。
 
 会话使用 Windows DPAPI 按当前 Windows 用户加密；不打印 Cookie。该加密减少明文落盘，不隔离同一用户运行的其他程序。会话沿用服务器最长 12 小时、空闲 2 小时失效、改密/重置/停用校验。Cookie 具有员工现有权限，CLI 命令清单不等于服务器已把凭据限制为只读。
 
@@ -64,7 +66,7 @@ npm run package:windows
 
 首版持久凭据仅支持 Windows；Linux/macOS 可构建和运行无凭据基础命令，持久登录支持留待后续批次。所有依赖许可证随 Windows 包提供。
 
-金蝶相关操作已按用户要求暂缓，后续单独安排；本批保持既有代码，金蝶命令不纳入W4业务操作验收。
+金蝶相关操作按用户要求暂缓，后续单独安排；既有代码保留，后续业务成品验收继续使用 `--skip-kingdee` 跳过12条金蝶命令。
 
 
 ## W10固定入口
@@ -75,4 +77,4 @@ npm run package:windows
 
 `system workspace schema/list/form/references/history/save/action/inspect/preview/commit/workbook/ownership/report/template/file-download`覆盖原跟进待办、财务协作任务、普通/原版导入、精确owner绑定和固定工具。comment要求订单版本+UUID，task要求完整原hash/版本；财务任务save/submit/accept/return/review/cancel只做协作，不产生现金。owner按明确ID/版本与previewHash一次原子提交，不循环姓名/30行旧接口。普通导入每批200行、原版35行，绑定原件hash、原选择/原因/offset及计划行摘要；旧原版缺rowsHash/writeContract只回读和下载，不补造历史摘要去提交。报表生成归档hash/ID；旧报表未存摘要时明示为本次只读计算的当前原件hash。
 
-保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。 IE内部通知仅固定原生协议，服务器决定收件人/邮箱与原Excel附件；engineering与sales_approval正向均经本地合成transport验证；sales_approval补充独立通讯套件13组/9命令通过，Windows成品仍待验。sending/unknown先查原历史，不自动重发；不宣称真实SMTP已验证。 详见[W10验收](../docs/cli-write-w10-acceptance.md)。
+保留W8 AR导出范围、付款授权人当前角色及W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。IE内部通知由原服务器决定固定收件人/邮箱与原Excel附件；engineering与sales_approval正向仅经本地合成transport验证。sending/unknown先查原历史，不自动重发，不宣称真实SMTP已验证。详见[W10基础批验收](../docs/cli-write-w10-acceptance.md)及[客服记录、项目协作与通用跟进补齐](../docs/cli-write-w10-coverage-acceptance.md)。

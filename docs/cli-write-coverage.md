@@ -140,7 +140,7 @@
 
 | 表单族 | 服务端入口线索 | 现有能力和待核验 |
 | --- | --- | --- |
-| 流程作业 | `process-data`、`process-history`、`process-save`；`lib/process-workspace-api.ts` | 流程类型共享入口但详情字段按类型校验；服务器校验客户、订单、组别和角色；个别类型当前 CLI 已查询，写入未接入。另有 `process-change-*`，预览是否登记记录需核验。 |
+| 流程作业 | `process-data`、`process-history`、`process-save`；`lib/process-workspace-api.ts` | 流程类型共享入口但详情字段按类型校验；服务器校验客户、订单、组别和角色；14类流程的schema/form/history/save已接入各固定命令族，详见下方矩阵。`process-change-*`提案确认保持既有网站边界，不能因流程保存可用就开放模型批准。 |
 | 客户项目 | `customer-project-*`；`lib/customer-project-api.ts` | 保存、项目回收/恢复、款式、轮次、任务、图纸及样品等存在不同 schema；表单字段、权限和副作用待逐项核验。 |
 | 项目结算 | `project-finance-*`、`project-receipt-*` 等；`lib/customer-project-finance-api.ts` | 通用项目财务登记按 `entryType` 区分；收款核实、分配、冲销、退款等是不同动作，不可合并。具体角色及金额规则逐项核验。 |
 | 采购 | `purchase-*`；`lib/purchase-api.ts`、`lib/purchase-change-api.ts` | 涉及预览、提交、保存、收货、归档；具体副作用、角色和字段待核验。 |
@@ -151,15 +151,15 @@
 
 | 页面与动作 | 请求字段线索 | 版本、权限与约束线索 | 状态 |
 | --- | --- | --- | --- |
-| 客户资料：`customer-save` | `id`、`expectedVersion`、`createOnly`、`customer`、`customerCode`、责任姓名和成员、`directory`、`workflow`、`notes`、`active`；嵌套字段见 `lib/collaboration-api.ts` 对应 schema | 客户目录修改要求版本；责任、客户身份冲突及付款条件需服务端校验。具体角色/字段范围待完整核对 | 查询部分已接入；写入未接入 |
-| 项目保存：`customer-project-save` | `id`、`version`、`token`、`customerId`、`code`、`title`、`description`、`teamId`、业务/客服负责人、审核人、`dueDate`、`status`、`development`；具体默认值与约束见 `lib/customer-project-api.ts` | 客户范围、项目角色和任务关系须服务端校验；回收与恢复为独立动作，不是物理删除 | 查询部分已接入；写入未接入 |
-| 流程作业：`process-save` | `id`、`version`、`token`、`type`、`customerId`、`orderId`、`teamId`、`title`、负责人/日期/状态、来源依据和版本、产出证据、阻塞与下一步、`notes`、`details`；`details` 按类型使用不同 schema | 服务端校验成员角色、客户/订单关联、组别、负责人和必要版本；已有 token 去重实现，具体各流程字段待逐项核验 | 10 类流程部分查询已接入；写入未接入 |
+| 客户资料：`customer-save` | `id`、`expectedVersion`、`createOnly`、`customer`、`customerCode`、责任姓名和成员、`directory`、`workflow`、`notes`、`active`；嵌套字段见 `lib/collaboration-api.ts` 对应 schema | 客户目录修改要求版本；责任、客户身份冲突及付款条件需服务端校验。具体角色/字段范围待完整核对 | W1已接入创建及独立master-patch增量修改；不把customer-save当通用PATCH |
+| 项目保存：`customer-project-save` | `id`、`version`、`token`、`customerId`、`code`、`title`、`description`、`teamId`、业务/客服负责人、审核人、`dueDate`、`status`、`development`；具体默认值与约束见 `lib/customer-project-api.ts` | 客户范围、项目角色和任务关系须服务端校验；回收与恢复为独立动作，不是物理删除 | W1已接入create/update及回收恢复，版本和UUID沿原接口 |
+| 流程作业：`process-save` | `id`、`version`、`token`、`type`、`customerId`、`orderId`、`teamId`、`title`、负责人/日期/状态、来源依据和版本、产出证据、阻塞与下一步、`notes`、`details`；`details` 按类型使用不同 schema | 服务端校验成员角色、客户/订单关联、组别、负责人和必要版本；已有 token 去重实现，具体各流程字段待逐项核验 | 14类固定查询与保存已接入，按类型schema和当前权限核验 |
 
 字段表是代码核对线索，并非最终用户可直接提交的完整契约；每个后续批次还必须验证默认值、嵌套结构、敏感字段、不可修改字段、冲突/回读及权限矩阵。
 
 ## 14 类流程表单核对（源码基线 d5a7bde）
 
-以下均使用 GET `process-data` / `process-history` 和 POST `process-save`，共用记录的客户、订单、业务组、标题、负责人、计划/实际日期、状态、来源、证据、关口、阻塞、下一步和备注字段。`details` 的专用字段如下，所有类型还共享 `gateReason`、`documentRef`。此表覆盖的是流程跟进记录，不能将其当作实际库存、放行、发运或财务记账；写入 CLI 均未接入。
+以下均使用 GET `process-data` / `process-history` 和 POST `process-save`，共用记录的客户、订单、业务组、标题、负责人、计划/实际日期、状态、来源、证据、关口、阻塞、下一步和备注字段。`details` 的专用字段如下，所有类型还共享 `gateReason`、`documentRef`。此表覆盖流程跟进记录，不能将其当作实际库存、放行、发运或财务记账；14类固定保存已按W1/W4/W6/W7/W8/W9接入，真实动作分别见对应矩阵。
 
 | 页面/类型 | details 专用字段 | 写入角色线索（均须再通过具体客户、订单与组别权限） |
 | --- | --- | --- |
@@ -193,17 +193,17 @@
 | 页面 / 表单 | 动作与字段 | 权限、版本和限制 | 当前状态 |
 | --- | --- | --- | --- |
 | 客户通用资料 | `customer-workflow-profile-save`：`token`, `customerId`, `version`, `patch`；patch 字段定义在 `lib/customer-workflow.ts` | 当前客户责任范围；普通资料和银行资料有不同写权限，启用状态与策略均须满足；服务器合并 patch 并验证完整结果，token 为 UUID、版本可为 0 | 查询、非银行/非快递账号资料字段更新已接入；其余字段级权限须逐字段验收 |
-| 客户跟进与排程 | `customer-workflow-followup`：token、客户、版本、日期、渠道、内容、结果、处理、下一步、证据；`customer-workflow-schedule`：token、客户、版本、下一步、日期 | 客户责任内的已启用账号及 workflow 权限；同键重放走服务器去重；日期、继续/暂停条件分别校验 | 待实现写入 |
-| 项目开发跟进 | `customer-project-followup-save`：token、id、version、ownerId、customerId、projectId、title、category、stars、status、日期、备注、下一步、checklist | 活跃的 admin/sales/clerk/pmc；非管理员不能改派负责人；关联客户要求操作人和负责人均有客户写权限；更新版本与 token 校验 | 待实现写入 |
-| 跟进邮件归类／转项目 | `customer-project-followup-mail-classify`、`customer-project-followup-promote`；字段详见 `lib/customer-project-followup-api.ts` | 当前跟进或邮件写权限；原负责人、客户和项目组关联一致；使用 UUID token 及当前版本；历史迁入 `customer-project-followup-import` 仅管理员 | 待实现写入；迁入和附件另审计 |
-| 项目协作任务 | `project-collaboration-save/followup/complete/cancel/acknowledge`；保存包含项目、轮次、节点、部门、负责人、标题、说明和期限；其他动作包含 token、id、version、comment | 派发、取消、收阅由项目授权管理人执行；完成须指定负责人本人；项目管理人回复不能代替执行人改变状态；项目和客户须可写 | 待实现写入；不因收到协作任务而扩大客户权限 |
-| 公司付款条件 | `payment-terms-save/authorize/disable/authorizers-save`；token、version，授权/停用含 id 和 reason；名单含成员列表和 reason | 仅管理员配置授权名单；授权/停用由指定负责人执行；草稿创建人或授权负责人维护相应草稿；已授权版本不可直接修改；版本及 UUID token 校验 | 待实现写入，授权和停用保留为业务动作 |
+| 客户跟进与排程 | `customer-workflow-followup`：token、客户、版本、日期、渠道、内容、结果、处理、下一步、证据；`customer-workflow-schedule`：token、客户、版本、下一步、日期 | 客户责任内的已启用账号及 workflow 权限；同键重放走服务器去重；日期、继续/暂停条件分别校验 | W1 followup-add/schedule已接入并验收 |
+| 项目开发跟进 | `customer-project-followup-save`：token、id、version、ownerId、customerId、projectId、title、category、stars、status、日期、备注、下一步、checklist | 活跃的 admin/sales/clerk/pmc；非管理员不能改派负责人；关联客户要求操作人和负责人均有客户写权限；更新版本与 token 校验 | W1 followups create/update已接入并验收 |
+| 跟进邮件归类／转项目 | `customer-project-followup-mail-classify`、`customer-project-followup-promote`；字段详见 `lib/customer-project-followup-api.ts` | 当前跟进或邮件写权限；原负责人、客户和项目组关联一致；使用 UUID token 及当前版本；历史迁入 `customer-project-followup-import` 仅管理员 | W1 classify/promote已接入；旧历史迁入接口仍单独待审计，不冒充通用导入已覆盖 |
+| 项目协作任务 | `project-collaboration-save/followup/complete/cancel/acknowledge`；保存包含项目、轮次、节点、部门、负责人、标题、说明和期限；其他动作包含 token、id、version、comment | 派发、取消、收阅由项目授权管理人执行；完成须指定负责人本人；项目管理人回复不能代替执行人改变状态；项目和客户须可写 | 0.40 system collaboration五类动作已接入并通过69组集中检查；成品结果另记，不扩大客户权限 |
+| 公司付款条件 | `payment-terms-save/authorize/disable/authorizers-save`；token、version，授权/停用含 id 和 reason；名单含成员列表和 reason | 仅管理员配置授权名单；授权/停用由指定负责人执行；草稿创建人或授权负责人维护相应草稿；已授权版本不可直接修改；版本及 UUID token 校验 | W8已接入save/authorize/disable，W10接入指定授权名单；授权和停用保留原业务动作 |
 
 ## 采购与收货接口核对
 
 `lib/purchase-api.ts` 中 `purchase-preview` 虽叫预览，实际会保存导入任务、解析明细和上传原件；它不是零写入 dry-run。`purchase-commit` 按 40 行分批提交，并检查来源版本及预览后的收货变化；不能把批次当作整表原子写入。两个动作限制 `broad(m)` 权限，文件和业务日期有独立校验；失败后应检查已有批次及偏移，不盲目新建或重复提交。
 
-`purchase-save` 使用 `changes` 数组，每项含 id、version、field、value，仅支持供应商复期、预计到货、下次催交和跟进备注；同字段被其他人更改会拒绝，部分异字段修改可合并。其本身没有通用 token。`purchase-receipt` 使用 id、version、type、quantity、returnPending、date、reference、note 和 UUID token；服务端检查权限、当前版本、凭证、数量及重复请求，并区分初始核对、收货、退货、补回和更正。`purchase-archive` 逐条核验版本和齐货条件并保留归档记录，不是删除。各动作仍待 CLI 接入及逐角色测试。
+`purchase-save` 使用 `changes` 数组，每项含 id、version、field、value，仅支持供应商复期、预计到货、下次催交和跟进备注；同字段被其他人更改会拒绝，部分异字段修改可合并。其本身没有通用 token。`purchase-receipt` 使用 id、version、type、quantity、returnPending、date、reference、note 和 UUID token；服务端检查权限、当前版本、凭证、数量及重复请求，并区分初始核对、收货、退货、补回和更正。`purchase-archive` 逐条核验版本和齐货条件并保留归档记录，不是删除。W5已接入save/receipt/archive并完成角色、版本、数量及成品检查；preview/commit源表导入继续按金蝶暂缓边界单列。
 
 ## 客服与 PMC 表单核对
 
@@ -218,9 +218,9 @@
 | shipment | invoiceNo, quantity, shipDate, carrier, trackingNo, packingNote |
 | receivable | invoiceNo, currency, amount, terms |
 
-服务端校验有效账号、客户责任、指定人、订单客户一致及业务类型；更新须匹配版本，客户和类型不可改绑。`service-save` 没有 token，网络异常后不可盲目重复新增。到账和冲销分别使用 `service-receipt`、`service-receipt-reverse`，须当前版本、UUID token 和服务端范围检查；金额以分处理，冲销保留原凭证。出货完成需要实际日期和订单数量约束，不能根据包装入仓推断。`service-attachment` 为独立上传，需按附件格式、权限及版本单独验收。
+服务端校验有效账号、客户责任、指定人、订单客户一致及业务类型；更新须匹配版本，客户和类型不可改绑。当前service-save为CLI提供version-token-v1契约、UUID与来源订单版本保护；旧服务器缺契约时拒绝写入，网络异常仍先核查原动作。到账和冲销分别使用 `service-receipt`、`service-receipt-reverse`，须当前版本、UUID token 和服务端范围检查；金额以分处理，冲销保留原凭证。出货完成需要实际日期和订单数量约束，不能根据包装入仓推断。`service-attachment` 为独立上传，需按附件格式、权限及版本单独验收。
 
-PMC `pmc-save` 批量变更字段需 id、version、col、value，并按同一字段的历史版本检查冲突；它无通用 token。`pmc-round` 新建轮次使用 token、lineIds、scope、productionScope；**已有 token 的重放只核对人员和生产范围，没有比较完整 lineIds/scope**。W5 不能把该 token 当成已绑定完整内容的通用幂等保证，须先补服务端校验或明确暂缓。`pmc-review` 则使用 roundId、lineId、version、status、note，并限定当前人员的最新轮次和原订单范围；此接口无通用 token。所有操作还须通过 `broad` 权限和订单可见性，不能以本表概述替代逐角色验收。
+PMC `pmc-save` 批量变更字段需 id、version、col、value，并按同一字段的历史版本检查冲突；它无通用 token。`pmc-round` 新建轮次使用 token、lineIds、scope、productionScope；W5已补全重放时的完整lineIds/scope及生产范围核对；CLI仅在服务器声明完整契约时新增轮次，旧服务器缺能力时拒绝。`pmc-review` 则使用 roundId、lineId、version、status、note，并限定当前人员的最新轮次和原订单范围；此接口无通用 token。所有操作还须通过 `broad` 权限和订单可见性，不能以本表概述替代逐角色验收。
 
 ## 报价与项目财务接口核对
 
@@ -344,13 +344,14 @@ BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登
 | 成员、业务组、候选名单及授权 | admin management六入口；真实version/hash/UUID、当前角色、全局ID及原字段保全 | 新业务成员不创建登录账号；撤权重放/异kind/完整回读；AR/核实grant/付款名单独立 |
 | 框架、模板、政策、位置及离岗 | 固定type/key；执行关闭、路径仅登记；本人接收、管理员完成重核库存和来源hash | 原权限/创建信息/未知字段和历史保全；认证密码、运行调度、备份部署不开放 |
 | 人工通讯、统一核对、知识和通知 | communications九入口；客户+渠道+项目/订单、版本/来源/内容hash | 负责销售本人核对；processed/收到/已登记分别保留；知识22键只读、无维护API |
-| IE内部通知 | 固定preview/push/history，服务端收件人及原Excel附件，先预留尝试 | engineering正向仅本地合成transport；sales_approval正向与Windows仍待验，未知不重发 |
+| IE内部通知 | 固定preview/push/history，服务端收件人及原Excel附件，先预留尝试 | engineering与sales_approval正向及0.39 Windows成品均已合成验收；无真实SMTP，未知不重发 |
 | 原跟进待办、财务协作及owner绑定 | workspace固定入口；原订单版本/完整hash/UUID，明确ID/版本/previewHash一次提交 | 六个财务任务动作不改现金；不用模糊姓名循环；权限/版本/回读和父夹具保全 |
 | 普通/原版导入、报表和固定工具 | 源/行摘要及原选集/原因/offset；报表归档hash；管理员workbook/归属/费用job | 原件字节保全；旧原版缺契约只读，旧报表明示当前计算hash；显式费用决定不接聊天确认、不自动approve |
 | 总览及维护 | 复用此前业务查询和当前任务投影，原网站/doctor提供维护读取 | 不发明总览写API，不开放任意Shell/SQL/路由、认证维护或备份动作 |
 
-0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。 保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。 IE内部通知仅固定原生协议，服务器决定收件人/邮箱与原Excel附件；engineering与sales_approval正向均经本地合成transport验证；sales_approval补充独立通讯套件13组/9命令通过，Windows成品仍待验。sending/unknown先查原历史，不自动重发；不宣称真实SMTP已验证。 本候选未应用，后续文档局部合并保留root后来W8/W9验收。
-# 0.40覆盖补齐（2026-10-28，开发验收中）
+0.39基础批已完成91CLI、72组隔离接口、402全站及独立子套件、18HTTP、Windows384条/217组、两套CI和GitHub来源核验；详见W10基础批验收。管理/通讯/工具已应用，成员新增不创建登录账号、框架执行关闭、路径只登记、知识无维护API；IE通知仅合成transport，不宣称真实SMTP。0.40补齐结果继续见下方，部署、真实外发和员工实机验收分别处理。
+
+## 0.40覆盖补齐（2026-10-28，成品及GitHub来源通过）
 
 测试环境，不含正式业务数据；以下与原有相似记录分别维护，不宣称已完成成品验收。
 
@@ -360,4 +361,4 @@ BF/BG入仓复用W6，成品协作保留专用入口；内容checked、发运登
 | 项目独立协作任务customer_project_collaboration_task | `system collaboration schema/list/references/form/history/save/action` | project-collaboration-data/save/followup/complete/cancel/acknowledge；原项目管理人及指定负责人 | 当前权限在UUID重放前校验，改派撤销原负责人操作；仅负责人完成，管理人收阅；任务授权不扩大客户资料访问 |
 | 通用业务附件与沟通business_followup | `system followups schema/targets/list/show/save/files/file-download` | 固定business-followup-targets/data/save/download；原目标授权、业务组、客户/项目/订单及来源归属 | 独立追加、UUID绑定身份与内容及原件摘要、目录回读；跨目标/客户拒绝，原单据及附件不变；金蝶/源快照暂缓 |
 
-新增23条命令进入原成品全命令验收链，版本0.40登记419条、本期407条非金蝶。69组隔离API/Commander通过，包含可选小样本并发共70组；独立进程、完整回归、成品和远端CI结果另行追加。通用跟进只覆盖schema列出的24个固定栏目，不能代替原审批、执行或暂停的金蝶动作。
+新增23条命令进入原成品全命令验收链，版本0.40登记419条、本期407条非金蝶。69组隔离API/Commander通过，包含可选小样本并发共70组；独立进程69组、完整402回归及独立子套件、18HTTP、Windows407条/242组、两套CI和GitHub来源均通过，详见本批验收。通用跟进只覆盖schema列出的24个固定栏目，不能代替原审批、执行或暂停的金蝶动作。
