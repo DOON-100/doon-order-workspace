@@ -1,5 +1,6 @@
 'use client';
-import {useEffect,useRef,useState,type ReactNode} from 'react';
+import {Fragment,useEffect,useRef,useState,type ReactNode} from 'react';
+import {BusinessFollowupSlot} from './business-followup-panel';
 import {Button} from '@/components/ui/button';
 import {Save,X} from 'lucide-react';
 import {CPSearchSelect} from './customer-project-search-select';
@@ -15,8 +16,10 @@ export const cpOptions=(rows:CPRow[],label:(row:CPRow)=>string):CPOption[]=>rows
 export const cpEnum=(values:Record<string,string>):CPOption[]=>Object.entries(values).map(([value,label])=>({value,label}));
 export function CPEmpty({children='暂无记录，可从上方按钮开始登记。'}:{children?:ReactNode}){return <div className="cp-empty">{children}</div>;}
 export function CPBadge({children,tone=''}:{children:ReactNode;tone?:string}){return <span className={'cp-badge '+tone}>{children}</span>;}
-export function CPSection({title,description,actions,children}:{title:string;description?:string;actions?:ReactNode;children:ReactNode}){return <section className="cp-section"><div className="cp-section-heading"><div><h3>{title}</h3>{description&&<p>{description}</p>}</div><div className="cp-actions">{actions}</div></div>{children}</section>;}
-export function CPTable({headers,rows,empty,filters}:{headers:string[];rows:ReactNode[][];empty?:string;filters?:ReactNode[]}){return <div className="cp-table-scroll"><table className="cp-table"><thead><tr>{headers.map((h,i)=><th scope="col" key={i}>{h}</th>)}</tr>{filters&&<tr className="cp-column-filters">{headers.map((h,i)=><td key={i}><div role="group" aria-label={`${h}筛选`}>{filters[i]}</div></td>)}</tr>}</thead><tbody>{rows.length?rows.map((row,i)=><tr key={i}>{row.map((cell,j)=><td key={j}>{cell??'—'}</td>)}</tr>):<tr><td colSpan={headers.length}><CPEmpty>{empty}</CPEmpty></td></tr>}</tbody></table></div>;}
+export function CPSection({title,description,actions,children}:{title:string;description?:string;actions?:ReactNode;children:ReactNode}){return <section className="cp-section"><div className="cp-section-heading"><div><h3>{title}</h3>{description&&<p>{description}</p>}</div><div className="cp-actions">{actions}</div></div>{children}<BusinessFollowupSlot title={title+' · 附件与沟通'}/></section>;}
+export type CPRecordTarget={module?:string;collection:string;recordId:string};
+export function CPTable({headers,rows,empty,filters,recordTargets}:{headers:string[];rows:ReactNode[][];empty?:string;filters?:ReactNode[];recordTargets?:(CPRecordTarget|null)[]}){return <div className="cp-table-scroll"><table className="cp-table"><thead><tr>{headers.map((h,i)=><th scope="col" key={i}>{h}</th>)}</tr>{filters&&<tr className="cp-column-filters">{headers.map((h,i)=><td key={i}><div role="group" aria-label={`${h}筛选`}>{filters[i]}</div></td>)}</tr>}</thead><tbody>{rows.length?rows.map((row,i)=><Fragment key={recordTargets?.[i]?.recordId||i}><tr>{row.map((cell,j)=><td key={j}>{cell??'—'}</td>)}</tr>{recordTargets?.[i]&&<tr className="business-followup-record-row"><td colSpan={headers.length}><BusinessFollowupSlot {...recordTargets[i]!} sectionKey="record" title="本条记录的附件与沟通"/></td></tr>}</Fragment>):<tr><td colSpan={headers.length}><CPEmpty>{empty}</CPEmpty></td></tr>}</tbody></table></div>;}
+
 
 export function CPFormDialog({form,busy,error,onSubmit,onClose,onDirtyChange}:{form:CPForm;busy:boolean;error:string;onSubmit:(values:Record<string,any>)=>void;onClose:()=>void;onDirtyChange:(dirty:boolean)=>void}){
  const [values,setValues]=useState<Record<string,any>>(()=>structuredClone(form.initial));

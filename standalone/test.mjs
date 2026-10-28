@@ -35,6 +35,12 @@ try{
  const unrelatedLarge=await request('/api/workspace/receipt-photo',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(unrelatedLarge.status,413);await unrelatedLarge.arrayBuffer();
  largeIeForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-too-large.pdf',{type:'application/pdf'}));const tooLargeIe=await request('/api/workspace/ie-quote-attachment-upload',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(tooLargeIe.status,413);await tooLargeIe.arrayBuffer();
  pass('工程上传允许12MB文件通过HTTP边界并继续权限校验，超限及其他附件限额仍拒绝');
+ const followupForm=new FormData();for(const [key,value] of Object.entries({token:crypto.randomUUID(),module:'orders',collection:'orders',recordId:'synthetic-missing-order',sectionKey:'record',note:'Synthetic upload boundary'}))followupForm.set(key,value);
+ followupForm.set('files',new File([new Uint8Array(20*1024*1024)],'synthetic-followup.txt'));
+ const followupBoundary=await request('/api/workspace/business-followup-save',followupForm,adminCookie,{'Connection':'close'});assert.equal(followupBoundary.status,403);await followupBoundary.arrayBuffer();
+ followupForm.set('files',new File([new Uint8Array(50*1024*1024)],'synthetic-over-limit.txt'));
+ const followupOver=await request('/api/workspace/business-followup-save',followupForm,adminCookie,{'Connection':'close'});assert.equal(followupOver.status,413);await followupOver.arrayBuffer();
+ pass('业务跟进20MiB附件通过独立HTTP边界后仍须记录授权，50MiB整请求上限拒绝超限');
  const expandedCustomers=Array.from({length:209},(_,i)=>'TEST-CUSTOMER-'+i);
  await ok('/api/auth/accounts',{username:'scope_test',name:'客户范围容量测试',password:'Test-Scope-Initial!',role:'sales',customers:expandedCustomers},adminCookie);
  const expandedState=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(expandedState.res.headers.get('content-encoding'),'gzip');assert.equal(expandedState.res.headers.get('cache-control'),'no-store');

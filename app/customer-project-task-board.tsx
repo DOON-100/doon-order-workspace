@@ -14,7 +14,7 @@ type TaskTableProps=TaskActions&{canEditEntries?:boolean;tasks:CPRow[];projects?
 
 export function CustomerProjectTaskTable({tasks,projects,customerName,onOpenProject,memberName,onEdit,onCancel,onSubmit,onReview,busy,empty,canEditEntries}:TaskTableProps){
  const withProjects=!!projects;
- return <CPTable headers={[...(withProjects?['客户 / 项目']:[]),'跟进行动','跟进与审核人','期限 / 等待方','状态 / 结果 / 审核意见','操作']} empty={empty||'当前范围暂无跟进事项。'} rows={tasks.map(task=>{
+ return <CPTable recordTargets={tasks.map(task=>({module:'customer-projects',collection:'tasks',recordId:task.id}))} headers={[...(withProjects?['客户 / 项目']:[]),'跟进行动','跟进与审核人','期限 / 等待方','状态 / 结果 / 审核意见','操作']} empty={empty||'当前范围暂无跟进事项。'} rows={tasks.map(task=>{
   const project=projects?.find(row=>row.id===task.projectId),pending=!['done','cancelled'].includes(task.status),history=Array.isArray(task.reviewHistory)?task.reviewHistory:[],latestOpinion=history.filter((entry:CPRow)=>['service','sales'].includes(entry.stage)).at(-1);
   return [...(withProjects?[<><b>{project?customerName?.(project.customerId)||'—':'项目不可见'}</b><span className="cp-sub">{project?[project.code,project.title].filter(Boolean).join(' · '):'—'}</span></>]:[]),
    <><b>{task.title}</b>{task.description&&<span className="cp-sub">{task.description}</span>}</>,

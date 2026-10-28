@@ -1,4 +1,5 @@
 import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
+import {businessFollowupGet,businessFollowupPost} from '@/lib/business-followup-api';
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
 import {productionWorkspaceGet,productionWorkspacePost} from '@/lib/production-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
@@ -64,6 +65,8 @@ function line(s:State,m:Member,id:string){const o=s.records.find(r=>r.id===id&&r
 function visible(s:State,m:Member){return (all(s,'order') as Order[]).filter(o=>canRead(m,o));}
 function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<string>){
  const target=s.records.find(v=>v.id===record.targetId),parts=[target,record.before,record.after].filter(Boolean);
+ // Followup contents inherit each exact source record's access, never broad order access.
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('business_followup')))return false;
  // Process snapshots are available only through their responsibility-scoped history.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
@@ -105,6 +108,7 @@ function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
+ const businessFollowup=await businessFollowupGet(action,req,s,m);if(businessFollowup)return businessFollowup;
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
  const kingdeeSales=await kingdeeSalesGet(action,req,s,m);if(kingdeeSales)return kingdeeSales;
@@ -184,6 +188,7 @@ export async function POST(req:Request,ctx:Context){try{
  sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot();
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const businessFollowup=await businessFollowupPost(action,req,s,m);if(businessFollowup)return businessFollowup;
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;
  const cliAr=await arCliPost(action,req,s,m);if(cliAr)return cliAr;
  const kingdeeSales=await kingdeeSalesPost(action,req,s,m);if(kingdeeSales)return kingdeeSales;
