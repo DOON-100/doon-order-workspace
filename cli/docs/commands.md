@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.41.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.42.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -57,7 +57,7 @@
 | `doon management communications action --type <type> --input <file> --version <number> --request-id <uuid> [--channel <channel>]` | 执行原状态动作或已预览的固定内部通知并核对结果 | business-write |
 | `doon system workspace schema --type <type>` | 查询任务、导入和固定工具精确字段 | local-read |
 | `doon system workspace list --type <type>` | 查询本人授权任务、批次或归档 | business-read |
-| `doon system workspace form <id> --type <type>` | 读取当前任务或批次 | business-read |
+| `doon system workspace form <id> --type <type> [--limit <number>] [--offset <number>] [--output <file.json>]` | 读取当前任务或批次；导入行分页，完整记录可另存JSON | business-read |
 | `doon system workspace references --type <type>` | 读取固定候选和人员，不授予额外权限 | business-read |
 | `doon system workspace history <id> --type <type>` | 查询跟进或财务任务历史 | business-read |
 | `doon system workspace save --type <type> --input <file> --request-id <uuid>` | 保存跟进、待办、精确负责人绑定或财务协作草稿 | business-write |

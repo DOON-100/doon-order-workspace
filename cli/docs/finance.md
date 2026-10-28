@@ -1,6 +1,6 @@
 # 财务、应收与结算
 
-CLI 0.38.0登记366条，其中12条金蝶继续暂缓、本期354条非金蝶。保留W8新增37条及全部精度、权限、原件和回读保护；W9再新增5条投诉命令，项目财务按type复用售后、费用及退款处理。W9合并开发59组/14个实际入口通过，完整CLI、全站、独立HTTP、Windows成品及CI来源验收待办。
+当前 CLI 0.42.0 登记425条唯一命令，其中413条属于本期范围，12条金蝶暂缓。财务入口涵盖项目财务、应收、付款条件、客服应收、供应商对账、投诉与售后；具体命令以 `doon commands --json` 为准。安装与错误处理见 [README](../README.md)，各版本验证结果见[执行记录](../../docs/cli-execution-log.md)。
 
 ## 项目财务
 
@@ -25,6 +25,21 @@ doon finance ar list --resource invoices --customer CUSTOMER_ID --json
 doon finance ar preview --input selection.json --json
 doon finance ar export --resource master --team TEAM_ID --output ar-master.csv --json
 ```
+
+筛选参数按所选资源分别支持；0.42起，不支持的参数在请求服务器前返回 `INVALID_ARGUMENT`，不会忽略后返回更大范围的数据。
+
+| `--resource` | 可用筛选 |
+| --- | --- |
+| `workspace` | `--customer`、`--team`、`--currency`、`--period-type`、`--period` |
+| `documents` | `--customer`、`--team` |
+| `invoices`、`imports`、`statements`、`files` | `--customer` |
+| `profiles` | `--customer`、`--invoice` |
+| `master` | `--customer`、`--team`；`references` 另支持 `--id` |
+| `bindings` | 无筛选参数，按当前管理员权限读取 |
+
+该表适用于 `list`、`form`、`references` 的业务筛选；`list` 另支持 `--limit` 和 `--offset`。`form <id> --resource master` 按明确条目编号读取。`export` 仅接受 `workspace` 或 `master`，分别支持上述资源的筛选，但没有分页和 `--id` 参数。不能为历史发票添加 `--team` 或 `--currency`，也不能为 `documents` 添加币种或期间筛选。
+
+`workspace` 的期间只限定回款和出货业绩，当前应收余额不按期间截断。`list` 的 `totals` 是所选授权范围的汇总，不是当前页小计；`references` 结果中的 `data.performance` 保留期间边界和按币种、业务组、客户的业绩。到期日、逾期金额及付款计划保留服务器结果，未知值继续为 `null`，不省略为零。
 
 AR的`*Cents`输入直接使用整数分，`null`表示未知，零和原生允许的负贷项分别保留。历史累计核对只维护历史依据，不生成当期现金。精确选集总表预览只读，登记重新核对previewHash；来源绑定及里程碑指定源版本，来源链接指定目标版本。原件追加保留，重复文件成功亦绑定本次UUID；同UUID不同内容拒绝。
 
@@ -64,7 +79,7 @@ doon finance complaints save --input complaint.json --version 0 --request-id UUI
 
 ## W10财务授权与协作
 
-0.39.0登记396条唯一命令，基础7条前置；12条金蝶暂缓，本期384非金蝶。W10新增管理6、通讯9、工具15，共30条。root合并CLI/服务器类型、目录及集中71组/30条新增命令通过；完整CLI、全站、独立HTTP、Windows成品及CI尚未通过。
+W10接入管理、通讯和固定工具入口。下文说明授权与业务边界，当前版本和命令总数以本文开头及实际目录为准；历史批次的中间检查数量不作为当前验收结果。
 
 `admin management schema/references/form/save/action/history`提供11种固定save及4种离岗动作。沿用管理员或原框架配置角色，完整表单携带真实version、完整来源hash和UUID；重放重核当前身份，保全未知字段、既有userId/邮箱/创建时间。业务成员新增是未绑定身份，不写认证账号表。AR读取grant、项目财务核实grant、付款授权名单、IE/客价/双签政策分别按原规则维护，不从目录可见推断核实权限。离岗由指定接收人本人确认，管理员完成时重核库存/来源hash，原子转交并停用，保留全部历史；不能代接收或自动接受。
 
@@ -74,6 +89,6 @@ AR显式授权导出仍需相同范围read/export；exportCompany/exportTeamIds�
 
 固定工作簿和客户归属工具仅管理员；未知归属不猜测。文件/费用预览可能保存任务和原件，inspect及owner预览只读。费用保留原报价单位/null，不能套AR整数分；fixed-decision须显式填写原job/previewHash及approve/reject/defer，由原程序重核版本、范围、规则和有效期，不接聊天批准、不自动approve。没有任意HTTP/SQL/Shell或SMTP兜底。结果不明先查询原请求/批次，不换UUID盲重提。
 
-保留W8 AR导出范围、付款授权人当前角色及未来W9售后；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因本批自动授权。
+保留AR导出范围、付款授权人当前角色及售后规则；业务成员新增不创建登录账号。框架执行关闭，模板/路径仅登记；知识没有维护API。账号密码、正式运行配置/调度/备份/部署及真实外发不因CLI安装自动授权。
 
-W10内部通知补验：engineering与sales_approval正向均经本机注入合成transport验证，补充独立通讯套件13组/9命令通过；固定总经理收件人与原Excel哈希、报价版本、内容fingerprint及UUID均核对，通知后客价仍为草稿。原集中71组/30命令未重跑；Windows成品及其他未过项仍待验，未验证真实SMTP。详见[W10验收](../../docs/cli-write-w10-acceptance.md)。
+内部通知的engineering与sales_approval正向检查使用本机合成传输；核对固定收件人、原Excel哈希、报价版本、内容fingerprint及UUID，通知后客价仍为草稿。这些检查不验证真实SMTP外发。成品与来源验证见[W10验收](../../docs/cli-write-w10-acceptance.md)，当前发布结果见[执行记录](../../docs/cli-execution-log.md)。

@@ -3,7 +3,7 @@ export function registerWorkspaceTools(program:Command,foundation:()=>Foundation
  const system=program.commands.find(c=>c.name()==='system')||program.command('system'),group=system.command('workspace'),service=()=>foundation().workspaceTools(),name=(v:string)=>'system workspace '+v,input=(c:Command)=>c.requiredOption('--input <file>','明确字段的JSON'),typed=(c:Command)=>c.requiredOption('--type <type>','固定类型'),pages=(c:Command)=>c.option('--limit <number>','条数').option('--offset <number>','偏移');
  typed(group.command('schema')).action(o=>result(name('schema'),service().schema(o.type)));
  pages(typed(group.command('list'))).action(async o=>result(name('list'),await service().list(o.type,o)));
- typed(group.command('form <id>')).action(async(id,o)=>result(name('form'),await service().form(o.type,id)));
+ pages(typed(group.command('form <id>'))).option('--output <file.json>','完整授权记录另存为新JSON文件').action(async(id,o)=>result(name('form'),await service().form(o.type,id,o)));
  typed(group.command('references')).action(async o=>result(name('references'),await service().references(o.type)));
  typed(group.command('history <id>')).action(async(id,o)=>result(name('history'),await service().history(o.type,id)));
  input(typed(group.command('save'))).requiredOption('--request-id <uuid>','UUID').action(async o=>result(name('save'),await service().save(o.type,o.input,o.requestId)));

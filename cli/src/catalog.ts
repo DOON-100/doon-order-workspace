@@ -32,7 +32,7 @@ import {engineeringWriteCommands} from './engineering-write-catalog.js';
 export {engineeringWriteCommands} from './engineering-write-catalog.js';
 import {orderWriteCommands} from './order-write-catalog.js';
 export {orderWriteCommands} from './order-write-catalog.js';
-export const version = '0.41.0';
+export const version = '0.42.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},

@@ -40,8 +40,15 @@ export async function productionWorkspaceGet(action:string,req:Request,s:State,m
  if(action==='production-workspace-data')return json({contract:productionContract,lifecycleContract:'ledger-lifecycle-readback-v1',receiptContract:'production-receipt-v1',mesContract:'production-mes-v1',orders:all(s,'order').filter(readable).map(r=>dto(s,m,r)),reports:all(s,'report').filter(readable).map(r=>dto(s,m,r)),corrections:all(s,'correction').filter(readable).map(r=>dto(s,m,r)),losses:all(s,'loss').filter(readable).map(r=>dto(s,m,r)),columnLabels:pick(colLabels,columns),receiptPhotos:all(s,'receipt_photo').filter(r=>broad(m)||r.actorId===m.id||all(s,'receipt').some(receipt=>receipt.photoId===r.id&&receipt.lines?.every((line:any)=>{try{order(s,m,line.lineId);return true;}catch{return false;}}))).map(r=>pick(r,keys('id filename hash contentType actorId actor createdAt')))});
  const query=new URL(req.url).searchParams,type=query.get('type'),targetId=query.get('id')||'',kind=type==='ledger'?'order':type==='report'?'report':type==='correction'?'correction':type==='loss'?'loss':'';
  const target=s.records.find(r=>r.id===targetId&&r.kind===kind);if(!target||!readable(target))throw new AppError('无权读取此生产记录历史。',403);
- const history=all(s,'audit').filter(a=>a.targetId===targetId&&a.after?.kind===kind&&a.after?.id===targetId&&readable(a.after)&&(!a.before||a.before.id===targetId&&a.before.kind===kind&&readable(a.before))).map(a=>({...pick(a,keys('id action actor createdAt source')),before:a.before?dto(s,m,a.before):null,after:dto(s,m,a.after)}));
- return json({contract:productionContract,id:targetId,type,history});
+ // A rematched report's current order cannot authorize its previous order's
+ // snapshots. Unlinked historical reports retain their PMC/admin-only scope.
+ const historicalReadable=(row:Entity)=>{try{
+  if(row.kind==='report'){if(!row.lineId)return broad(m);order(s,m,row.lineId);return true;}
+  if(row.kind==='correction'){order(s,m,row.lineId);return true;}
+  return readable(row);
+ }catch{return false;}};
+ const history=all(s,'audit').filter(a=>a.targetId===targetId&&a.after?.kind===kind&&a.after?.id===targetId&&historicalReadable(a.after)&&(!a.before||a.before.id===targetId&&a.before.kind===kind&&historicalReadable(a.before))).map(a=>({...pick(a,keys('id action actor createdAt source')),before:a.before?dto(s,m,a.before):null,after:dto(s,m,a.after)}));
+ return json({contract:productionContract,historyScopeContract:'production-history-snapshot-scope-v1',id:targetId,type,history});
 }
 export async function productionWorkspacePost(action:string,req:Request,s:State,m:Member){
  if(action!=='production-report-action')return null;
