@@ -2,10 +2,10 @@ name: Employee CLI CI
 on:
   push:
     branches: [main]
-    paths: ['cli/**', 'docs/cli-*.md', '.github/workflows/cli-ci.yml']
+    paths: ['cli/**', 'docs/cli-*.md', '.github/workflows/cli-ci.yml', 'lib/department-workspace-navigation.ts', 'app/business-process-panel.tsx']
   pull_request:
     branches: [main]
-    paths: ['cli/**', '.github/workflows/cli-ci.yml']
+    paths: ['cli/**', '.github/workflows/cli-ci.yml', 'lib/department-workspace-navigation.ts', 'app/business-process-panel.tsx']
   workflow_dispatch:
 permissions:
   contents: read
@@ -31,6 +31,7 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm test
       - run: npm run docs:check
+      - run: node scripts/audit-navigation-coverage.mjs --output ../test-output/cli-source-coverage-ci.json
       - run: npm run package:windows
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
