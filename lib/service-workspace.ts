@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {all,clean,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
+import {all,clean,readStateIndexToken,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {customerQuoteAccessPolicy} from './customer-quote-access';
 import {matchesCustomerResponsibility} from './customer-responsibility';
 import {historicalCustomerIdentities} from './customer-identities';
@@ -46,21 +46,40 @@ export function assignedServiceCustomer(s:State,m:Member,account:CustomerAccount
 export function serviceCustomerAccounts(s:State,m:Member):CustomerAccount[]{
  return (all(s,'customer_account') as CustomerAccount[]).filter(account=>assignedServiceCustomer(s,m,account));
 }
+type OrderCustomerIdentityIndex={owners:Map<string,Set<string>>;profiles:Map<string,Entity[]>;historyState:State;keys:WeakMap<CustomerAccount,string[]>};
+const orderCustomerIdentityIndexes=new WeakMap<object,OrderCustomerIdentityIndex>();
+function orderCustomerIdentityIndex(s:State):OrderCustomerIdentityIndex{
+ const token=readStateIndexToken(s),saved=token&&orderCustomerIdentityIndexes.get(token);
+ if(saved)return saved;
+ const accounts=all(s,'customer_account') as CustomerAccount[];
+ const profiles=new Map<string,Entity[]>();
+ for(const row of all(s,'service_record'))if(row.type==='customer_profile'){
+  const rows=profiles.get(row.customerId);if(rows)rows.push(row);else profiles.set(row.customerId,[row]);
+ }
+ // Use an independent history snapshot even when the same State is reindexed.
+ // The history helper's own State cache must never retain an earlier GET index.
+ const historyState:State={revision:s.revision,records:all(s,'customer_workflow_identity')},owners=new Map<string,Set<string>>();
+ for(const other of accounts){
+  const claims=(profiles.get(other.id)||[]).map(row=>row.source?.confirmedCustomerCode)
+   .filter((value):value is string=>typeof value==='string'&&clean(value).length>0&&clean(value).length<=160);
+  for(const value of [other.customer,other.customerCode,...claims,...historicalCustomerIdentities(historyState,other.id)]){
+   const key=nameKey(value);if(!key)continue;
+   const ids=owners.get(key);if(ids)ids.add(other.id);else owners.set(key,new Set([other.id]));
+  }
+ }
+ const index={owners,profiles,historyState,keys:new WeakMap<CustomerAccount,string[]>()};
+ if(token)orderCustomerIdentityIndexes.set(token,index);return index;
+}
 /** Explicit reviewed identities only; ambiguous codes never join an order. */
 export function serviceOrderCustomerKeys(s:State,account:CustomerAccount):string[]{
- const accounts=all(s,'customer_account') as CustomerAccount[];
- const profiles=all(s,'service_record').filter(row=>row.type==='customer_profile');
- const claims=(id:string)=>profiles.filter(row=>row.customerId===id).map(row=>row.source?.confirmedCustomerCode)
-  .filter((value):value is string=>typeof value==='string'&&clean(value).length>0&&clean(value).length<=160).map(clean);
- const confirmed=(id:string)=>{
-  const matches=profiles.filter(row=>row.customerId===id);
-  if(matches.length!==1)return '';
-  const value=matches[0].source?.confirmedCustomerCode;
-  return typeof value==='string'&&clean(value).length<=160?clean(value):'';
- };
- const candidates=[account.customer,account.customerCode,confirmed(account.id),...historicalCustomerIdentities(s,account.id)].map(clean).filter(Boolean);
- return [...new Set(candidates)].filter(candidate=>!accounts.some(other=>other.id!==account.id&&
-  [other.customer,other.customerCode,...claims(other.id),...historicalCustomerIdentities(s,other.id)].some(value=>!!nameKey(value)&&nameKey(value)===nameKey(candidate))));
+ const index=orderCustomerIdentityIndex(s),saved=index.keys.get(account);if(saved)return saved.slice();
+ const matches=index.profiles.get(account.id)||[],value=matches.length===1?matches[0].source?.confirmedCustomerCode:'';
+ const confirmed=typeof value==='string'&&clean(value).length<=160?clean(value):'';
+ const candidates=[account.customer,account.customerCode,confirmed,...historicalCustomerIdentities(index.historyState,account.id)].map(clean).filter(Boolean);
+ const result=[...new Set(candidates)].filter(candidate=>{
+  const owners=index.owners.get(nameKey(candidate));return !owners||owners.size===1&&owners.has(account.id);
+ });
+ index.keys.set(account,result);return result.slice();
 }
 export function canWriteServiceWorkspace(s:State,m:Member){
  if(!m.active||paymentTermsReadOnly(s,m))return false;

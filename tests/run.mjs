@@ -171,4 +171,6 @@ const {testKingdeeSales}=await import('./kingdee-sales-cases.mjs');await testKin
 const {testIeQuoteWorkbook}=await import('./ie-quote-workbook-cases.mjs');await testIeQuoteWorkbook({pass});
 const {testIeManualWorkbook}=await import('./ie-quote-manual-workbook-cases.mjs');await testIeManualWorkbook({pass});
 const {testIeMail}=await import('./ie-mail-cases.mjs');await testIeMail({pass});
+const {testWorkspaceAuditReads}=await import('./workspace-audit-read-cases.mjs');await testWorkspaceAuditReads({...projectHarness,admin});
+await import('./service-order-customer-keys.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

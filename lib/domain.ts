@@ -27,6 +27,11 @@ export function indexReadState(s:State){
  for(const row of s.records){const rows=kinds.get(row.kind);if(rows)rows.push(row);else kinds.set(row.kind,[row]);if(!byId.has(row.id))byId.set(row.id,row);}
  readIndexes.set(s,{records:s.records,length:s.records.length,kinds,byId});return s;
 }
+/** Opaque request-local cache key; mutable/write states have no reusable index. */
+export function readStateIndexToken(s:State):object|undefined{
+ const index=readIndexes.get(s);
+ return index&&index.records===s.records&&index.length===s.records.length?index:undefined;
+}
 export const all=(s:State,kind:string)=>{const index=readIndexes.get(s);return index&&index.records===s.records&&index.length===s.records.length?(index.kinds.get(kind)||[]).slice():s.records.filter(r=>r.kind===kind);};
 export function recordById(s:State,id:string|undefined,kind?:string){const index=readIndexes.get(s);const record=index&&index.records===s.records&&index.length===s.records.length?index.byId.get(id!):s.records.find(row=>row.id===id);return record&&(!kind||record.kind===kind)?record:undefined;}
 /** For positive limits, same result as filter(...).slice(-limit).reverse(). */
