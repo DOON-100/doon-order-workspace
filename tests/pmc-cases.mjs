@@ -2,10 +2,23 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  const sheet={I3:{t:'s',v:'订单号'},M3:{t:'s',v:'订单数量'},BF3:{t:'s',v:'包装入仓数量'}};
- for(let row=4;row<=6;row++)for(const [col,value] of Object.entries({B:'CANDY',C:'测试客户甲',I:'PMC-TEST',J:'DN-PMC',L:row===6?'C2':'C1',H:'白片',M:100,U:'2026-09-20',AB:'原备注',AC:'2026-09-18',BF:0}))sheet[col+row]={t:typeof value==='number'?'n':'s',v:value};
+ for(let row=4;row<=6;row++)for(const [col,value] of Object.entries({B:'CANDY',C:'测试客户甲',I:'PMC-TEST',J:'DN-PMC',L:row===6?'C2':'C1',H:'白片',M:100,U:'2026-09-20',AB:'原备注',AC:'2026-09-18',BF:row===5?100:0,...(row<6?{AF:'2026-09-17',AG:50,BD:100}:{})}))sheet[col+row]={t:typeof value==='number'?'n':'s',v:value};
  sheet['!ref']='A1:BF6';const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'动态表');const job=await original(XLSX.write(book,{type:'buffer',bookType:'xlsx'}),'active','PMC核对测试.xlsx');await ok('ledger-commit',{id:job.id,offset:0});
  const getRows=async()=>(await state()).orders.filter(o=>o.orderNo==='PMC-TEST').sort((a,b)=>a.ledger.sourceRow-b.ledger.sourceRow);
  let [a,b,c]=await getRows();const initialA=a;
+ async function exportedIds(filters={}){const response=await call('ledger-export?'+new URLSearchParams({mode:'active',production:'internal',q:'PMC-TEST',...filters}));assert.equal(response.status,200);const workbook=XLSX.read(await response.arrayBuffer());return XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]).map(row=>row['_明细编号']);}
+ const beforeExport=await state();
+ assert.deepEqual(await exportedIds({currentStage:'包装入仓'}),[a.id]);
+ assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单'}),[b.id]);
+ assert.deepEqual(await exportedIds({currentStage:'待齐料 / 核对'}),[c.id]);
+ assert.deepEqual(await exportedIds({stage:'welding'}),[a.id,b.id]);
+ assert.deepEqual(await exportedIds({currentStage:'钛焊'}),[]);
+ assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单',owner:'CANDY',q:'DN-PMC C1'}),[b.id]);
+ assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单',owner:'CANDY',q:'DN-PMC C2'}),[]);
+ assert.deepEqual(await exportedIds({currentStage:'包装入仓',owner:'TINA'}),[]);
+ assert.deepEqual(await exportedIds({currentStage:'包装入仓',production:'external'}),[]);
+ const afterExport=await state();assert.equal(afterExport.revision,beforeExport.revision);assert.deepEqual(afterExport.orders,beforeExport.orders);
+ pass('PMC导出按显示的当前工序精确筛选，保留原工序在制量口径，组合跟单员、搜索及生产范围且不改数据');
  const save=(o,col,value)=>({changes:[{id:o.id,version:o.version,col,value}]});
  assert.equal((await call('pmc-save',save(a,'U','2026-09-22'),clerk)).status,403);assert.equal((await call('pmc-data',undefined,sales)).status,403);assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'BF',value:'999'}]})).status,400);
  assert.equal((await call('pmc-save',save(a,'U','2026-02-30'))).status,400);pass('PMC总表服务端拦截越权、非PMC工序与非法日期');
@@ -27,6 +40,10 @@ export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'pending'})).status,400);
  await ok('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'});
  await ok('pmc-review',{roundId:round.id,lineId:b.id,version:b.version,status:'pending',note:'等仓库复核'});
+ assert.deepEqual(await exportedIds({currentStage:'包装入仓',reviewStatus:'done'}),[a.id]);
+ assert.deepEqual(await exportedIds({currentStage:'包装入仓',reviewStatus:'pending'}),[]);
+ assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单',reviewStatus:'pending'}),[b.id]);
+ pass('PMC当前工序与本轮核对状态组合导出只包含共同符合的明细');
  let progress=await ok('pmc-data');assert.equal(progress.rounds.find(r=>r.id===round.id).lastLineId,b.id);assert.equal(progress.reviews.filter(r=>r.roundId===round.id).length,2);assert.equal((await getRows())[0].version,a.version);pass('核对轮次固定范围、重试不重复，已核对与待处理跨请求持久保存且不改订单');
  await ok('pmc-save',save(a,'AB','核对后的新变化'));[a]=await getRows();progress=await ok('pmc-data');assert.notEqual(progress.reviews.find(r=>r.lineId===a.id).orderVersion,a.version);
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version-1,status:'done'})).status,409);pass('核对后订单变化使旧标记失效，不能用旧版本再次确认');
