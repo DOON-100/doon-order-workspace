@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import {Combobox} from '@base-ui/react';
 import {Check,ChevronDown} from 'lucide-react';
 import type {CPOption} from './customer-project-ui';
+import './customer-project-search-select.css';
 
 const normalized=(text:string)=>text.normalize('NFKC').trim().toLocaleLowerCase();
 
