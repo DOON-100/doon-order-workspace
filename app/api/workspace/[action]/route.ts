@@ -60,6 +60,12 @@ import {salesColorFieldsGet,salesColorFieldsPost} from '@/lib/sales-color-fields
 import {salesOrderSourcesGet,salesOrderSourcesPost} from '@/lib/sales-order-sources-api';
 import {kingdeeSalesGet,kingdeeSalesPost} from '@/lib/kingdee-sales-api';
 export const dynamic='force-dynamic';
+// Every action used to read the whole workspace on each request. The audit trail
+// and archive rows now make that tens of megabytes, so reads that only inspect
+// their own records declare the kinds they need and skip the rest.
+const scopedReadKinds:Record<string,readonly string[]>={
+ 'service-history':['member','service_record','service_revision','customer_account','customer_quote_access'],
+};
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
 function requirePMC(m:Member){if(!broad(m))throw new AppError('此操作需要 PMC 或管理员权限。',403);}
@@ -163,7 +169,9 @@ export async function GET(req:Request,ctx:Context){try{
    response.headers.set('X-Workspace-Revision',String(s.revision));return response;
   }
  }
- const s=indexReadState(await snapshot()),m=await actor(s);
+ // Reads that only inspect their own records load those kinds instead of the
+ // whole workspace; the audit trail alone is most of the database by now.
+ const s=indexReadState(await snapshot(scopedReadKinds[action])),m=await actor(s);
  const response=await workspaceRead(req,ctx,action,s,m);
  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
 }catch(e){return failure(e);}}
