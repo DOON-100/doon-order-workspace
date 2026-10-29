@@ -89,6 +89,7 @@ async function main() {
   run(powershell, ['-NoProfile', '-NonInteractive', '-File', compress, '-Stage', stage, '-Archive', zip]);
   run(powershell, ['-NoProfile', '-NonInteractive', '-File', expand, '-Archive', zip, '-Destination', extracted]);
   if (JSON.stringify(await inventory(extracted)) !== JSON.stringify(manifest.files)) throw Error('Extracted package integrity mismatch');
+  console.log(run(process.execPath, [path.join(root, 'scripts/test-windows-installer.mjs'), '--package-root', extracted]).toString().trim());
   const isolatedEnv = {...process.env, DOON_CLI_HOME: path.join(work, 'synthetic-config')};
   delete isolatedEnv.NODE_PATH;
   delete isolatedEnv.NODE_OPTIONS;
