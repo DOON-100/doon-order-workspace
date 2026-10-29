@@ -33,12 +33,26 @@ class Statement {
 }
 export function transaction(fn){db.exec('BEGIN IMMEDIATE');try{const value=fn();db.exec('COMMIT');return value;}catch(e){db.exec('ROLLBACK');throw e;}}
 export function records(){return db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data));}
+// Yielding readers must not accumulate an unbounded number of full snapshots.
+// Only member-only reads bypass this FIFO so enrollment stays responsive.
+let snapshotReaders=0;
+const snapshotWaiters=[];
+async function acquireSnapshotReader(){
+ if(snapshotReaders<2){snapshotReaders++;return;}
+ await new Promise(resolve=>snapshotWaiters.push(resolve));
+}
+function releaseSnapshotReader(){const next=snapshotWaiters.shift();if(next)next();else snapshotReaders--;}
 // No long-lived cursor/transaction crosses an await. snapshot() checks the
 // workspace revision around all batches and retries a changed read, never a write.
 // One indivisible legacy record may exceed the byte budget; it is preserved whole.
 export async function readSnapshot(kinds){
+ if(kinds&&!kinds.length)return [];
+ const bulk=!kinds||kinds.some(kind=>kind!=='member');
+ if(bulk)await acquireSnapshotReader();
+ try{return await readSnapshotBatches(kinds);}finally{if(bulk)releaseSnapshotReader();}
+}
+async function readSnapshotBatches(kinds){
  const items=[];let cursor;
- if(kinds&&!kinds.length)return items;
  const filter=kinds?'kind IN ('+kinds.map(()=>'?').join(',')+')':null;
  const first=db.prepare('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records'+(filter?' WHERE '+filter:'')+' ORDER BY rowid LIMIT 64');
  const next=db.prepare('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records WHERE '+(filter?filter+' AND ':'')+'rowid>? ORDER BY rowid LIMIT 64');

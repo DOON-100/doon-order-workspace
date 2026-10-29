@@ -31,6 +31,19 @@ try{
  assert.deepEqual((await store.snapshot([])).records,[]);
  assert.deepEqual(db.prepare('SELECT CAST(rowid AS TEXT) rowid,id,kind,data FROM records ORDER BY rowid').all(),before);
  console.log('PASS Complete snapshots preserve ordering, bytes, negative/zero/full 64-bit rowids and explicit member-only reads.');
+ const prepare=db.prepare;let bulkStarts=0;
+ db.prepare=function(sql){if(sql.startsWith('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records ORDER BY rowid'))bulkStarts++;return prepare.call(this,sql);};
+ try{
+  let completed=0;
+  const pending=Array.from({length:20},()=>read().then(value=>{completed++;assert.deepEqual(value,rows());}));
+  await new Promise(resolve=>setImmediate(resolve));assert.equal(bulkStarts,2,'Only two bulk snapshots may start while others wait');
+  const members=await read(['member']);assert.equal(members.length,1);assert.equal(completed,0,'Member-only reads must bypass the bulk queue');
+  await Promise.all(pending);assert.equal(bulkStarts,20);
+ }finally{db.prepare=prepare;}
+ db.prepare("INSERT INTO records(id,kind,data) VALUES('malformed-synthetic','synthetic','{')").run();
+ const rejected=await Promise.allSettled(Array.from({length:5},()=>read()));assert(rejected.every(value=>value.status==='rejected'));
+ db.prepare("DELETE FROM records WHERE id='malformed-synthetic'").run();assert.deepEqual(await read(),rows());
+ console.log('PASS Twenty bulk readers are limited to two, members bypass their queue, and failed reads release all permits.');
  let attempts=0;
  env.DB.readSnapshot=async kinds=>{
   attempts++;const pending=read(kinds);
@@ -57,6 +70,15 @@ try{
  assert.deepEqual((await store.snapshot(['member'])).records,native.records.filter(row=>row.kind==='member'));
  env.DB.readSnapshot=read;
  console.log('PASS Mid-read revocation is enforced; the unchanged D1-style fallback returns the same full snapshot.');
+ const occupied=[read(),read()];let queuedAttempts=0;
+ env.DB.readSnapshot=kinds=>{queuedAttempts++;return read(kinds);};
+ const queued=store.snapshot();
+ setImmediate(()=>{db.prepare("UPDATE records SET data=json_set(data,'$.original','changed while queued') WHERE id='row-1'").run();bump();});
+ const queuedSnapshot=await queued;await Promise.all(occupied);env.DB.readSnapshot=read;
+ assert.equal(queuedAttempts,2);assert.deepEqual(queuedSnapshot.records,rows());
+ await assert.rejects(()=>store.commit(queuedSnapshot.revision-1,[{id:'forbidden-queued-write',kind:'synthetic'}]),error=>error.status===409);
+ assert.equal(db.prepare("SELECT id FROM records WHERE id='forbidden-queued-write'").get(),undefined);
+ console.log('PASS A queued snapshot revalidates concurrent changes after admission and still rejects stale writes.');
  const state=domain.indexReadState({revision:1,records:rows()}),record=domain.recordById(state,'row-1');
  assert.equal(record.id,'row-1');assert.equal(domain.recordById(state,'row-1','member'),undefined);
  const derived={...state,records:[{id:'row-1',kind:'replacement'}]};assert.equal(domain.recordById(derived,'row-1').kind,'replacement');
