@@ -49,7 +49,7 @@ AR的`*Cents`输入直接使用整数分，`null`表示未知，零和原生允�
 
 `finance payment-terms schema/list/form/history/save/action --type authorize|disable`沿用草稿创建人和指定业务授权人。管理员配置身份不自动替代指定授权人。指定人员须仍符合在职admin/sales角色，AR readOnly优先；源版本派生保留原family/termVersion，已授权内容不覆盖。
 
-`finance receivables`保留list/show/history，新增schema/form/references/revisions/save/action/files/file-upload/file-download。保存关联订单时提供`--order-version`，新建0、更新真实当前版本和UUID；到账及全额冲销各自独立。实际到账日期不得晚于上海当日，已收后币种/发票等保持原规则。金额历史以整数分精确重建元文本，未知不填0。
+`finance receivables`保留list/show/history，新增schema/form/references/revisions/save/action/files/file-upload/file-download。保存关联订单时提供`--order-version`，新建0、更新真实当前版本和UUID；到账及全额冲销各自独立。实际到账日期不得晚于上海当日，已收后币种/发票等保持原规则。金额历史以整数分精确重建元文本。新增跟进可省略标题、发票号和amount（或将amount留空），标题由服务器生成，币种默认USD；未知金额不填0、不计入已确认金额汇总，余额为null。补充金额后才能登记到账，已有到账/冲销凭证的应收不能清空金额。
 
 `finance reconciliations`保留查询，新增schema/form/references/revisions/save，固定复用`supplier-reconciliation`流程。销售有价格读取权仍不因此取得维护权；维护按原管理员/PMC/财务角色。该记录保存对账依据，不执行付款、开票或供应商消息。
 

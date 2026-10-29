@@ -46,7 +46,7 @@ try{
 
  const empty=()=>page.getByText('没有匹配的选项，请更换关键词；不支持自定义。',{exact:true});
  async function choose(label,query,option){const control=editor.getByRole('combobox',{name:label,exact:true});await control.fill(query);await page.getByRole('option',{name:option,exact:true}).click();assert.equal(await control.inputValue(),option);}
- await editor.getByPlaceholder('一句话说明需推进的事项').fill('合成模糊查询验证');
+ await editor.getByPlaceholder(/一句话说明需推进的事项/).fill('合成模糊查询验证');
  let saves=0;page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/service-save'))saves++;});
  await input.fill('不存在的合成客户');await empty().waitFor();await input.press('Escape');
  await editor.getByRole('button',{name:'确认保存',exact:true}).click();assert.equal(saves,0,'An unselected required customer cannot be saved');
@@ -93,7 +93,7 @@ try{
 
  await page.getByRole('button',{name:'合成模糊查询验证',exact:true}).click();
  assert(await editor.getByRole('combobox',{name:'记录所属客户',exact:true}).isDisabled(),'Saved customer remains locked when reopened');
- const title=editor.getByPlaceholder('一句话说明需推进的事项');
+ const title=editor.getByPlaceholder(/一句话说明需推进的事项/);
  await title.waitFor();assert(await title.isEnabled(),'The saved record can be reopened while readback is pending');
  await title.fill('合成第二次快速保存');
  const secondResponse=page.waitForResponse(r=>r.url().endsWith('/service-save')&&r.request().method()==='POST');

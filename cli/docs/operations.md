@@ -63,7 +63,7 @@ MES `import-preview`会保存原件和预览，归business-write，不是只读�
 
 - `quality records --type oqc`和`warehouse records --type packaging/shipment-release`复用schema/list/form/references/history/save。检验三数及完成依据、包装数量/箱数/规格/装箱单引用、放行物流/放行依据由原服务器校验；流程凭据不会自动过账库存或判定已发运。
 - `service shipments schema/list/references/form/history/save/files/file-upload/file-download`维护发运与物流跟进。新增version=0，修改用当前版本及UUID；有关联订单必须额外`--order-version`。更新仅指定字段并按原历史版本重建合法重放，服务器核权限、版本、订单来源及团队范围；旧服务器无协议标记时写前拒绝。
-- 发运details使用invoiceNo、正整数quantity、shipDate、carrier、trackingNo、packingNote；status=open/done/cancelled。done必须实际发运日期，同订单所有done分批合计不得超原数量。取消/重新打开是台账状态维护，不等于承运商撤单。没有承运商查询、真实发送或客户签收字段，不猜测物流状态。
+- 发运details使用invoiceNo、quantity、shipDate、carrier、trackingNo、packingNote；status=open/done/cancelled。新增跟进可只填customerId，标题自动生成，数量和日期未确认时可省略；done必须填写正整数quantity及实际发运日期，同订单所有done分批合计不得超原数量。取消/重新打开是台账状态维护，不等于承运商撤单。没有承运商查询、真实发送或客户签收字段，不猜测物流状态。
 - `operations ledger schema --type lifecycle`及`lifecycle --input <file> --version <number>`复用原结单/恢复。输入id、mode=active/archived、reason，归档需closedDate。成品文员只能办理足量入仓后的正常结单；PMC/管理员才可特殊结单和恢复。无UUID契约，不自动重试。包装入仓仍是W6原表BF/BG，启用成品协作的订单不得绕过其专用入口。
 - `service documents`现支持`--kind source --type production_shipment`；references提供精确发运记录id/version供只读来源引用。装箱单/运单无价格，Invoice另需当前PI版本、行映射与累计数量限制。原件及来源版本保留，资料内容checked不等于已经发送、承运商收件或客户签收。
 

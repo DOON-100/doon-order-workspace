@@ -6,6 +6,7 @@ import {historicalCustomerIdentities} from './customer-identities';
 import {paymentTermsReadOnly} from './payment-terms';
 
 export const serviceTypes=['customer_profile','followup','project','sample','shipment','receivable'] as const;
+export const serviceTypeLabels={customer_profile:'客户联系档案',followup:'日常跟进',project:'新款 / 项目',sample:'样办 / 确认',shipment:'出货 / 单据',receivable:'应收 / 核销'} as const;
 export const serviceCurrencies=['CNY','USD','EUR','GBP','HKD'] as const;
 export type ServiceType=typeof serviceTypes[number];
 export type ServiceCurrency=typeof serviceCurrencies[number];
@@ -121,18 +122,18 @@ export const serviceDetailsSchemas={
  followup:z.object({category:text(120)}).strict(),
  project:z.object({model:text(160),drawing:text(160),stage:text(160)}).strict(),
  sample:z.object({model:text(160),drawing:text(160),sampleType:text(160),approvalCustomer:approval,approvalColor:approval,approvalEngraving:approval,approvalAccessory:approval,trackingNo:text(240)}).strict(),
- shipment:z.object({invoiceNo:text(160),quantity:z.number().int().positive().max(100_000_000),shipDate:day,carrier:text(240),trackingNo:text(240),packingNote:text(3000)}).strict(),
- receivable:z.object({invoiceNo:z.string().trim().min(1,'请填写应收发票号').max(160),currency:z.enum(serviceCurrencies),amount:money,terms:text(3000)}).strict(),
+ shipment:z.object({invoiceNo:text(160),quantity:z.preprocess(value=>typeof value==='string'&&!value.trim()?undefined:value,z.number().int().positive().max(100_000_000).optional()),shipDate:day,carrier:text(240),trackingNo:text(240),packingNote:text(3000)}).strict(),
+ receivable:z.object({invoiceNo:text(160),currency:z.enum(serviceCurrencies).default('USD'),amount:z.preprocess(value=>typeof value==='string'&&!value.trim()?undefined:value,money.optional()),terms:text(3000)}).strict(),
 };
 export const serviceSaveSchema=z.object({
  id:serviceIdSchema.optional(),version:z.number().int().positive().optional(),token:z.string().uuid().optional(),sourceOrderVersion:z.number().int().positive().optional(),
  type:z.enum(serviceTypes),customerId:serviceIdSchema,orderId:z.string().trim().max(160).default(''),
  teamId:z.string().trim().max(160).optional(),ownerId:z.string().trim().max(160).optional(),
  serviceReviewerId:z.string().trim().max(160).optional(),salesReviewerId:z.string().trim().max(160).optional(),
- title:z.string().trim().min(1,'请填写标题').max(300),description:text(10000),
+ title:text(300),description:text(10000),
  status:z.enum(['open','done','cancelled']).default('open'),
  waitingFor:z.enum(['none','customer','factory','jennifer']).default('none'),
- dueDate:day,nextFollowUp:day,details:z.record(z.unknown()),
+ dueDate:day,nextFollowUp:day,details:z.record(z.unknown()).default({}),
 }).strict().superRefine((value,ctx)=>{
  if(value.sourceOrderVersion!==undefined&&(!value.token||!value.orderId))ctx.addIssue({code:z.ZodIssueCode.custom,path:['sourceOrderVersion'],message:'来源版本须绑定操作标识和明确订单'});
  if(value.token&&value.orderId&&value.sourceOrderVersion===undefined)ctx.addIssue({code:z.ZodIssueCode.custom,path:['sourceOrderVersion'],message:'请提供关联订单当前版本'});
@@ -144,10 +145,10 @@ export function validateServiceRecordInput(value:unknown){
  const input=serviceSaveSchema.parse(value),validated=serviceDetailsSchemas[input.type].parse(input.details);
  let details:Record<string,string|number>=validated as Record<string,string|number>;
  if(input.type==='receivable'){
-  const {amount,...other}=validated as {amount:number;invoiceNo:string;currency:ServiceCurrency;terms:string};
-  details={...other,amountCents:amount};
+  const {amount,...other}=validated as {amount?:number;invoiceNo:string;currency:ServiceCurrency;terms:string};
+  details={...other,...(amount===undefined?{}:{amountCents:amount})};
  }
- return {...input,details};
+ return {...input,title:input.title||serviceTypeLabels[input.type],details};
 }
 export const serviceReceiptSchema=z.object({
  recordId:serviceIdSchema,version:z.number().int().positive(),amount:money.refine(value=>value>0,'到账金额须大于零'),
@@ -163,18 +164,20 @@ export function serviceReceivedCents(s:State,recordId:string){
 }
 export function publicServiceRecord(s:State,record:ServiceRecord){
  if(record.type!=='receivable')return record;
- const receivedCents=serviceReceivedCents(s,record.id),amountCents=Number(record.details.amountCents);
- return {...record,details:{...record.details,amount:(amountCents/100).toFixed(2)},receivedCents,balanceCents:amountCents-receivedCents};
+ const receivedCents=serviceReceivedCents(s,record.id),amountCents=record.details.amountCents;
+ if(!Number.isSafeInteger(amountCents))return {...record,details:{...record.details,amount:''},receivedCents,balanceCents:null};
+ return {...record,details:{...record.details,amount:(Number(amountCents)/100).toFixed(2)},receivedCents,balanceCents:Number(amountCents)-receivedCents};
 }
 export function publicServiceReceipt(receipt:ServiceReceipt){const {requestFingerprint,...safe}=receipt;return safe;}
 export function publicServiceAttachment(attachment:ServiceAttachment){const {fileKey,...safe}=attachment;return safe;}
 
 export function serviceTotalsByCurrency(s:State,records:ServiceRecord[]){
- const totals:Partial<Record<ServiceCurrency,{amountCents:number;receivedCents:number;balanceCents:number}>>={};
+ const totals:Partial<Record<ServiceCurrency,{amountCents:number;receivedCents:number;balanceCents:number;pendingAmountCount?:number}>>={};
  for(const record of records){
   if(record.type!=='receivable'||record.status==='cancelled')continue;
   const currency=record.details.currency as ServiceCurrency;
   const row=totals[currency]||(totals[currency]={amountCents:0,receivedCents:0,balanceCents:0});
+  if(!Number.isSafeInteger(record.details.amountCents)){row.pendingAmountCount=(row.pendingAmountCount||0)+1;continue;}
   row.amountCents+=Number(record.details.amountCents);row.receivedCents+=serviceReceivedCents(s,record.id);row.balanceCents=row.amountCents-row.receivedCents;
  }
  return totals;

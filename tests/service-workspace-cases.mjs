@@ -166,7 +166,7 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  assert.deepEqual(totals,{USD:{amountCents:10001,receivedCents:0,balanceCents:10001},EUR:{amountCents:20002,receivedCents:0,balanceCents:20002},CNY:{amountCents:30,receivedCents:0,balanceCents:30}});
  assert.deepEqual((await list(other)).totalsByCurrency,{USD:{amountCents:5555,receivedCents:0,balanceCents:5555}});
  await deny('service-save',{...base,type:'receivable',details:samples.receivable},409);
- for(const amount of ['',-1,'1.005','1e2','1000000001.00'])await deny('service-save',{...base,type:'receivable',details:{...samples.receivable,invoiceNo:'SYNTHETIC-INVALID',amount}},400);
+ for(const amount of [-1,'1.005','1e2','1000000001.00'])await deny('service-save',{...base,type:'receivable',details:{...samples.receivable,invoiceNo:'SYNTHETIC-INVALID',amount}},400);
  await deny('service-save',{...fields(invoice),status:'done'},400);
  pass('应收金额按整数分精确存储且按客户权限及币种分别汇总；重复发票、超精度、空值和非法金额不能入账');
 
@@ -283,6 +283,40 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  await ok('member',{...activeMember,active:true});
  for(const row of protectedService)assert.deepEqual(rawRecords().find(record=>record.id===row.id),row);
  pass('停用客户或账号即时禁止业务和附件访问，管理员仍可查历史，不删除任何客服记录');
+
+ // Unknown is distinct from a confirmed zero. New followups need only an authorized customer/type.
+ const priorTotals=clone((await list(assigned)).totalsByCurrency);
+ const pending=[];
+ for(const details of [{},{amount:''},{amount:'   '}]){
+  const row=(await save({type:'receivable',customerId:account.id,details})).record;pending.push(row);
+  assert(row.title.includes(account.customer));assert.equal(row.details.currency,'USD');assert.equal(row.details.invoiceNo,'');
+  assert.equal(row.details.amount,'');assert.equal(row.balanceCents,null);
+  assert(!Object.hasOwn(rawRecords().find(r=>r.id===row.id).details,'amountCents'));
+  await deny('service-receipt',{recordId:row.id,version:row.version,amount:'1.00',date:'2026-10-10',token:crypto.randomUUID()},400);
+  await deny('service-save',{...fields(row),status:'done'},400);
+ }
+ const pendingTotals=(await list(assigned)).totalsByCurrency;
+ assert.equal(pendingTotals.USD.pendingAmountCount,3);
+ for(const key of ['amountCents','receivedCents','balanceCents'])assert.equal(pendingTotals.USD[key],priorTotals.USD[key]);
+ let confirmed=(await save({...fields(pending[0]),details:{invoiceNo:'',currency:'USD',amount:'10.00'}})).record;
+ assert.equal(confirmed.details.amountCents,1000);assert.equal(confirmed.balanceCents,1000);
+ const retainedTitle=confirmed.title;
+ confirmed=(await save({id:confirmed.id,version:confirmed.version,type:'receivable',customerId:account.id})).record;
+ assert.equal(confirmed.details.amountCents,1000);assert.equal(confirmed.title,retainedTitle);
+ confirmed=(await ok('service-receipt',{recordId:confirmed.id,version:confirmed.version,amount:'1.00',date:'2026-10-10',token:crypto.randomUUID()},assigned)).record;
+ await deny('service-save',{...fields(confirmed),details:{invoiceNo:'',currency:'USD',amount:''}},400);
+ const zero=(await save({type:'receivable',customerId:account.id,details:{amount:'0'}})).record;
+ assert.equal(zero.details.amountCents,0);assert.equal(zero.balanceCents,0);
+ for(const type of ['followup','project','sample','shipment']){
+  const draft=(await save({type,customerId:account.id})).record;assert(draft.title);
+  if(type==='shipment'){
+   assert(!Object.hasOwn(draft.details,'quantity'));
+   await deny('service-save',{...fields(draft),status:'done'},400);
+   await deny('service-save',{...fields(draft),status:'done',details:{quantity:1}},400);
+   assert.equal((await save({...fields(draft),status:'done',details:{quantity:1,shipDate:'2026-10-10'}})).record.status,'done');
+  }
+ }
+ pass('客服跟进仅客户必选，标题自动生成；金额、发票和出货数量可暂缺，未知不计零且不参与汇总，到账与实际出货仍校验必要事实');
 
  const finalRows=new Map(rawRecords().map(row=>[row.id,row]));
  for(const row of before)assert.deepEqual(finalRows.get(row.id),row);

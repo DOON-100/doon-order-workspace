@@ -7,7 +7,7 @@ import {serviceAssignmentData,validateServiceAssignment} from './service-workspa
 import {paymentTermsReadOnly} from './payment-terms';
 import {
  assignedServiceCustomer,canReadServiceRecord,canWriteServiceWorkspace,publicServiceAttachment,publicServiceReceipt,publicServiceRecord,
- serviceCustomerAccounts,serviceDetailsSchemas,serviceOrderCustomerKeys,serviceReceivedCents,serviceReceiptReverseSchema,serviceReceiptSchema,serviceSaveSchema,serviceTotalsByCurrency,
+ serviceCustomerAccounts,serviceDetailsSchemas,serviceTypeLabels,serviceOrderCustomerKeys,serviceReceivedCents,serviceReceiptReverseSchema,serviceReceiptSchema,serviceSaveSchema,serviceTotalsByCurrency,
  type ServiceAttachment,type ServiceCurrency,type ServiceReceipt,type ServiceRecord,type ServiceRevision,
 } from './service-workspace';
 
@@ -51,6 +51,7 @@ async function persist(s:State,m:Member,record:ServiceRecord,before:ServiceRecor
 function advance(record:ServiceRecord,m:Member):ServiceRecord{return {...record,version:record.version+1,updatedAt:now(),updatedBy:m.name};}
 function financial(record:ServiceRecord){
  if(record.type!=='receivable')throw new AppError('只能在应收账款记录中确认到账或冲销。');
+ if(record.details.amountCents===undefined)throw new AppError('请先确认并保存应收金额，再登记到账或冲销。');
  if(!Number.isSafeInteger(record.details.amountCents)||!['CNY','USD','EUR','GBP','HKD'].includes(String(record.details.currency)))throw new AppError('应收账款金额或币种异常，请联系管理员核对原记录。',409);
 }
 async function fingerprint(value:unknown){return sha(JSON.stringify(value));}
@@ -130,11 +131,17 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
   if(prior){if(prior.kind!=='service_save_request'||prior.actorId!==m.id||prior.action!=='service-save'||prior.requestFingerprint!==requestFingerprint)throw new AppError('客服保存请求标识已用于其他身份或内容。',409);const currentRecord=editable(s,m,prior.recordId);serviceTeam(req,s,m,currentRecord);return json({ok:true,idempotent:true,record:publicServiceRecord(s,currentRecord)});}
   if(before)current(before,input.version);
   if(input.token&&sourceOrder&&sourceOrder.version!==input.sourceOrderVersion)throw new AppError('关联订单版本已变化，请重新核对来源。',409);
-  const validated=parse(serviceDetailsSchemas[input.type],input.details);
+  // Omitted optional fields retain existing facts; explicit blanks remain explicit.
+  const detailsInput:Record<string,unknown>={};
+  if(before)for(const key of Object.keys(serviceDetailsSchemas[input.type].shape))if(Object.hasOwn(before.details,key))detailsInput[key]=before.details[key];
+  if(before?.type==='receivable'&&Number.isSafeInteger(before.details.amountCents))detailsInput.amount=(Number(before.details.amountCents)/100).toFixed(2);
+  Object.assign(detailsInput,input.details);
+  const validated=parse(serviceDetailsSchemas[input.type],detailsInput);
   let details:Record<string,string|number>=validated as Record<string,string|number>;
   if(input.type==='customer_profile'&&all(s,'service_record').some(row=>row.id!==before?.id&&row.type==='customer_profile'&&row.customerId===input.customerId))
    throw new AppError('该客户已有联系资料，请修改原资料，避免创建重复档案。',409);
   if(input.type==='shipment'&&input.status==='done'){
+   if(!Number.isSafeInteger(details.quantity)||Number(details.quantity)<1)throw new AppError('标记实际出货完成时须填写出货数量。');
    if(!details.shipDate)throw new AppError('完成出货时须填写实际出货日期；包装入仓不能当作已发货。');
    if(input.orderId){
     const order=all(s,'order').find(row=>row.id===input.orderId) as Order;
@@ -145,16 +152,17 @@ export async function serviceWorkspacePost(action:string,req:Request,s:State,m:M
    }
   }
   if(input.type==='receivable'){
-   const {amount,...other}=validated as {amount:number;invoiceNo:string;currency:ServiceCurrency;terms:string};details={...other,amountCents:amount};
+   const {amount,...other}=validated as {amount?:number;invoiceNo:string;currency:ServiceCurrency;terms:string};details={...other,...(amount===undefined?{}:{amountCents:amount})};
    const receipts=before?all(s,'service_receipt').filter(row=>row.recordId===before.id):[],received=before?serviceReceivedCents(s,before.id):0;
    if(receipts.length&&(before!.details.currency!==other.currency||before!.details.invoiceNo!==other.invoiceNo))throw new AppError('已有到账或冲销凭证，不能改变币种和发票号；请保留原凭证关联。');
-   if(amount<received)throw new AppError('应收金额不能少于已到账净额；请先核对到账凭证。');
+   if(amount===undefined&&(receipts.length||input.status==='done'))throw new AppError(receipts.length?'已有到账或冲销凭证，不能清空应收金额。':'应收金额待确认，不能标记应收完成。');
+   if(amount!==undefined&&amount<received)throw new AppError('应收金额不能少于已到账净额；请先核对到账凭证。');
    if(input.status==='done'&&amount!==received)throw new AppError('应收尚有余额，不能标记完成。');
    if(input.status==='cancelled'&&received!==0)throw new AppError('已有有效到账，不能取消；请先按实际情况冲销并填写原因。');
-   if(all(s,'service_record').some(row=>row.id!==before?.id&&row.type==='receivable'&&row.customerId===input.customerId&&row.status!=='cancelled'
+   if(other.invoiceNo&&all(s,'service_record').some(row=>row.id!==before?.id&&row.type==='receivable'&&row.customerId===input.customerId&&row.status!=='cancelled'
     &&clean(row.details?.invoiceNo).toLowerCase()===other.invoiceNo.toLowerCase()&&row.details?.currency===other.currency))throw new AppError('该客户相同发票号及币种已登记应收，请修改原记录，避免重复应收。',409);
   }
-  const {id,version,token,sourceOrderVersion,...fields}=input,at=now(),record:ServiceRecord={...before,...fields,details,id:before?.id||newId('service_record'),kind:'service_record',version:(before?.version||0)+1,
+  const {id,version,token,sourceOrderVersion,...fields}=input,at=now(),record:ServiceRecord={...before,...fields,title:input.title||before?.title||account.customer+' · '+serviceTypeLabels[input.type],details,id:before?.id||newId('service_record'),kind:'service_record',version:(before?.version||0)+1,
    createdAt:before?.createdAt||at,updatedAt:at,updatedBy:m.name};
   const request=requestId?[{id:requestId,kind:'service_save_request',recordId:record.id,customerId:record.customerId,actorId:m.id,action:'service-save',requestFingerprint,sourceOrderId:record.orderId,sourceOrderVersion:sourceOrder?.version||0,createdAt:at}]:[];
   const next=await persist(s,m,record,before,before?'更新客服业务记录':'新增客服业务记录',request);return json({ok:true,record:publicServiceRecord(next,record)});
