@@ -7,3 +7,5 @@
 @media print{.sw-hero-actions,.sw-tabs,.sw-controls,.sw-savebar,.sw-upload,.sw-form-actions,.sw-list-heading>button{display:none!important}.service-workspace{display:block}.sw-editor{padding:0}.sw-table{min-width:0}.sw-table-scroll{overflow:visible}}
 
 .sw-search-select{width:100%;min-width:0}.sw-search-select input{width:100%;padding-right:40px}.sw-select .sw-search-select input{min-width:0;min-height:39px;background:white;border:1px solid #d6e1da;border-radius:6px;padding:8px 40px 8px 10px;font-size:12px}.sw-search-select:has(input:disabled)>button{cursor:default}
+
+.sw-save-toast{position:fixed;left:50%;top:24px;transform:translateX(-50%);z-index:150;display:flex;align-items:center;gap:9px;max-width:calc(100vw - 48px);padding:13px 20px;border:1px solid #b6d8c6;border-radius:10px;background:#edf8f0;color:#1e5747;box-shadow:0 8px 28px #123b3b26;font-size:14px;font-weight:600;pointer-events:none}

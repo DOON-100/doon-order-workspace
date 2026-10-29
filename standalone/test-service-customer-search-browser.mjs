@@ -72,20 +72,68 @@ try{
   if(await control.isDisabled())continue;const before=await control.inputValue();
   await control.fill('绝不自定义xyz');await empty().waitFor();await control.press('Escape');assert.equal(await control.inputValue(),before);
  }
+ // A slow post-save read must not hold the editing lock or overwrite a later save.
+ let heldRead,releaseRead,holdRead=true,failRead=false;
+ const readHeld=new Promise(resolve=>{heldRead=resolve;});
+ await page.route('**/api/workspace/service-data',async route=>{
+  if(failRead){failRead=false;await route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic readback unavailable'})});return;}
+  const response=await route.fetch(),body=await response.body();
+  if(holdRead){holdRead=false;await new Promise(resolve=>{releaseRead=resolve;heldRead();});}
+  await route.fulfill({response,body});
+ });
  const response=page.waitForResponse(r=>r.url().endsWith('/service-save')&&r.request().method()==='POST');
  await editor.getByRole('button',{name:'确认保存',exact:true}).click();
  const saved=await (await response).json();assert.equal(saved.record.customerId,alpha.id);assert.equal(saved.record.waitingFor,'jennifer','Existing stored status remains compatible');
- await input.waitFor({state:'visible'});assert(await input.isDisabled(),'Saved customer remains locked');
+ await editor.waitFor({state:'hidden'});assert.equal(await editor.count(),0,'Successful save closes the editor');
+ await readHeld;
+ const toast=page.getByTestId('service-save-toast');await toast.waitFor();assert.equal(await toast.innerText(),'保存成功');
+ const box=await toast.boundingBox();assert(Math.abs(box.x+box.width/2-720)<2&&box.y<=30,'Toast is at the top center of the viewport');
+ const toastAt=Date.now();await page.screenshot({path:'test-output/service-save-toast.png',fullPage:true});await toast.waitFor({state:'hidden',timeout:3500});
+ assert(Date.now()-toastAt>=1200,'The success toast remains visible before its two-second dismissal');
+
+ await page.getByRole('button',{name:'合成模糊查询验证',exact:true}).click();
+ assert(await editor.getByRole('combobox',{name:'记录所属客户',exact:true}).isDisabled(),'Saved customer remains locked when reopened');
+ const title=editor.getByPlaceholder('一句话说明需推进的事项');
+ await title.waitFor();assert(await title.isEnabled(),'The saved record can be reopened while readback is pending');
+ await title.fill('合成第二次快速保存');
+ const secondResponse=page.waitForResponse(r=>r.url().endsWith('/service-save')&&r.request().method()==='POST');
+ await editor.getByRole('button',{name:'确认保存',exact:true}).click();
+ const second=await (await secondResponse).json();assert.equal(second.record.version,2);
+ await editor.waitFor({state:'hidden'});
+ releaseRead();
+ await page.waitForResponse(r=>r.url().endsWith('/service-data')&&r.request().method()==='GET');
+ await page.getByRole('button',{name:'合成第二次快速保存',exact:true}).click();
+ assert.equal(await title.inputValue(),'合成第二次快速保存','A stale read cannot replace the newer record');
+ failRead=true;await title.fill('合成刷新失败后仍已保存');
+ const thirdResponse=page.waitForResponse(r=>r.url().endsWith('/service-save')&&r.request().method()==='POST');
+ await editor.getByRole('button',{name:'确认保存',exact:true}).click();
+ const third=await (await thirdResponse).json();assert.equal(third.record.version,3);
+ await page.getByRole('alert').filter({hasText:'本次操作已保存，但列表刷新失败'}).waitFor();
+ await editor.waitFor({state:'hidden'});assert.equal(saves,3,'A failed readback must not repeat the write');
+ const persisted=(await api('workspace/service-data')).records.find(r=>r.id===saved.record.id);
+ assert.equal(persisted.title,'合成刷新失败后仍已保存');assert.equal(persisted.version,3);
+ await page.unroute('**/api/workspace/service-data');
+ // A rejected write must retain input and never display a success toast.
+ await page.getByRole('button',{name:'合成刷新失败后仍已保存',exact:true}).click();
+ await title.fill('合成写入被拒绝');
+ await page.route('**/api/workspace/service-save',route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Synthetic version conflict'})}),{times:1});
+ await editor.getByRole('button',{name:'确认保存',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Synthetic version conflict'}).waitFor();
+ assert.equal(await page.getByTestId('service-save-toast').count(),0);assert.equal(await title.inputValue(),'合成写入被拒绝');
+ assert.equal((await api('workspace/service-data')).records.find(r=>r.id===saved.record.id).version,3);
+
+
  const check=new DatabaseSync(path.join(dir,'workspace.sqlite'),{readOnly:true});
  assert.deepEqual(check.prepare("SELECT id,data FROM records WHERE kind='customer_account' ORDER BY id").all(),originals);check.close();
  assert.deepEqual(errors,[]);
  await page.screenshot({path:'test-output/service-customer-search.png',fullPage:true});
+ page.once('dialog',dialog=>dialog.accept());
  await page.getByRole('button',{name:'新增跟进',exact:true}).click();
  assert.equal(await editor.getByRole('combobox',{name:'记录所属客户'}).inputValue(),'请选择客户','New draft clears the previous customer');
  await page.getByRole('button',{name:'等待业务',exact:true}).click();
  await page.getByRole('cell',{name:'等待业务',exact:false}).waitFor();
  assert.equal(await page.getByText('等待曲艳红',{exact:true}).count(),0);
- console.log('PASS all service dropdowns use existing options only; approval/currency/assignment/status search; 223 synthetic customers: name/code partial matching, case-insensitive multi-keywords, keyboard selection, unmatched save blocked, saved customer locked, original accounts unchanged, fresh draft cleared, waiting-for-business label with legacy stored status');
+ console.log('PASS all service dropdowns use existing options only; approval/currency/assignment/status search; 223 synthetic customers: name/code partial matching, case-insensitive multi-keywords, keyboard selection, unmatched save blocked, saved customer locked, original accounts unchanged, fresh draft cleared, waiting-for-business label with legacy stored status; slow/stale/failed background refresh cannot block or repeat saves; successful save closes editor and top-center toast dismisses after two seconds; rejected writes retain input without success toast');
 }catch(error){
  if(browser){const pages=browser.contexts()[0].pages();await pages[0]?.screenshot({path:'test-output/service-search-failure.png',fullPage:true});console.error((await pages[0]?.locator('body').innerText())?.slice(-2400));}throw error;
 }finally{

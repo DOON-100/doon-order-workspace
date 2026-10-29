@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {all,canRead,clean,newId,now,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
+import {all,canRead,clean,indexReadState,newId,now,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {businessTeamData,businessTeamHeader,filterBusinessTeamRows,ungroupedBusinessTeam} from './business-team-scope';
 import {sha} from './workbooks';
@@ -55,7 +55,10 @@ function financial(record:ServiceRecord){
 }
 async function fingerprint(value:unknown){return sha(JSON.stringify(value));}
 const canonicalSave=(value:any):string=>value===null||typeof value!=='object'?JSON.stringify(value):Array.isArray(value)?'['+value.map(canonicalSave).join(',')+']':'{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+canonicalSave(value[key])).join(',')+'}';
-function serviceTeam(req:Request,s:State,m:Member,record:ServiceRecord|Record<string,unknown>){const team=(req.headers.get(businessTeamHeader)||'').trim();if(!team)return;if(team.length>160||team!==ungroupedBusinessTeam&&!businessTeamData(s,m).teams.some(row=>row.id===team)||!filterBusinessTeamRows(s,[record],team).length)throw new AppError('客服记录不在所选业务组范围。',403);}
+function serviceTeam(req:Request,s:State,m:Member,record:ServiceRecord|Record<string,unknown>){const team=(req.headers.get(businessTeamHeader)||'').trim();if(!team)return;
+ // These two authorization reads share an immutable view; the mutable write State is never cached.
+ const view=indexReadState({...s,records:s.records.slice()});
+ if(team.length>160||team!==ungroupedBusinessTeam&&!businessTeamData(view,m).teams.some(row=>row.id===team)||!filterBusinessTeamRows(view,[record],team).length)throw new AppError('客服记录不在所选业务组范围。',403);}
 const imageExtensions:Record<string,string>={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp'};
 function imageContentType(bytes:ArrayBuffer){
  const data=new Uint8Array(bytes),matches=(offset:number,values:number[])=>values.every((value,index)=>data[offset+index]===value);
