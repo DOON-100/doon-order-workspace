@@ -23,20 +23,22 @@ function optionsFrom(children:ReactNode):Option[]{
 const normalized=(value:string)=>value.normalize('NFKC').trim().toLocaleLowerCase();
 
 // Search text only filters existing options. Only selecting an item emits a value.
-export function ServiceSearchSelect({value,children,onChange,required,disabled,'aria-label':label}:{value:string;children:ReactNode;onChange:(event:{target:{value:string}})=>void;required?:boolean;disabled?:boolean;'aria-label':string}){
- const options=optionsFrom(children),selected=options.find(option=>option.value===value)||null;
+export function ServiceSearchSelect({value,children,onChange,required,disabled,placeholder,'aria-label':label}:{value:string;children:ReactNode;onChange:(event:{target:{value:string}})=>void;required?:boolean;disabled?:boolean;placeholder?:string;'aria-label':string}){
+ // A placeholder is a hint, not a choice: an empty-valued option stays out of the
+ // list so required fields cannot be "answered" with 请选择客户 itself.
+ const options=optionsFrom(children),selectable=placeholder?options.filter(option=>option.value!==''):options,selected=selectable.find(option=>option.value===value)||null;
  const [query,setQuery]=useState(selected?.label||''),[open,setOpen]=useState(false);
  const input=useRef<HTMLInputElement>(null);
- const matching=query===selected?.label?options:options.filter(option=>normalized(query).split(/\s+/).every(part=>normalized(option.label).includes(part)));
+ const matching=query===selected?.label?selectable:selectable.filter(option=>normalized(query).split(/\s+/).every(part=>normalized(option.label).includes(part)));
  useEffect(()=>{if(!open)setQuery(selected?.label||'');},[open,value,selected?.label]);
  useEffect(()=>{input.current?.setCustomValidity(required&&!selected?.value?'请从查询结果中选择'+label+'。':'');},[required,selected?.value,label]);
- return <Combobox.Root<Option> items={options} filteredItems={matching} filter={null} value={selected} inputValue={query} disabled={disabled} autoHighlight open={open}
+ return <Combobox.Root<Option> items={selectable} filteredItems={matching} filter={null} value={selected} inputValue={query} disabled={disabled} autoHighlight open={open}
   isItemEqualToValue={(a,b)=>a.value===b.value}
   onOpenChange={next=>{setOpen(next);if(!next)setQuery(selected?.label||'');}}
   onInputValueChange={(value,details)=>{if(['input-change','input-clear','clear-press'].includes(details.reason)){setQuery(value);setOpen(true);}}}
   onValueChange={option=>{if(!option||option.disabled)return;onChange({target:{value:option.value}});setQuery(option.label);setOpen(false);}}>
   <div className="cp-search-input sw-search-select">
-   <Combobox.Input ref={input} aria-label={label} disabled={disabled} required={required} autoComplete="off" placeholder="输入关键词查询，仅可选择已有选项"/>
+   <Combobox.Input ref={input} aria-label={label} disabled={disabled} required={required} autoComplete="off" placeholder={placeholder||'输入关键词查询，仅可选择已有选项'}/>
    <Combobox.Trigger type="button" disabled={disabled} aria-label={'展开'+label+'选项'}><ChevronDown size={16}/></Combobox.Trigger>
   </div>
   <Combobox.Portal><Combobox.Positioner sideOffset={5} style={{zIndex:120}}>

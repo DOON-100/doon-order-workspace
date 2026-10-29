@@ -177,4 +177,5 @@ await import('./customer-project-list-filters-ui.mjs');
 await import('./customer-project-followup-links-ui.mjs');
 await import('./workspace-manual-refresh.mjs');
 await import('./project-collaboration-ui.mjs');
+await import('./service-progress-contract.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

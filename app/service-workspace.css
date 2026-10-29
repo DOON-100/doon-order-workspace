@@ -12,3 +12,10 @@
 
 .sw-required{color:#b42318;font-weight:700;margin-left:4px}
 .sw-required::before{content:"*"}
+
+.sw-confirm-overlay{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;background:#123b3b40}
+.sw-confirm{width:min(430px,100%);border:1px solid #cfded4;border-radius:14px;background:#fff;color:#233f36;box-shadow:0 24px 60px #123b3b59;padding:22px 24px}
+.sw-confirm h2{margin:0 0 9px;font-size:16px;font-weight:650;letter-spacing:-.2px}
+.sw-confirm p{margin:0;font-size:12px;line-height:1.8;color:#5c7a69}
+.sw-confirm-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+@media(max-width:650px){.sw-confirm-actions{flex-direction:column-reverse}.sw-confirm-actions>button{width:100%}}
