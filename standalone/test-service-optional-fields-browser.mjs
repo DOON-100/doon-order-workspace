@@ -59,15 +59,15 @@ try{
   records[type]=await save();assert(records[type].title.includes(alpha.customer));assert.equal(records[type].type,type);
  }
  const pending=records.receivable;assert.equal(pending.details.amount,'');assert.equal(pending.balanceCents,null);assert.equal(pending.details.invoiceNo,'');assert.equal(pending.details.currency,'USD');assert(!Object.hasOwn(pending.details,'amountCents'));
- await page.getByRole('button',{name:pending.title,exact:true}).click();
+ await page.getByRole('button',{name:pending.title,exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();
  const amount=editor.getByRole('spinbutton',{name:'应收金额',exact:true});assert.equal(await amount.inputValue(),'');assert(!(await amount.evaluate(n=>n.required)));
  assert(await editor.getByRole('button',{name:'登记已确认到账',exact:true}).isDisabled());
  await amount.fill('25.50');const confirmed=await save();assert.equal(confirmed.details.amountCents,2550);assert.equal(confirmed.balanceCents,2550);
- await page.getByRole('button',{name:pending.title,exact:true}).click();assert.equal(await amount.inputValue(),'25.50');
+ await page.getByRole('button',{name:pending.title,exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();assert.equal(await amount.inputValue(),'25.50');
  assert(await editor.getByRole('button',{name:'登记已确认到账',exact:true}).isEnabled());
  await editor.getByRole('button',{name:'关闭客服业务编辑',exact:true}).click();
  const shipment=records.shipment;assert(!Object.hasOwn(shipment.details,'quantity'));
- await page.getByRole('button',{name:shipment.title,exact:true}).click();await choose('处理状态','已完','已完成');await save(400);
+ await page.getByRole('button',{name:shipment.title,exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();await choose('处理状态','已完','已完成');await save(400);
  await editor.getByLabel('出货数量（副）',{exact:true}).fill('1');await editor.getByLabel('出货日期',{exact:true}).fill('2026-10-10');
  assert.equal((await save()).status,'done');
  const check=new DatabaseSync(path.join(dir,'workspace.sqlite'),{readOnly:true});assert.deepEqual(check.prepare("SELECT id,data FROM records WHERE kind='customer_account' ORDER BY id").all(),originals);check.close();assert.deepEqual(errors,[]);

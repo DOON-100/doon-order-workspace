@@ -91,7 +91,7 @@ try{
  const toastAt=Date.now();await page.screenshot({path:'test-output/service-save-toast.png',fullPage:true});await toast.waitFor({state:'hidden',timeout:3500});
  assert(Date.now()-toastAt>=1200,'The success toast remains visible before its two-second dismissal');
 
- await page.getByRole('button',{name:'合成模糊查询验证',exact:true}).click();
+ await page.getByRole('button',{name:'合成模糊查询验证',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();
  assert(await editor.getByRole('combobox',{name:'记录所属客户',exact:true}).isDisabled(),'Saved customer remains locked when reopened');
  const title=editor.getByPlaceholder(/一句话说明需推进的事项/);
  await title.waitFor();assert(await title.isEnabled(),'The saved record can be reopened while readback is pending');
@@ -102,7 +102,7 @@ try{
  await editor.waitFor({state:'hidden'});
  releaseRead();
  await page.waitForResponse(r=>r.url().endsWith('/service-data')&&r.request().method()==='GET');
- await page.getByRole('button',{name:'合成第二次快速保存',exact:true}).click();
+ await page.getByRole('button',{name:'合成第二次快速保存',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();
  assert.equal(await title.inputValue(),'合成第二次快速保存','A stale read cannot replace the newer record');
  failRead=true;await title.fill('合成刷新失败后仍已保存');
  const thirdResponse=page.waitForResponse(r=>r.url().endsWith('/service-save')&&r.request().method()==='POST');
@@ -114,7 +114,7 @@ try{
  assert.equal(persisted.title,'合成刷新失败后仍已保存');assert.equal(persisted.version,3);
  await page.unroute('**/api/workspace/service-data');
  // A rejected write must retain input and never display a success toast.
- await page.getByRole('button',{name:'合成刷新失败后仍已保存',exact:true}).click();
+ await page.getByRole('button',{name:'合成刷新失败后仍已保存',exact:true}).click();await page.getByRole('dialog').getByRole('button',{name:'编辑跟进',exact:true}).click();
  await title.fill('合成写入被拒绝');
  await page.route('**/api/workspace/service-save',route=>route.fulfill({status:409,contentType:'application/json',body:JSON.stringify({error:'Synthetic version conflict'})}),{times:1});
  await editor.getByRole('button',{name:'确认保存',exact:true}).click();
