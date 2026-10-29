@@ -1,5 +1,7 @@
 # Mastra Studio 本地测试
 
+对话附件、DeepSeek 图片理解及 Word／Excel／PDF／Markdown 文件生成见[附件使用与发布说明](../../docs/studio-chat-files.md)。内置 Agent 提供生成工具；自定义 Agent 可从工具列表选择 `createDocument`。
+
 云端只读模式的自动调度、独立后台授权和持久运行结果见 [云端自动调度说明](../../docs/cloud-workflow-schedules.md)。本分支实现与云端已发布状态分别验收；保存或发布不会自动启用云端后台任务。
 
 在 `codex/mastra-local-validation` 分支完善正式岗位 Agent，复用数据台的登录与公司图标。总管、PMC、采购、客服使用正式岗位名称；测试数据来源不附加到 Agent 名称或页面标题。默认保留合成演练，也可显式选择本机业务快照进行验证；Git 操作不自动部署到 ECS。

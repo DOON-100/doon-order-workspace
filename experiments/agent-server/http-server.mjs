@@ -6,10 +6,10 @@ import {parsePublicOrigin,canEnterStudio,SessionCheckError} from './session.mjs'
 import {withModelAccess} from '../mastra-studio/model-scheduler.mjs';
 
 export function createAgentServer({publicOrigin,studio,staticStudio,authenticate,acquireRuntime,businessAccess,processChanges,purchaseChanges,withAccess=(_,operation)=>operation(),syntheticOnly=true,health=async()=>true,schedulerStatus,maxActive=Infinity}){
- const origin=parsePublicOrigin(publicOrigin);let active=0;
+ const origin=parsePublicOrigin(publicOrigin);let active=0,activeUploads=0;
  const json=(res,status,body)=>{res.writeHead(status,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff'});res.end(JSON.stringify(body));};
  const server=http.createServer(async(req,res)=>{
-  let counted=false,lease;
+  let counted=false,countedUpload=false,lease;
   try{
    if(req.url==='/health'&&req.method==='GET'){const ok=await health();return json(res,ok?200:503,{ok,syntheticOnly,...(schedulerStatus?{scheduler:schedulerStatus()}: {})});}
    if(req.headers.host!==origin.host)return json(res,403,{error:'访问地址未获授权。'});
@@ -30,11 +30,15 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
     res.setHeader('X-Doon-Auth-Status','expired');return json(res,401,{error:'登录已失效，请先登录数据台。',code:'AUTH_EXPIRED'});
    }
    if(!canEnterStudio(user)){res.setHeader('X-Doon-Auth-Status','forbidden');return json(res,403,{error:'agent 工作台仅限已完成改密的内部账号。',code:'AUTH_FORBIDDEN'});}
+   if(req.method==='POST'&&url.pathname==='/studio/documents/upload'){
+    if(activeUploads>=4)return json(res,429,{error:'当前上传人数较多，请稍后重试。'});
+    activeUploads++;countedUpload=true;
+   }
    const generation=/\/agents\/[^/]+\/(stream|generate|send-message|stream-network|network)(\/|$)/.test(url.pathname);
    if(generation){if(active>=maxActive)return json(res,429,{error:'当前模型验证并发已满，请稍后重试。'});active++;counted=true;}
    const headers=new Headers();for(const [key,value] of Object.entries(req.headers))if(value!==undefined&&!['cookie','authorization','host','connection','content-length'].includes(key))headers.set(key,Array.isArray(value)?value.join(','):value);
    let body;
-   if(!['GET','HEAD'].includes(req.method)){const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>512*1024){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'工作台请求超过大小限制。'});body=Buffer.concat(chunks);}
+   if(!['GET','HEAD'].includes(req.method)){const limit=req.method==='POST'&&url.pathname==='/studio/documents/upload'?11*1024*1024:512*1024;const chunks=[];let size=0,tooLarge=false;for await(const chunk of req){size+=chunk.length;if(size>limit){tooLarge=true;continue;}if(!tooLarge)chunks.push(chunk);}if(tooLarge)return json(res,413,{error:'工作台请求超过大小限制。文件每件不能超过 10 MiB。'});body=Buffer.concat(chunks);}
    const actor={id:String(user.identity?.id||user.username),name:user.identity?.name||user.username,role:user.role};
    const changes=processChanges?.({cookie:req.headers.cookie||'',user}),purchases=purchaseChanges?.({cookie:req.headers.cookie||'',user});
    const access=businessAccess?.({cookie:req.headers.cookie||'',user,...(changes?{stageProcessDraft:draft=>changes.stage(draft)}:{}),...(purchases?{stagePurchaseDraft:draft=>purchases.stage(draft)}:{})});
@@ -76,7 +80,7 @@ export function createAgentServer({publicOrigin,studio,staticStudio,authenticate
    }
    // Do not serialize upstream responses, cookies, user objects or error stacks.
    json(res,error.status===429?429:503,{error:error.status===429?'工作台当前使用人数已满，请稍后重试。':'agent 工作台暂时不可用，请稍后重试。'});
-  }finally{lease?.release();if(counted)active--;}
+  }finally{lease?.release();if(counted)active--;if(countedUpload)activeUploads--;}
  });
  server.requestTimeout=120000;server.headersTimeout=10000;server.keepAliveTimeout=5000;return server;
 }

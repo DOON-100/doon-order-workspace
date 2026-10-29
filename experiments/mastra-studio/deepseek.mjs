@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {createDeepSeek} from '@ai-sdk/deepseek';
 import {processModelScheduler,currentModelAccess,ModelScheduleError} from './model-scheduler.mjs';
+import {createDeepSeekFiles,DeepSeekImageError} from './deepseek-files.mjs';
 
 export const docsUrl='https://api-docs.deepseek.com/zh-cn/quick_start/error_codes/';
 const types={
@@ -19,6 +20,9 @@ export function explainError(status,body={},secret=''){
  return {httpStatus:status,title,cause,action,providerCode:safe(body?.error?.code),providerType:safe(body?.error?.type),documented:!!types[status],docsUrl};
 }
 const localError=(title,cause,action)=>({httpStatus:null,title,cause,action,providerCode:null,providerType:null,documented:false,docsUrl});
+export class DeepSeekResponseError extends Error{
+ constructor(message,status){super(message);this.name='DeepSeekResponseError';this.code='DEEPSEEK_HTTP_ERROR';this.status=status;this.statusCode=status;this.isRetryable=false;}
+}
 export async function readDeepSeekKey(env=process.env){
  const value=env.DEEPSEEK_API_KEY_FILE?await fs.readFile(env.DEEPSEEK_API_KEY_FILE,'utf8'):env.DEEPSEEK_API_KEY||'';
  const key=value.trim();
@@ -34,6 +38,7 @@ export async function loadDeepSeekFileKey(env=process.env){
  else delete env.DEEPSEEK_API_KEY;
 }
 export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.now,timeoutMs=8000,scheduler=processModelScheduler,modelOwner='local',requireModelAccess=false}={}){
+ const images=createDeepSeekFiles({fetchImpl,readKey:()=>readDeepSeekKey(env),now});
  let cached=null,cachedKey=null,expires=0,inflight=null,inflightKey=null,lastModelCall=null;
  const requested=env.DOON_STUDIO_MODEL||'offline';
  if(!['offline','deepseek-flash','deepseek-v4-pro'].includes(requested))throw new Error('DOON_STUDIO_MODEL must be offline, deepseek-flash or deepseek-v4-pro');
@@ -45,19 +50,26 @@ export function createDeepSeekStatus({env=process.env,fetchImpl=fetch,now=Date.n
    if(generation&&requireModelAccess&&!access?.authorize)throw new ModelScheduleError('模型调用缺少有效服务端身份。',403,'authorization');
    const timeout=generation?null:AbortSignal.timeout(timeoutMs);
    const options={...init,redirect:'error',...(timeout?{signal:init.signal?AbortSignal.any([init.signal,timeout]):timeout}:{})};
-   const response=generation?await scheduler.fetch(fetchImpl,input,options,access||{owner:modelOwner}):await fetchImpl(input,options);
+   const response=generation?await scheduler.fetch((target,admitted)=>images.fetch(target,admitted,{owner:access?.owner||modelOwner}),input,options,access||{owner:modelOwner}):await fetchImpl(input,options);
    if(generation){
     let body={};if(!response.ok)body=await response.clone().json().catch(()=>({}));
     lastModelCall={checkedAt:new Date(now()).toISOString(),ok:response.ok,error:response.ok?null:explainError(response.status,body,await readDeepSeekKey(env))};
     if(!response.ok){
      const error=lastModelCall.error;await response.body?.cancel();
-     return Response.json({error:{message:`DeepSeek HTTP ${response.status}：${error.title}。${error.action}`,code:error.providerCode||String(response.status),type:error.providerType||'api_error'}},{status:response.status});
+     // The SDK attaches original requestBodyValues to HTTP API errors. Both
+     // extracted document text and image base64 must stay out of error objects.
+     throw new DeepSeekResponseError(`DeepSeek HTTP ${response.status}：${error.title}。${error.action}`,response.status);
     }
    }
    return response;
   }catch(error){
    if(generation){
     if(init.signal?.aborted)throw init.signal.reason;
+    if(error instanceof DeepSeekResponseError)throw error;
+    if(error instanceof DeepSeekImageError){
+     lastModelCall={checkedAt:new Date(now()).toISOString(),ok:false,error:localError('图片处理未完成',error.message,'检查图片或当前模型后重新提交。')};
+     throw error;
+    }
     if(error instanceof ModelScheduleError){
      lastModelCall={checkedAt:new Date(now()).toISOString(),ok:false,error:localError('模型调度未完成',error.message,'查看等待状态；必要时停止旧请求后重新提交。')};
      // A local rejection is not a provider HTTP response. Preserve this safe,

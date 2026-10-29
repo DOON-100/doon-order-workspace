@@ -7,6 +7,7 @@ import {createDeepSeekStatus,loadDeepSeekFileKey} from './deepseek.mjs';
 import {guardBusinessRequest} from './business-request.mjs';
 import {guardEditorRequest} from './editor.mjs';
 import {withWorkflowToolContext} from './workflow-tools.mjs';
+import {createDocuments} from './documents.mjs';
 
 // These pinned SDK endpoints use POST for structured read filters. Keep this
 // list explicit: observability also exposes destructive POST/DELETE routes.
@@ -15,18 +16,19 @@ const observabilityReadPosts=new Set([
  ...['metrics','scores','feedback'].flatMap(kind=>['aggregate','breakdown','timeseries','percentiles'].map(operation=>kind+'/'+operation)),
 ].map(route=>'/studio/api/observability/'+route));
 
-export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime,liveReadOnly=false,scopeId}){
+export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,businessFacts,createRuntime,liveReadOnly=false,scopeId,documentStore=storage?.documents}){
  await fs.mkdir(dataDir,{recursive:true});
  await loadDeepSeekFileKey(deepseekOptions?.env||process.env);
  const deepseek=createDeepSeekStatus({...deepseekOptions,modelOwner:scopeId||'local',requireModelAccess:cloud&&liveReadOnly}),liveModel=await deepseek.model();
  if(businessFacts&&cloud)throw new Error('真实快照模式仅供本机隔离验证');
  if(createRuntime&&cloud)throw new Error('闭环验证运行时仅供本机隔离环境');
  if(liveReadOnly&&(!cloud||!storage||!scopeId))throw new Error('Live API mode requires isolated cloud storage');
- const lab=liveReadOnly?(await import('./live-agents.mjs')).createLiveAgents({storage,liveModel,scopeId}):createRuntime?await createRuntime({dataDir,liveModel}):businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
+ const documents=documentStore?createDocuments({store:documentStore,owner:scopeId||'local',model:deepseek.modelInfo.id}):null;
+ const lab=liveReadOnly?(await import('./live-agents.mjs')).createLiveAgents({storage,liveModel,scopeId,documentTools:documents?.tools}):createRuntime?await createRuntime({dataDir,liveModel}):businessFacts?(await import('./business-agents.mjs')).createBusinessAgents(dataDir,{facts:businessFacts,liveModel,storage}):createAgents(dataDir,{liveModel,storage,...(cloud?{serviceName:'doon-agent-studio-cloud'}:{})}),app=new Hono();
  const server=new MastraServer({app,mastra:lab.mastra,tools:lab.tools,prefix:'/studio/api'});
  await lab.editorReady;
  await server.init();
- const assets=createStudioAssets({cloud,businessFacts:!!businessFacts,liveModel:!!liveModel,liveReadOnly,hasManager:!!lab.manager,hasWorkflowManager:!!lab.workflowManager});
+ const assets=createStudioAssets({cloud,businessFacts:!!businessFacts,liveModel:!!liveModel,liveReadOnly,hasManager:!!lab.manager,hasWorkflowManager:!!lab.workflowManager,documentsEnabled:!!documents});
  return{
   ...lab,assets,
   // send-message acknowledges before its background stream ends. An absent
@@ -35,6 +37,7 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
   async handle(request,{actor,workflowAccess,processChanges,purchaseChanges}={}){
    const asset=await assets.handle(request);if(asset)return asset;
    const url=new URL(request.url);
+   if(url.pathname.startsWith('/studio/documents/'))return documents?documents.handle(request):Response.json({error:'当前实例未启用文档功能。'},{status:404});
    if(url.pathname==='/studio/purchase-change/api')return purchaseChanges?purchaseChanges.handle(request,{actor}):Response.json({error:'当前实例未启用采购人工确认。'},{status:403});
    if(url.pathname==='/studio/process-change/api')return processChanges?processChanges.handle(request,{actor}):Response.json({error:'当前实例未启用流程人工确认。'},{status:403});
    if(url.pathname.startsWith('/studio/workflow-manager/api/')){
@@ -63,14 +66,17 @@ export async function createStudio({dataDir,deepseekOptions,storage,cloud=false,
     // Studio is a debug UI, not a policy editor. Real-data model/tool overrides are forbidden.
     if(liveReadOnly&&request.method!=='GET'&&request.method!=='HEAD'){
      if(/^\/studio\/api\/agents\/[^/]+\/(?:generate|stream|send-message|threads\/subscribe|threads\/abort)$/.test(url.pathname)){
-      const guarded=await guardBusinessRequest(request,{agents:lab.agents});if(guarded instanceof Response)return guarded;request=guarded;
+      const guarded=await guardBusinessRequest(request,{agents:lab.agents,documents});if(guarded instanceof Response)return guarded;request=guarded;
      }else if(!(request.method==='POST'&&observabilityReadPosts.has(url.pathname))&&!url.pathname.startsWith('/studio/api/stored/')&&!url.pathname.startsWith('/studio/api/editor/'))return Response.json({error:'当前云端入口只开放受控配置和只读查询；请通过工作流管理入口运行流程。'},{status:403});
     }
     if(businessFacts){const guarded=await guardBusinessRequest(request);if(guarded instanceof Response)return guarded;request=guarded;}
     else if(lab.mastra.getEditor()){const guarded=await guardEditorRequest(request,lab.agents,lab.storage);if(guarded instanceof Response)return guarded;request=guarded;}
     const fetch=async()=>{
      const trusted=actor&&request.method==='POST'&&request.headers.get('origin')===url.origin?{actor:{id:actor.id,name:actor.name,role:actor.role,synthetic:actor.synthetic===true},workflowAccess}:undefined;
-     const response=await withWorkflowToolContext(trusted,()=>app.fetch(request));
+     const payload=documents&&request.method==='POST'&&/^\/studio\/api\/agents\/[^/]+\/(?:generate|stream|send-message)$/.test(url.pathname)?await request.clone().json():null;
+     const threadId=payload?.threadId||payload?.memory?.thread;
+     const operation=()=>withWorkflowToolContext(trusted,()=>app.fetch(request));
+     const response=documents&&actor&&threadId?await documents.context({actor,threadId},operation):await operation();
      const edited=url.pathname.match(/^\/studio\/api\/stored\/agents\/([\w-]+)(?:\/versions\/[^/]+\/(?:activate|restore))?$/);
      if(response.ok&&edited&&lab.manager?.has(edited[1])&&!['GET','HEAD'].includes(request.method))await lab.manager.refresh(edited[1]);
      return response;

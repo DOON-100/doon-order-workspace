@@ -6,6 +6,7 @@ import {gzip} from 'node:zlib';
 import {promisify} from 'node:util';
 import {brandStudioScript} from './branding.mjs';
 import {localizeStudioWidgets} from './widgets-zh.mjs';
+import {patchStudioDocumentUploads} from './document-ui.mjs';
 
 const studioRoot=path.join(path.dirname(fileURLToPath(import.meta.resolve('mastra/package.json'))),'dist','studio');
 const brandStyles=new URL('./brand.css',import.meta.url);
@@ -33,7 +34,7 @@ async function assetResponse(bytes,type,request){
 
 // Packaged UI code contains no user data. The cloud gateway must authenticate
 // every request, including conditional 304s, before invoking this static handler.
-export function createStudioAssets({cloud=false,businessFacts=false,liveModel=false,liveReadOnly=false,hasManager=false,hasWorkflowManager=false}={}){
+export function createStudioAssets({cloud=false,businessFacts=false,liveModel=false,liveReadOnly=false,hasManager=false,hasWorkflowManager=false,documentsEnabled=false}={}){
  return {
   async warm(){
    // Complete translation and compression before cloud readiness, so the first
@@ -43,7 +44,7 @@ export function createStudioAssets({cloud=false,businessFacts=false,liveModel=fa
   },
   async handle(request){
   const url=new URL(request.url);
-  if(!['GET','HEAD'].includes(request.method)||!/^\/studio(?:\/|$)/.test(url.pathname)||/^\/studio\/(?:api(?:\/|$)|manage\/api(?:\/|$)|workflow-manager\/api(?:\/|$)|(?:process-change|purchase-change)\/api(?:\/|$)|integrations\/|business\/)/.test(url.pathname))return null;
+  if(!['GET','HEAD'].includes(request.method)||!/^\/studio(?:\/|$)/.test(url.pathname)||/^\/studio\/(?:api(?:\/|$)|manage\/api(?:\/|$)|workflow-manager\/api(?:\/|$)|(?:process-change|purchase-change)\/api(?:\/|$)|integrations\/|business\/|documents\/)/.test(url.pathname))return null;
    const changeFiles={'/studio/process-change/':['process-change.html','text/html; charset=utf-8'],'/studio/process-change/app.js':['process-change.js','text/javascript; charset=utf-8'],'/studio/process-change/style.css':['process-change.css','text/css; charset=utf-8']};
    const changePath=url.pathname.replace(/^\/studio\/purchase-change\//,'/studio/process-change/');
    if(Object.hasOwn(changeFiles,changePath)){
@@ -89,8 +90,9 @@ export function createStudioAssets({cloud=false,businessFacts=false,liveModel=fa
     const html=bytes.toString().replace(/%%(\w+)%%/g,(_,key)=>values[key]||'').replace('<html lang="en">','<html lang="zh-CN">').replace('<title>Mastra Studio</title>','<title>agent 工作台</title>').replace('<link rel="icon" type="image/svg+xml" href="./mastra-dark-tile.svg" />','<link rel="icon" type="image/jpeg" href="/brand/doon-eyewear-manufacturing.jpg" />').replace('</head>','<link rel="stylesheet" href="/studio/brand.css" /></head>');
     bytes=Buffer.from(html.replace('<div id="root"></div>',`<div class="doon-studio-banner"><a href="/personal-tasks">← 返回数据台</a><span>${cloud?'云端 agent 工作台':'本地 agent 工作台'} · ${liveReadOnly?'真实业务只读 · 按当前账号权限':businessFacts?'岗位协作 · '+(liveModel?'DeepSeek':'连接诊断'):liveModel?'DeepSeek 实模验证 · 仅使用合成数据':'离线合成演练 · 不连接正式业务'}</span></div><div id="root"></div><script type="module" src="/studio/provider-status.js"></script>${hasManager?'<link rel="stylesheet" href="/studio/workflow-preview/style.css"><link rel="stylesheet" href="/studio/workflow-schedules/style.css"><script type="module" src="/studio/agent-manager-entry.js"></script>':''}`));
    }else if(relative.endsWith('.js')){
-    if(!localizedScripts.has(target))localizedScripts.set(target,Buffer.from(localizeStudioWidgets(brandStudioScript(bytes.toString()))));
-    bytes=localizedScripts.get(target);
+    const cacheKey=target+(documentsEnabled?':documents':'');
+    if(!localizedScripts.has(cacheKey)){const source=documentsEnabled&&path.basename(target).startsWith('main-')?patchStudioDocumentUploads(bytes.toString()):bytes.toString();localizedScripts.set(cacheKey,Buffer.from(localizeStudioWidgets(brandStudioScript(source))));}
+    bytes=localizedScripts.get(cacheKey);
    }
    return assetResponse(bytes,type,request);
  }};

@@ -7,7 +7,7 @@
   },
   "scripts": {
     "start": "node start.mjs",
-    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs model-scheduler.test.mjs observability.test.mjs business.test.mjs department-tools.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs ../agent-server/session.test.mjs ../agent-server/server.test.mjs",
+    "test": "node --test --test-concurrency=1 localization.test.mjs studio.test.mjs deepseek.test.mjs deepseek-files.test.mjs document-formats.test.mjs document-store.test.mjs documents.test.mjs documents.integration.mjs model-scheduler.test.mjs observability.test.mjs business.test.mjs department-tools.test.mjs editor.test.mjs agent-manager.test.mjs prompt-reference.test.mjs workflow-manager.test.mjs workflow-triggers.test.mjs workflow-tools.test.mjs workflow-schedule.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/loading.test.mjs ../agent-server/runtime-pool.test.mjs ../agent-server/streaming.test.mjs ../agent-server/session.test.mjs ../agent-server/server.test.mjs",
     "test:departments": "node --test department-tools.test.mjs ../agent-server/business-api.test.mjs ../agent-server/live-studio.test.mjs ../agent-server/schedule-worker.test.mjs",
     "test:purchases": "node ../agent-server/purchase-change.integration.mjs",
     "test:process-changes": "node ../agent-server/process-change.integration.mjs",
@@ -18,7 +18,10 @@
     "start:autonomy": "node autonomy/start.mjs",
     "start:chain": "node autonomy/start-chain.mjs",
     "test:locale": "node --test localization.test.mjs",
-    "test:auth": "node --test ../agent-server/session.test.mjs ../agent-server/server.test.mjs ../agent-server/loading.test.mjs auth-status.test.mjs"
+    "test:auth": "node --test ../agent-server/session.test.mjs ../agent-server/server.test.mjs ../agent-server/loading.test.mjs auth-status.test.mjs",
+    "test:documents": "node --test --test-concurrency=1 document-formats.test.mjs deepseek-files.test.mjs document-store.test.mjs documents.test.mjs documents.integration.mjs",
+    "test:documents:pg": "node --test document-store.pg.test.mjs",
+    "test:documents:browser": "node --test --test-force-exit --test-concurrency=1 documents-ui.integration.mjs"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "1.0.63",
@@ -30,8 +33,15 @@
     "@mastra/observability": "1.20.1",
     "@mastra/pg": "1.31.2",
     "acorn": "8.19.0",
+    "docx": "9.15.0",
     "hono": "4.13.5",
+    "mammoth": "1.13.0",
     "mastra": "1.34.2",
+    "pdfjs-dist": "6.4.299",
+    "pdfkit": "0.20.2",
+    "pg": "8.23.1",
+    "sharp": "0.35.4",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "3.25.76"
   }
 }

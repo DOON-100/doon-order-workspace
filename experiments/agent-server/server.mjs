@@ -21,7 +21,7 @@ const pool=live?createRuntimePool({create:async(user,schema)=>{
  try{return await createStudio({dataDir:'/tmp/agent-studio/'+schema,storage,cloud:true,liveReadOnly:true,scopeId:schema});}catch(error){await storage.close();throw error;}
 }}):null;
 const studio=live?null:await createStudio({dataDir:'/tmp/agent-studio',storage:await createCloudStorage(),cloud:true});
-const staticStudio=live?createStudioAssets({cloud:true,liveReadOnly:true,hasManager:true,hasWorkflowManager:true}):studio.assets;
+const staticStudio=live?createStudioAssets({cloud:true,liveReadOnly:true,hasManager:true,hasWorkflowManager:true,documentsEnabled:true}):studio.assets;
 const read=live?createBusinessReader({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;
 // Opt-in only; a code/image update alone must never enable business confirmations.
 const processChangeClient=live&&process.env.DOON_AGENT_PROCESS_CHANGES_ENABLED==='1'?createProcessChangeClient({publicOrigin,connectHost:process.env.DOON_PLATFORM_CONNECT_HOST||'host.docker.internal'}):null;

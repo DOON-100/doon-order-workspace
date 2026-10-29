@@ -43,6 +43,12 @@
 !mastra-studio/locale-zh.mjs
 !mastra-studio/widgets-zh.mjs
 !mastra-studio/deepseek.mjs
+!mastra-studio/deepseek-files.mjs
+!mastra-studio/documents.mjs
+!mastra-studio/document-store.mjs
+!mastra-studio/document-ui.mjs
+!mastra-studio/document-formats.mjs
+!mastra-studio/document-worker.mjs
 !mastra-studio/model-scheduler.mjs
 !mastra-studio/offline-model.mjs
 !mastra-studio/postgres.mjs
@@ -51,6 +57,10 @@
 !mastra-studio/auth-status.js
 !mastra-studio/assets/
 !mastra-studio/assets/deepseek.svg
+!mastra-studio/assets/fonts/
+!mastra-studio/assets/fonts/NotoSansCJKsc-Regular.otf
+!mastra-studio/assets/fonts/OFL.txt
+!mastra-studio/assets/fonts/manifest.json
 !agent-server/
 !agent-server/server.mjs
 !agent-server/http-server.mjs
