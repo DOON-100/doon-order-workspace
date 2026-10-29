@@ -20,7 +20,7 @@ try{
  await api('auth/accounts',{username:'sales_test',name:'销售验收',role:'sales',password:'PMC-Test-Initial-2026!',customers:['C00']});
  const sheet={I3:{t:'s',v:'订单号'},M3:{t:'s',v:'订单数量'},BF3:{t:'s',v:'包装入仓数量'}};
  for(let row=4;row<1175;row++)for(const [col,v] of Object.entries({B:row%2?'TINA':'CANDY',C:'C00',I:'2026-TEST-'+String(Math.floor((row-4)/3)+1).padStart(3,'0'),J:'DN'+(2100+Math.floor((row-4)/3)),L:'C'+((row-4)%3+1),H:'太阳片',M:50,N:50,T:'2026-09-25',U:'2026-09-24',AB:'待电镀回货后进入包装。',AC:'2026-09-15',AD:'2026-09-16',AE:'2026-09-16',AF:'2026-09-17',BF:0}))sheet[col+row]={t:typeof v==='number'?'n':'s',v};
- sheet.BF5={t:'n',v:50};sheet.BD6={t:'n',v:50};sheet.BF6={t:'n',v:20};
+ sheet.BF5={t:'n',v:50};sheet.BD6={t:'n',v:50};sheet.BF6={t:'n',v:20};delete sheet.AC7;sheet.AC8={t:'s',v:'-'};
  sheet['!ref']='A1:BF1174';const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'动态表');const form=new FormData();form.set('file',new File([XLSX.write(book,{type:'buffer',bookType:'xlsx'})],'PMC验收虚拟订单.xlsx'));form.set('mode','active');let job=await api('workspace/ledger-preview',form);while(job.status!=='已完成')job=await api('workspace/ledger-commit',{id:job.id,offset:job.offset});
  browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-proxy-server']});
  async function login(name){const context=await browser.newContext({viewport:{width:1600,height:1080}}),page=await context.newPage();page.on('pageerror',e=>errors.push(e.message));await page.goto(origin);await page.getByLabel('登录账号',{exact:true}).fill(name);await page.getByLabel('登录密码',{exact:true}).fill('PMC-Test-Initial-2026!');await page.getByRole('button',{name:'登录',exact:true}).click();await page.getByLabel('当前密码',{exact:true}).fill('PMC-Test-Initial-2026!');await page.getByLabel('新密码',{exact:true}).fill('PMC-Test-Personal-2026!');await page.getByLabel('确认新密码',{exact:true}).fill('PMC-Test-Personal-2026!');await Promise.all([page.waitForResponse(r=>new URL(r.url()).pathname==='/api/auth/password'&&r.ok()),page.getByRole('button',{name:'保存密码并进入',exact:true}).click()]);await page.getByRole('button',{name:'保存密码并进入',exact:true}).waitFor({state:'hidden'});await page.goto(origin+'/pmc');return {context,page};}
@@ -36,6 +36,48 @@ try{
  await page.getByLabel('PMC跟单员',{exact:true}).selectOption('');await stageFilter.selectOption('入仓足量 · 待结单');await eventually(async()=>/^5\s/.test(await table.locator('tr[data-line-id]').innerText()));
  await page.getByRole('button',{name:'清除筛选',exact:true}).click();assert.equal(await stageFilter.inputValue(),'');await page.locator('.pmc-sheet-status').getByText('1171',{exact:true}).waitFor();
  pass('当前工序筛选与展示一致，可组合跟单员和搜索，重置滚动、核对范围及清除筛选正确');
+ const columnLabels=['原行号','订单 / 图纸编号','产品类型','跟单员','PMC排期','状态备注','色号','镜片','订单数','欠数','客原交期','配件齐日期','板料齐期','配套齐料期','投产日','当前工序','结单','本轮核对'];
+ for(const label of columnLabels){
+  const trigger=table.getByRole('button',{name:'筛选'+label,exact:true});assert.equal(await trigger.count(),1,label);await trigger.click();
+  const menu=page.getByRole('dialog',{name:'筛选'+label,exact:true});await menu.waitFor();
+  const box=await menu.boundingBox(),viewport=page.viewportSize();assert(box&&box.x>=0&&box.y>=0&&box.x+box.width<=viewport.width+1&&box.y+box.height<=viewport.height+1,label+'筛选弹层须完整可见');
+  if(label==='当前工序')await page.screenshot({path:path.join(root,'pmc-column-filter.png'),fullPage:true});
+  await menu.press('Escape');await menu.waitFor({state:'hidden'});
+ }
+ const headerWidths=await table.locator('thead th').evaluateAll(cells=>cells.map(cell=>Math.round(cell.getBoundingClientRect().width)));
+ assert.deepEqual(headerWidths,[76,278,125,95,130,290,110,95,90,90,120,130,130,130,130,160,110,185]);
+ async function chooseColumn(label,value,target=page,search=''){
+  await target.getByRole('button',{name:'筛选'+label,exact:true}).click();
+  const menu=target.getByRole('dialog',{name:'筛选'+label,exact:true});await menu.waitFor();
+  if(search)await menu.getByLabel('搜索'+label+'筛选值',{exact:true}).fill(search);
+  await menu.getByRole('button',{name:value,exact:true}).click();await menu.waitFor({state:'hidden'});
+ }
+ const beforeColumnFilters=await api('workspace/data');
+ await chooseColumn('欠数','0');await eventually(async()=>await table.locator('tr[data-line-id]').count()===1);assert.match(await table.locator('tr[data-line-id]').innerText(),/^5\s/);
+ await chooseColumn('跟单员','CANDY');await page.getByText('没有符合当前筛选的明细。清除筛选后可继续核对。',{exact:true}).waitFor();
+ await chooseColumn('跟单员','全部');await chooseColumn('本轮核对','未开始');assert.match(await table.locator('tr[data-line-id]').innerText(),/^5\s/);
+ const [columnExport,columnDownload]=await Promise.all([page.waitForResponse(r=>new URL(r.url()).pathname==='/api/workspace/ledger-export'),page.waitForEvent('download'),page.getByRole('button',{name:'导出当前总表',exact:true}).click()]);
+ assert.equal(columnExport.status(),200);assert.deepEqual(JSON.parse(new URL(columnExport.url()).searchParams.get('pmcColumns')),{balance:'0',review:'未开始'});
+ await columnDownload.saveAs(path.join(root,'column-filter-export.xlsx'));const columnExportBytes=await fs.readFile(path.join(root,'column-filter-export.xlsx'));
+ const columnBook=XLSX.read(columnExportBytes),columnExportRows=XLSX.utils.sheet_to_json(columnBook.Sheets[columnBook.SheetNames[0]]);
+ assert(columnExportBytes.length>0,'筛选导出应下载非空Excel文件');
+ assert.deepEqual(columnExportRows.map(row=>row['_明细编号']),[beforeColumnFilters.orders.find(o=>o.ledger.sourceRow===5).id]);
+ await page.getByRole('button',{name:'开始核对',exact:true}).click();await page.getByRole('dialog',{name:'开始PMC核对轮次'}).getByRole('button',{name:'确认开始 1 条',exact:true}).waitFor();await page.getByRole('dialog',{name:'开始PMC核对轮次'}).getByRole('button',{name:'取消',exact:true}).click();
+ await page.getByRole('button',{name:'清除筛选',exact:true}).click();await page.locator('.pmc-sheet-status').getByText('1171',{exact:true}).waitFor();
+ await chooseColumn('跟单员','CANDY');await chooseColumn('色号','C1');
+ const candyC1=beforeColumnFilters.orders.filter(o=>o.ledger.columns.B==='CANDY'&&o.color==='C1');await page.locator('.pmc-sheet-status').getByText(String(candyC1.length),{exact:true}).waitFor();
+ assert.deepEqual(await table.locator('tr[data-line-id]').evaluateAll(rows=>rows.map(row=>row.getAttribute('data-line-id'))),candyC1.sort((a,b)=>a.ledger.sourceRow-b.ledger.sourceRow).slice(0,28).map(o=>o.id));
+ await page.getByLabel('搜索PMC总表',{exact:true}).fill('2026-TEST-001');await eventually(async()=>await table.locator('tr[data-line-id]').count()===1);
+ await chooseColumn('订单 / 图纸编号','2026-TEST-001 · C00 · DN2100 · C1 · 太阳片',page,'DN2100');assert.match(await table.locator('tr[data-line-id]').innerText(),/^4\s/);
+ await page.getByRole('button',{name:'清除筛选',exact:true}).click();await chooseColumn('配件齐日期','（空白）');await eventually(async()=>await table.locator('tr[data-line-id]').count()===1);assert.match(await table.locator('tr[data-line-id]').innerText(),/^7\s/);
+ await chooseColumn('配件齐日期','-');await eventually(async()=>/^8\s/.test(await table.locator('tr[data-line-id]').innerText()));
+ await page.getByRole('button',{name:'清除筛选',exact:true}).click();await page.locator('.pmc-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await page.getByText('1174',{exact:true}).waitFor();
+ await chooseColumn('原行号','1174',page,'1174');await eventually(async()=>await table.locator('tr[data-line-id]').count()===1);assert.match(await table.locator('tr[data-line-id]').innerText(),/^1174\s/);assert.equal(await page.locator('.pmc-scroll').evaluate(el=>el.scrollTop),0);
+ await page.getByRole('button',{name:'清除筛选',exact:true}).click();await page.locator('.pmc-sheet-status').getByText('1171',{exact:true}).waitFor();assert.match(await table.locator('tr[data-line-id]').first().innerText(),/^4\s/);
+ assert.deepEqual(await table.locator('thead th').evaluateAll(cells=>cells.map(cell=>Math.round(cell.getBoundingClientRect().width))),headerWidths);
+ assert((await table.locator('tr[data-line-id]').evaluateAll(rows=>rows.map(row=>Math.round(row.getBoundingClientRect().height)))).every(height=>height===76));
+ const afterColumnFilters=await api('workspace/data');assert.equal(afterColumnFilters.revision,beforeColumnFilters.revision);assert.deepEqual(afterColumnFilters.orders,beforeColumnFilters.orders);assert.deepEqual(afterColumnFilters.reports,beforeColumnFilters.reports);
+ pass('18列表头可下拉搜索筛选，支持多列交集、零欠数、空白与横线日期；导出一致且不改数据、列宽、行高和原行序');
  await page.getByRole('button',{name:'字段顺序',exact:true}).click();await page.getByRole('button',{name:'当前工序向左移动',exact:true}).click();let stageAt=await table.getByRole('columnheader',{name:'当前工序',exact:true}).evaluate(x=>x.cellIndex),startAt=await table.getByRole('columnheader',{name:/AF\s*投产日/}).evaluate(x=>x.cellIndex);assert(stageAt<startAt);await page.reload();stageAt=await table.getByRole('columnheader',{name:'当前工序',exact:true}).evaluate(x=>x.cellIndex);startAt=await table.getByRole('columnheader',{name:/AF\s*投产日/}).evaluate(x=>x.cellIndex);assert(stageAt<startAt);pass('业务字段可向左或向右移动，并按账号浏览器保存字段顺序');
  await page.getByRole('button',{name:/^原表4行 PMC排期/}).click();await page.getByLabel('编辑 4 PMC排期',{exact:true}).fill('2026-09-27');await page.getByRole('button',{name:'保存后结单',exact:true}).first().click();const closeDialog=page.getByRole('dialog',{name:'办理订单结单'});await closeDialog.waitFor();assert.match(await closeDialog.innerText(),/当前欠数/);assert.equal(await page.getByLabel('PMC结单日期').inputValue(),new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Shanghai'}));await page.getByRole('button',{name:'取消结单',exact:true}).click();await closeDialog.waitFor({state:'hidden'});let autoSaved=await api('workspace/data');assert.equal(autoSaved.orders.find(o=>o.ledger.sourceRow===4).plannedDate,'2026-09-27');pass('有待填单元格时结单会先自动保存，再展示日期、依据、入仓数及欠数提醒');
  await page.locator('.pmc-scroll').evaluate(el=>el.scrollTop=el.scrollHeight);await page.getByText('1174',{exact:true}).waitFor();assert((await table.locator('tr[data-line-id]').count())<=28);await page.locator('.pmc-scroll').evaluate(el=>el.scrollTop=0);await page.getByRole('button',{name:/^原表4行 PMC排期/}).waitFor();pass('连续虚拟滚动保持76像素行高，原表4至1174行全部可达');
@@ -47,6 +89,7 @@ try{
  await page.getByRole('button',{name:'待处理原表5行',exact:true}).click();await page.getByLabel('待处理原因',{exact:true}).fill('等电镀仓核对数量');await page.getByRole('button',{name:'保存待处理',exact:true}).click();await eventually(async()=>/待处理\s*1/.test(await page.locator('.pmc-counts').innerText()));await page.getByRole('button',{name:'回到上次位置',exact:true}).click();await page.getByText('等电镀仓核对数量',{exact:true}).waitFor();pass('待处理必须记录原因，继续核对可回到上次位置');
  const tina=await login('tina_test');await tina.page.getByRole('heading',{name:'PMC 排期总表',exact:true}).waitFor();assert.match(await tina.page.locator('.pmc-review-card').innerText(),/开始第一轮核对/);assert.match(await tina.page.locator('.pmc-peer-progress').innerText(),/Candy 验收/);pass('Tina首页独立核对进度，可见Candy进度概要');
  const sales=await login('sales_test');await sales.page.getByRole('heading',{name:'权限受限',exact:true}).waitFor();assert(await sales.page.getByRole('button',{name:/^原表4行 PMC排期/}).isDisabled());pass('销售进入总表显示彩色只读提醒，编辑入口禁用');
+ await chooseColumn('原行号','5',sales.page,'5');await eventually(async()=>await sales.page.locator('.pmc-sheet tr[data-line-id]').count()===1);assert.match(await sales.page.locator('.pmc-sheet tr[data-line-id]').innerText(),/^5\s/);assert(await sales.page.getByRole('button',{name:/^原表5行 PMC排期/}).isDisabled());await sales.page.getByRole('button',{name:'清除筛选',exact:true}).click();pass('只读成员可按表头筛选，筛选不开放编辑权限');
  await page.getByRole('button',{name:'清除筛选',exact:true}).click();await page.locator('.pmc-scroll').evaluate(el=>{el.scrollTop=0;el.scrollLeft=0;});
  const rowHeights=await table.locator('tr[data-line-id]').evaluateAll(rows=>rows.map(r=>Math.round(r.getBoundingClientRect().height)));assert(rowHeights.every(h=>h===76),JSON.stringify(rowHeights));
  await page.route('**/api/workspace/pmc-save',route=>route.abort());await page.getByRole('button',{name:/^原表4行 PMC排期/}).click();await page.getByLabel('编辑 4 PMC排期',{exact:true}).fill('2026-09-29');await page.getByLabel('编辑 4 PMC排期',{exact:true}).press('Tab');await page.getByText('单元格未保存',{exact:false}).waitFor();assert.match(await page.locator('.pmc-conflict').innerText(),/2026-09-29/);await page.getByRole('button',{name:'动态订单总表',exact:false}).click();assert.equal(new URL(page.url()).pathname,'/pmc');await page.unroute('**/api/workspace/pmc-save');await page.getByRole('button',{name:'已核对，保存我的输入',exact:true}).click();await page.locator('.pmc-conflict').waitFor({state:'hidden'});state=await api('workspace/data');assert.equal(state.orders.find(o=>o.id===a.id).plannedDate,'2026-09-29');pass('断网保存失败保留输入，阻止离页，恢复后可重新保存');

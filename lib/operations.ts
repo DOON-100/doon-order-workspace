@@ -5,7 +5,7 @@ import {businessTeamHeader,filterBusinessTeamRows} from './business-team-scope';
 import {requestedExportBusinessTeam} from './business-team-export';
 import {z} from 'zod';
 import {AppError,audit,bucket,commit,json} from './store';
-import {all,allowedFields,broad,canRead,clean,newId,now,productTypeOf,strictDate,type State,type Member,type Order,type Entity} from './domain';
+import {all,allowedFields,broad,canRead,clean,newId,now,productTypeOf,strictDate,type State,type Member,type Order,type Entity,type Report} from './domain';
 import {parseLedger} from './ledger-import';
 import {active,automaticDates,countValue,colLabels,currentStage,dateCols,dateValue,editableCols,numeric,outstanding,stageDefs,stageNumbers,issues,today} from './ledger';
 import {makeWorkbook,sha} from './workbooks';
@@ -17,6 +17,7 @@ import {purchaseGet,purchasePost} from './purchase-api';
 import {factoryName,inProductionScope,productionScope} from './manufacturing';
 import {orderExportExtras} from './order-export';
 import {pmcOrder,reviewState,type PmcRound} from './pmc';
+import {matchesPmcColumnFilters,parsePmcColumnFilters} from './pmc-column-filters';
 import {collaborationGet,collaborationPost} from './collaboration-api';
 import {canCreateOutsource,outsourceApprover} from './suppliers';
 import {matchesOrderIdentity,orderIdentities,orderIdentityKey} from './order-identity';
@@ -39,10 +40,13 @@ export async function operationGet(action:string,req:Request,s:State,m:Member):P
   const object=await bucket().get(item.fileKey);if(!object)throw new AppError('文件未找到。',404);return download(object.body,item.filename,item.contentType||'application/octet-stream',item.kind==='receipt_photo');
  }
  if(action==='ledger-export'){
+  let columnFilters;try{columnFilters=parsePmcColumnFilters(url.searchParams.get('pmcColumns'));}catch(e){throw new AppError((e as Error).message);}
+  const reports=all(s,'report') as Report[];
   const sourceScope=url.searchParams.get('production'),factory=clean(url.searchParams.get('factory')),reviewFilter=clean(url.searchParams.get('reviewStatus')),round=all(s,'pmc_round').filter(r=>r.actorId===m.id&&productionScope(r.productionScope)===productionScope(sourceScope)).at(-1) as PmcRound|undefined,reviewMap=new Map(all(s,'pmc_review').filter(r=>r.roundId===round?.id).map(r=>[r.lineId,r]));
   const mode=url.searchParams.get('mode')==='archived'?'archived':'active',q=clean(url.searchParams.get('q')).toLowerCase(),customer=clean(url.searchParams.get('customer')),owner=clean(url.searchParams.get('owner')),month=clean(url.searchParams.get('month')),exception=clean(url.searchParams.get('exception')),stage=stageDefs.find(d=>d.id===url.searchParams.get('stage')),currentStageFilter=clean(url.searchParams.get('currentStage')),archiveReview=url.searchParams.get('review')==='1';
   const rows=pmcOrder(all(s,'order') as Order[]).filter(o=>canRead(m,o)&&(!sourceScope||inProductionScope(o,productionScope(sourceScope)))&&(!factory||factoryName(o)===factory)&&(mode==='archived'?o.lifecycle==='archived':active(o))&&(!q||[o.orderNo,o.customer,o.drawing,o.color,o.lens,o.notes,o.ledger?.ownerName,o.ledger?.sourceRow,factoryName(o)].join(' ').toLowerCase().includes(q))&&(!customer||o.customer===customer)&&(!owner||o.ledger?.ownerName===owner||o.ownerEmail===owner||(owner==='mine'&&o.ownerEmail===m.email))&&(!month||(mode==='archived'?o.closedDate:o.plannedDate||o.requestedDate)?.startsWith(month))&&(!exception||issues(o).includes(exception))&&(!stage||(stageNumbers(o,stage).wip||0)>0)&&(!currentStageFilter||currentStage(o)===currentStageFilter)&&(!archiveReview||(outstanding(o)??0)>0||!o.closedDate)&&(!reviewFilter||(reviewFilter==='todo'?['unreviewed','changed','pending'].includes(reviewState(o,round,reviewMap.get(o.id) as any)):reviewState(o,round,reviewMap.get(o.id) as any)===reviewFilter)));
-  const data=filterBusinessTeamRows(s,rows,requestedExportBusinessTeam(s,m,req)).map(o=>({'生产厂':factoryName(o),'订单号':o.orderNo,'客户':o.customer,'产品类型':productTypeOf(o),'款号':o.drawing,'色号':o.color,'镜片':o.lens,'跟单员':o.ledger?.ownerName||o.ownerEmail,'订单数量':o.quantity,'PMC排期':o.plannedDate,'状态备注':o.notes,'包装入仓':o.ledger?.columns.BF||'未记录','重算欠数':outstanding(o),'待核对':issues(o).join('；'),'当前状态':mode==='archived'?'已归档':'在制','结单日':o.closedDate||'','归档依据':o.archiveReason||'',...orderExportExtras(o,['A','B','AQ','BC','BF','BH']),'_明细编号':o.id,'_版本':o.version}));
+  const filteredRows=rows.filter(o=>matchesPmcColumnFilters(o,columnFilters,reports,reviewState(o,round,reviewMap.get(o.id) as any),productionScope(sourceScope)));
+  const data=filterBusinessTeamRows(s,filteredRows,requestedExportBusinessTeam(s,m,req)).map(o=>({'生产厂':factoryName(o),'订单号':o.orderNo,'客户':o.customer,'产品类型':productTypeOf(o),'款号':o.drawing,'色号':o.color,'镜片':o.lens,'跟单员':o.ledger?.ownerName||o.ownerEmail,'订单数量':o.quantity,'PMC排期':o.plannedDate,'状态备注':o.notes,'包装入仓':o.ledger?.columns.BF||'未记录','重算欠数':outstanding(o),'待核对':issues(o).join('；'),'当前状态':mode==='archived'?'已归档':'在制','结单日':o.closedDate||'','归档依据':o.archiveReason||'',...orderExportExtras(o,['A','B','AQ','BC','BF','BH']),'_明细编号':o.id,'_版本':o.version}));
   const title=sourceScope==='external'?'成品外发跟进总表':mode==='archived'?'PMC已完成订单档案':'度昂在制订单明细',response=download(makeWorkbook(data,title),title+(factory?'_'+factory:'')+'.xlsx');response.headers.set('Vary',businessTeamHeader);return response;
  }
  return null;

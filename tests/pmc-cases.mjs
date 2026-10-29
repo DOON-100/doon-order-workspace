@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  const sheet={I3:{t:'s',v:'订单号'},M3:{t:'s',v:'订单数量'},BF3:{t:'s',v:'包装入仓数量'}};
- for(let row=4;row<=6;row++)for(const [col,value] of Object.entries({B:'CANDY',C:'测试客户甲',I:'PMC-TEST',J:'DN-PMC',L:row===6?'C2':'C1',H:'白片',M:100,U:'2026-09-20',AB:'原备注',AC:'2026-09-18',BF:row===5?100:0,...(row<6?{AF:'2026-09-17',AG:50,BD:100}:{})}))sheet[col+row]={t:typeof value==='number'?'n':'s',v:value};
+ for(let row=4;row<=6;row++)for(const [col,value] of Object.entries({B:'CANDY',C:'测试客户甲',I:'PMC-TEST',J:'DN-PMC',L:row===6?'C2':'C1',H:'白片',M:100,T:row<6?'2026-10-01':'',U:'2026-09-20',W:row<6?'钛架':'',AB:'原备注',AC:'2026-09-18',AD:row===4?'-':row===5?'2026-09-19':'',BF:row===5?100:0,...(row<6?{AF:'2026-09-17',AG:50,BD:100}:{})}))sheet[col+row]={t:typeof value==='number'?'n':'s',v:value};
  sheet['!ref']='A1:BF6';const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,sheet,'动态表');const job=await original(XLSX.write(book,{type:'buffer',bookType:'xlsx'}),'active','PMC核对测试.xlsx');await ok('ledger-commit',{id:job.id,offset:0});
  const getRows=async()=>(await state()).orders.filter(o=>o.orderNo==='PMC-TEST').sort((a,b)=>a.ledger.sourceRow-b.ledger.sourceRow);
  let [a,b,c]=await getRows();const initialA=a;
- async function exportedIds(filters={}){const response=await call('ledger-export?'+new URLSearchParams({mode:'active',production:'internal',q:'PMC-TEST',...filters}));assert.equal(response.status,200);const workbook=XLSX.read(await response.arrayBuffer());return XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]).map(row=>row['_明细编号']);}
+ async function exportedIds(filters={},user=admin){const response=await call('ledger-export?'+new URLSearchParams({mode:'active',production:'internal',q:'PMC-TEST',...filters}),undefined,user);assert.equal(response.status,200);const workbook=XLSX.read(await response.arrayBuffer());return XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]).map(row=>row['_明细编号']);}
+ const byColumns=columns=>({pmcColumns:JSON.stringify(columns)});
  const beforeExport=await state();
  assert.deepEqual(await exportedIds({currentStage:'包装入仓'}),[a.id]);
  assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单'}),[b.id]);
@@ -17,8 +18,25 @@ export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单',owner:'CANDY',q:'DN-PMC C2'}),[]);
  assert.deepEqual(await exportedIds({currentStage:'包装入仓',owner:'TINA'}),[]);
  assert.deepEqual(await exportedIds({currentStage:'包装入仓',production:'external'}),[]);
+ assert.deepEqual(await exportedIds(byColumns({sourceRow:'5',order:'PMC-TEST · 测试客户甲 · DN-PMC · C1 · 白片',productType:'钛架',owner:'CANDY',U:'2026-09-20',AB:'原备注',color:'C1',lens:'白片',quantity:'100',balance:'0',requestedDate:'2026-10-01',AC:'2026-09-18',AD:'2026-09-19',AE:'',AF:'2026-09-17',stage:'入仓足量 · 待结单',close:'办理结单',review:'未开始'})),[b.id]);
+ assert.deepEqual(await exportedIds(byColumns({color:'C1'})),[a.id,b.id]);
+ assert.deepEqual(await exportedIds({...byColumns({color:'C1',balance:'100'}),currentStage:'包装入仓',owner:'CANDY',q:'DN-PMC C1'}),[a.id]);
+ assert.deepEqual(await exportedIds({...byColumns({color:'C2'}),currentStage:'包装入仓'}),[]);
+ assert.deepEqual(await exportedIds(byColumns({balance:'0'})),[b.id]);
+ assert.deepEqual(await exportedIds(byColumns({balance:''})),[]);
+ assert.deepEqual(await exportedIds(byColumns({AD:'-'})),[a.id]);
+ assert.deepEqual(await exportedIds(byColumns({AD:'',AF:'',requestedDate:'',productType:'未填写'})),[c.id]);
+ assert.deepEqual(await exportedIds(byColumns({review:'未开始'})),[a.id,b.id,c.id]);
+ assert.deepEqual(await exportedIds(byColumns({review:'已核对'})),[]);
+ assert.deepEqual(await exportedIds({...byColumns({color:'C1'}),production:'external'}),[]);
+ assert.deepEqual(await exportedIds(byColumns({sourceRow:'5',color:'C1'}),sales),[]);
+ assert.deepEqual(await exportedIds(byColumns({})),[a.id,b.id,c.id]);
+ for(const invalid of ['', '{', 'null', '[]', '"C1"', '{"unknown":"x"}', '{"color":null}', '{"quantity":100}', '{"color":["C1"]}', '{"__proto__":"x"}']){
+  const response=await call('ledger-export?'+new URLSearchParams({mode:'active',q:'PMC-TEST',pmcColumns:invalid}));assert.equal(response.status,400);assert.match((await response.json()).error,/PMC列筛选/);
+ }
  const afterExport=await state();assert.equal(afterExport.revision,beforeExport.revision);assert.deepEqual(afterExport.orders,beforeExport.orders);
  pass('PMC导出按显示的当前工序精确筛选，保留原工序在制量口径，组合跟单员、搜索及生产范围且不改数据');
+ pass('PMC全部18列表头筛选按显示值精确取交集，区分空白、零和不适用，保持原行序并拒绝无效筛选');
  const save=(o,col,value)=>({changes:[{id:o.id,version:o.version,col,value}]});
  assert.equal((await call('pmc-save',save(a,'U','2026-09-22'),clerk)).status,403);assert.equal((await call('pmc-data',undefined,sales)).status,403);assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'BF',value:'999'}]})).status,400);
  assert.equal((await call('pmc-save',save(a,'U','2026-02-30'))).status,400);pass('PMC总表服务端拦截越权、非PMC工序与非法日期');
@@ -43,11 +61,22 @@ export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  assert.deepEqual(await exportedIds({currentStage:'包装入仓',reviewStatus:'done'}),[a.id]);
  assert.deepEqual(await exportedIds({currentStage:'包装入仓',reviewStatus:'pending'}),[]);
  assert.deepEqual(await exportedIds({currentStage:'入仓足量 · 待结单',reviewStatus:'pending'}),[b.id]);
+ const beforeReviewFilter=await state(),progressBeforeReviewFilter=await ok('pmc-data');
+ assert.deepEqual(await exportedIds(byColumns({review:'已核对',color:'C1'})),[a.id]);
+ assert.deepEqual(await exportedIds({...byColumns({review:'待处理',balance:'0'}),reviewStatus:'pending'}),[b.id]);
+ assert.deepEqual(await exportedIds({...byColumns({review:'已核对'}),reviewStatus:'pending'}),[]);
+ assert.deepEqual(await exportedIds(byColumns({review:'未纳入本轮'})),[c.id]);
+ assert.deepEqual(await exportedIds(byColumns({review:'未开始'})),[]);
+ const afterReviewFilter=await state();assert.equal(afterReviewFilter.revision,beforeReviewFilter.revision);assert.deepEqual(afterReviewFilter.orders,beforeReviewFilter.orders);assert.deepEqual(await ok('pmc-data'),progressBeforeReviewFilter);
  pass('PMC当前工序与本轮核对状态组合导出只包含共同符合的明细');
+ pass('PMC列筛选复用本人本轮核对状态，导出不改变订单、轮次或核对记录');
  let progress=await ok('pmc-data');assert.equal(progress.rounds.find(r=>r.id===round.id).lastLineId,b.id);assert.equal(progress.reviews.filter(r=>r.roundId===round.id).length,2);assert.equal((await getRows())[0].version,a.version);pass('核对轮次固定范围、重试不重复，已核对与待处理跨请求持久保存且不改订单');
  await ok('pmc-save',save(a,'AB','核对后的新变化'));[a]=await getRows();progress=await ok('pmc-data');assert.notEqual(progress.reviews.find(r=>r.lineId===a.id).orderVersion,a.version);
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version-1,status:'done'})).status,409);pass('核对后订单变化使旧标记失效，不能用旧版本再次确认');
  const pmc2={userId:'test_pmc_two',email:'pmc2@test.invalid',displayName:'另一位PMC',fullName:'另一位PMC'};await ok('member',{name:'另一位PMC',email:pmc2.email,role:'pmc',customers:[],active:true});await ok('enroll',{},pmc2);
+ assert.deepEqual(await exportedIds(byColumns({review:'需复核'})),[a.id]);
+ assert.deepEqual(await exportedIds(byColumns({review:'未开始'}),pmc2),[a.id,b.id,c.id]);
+ assert.deepEqual(await exportedIds(byColumns({review:'已核对'}),pmc2),[]);
  assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'},pmc2)).status,403);
  const other=(await ok('pmc-round',{token:crypto.randomUUID(),lineIds:[a.id],scope:'另一位的核对'},pmc2)).round;await ok('pmc-review',{roundId:other.id,lineId:a.id,version:a.version,status:'done'},pmc2);assert.equal((await ok('pmc-data')).rounds.length,2);
  await ok('pmc-round',{token:crypto.randomUUID(),lineIds:[a.id,b.id,c.id],scope:'新一轮包含新明细'});assert.equal((await call('pmc-review',{roundId:round.id,lineId:a.id,version:a.version,status:'done'})).status,409);pass('两位PMC进度独立且可互看，旧轮次不能污染新轮次');
