@@ -21,13 +21,16 @@ export type State={revision:number;records:Entity[]};
 export type PreviewRow={index:number;status:'new'|'update'|'conflict'|'skip'|'error';reason:string;before?:any;after?:any;changes?:string[];expectedVersion?:number};
 // Request-local index, enabled only for GET snapshots. Writes and arbitrary
 // mutable states retain the original filtering behavior; no cross-user cache.
-const readIndexes=new WeakMap<State,{records:Entity[];length:number;kinds:Map<string,Entity[]>}>();
+const readIndexes=new WeakMap<State,{records:Entity[];length:number;kinds:Map<string,Entity[]>;byId:Map<string,Entity>}>();
 export function indexReadState(s:State){
- const kinds=new Map<string,Entity[]>();
- for(const row of s.records){const rows=kinds.get(row.kind);if(rows)rows.push(row);else kinds.set(row.kind,[row]);}
- readIndexes.set(s,{records:s.records,length:s.records.length,kinds});return s;
+ const kinds=new Map<string,Entity[]>(),byId=new Map<string,Entity>();
+ for(const row of s.records){const rows=kinds.get(row.kind);if(rows)rows.push(row);else kinds.set(row.kind,[row]);if(!byId.has(row.id))byId.set(row.id,row);}
+ readIndexes.set(s,{records:s.records,length:s.records.length,kinds,byId});return s;
 }
 export const all=(s:State,kind:string)=>{const index=readIndexes.get(s);return index&&index.records===s.records&&index.length===s.records.length?(index.kinds.get(kind)||[]).slice():s.records.filter(r=>r.kind===kind);};
+export function recordById(s:State,id:string|undefined,kind?:string){const index=readIndexes.get(s);const record=index&&index.records===s.records&&index.length===s.records.length?index.byId.get(id!):s.records.find(row=>row.id===id);return record&&(!kind||record.kind===kind)?record:undefined;}
+/** For positive limits, same result as filter(...).slice(-limit).reverse(). */
+export function latestVisibleRecords(rows:Entity[],visible:(row:Entity)=>boolean,limit:number){const result:Entity[]=[];for(let i=rows.length-1;i>=0&&result.length<limit;i--)if(visible(rows[i]))result.push(rows[i]);return result;}
 export const now=()=>new Date().toISOString();
 export const newId=(prefix:string)=>prefix+'_'+crypto.randomUUID();
 export const clean=(x:unknown)=>String(x??'').normalize('NFKC').trim();

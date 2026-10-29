@@ -109,3 +109,4 @@ try{
   await fs.rm(target,{recursive:true,force:true});assert.equal(await fs.stat(target).then(()=>true,()=>false),false);
  }
 }
+execFileSync(process.execPath,['standalone/test-snapshot-responsiveness.mjs'],{stdio:'inherit',windowsHide:true});

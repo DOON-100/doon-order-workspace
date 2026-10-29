@@ -4,6 +4,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import fs from 'node:fs/promises';
 import {mkdirSync,readFileSync} from 'node:fs';
 import path from 'node:path';
+import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {createIeMailAdapter} from './ie-mail.mjs';
 
 export const dataDir=path.resolve(process.env.DOON_DATA_DIR||'lan-data');
@@ -32,6 +33,25 @@ class Statement {
 }
 export function transaction(fn){db.exec('BEGIN IMMEDIATE');try{const value=fn();db.exec('COMMIT');return value;}catch(e){db.exec('ROLLBACK');throw e;}}
 export function records(){return db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data));}
+// No long-lived cursor/transaction crosses an await. snapshot() checks the
+// workspace revision around all batches and retries a changed read, never a write.
+// One indivisible legacy record may exceed the byte budget; it is preserved whole.
+export async function readSnapshot(kinds){
+ const items=[];let cursor;
+ if(kinds&&!kinds.length)return items;
+ const filter=kinds?'kind IN ('+kinds.map(()=>'?').join(',')+')':null;
+ const first=db.prepare('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records'+(filter?' WHERE '+filter:'')+' ORDER BY rowid LIMIT 64');
+ const next=db.prepare('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records WHERE '+(filter?filter+' AND ':'')+'rowid>? ORDER BY rowid LIMIT 64');
+ while(true){
+  await yieldTurn();let count=0,bytes=0;
+  // String cursors preserve negative, zero and full 64-bit SQLite rowids.
+  for(const row of (cursor===undefined?first:next).iterate(...(kinds||[]),...(cursor===undefined?[]:[cursor]))){
+   items.push(JSON.parse(row.data));cursor=row.cursor;count++;bytes+=Buffer.byteLength(row.data);
+   if(bytes>=1024*1024)break;
+  }
+  if(!count)return items;
+ }
+}
 export function saveRecords(items){for(const item of items)db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(item.id,item.kind,JSON.stringify(item));db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();}
 export function memberFor(account){const row=account&&db.prepare("SELECT data FROM records WHERE id=? AND kind='member'").get(account.member_id);return row?JSON.parse(row.data):null;}
 export function auditLocal(member,action,target){return {id:'audit_'+randomUUID(),kind:'audit',actorId:member.id,actor:member.name,action,targetId:target,source:'内网账号管理',createdAt:new Date().toISOString()};}
@@ -39,7 +59,7 @@ const objectDir=path.join(dataDir,'files');mkdirSync(objectDir,{recursive:true})
 function objectPath(key){return path.join(objectDir,createHash('sha256').update(String(key)).digest('hex'));}
 // Server-only credentials: never included in the browser build or stored in business records.
 const kingdeeReadonlyEnv=Object.fromEntries(['READONLY_ENABLED','SALES_WRITE_ENABLED','CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>['DOON_KINGDEE_'+key,process.env['DOON_KINGDEE_'+key]]));
-export const env={...kingdeeReadonlyEnv,IE_MAIL:createIeMailAdapter(),DB:{prepare:sql=>new Statement(sql),batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
+export const env={...kingdeeReadonlyEnv,IE_MAIL:createIeMailAdapter(),DB:{prepare:sql=>new Statement(sql),readSnapshot,batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
  async put(key,value){const target=objectPath(key),temp=target+'.'+randomUUID()+'.tmp';const bytes=typeof value==='string'?Buffer.from(value):Buffer.from(value);await fs.writeFile(temp,bytes);await fs.rename(temp,target);},
  async get(key){try{const body=await fs.readFile(objectPath(key));return {body,json:async()=>JSON.parse(body.toString()),arrayBuffer:async()=>body.buffer.slice(body.byteOffset,body.byteOffset+body.byteLength)};}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 }};

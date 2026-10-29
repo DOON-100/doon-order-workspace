@@ -47,7 +47,7 @@ const api=await import('./workspace-api.mjs');
 const scheduleConfig=await scheduleBridgeConfig();
 if(scheduleConfig&&(supplierOnly||reviewMode))throw Error('此入口不允许启用后台只读调度');
 const scheduleBridge=scheduleConfig?createScheduleBridge({db,config:scheduleConfig,currentForOwner:async ownerId=>{
- const member=runtime.records().find(r=>r.kind==='member'&&r.userId===ownerId),account=member&&db.prepare('SELECT id,username,must_change FROM local_accounts WHERE member_id=?').get(member.id);
+ const member=db.prepare("SELECT data FROM records WHERE kind='member' ORDER BY rowid").all().map(row=>JSON.parse(row.data)).find(r=>r.kind==='member'&&r.userId===ownerId),account=member&&db.prepare('SELECT id,username,must_change FROM local_accounts WHERE member_id=?').get(member.id);
  return member&&account?{member,account,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name}}:null;
 },readView:async(current,action,scope)=>{
  const url=new URL('/api/workspace/'+action,'http://127.0.0.1:'+port);for(const [key,value] of Object.entries(scope))if(value)url.searchParams.set(key,value);

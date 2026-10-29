@@ -18,13 +18,22 @@ export async function readVersion(){
  }
  throw new AppError('其他成员正在更新，请刷新后重试。',409);
 }
-export async function snapshot():Promise<State>{
+export async function snapshot(kinds?:readonly string[]):Promise<State>{
  const db=database();await db.prepare("INSERT OR IGNORE INTO workspace_revision (id,revision) VALUES ('main',0)").run();
  for(let retry=0;retry<3;retry++){
   const start=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
-  const result=await db.prepare('SELECT data FROM records ORDER BY rowid').all<{data:string}>();
+  // Native SQLite yields between bounded batches, including JSON parsing. D1
+  // keeps its existing read path. Revision guards cover the complete read in both.
+  const native=db as typeof db&{readSnapshot?:(kinds?:readonly string[])=>Promise<Entity[]>};
+  let records:Entity[];
+  if(native.readSnapshot)records=await native.readSnapshot(kinds);
+  else{
+   const sql='SELECT data FROM records'+(kinds?(kinds.length?' WHERE kind IN ('+kinds.map(()=>'?').join(',')+')':' WHERE 0'):'')+' ORDER BY rowid';
+   const statement=db.prepare(sql),result=await (kinds?.length?statement.bind(...kinds):statement).all<{data:string}>();
+   records=result.results.map(r=>JSON.parse(r.data));
+  }
   const end=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
-  if(start!.revision===end!.revision)return {revision:start!.revision,records:result.results.map(r=>JSON.parse(r.data))};
+  if(start!.revision===end!.revision)return {revision:start!.revision,records};
  }
  throw new AppError('其他成员正在更新，请刷新后重试。',409);
 }

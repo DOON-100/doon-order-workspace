@@ -40,4 +40,20 @@ for(const member of members){
 }
 assert.equal(db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get().revision,0);
 console.log('PASS 8 roles × 5 private prefixes × target/before/after audit isolation; legacy order history and all source records unchanged');
+const visibleIds=[];
+for(let i=0;i<450;i++){
+ const id='audit-visible-bounded-'+i;visibleIds.push(id);
+ put({id,kind:'audit',lineId:'synthetic-order',targetId:'synthetic-order',action:'bounded-visible-history',after:{id:'synthetic-order',kind:'order',quantity:i}});
+ put({id:'audit-hidden-interleaved-'+i,kind:'audit',lineId:'synthetic-order',targetId:'private-3',after:{id:'private-3',kind:'framework_synthetic',body:'SYNTHETIC_PRIVATE_SENTINEL'}});
+}
+for(let i=0;i<600;i++)put({id:'audit-hidden-tail-'+i,kind:'audit',lineId:'synthetic-order',targetId:'missing-framework-target',before:{kind:'framework_synthetic',body:'SYNTHETIC_PRIVATE_SENTINEL'}});
+const boundedBefore=snapshot(),expectedIds=visibleIds.slice(-250).reverse();
+for(const member of members){
+ const response=await identity.run({userId:member.userId,email:member.email},()=>api.GET(new Request('https://synthetic.invalid/api/workspace/data'),{params:Promise.resolve({action:'data'})}));
+ assert.equal(response.status,200);const body=await response.json();
+ assert.deepEqual(body.audits.map(row=>row.id),expectedIds,member.role+' must select the latest 250 visible records, not the latest 250 raw records');
+ assert(!JSON.stringify(body).includes('SYNTHETIC_PRIVATE_SENTINEL'));
+ assert.deepEqual(snapshot(),boundedBefore);
+}
+console.log('PASS Reverse history selection skips 600 private tail records and interleaved private records without changing the latest 250 authorized results.');
 db.close();
