@@ -27,7 +27,7 @@ function SourcePreviewRows({preview}:{preview:Preview}){
 
 export function KingdeePendingPanel({overview=false,onNavigate,onDirtyChange}:{overview?:boolean;onNavigate:WorkspaceNavigate;onDirtyChange:(dirty:boolean)=>void}){
  const cache=useQueryClient(),[snapshotId,setSnapshotId]=useState('');
- const query=useQuery<SourceData>({queryKey:['kingdee-pending',snapshotId],queryFn:()=>request('kingdee-pending-data'+(snapshotId?'?id='+encodeURIComponent(snapshotId):'')),refetchInterval:30000});
+ const query=useQuery<SourceData>({queryKey:['kingdee-pending',snapshotId],queryFn:()=>request('kingdee-pending-data'+(snapshotId?'?id='+encodeURIComponent(snapshotId):''))});
  const snapshot=query.data?.snapshot,headers=snapshot?.headers||[],metadata=snapshot?.metadata;
  const [q,setQ]=useState(''),[supplier,setSupplier]=useState(''),[buyer,setBuyer]=useState(''),[period,setPeriod]=useState('all'),[page,setPage]=useState(0),[showSummary,setShowSummary]=useState(false);
  const [importOpen,setImportOpen]=useState(false),[file,setFile]=useState<File|null>(null),[sourceAsOf,setSourceAsOf]=useState(today()),[sourceAccount,setSourceAccount]=useState('深圳市度昂眼镜科技有限公司'),[preview,setPreview]=useState<Preview|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');

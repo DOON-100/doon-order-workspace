@@ -51,11 +51,11 @@ function TaskWorkspace({data,projectId='',roundId='',stepKey='directory',onDirty
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[refreshWarning,setRefreshWarning]=useState(''),[discardPrompt,setDiscardPrompt]=useState('');
  const mounted=useRef(true),busyRef=useRef(false),pendingRef=useRef<Submission|null>(null),scopeRef=useRef(scope),switchAction=useRef<(()=>void)|null>(null),applied=useRef(''),controller=useRef<AbortController|null>(null),heading=useRef<HTMLHeadingElement|null>(null),returnFocus=useRef<HTMLElement|null>(null);
  scopeRef.current=scope;
- const feedQuery=useQuery<Feed>({queryKey:['project-collaboration',actor,revision,projectId],queryFn:({signal})=>taskRequest('project-collaboration-data'+(projectId?'?projectId='+encodeURIComponent(projectId):''),undefined,signal),enabled:!data||data.me.active,retry:false,refetchInterval:30000,refetchOnWindowFocus:true});
+ const feedQuery=useQuery<Feed>({queryKey:['project-collaboration',actor,revision,projectId],queryFn:({signal})=>taskRequest('project-collaboration-data'+(projectId?'?projectId='+encodeURIComponent(projectId):''),undefined,signal),enabled:!data||data.me.active,retry:false});
  const feed=!feedQuery.isError&&!feedQuery.isPending&&(!data||data.me.active)?feedQuery.data:undefined;
- const detailQuery=useQuery<Feed>({queryKey:['project-collaboration-detail',actor,revision,selectedId],queryFn:({signal})=>taskRequest('project-collaboration-data?taskId='+encodeURIComponent(selectedId),undefined,signal),enabled:!!selectedId&&!!feed,retry:false,refetchInterval:30000,refetchOnWindowFocus:true});
+ const detailQuery=useQuery<Feed>({queryKey:['project-collaboration-detail',actor,revision,selectedId],queryFn:({signal})=>taskRequest('project-collaboration-data?taskId='+encodeURIComponent(selectedId),undefined,signal),enabled:!!selectedId&&!!feed,retry:false});
  const selected=feed&&selectedId&&!detailQuery.isError&&!detailQuery.isPending?detailQuery.data?.tasks.find(t=>t.id===selectedId&&(!projectId||t.projectId===projectId)):undefined;
- const candidatesQuery=useQuery<Feed>({queryKey:['project-collaboration-candidates',actor,revision,draft?.projectId||''],queryFn:({signal})=>taskRequest('project-collaboration-data?projectId='+encodeURIComponent(draft?.projectId||''),undefined,signal),enabled:personal&&!!draft?.id&&!!feed,retry:false,refetchInterval:30000,refetchOnWindowFocus:true});
+ const candidatesQuery=useQuery<Feed>({queryKey:['project-collaboration-candidates',actor,revision,draft?.projectId||''],queryFn:({signal})=>taskRequest('project-collaboration-data?projectId='+encodeURIComponent(draft?.projectId||''),undefined,signal),enabled:personal&&!!draft?.id&&!!feed,retry:false});
  const candidates=personal?(candidatesQuery.isError||candidatesQuery.isPending?undefined:candidatesQuery.data):feed;
  const draftTask=draft?.id?(selected?.id===draft.id?selected:feed?.tasks.find(t=>t.id===draft.id)):undefined;
  const draftAllowed=!!feed&&!!draft&&draft.scope===scope&&!!candidates?.canAssign&&(draft.id?!!draftTask?.canAssign:feed.canAssign&&draft.projectId===projectId)&&(!selectedId||!detailQuery.isError);
@@ -103,7 +103,10 @@ function TaskWorkspace({data,projectId='',roundId='',stepKey='directory',onDirty
   pendingRef.current=null;setPending(null);clearEditor();setNotice('已保存，完成记录与回复已同步留在项目中。');
   try{
    const results=await Promise.all([feedQuery.refetch(),...(selectedId?[detailQuery.refetch()]:[])]);
-   await onChanged?.();void cache.invalidateQueries({queryKey:['workspace']});
+   await onChanged?.();
+   // Task results and the parent project were just read back. Mark shared
+   // catalogs stale without immediately loading every revision-dependent view.
+   void cache.invalidateQueries({queryKey:['workspace'],refetchType:'none'});
    if(results.some(r=>r.isError))throw new Error('refresh');
   }catch{if(mounted.current)setRefreshWarning('操作已保存，但最新清单刷新失败。请重新读取，无需再次提交。');}
   finally{busyRef.current=false;if(mounted.current)setBusy(false);}

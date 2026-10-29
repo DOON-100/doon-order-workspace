@@ -32,7 +32,6 @@ export function EngineeringDrawingPanel({data,initialRecordId='',onDirtyChange}:
  const selected=work.records.find(r=>r.id===draft?.id),manage=selected?.canManage??work.canManage,approve=selected?.canApprove??work.canApprove,editable=draft?.id?(selected?.canEdit||manage):work.canCreate;
  const reload=useCallback(async()=>{const seq=++loadSeq.current;setLoading(true);try{const result=await request('drawing-data');if(seq!==loadSeq.current)return;const next={...initial,...result};setWork(next);if(draftRef.current?.id&&!next.records.some((r:Drawing)=>r.id===draftRef.current?.id)){setDraft(null);setBaseline('');setHistory([]);setError('该记录当前不可访问，请核对账号权限。');}}finally{if(seq===loadSeq.current)setLoading(false);}},[]);
  useEffect(()=>{reload().catch(e=>setError(e.message));return()=>{loadSeq.current++;historySeq.current++;};},[reload]);
- useEffect(()=>{const timer=setInterval(()=>reload().catch(e=>setError(e.message)),30000);return()=>clearInterval(timer);},[reload]);
  useEffect(()=>{onDirtyChange?.(hasUnsavedInput);return()=>onDirtyChange?.(false);},[hasUnsavedInput,onDirtyChange]);
  useEffect(()=>{if(!hasUnsavedInput)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};addEventListener('beforeunload',leave);return()=>removeEventListener('beforeunload',leave);},[hasUnsavedInput]);
  useEffect(()=>setPage(0),[search,queue,type,owner]);

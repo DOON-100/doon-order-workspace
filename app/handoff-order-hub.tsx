@@ -17,8 +17,8 @@ export function HandoffOrderHub({data,onNavigate,openOrder,initialContext={}}:{d
  const businessTeam=useBusinessTeamScope();
  const [search,setSearch]=useState(''),[owner,setOwner]=useState(''),[localTeamId,setTeamId]=useState(''),[selected,setSelected]=useState(initialContext.orderId||''),[page,setPage]=useState(0);
  const teamId=businessTeam?'':localTeamId;
- const query=useQuery<Feed>({queryKey:['handoff-order-index',data.me.id,data.revision],queryFn:({signal})=>request('handoff-business-data',undefined,{signal}),retry:false,refetchInterval:30000});
- const groupQuery=useQuery<ServiceGroups>({queryKey:['handoff-service-groups',data.me.id,data.revision],queryFn:({signal})=>request('service-data',undefined,{signal}),retry:false,refetchInterval:30000});
+ const query=useQuery<Feed>({queryKey:['handoff-order-index',data.me.id,data.revision],queryFn:({signal})=>request('handoff-business-data',undefined,{signal}),retry:false});
+ const groupQuery=useQuery<ServiceGroups>({queryKey:['handoff-service-groups',data.me.id,data.revision],queryFn:({signal})=>request('service-data',undefined,{signal}),retry:false});
  const source=query.isError?undefined:query.data;
  const groupingReady=!!source&&!groupQuery.isError&&Array.isArray(groupQuery.data?.teams)&&Array.isArray(groupQuery.data?.customers);
  const teams=businessTeam?.catalog?.teams||(groupingReady?groupQuery.data!.teams:[]);

@@ -3,11 +3,13 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 const H={slots:[],effects:[],index:0,changed:false};globalThis.__pctHooks=H;
+globalThis.__pctInvalidations=[];
 const react=`const H=globalThis.__pctHooks;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,value=>{const next=typeof value==='function'?value(H.slots[i].value):value;if(!Object.is(next,H.slots[i].value)){H.slots[i].value=next;H.changed=true;}}];}export function useRef(value){const i=H.index++;return H.slots[i]||(H.slots[i]={current:value});}export function useEffect(fn,deps){const i=H.index++,old=H.slots[i];if(!old||deps.some((value,j)=>value!==old.deps[j])){H.slots[i]={deps,cleanup:old?.cleanup};H.effects.push(()=>{old?.cleanup?.();H.slots[i].cleanup=fn();});}}`;
 const bundled=await build({entryPoints:['app/project-collaboration-panel.tsx'],bundle:true,platform:'node',format:'esm',write:false,alias:{'@':process.cwd()},plugins:[{name:'synthetic-task-events',setup(b){
  b.onResolve({filter:/^(react|react\/jsx-runtime|@tanstack\/react-query)$/},a=>({path:a.path,namespace:'synthetic'}));
  b.onResolve({filter:/components\/ui\/button$/},()=>({path:'button',namespace:'synthetic'}));b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'synthetic'}));
- b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export const jsx=(type,props)=>({type,props:props||{}});export const jsxs=jsx;`:a.path==='button'?`export const Button='button';`:a.path==='@tanstack/react-query'?`export const useQuery=options=>globalThis.__pctQuery(options);export const useQueryClient=()=>({invalidateQueries:async()=>{}});`:''}));
+ b.onResolve({filter:/business-followup-panel$/},()=>({path:'followup-slot',namespace:'synthetic'}));
+ b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export const jsx=(type,props)=>({type,props:props||{}});export const jsxs=jsx;`:a.path==='followup-slot'?`export function BusinessFollowupSlot(){return null;}`:a.path==='button'?`export const Button='button';`:a.path==='@tanstack/react-query'?`export const useQuery=options=>globalThis.__pctQuery(options);export const useQueryClient=()=>({invalidateQueries:async options=>{globalThis.__pctInvalidations.push(options);}});`:''}));
  }}]});
 const {PersonalTasksPanel,ProjectStepCollaboration}=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
 const originalFetch=globalThis.fetch,originalWindow=globalThis.window,listeners=new Map(),queries=new Map();
@@ -82,5 +84,6 @@ try{
  console.log('PASS cards and details identify each round, project-level and unresolved round labels without changing step/all-round visibility');
  const originalTZ=process.env.TZ;try{process.env.TZ='Asia/Shanghai';await mount();await open();assert.equal(text(nodes().find(n=>n.type==='time')).includes('16:00'),true);process.env.TZ='UTC';render();assert.equal(text(nodes().find(n=>n.type==='time')).includes('08:00'),true);sourceTasks[0]={...sourceTasks[0],history:[{...baseTask.history[0],at:'not-a-valid-time'},{...baseTask.history[0],id:'synthetic-empty-time',at:''}]};await reread();assert.deepEqual(nodes().filter(n=>n.type==='time').map(n=>text(n)),['时间待核查','未记录时间']);assert.equal(baseTask.history[0].at,'2026-10-13T08:00:00Z');}finally{if(originalTZ===undefined)delete process.env.TZ;else process.env.TZ=originalTZ;}
  console.log('PASS history uses local browser timezone for valid timestamps and safe invalid/empty fallbacks without rewriting source time');
+ assert(globalThis.__pctInvalidations.length>0);assert(globalThis.__pctInvalidations.every(options=>options.refetchType==='none'),'Confirmed task updates must not reload the unrelated workspace after their own readback');
  console.log('PASS project-collaboration UI: 11 synthetic interaction groups');
-}finally{cleanup();globalThis.fetch=originalFetch;if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;delete globalThis.__pctHooks;delete globalThis.__pctQuery;}
+}finally{cleanup();globalThis.fetch=originalFetch;if(originalWindow===undefined)delete globalThis.window;else globalThis.window=originalWindow;delete globalThis.__pctHooks;delete globalThis.__pctQuery;delete globalThis.__pctInvalidations;}

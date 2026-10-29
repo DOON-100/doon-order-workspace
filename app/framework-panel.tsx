@@ -29,9 +29,9 @@ export function FrameworkLegacyWorkbench({data,onNavigate}:FrameworkPanelProps){
  const enabled=data.me.active&&data.me.role!=='supplier';
  // Each existing endpoint applies its own server-side customer and project authorization.
  const queryScope=[data.me.id,data.me.role,data.me.active,data.revision];
- const projects=useQuery<FrameworkProjectData>({queryKey:['framework-projects',...queryScope],enabled,queryFn:()=>request('customer-project-data'),refetchInterval:30000,retry:false});
- const followups=useQuery<FrameworkFollowupData>({queryKey:['framework-followups',...queryScope],enabled,queryFn:()=>request('customer-project-followup-data'),refetchInterval:30000,retry:false});
- const communications=useQuery<FrameworkCommunicationData>({queryKey:['framework-communications',...queryScope],enabled,queryFn:()=>request('unified-communication-data'),refetchInterval:30000,retry:false});
+ const projects=useQuery<FrameworkProjectData>({queryKey:['framework-projects',...queryScope],enabled,queryFn:()=>request('customer-project-data'),retry:false});
+ const followups=useQuery<FrameworkFollowupData>({queryKey:['framework-followups',...queryScope],enabled,queryFn:()=>request('customer-project-followup-data'),retry:false});
+ const communications=useQuery<FrameworkCommunicationData>({queryKey:['framework-communications',...queryScope],enabled,queryFn:()=>request('unified-communication-data'),retry:false});
  const today=frameworkDay();
  const todos=useMemo(()=>buildFrameworkTodos(data,projects.isError?undefined:projects.data,followups.isError?undefined:followups.data,today,communications.isError?undefined:communications.data),[data,projects.data,projects.isError,followups.data,followups.isError,communications.data,communications.isError,today]);
  const scoped=todos.filter(t=>scope==='all'||t.mine),late=scoped.filter(t=>t.date&&t.date<today),reviews=scoped.filter(t=>t.review),dated=scoped.filter(t=>t.date===today);

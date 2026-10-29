@@ -12,6 +12,7 @@ const stubs={react,
  'lucide-react':`export const ArrowRight='icon',CheckCheck='icon',Download='icon',Inbox='icon',Plus='icon',RefreshCw='icon',Save='icon',Search='icon',X='icon';`,
  button:`export const Button='button';`,
  'client-id':`let n=0;export const clientId=()=>'followup-links-test-'+(++n);`,
+ 'business-followup-panel':`export function BusinessFollowupSlot(){return null;}`,
  ui:`export const request=(...args)=>globalThis.__followupLinksRequest(...args);export const dateTime=value=>value||'—';`,
  'customer-project-ui':`export const CPBadge='badge',CPEmpty='empty',CPSection='section',CPTable='table';export const cpToday=()=>'2026-10-14';`,css:''
 };
@@ -56,7 +57,10 @@ try{
  nodes(table.props.rows).find(node=>node.type==='button').props.onClick();assert.equal(opened,'without-followup');assert.equal(mutations,0);
  console.log('PASS followup view explains project/entry counts, includes same-project tasks and exposes projects without inventing followups');
 
- slowRead=true;for(const listener of [...listeners.get('focus')])listener();render();assert(pendingRead);const oldSignal=signals.at(-1);
+ const initialReads=reads,initialChanged=changed;
+ for(const listener of listeners.get('focus')||[])listener();await settle();
+ assert.equal(reads,initialReads,'Focus must not reload followups');assert.equal(changed,initialChanged,'Focus must not reload parent project/finance data');
+ slowRead=true;button('刷新跟进').props.onClick();render();assert(pendingRead);const oldSignal=signals.at(-1);
  button('查看 / 更新跟进').props.onClick();render();
  assert.equal(byTestId('followup-project-tasks').props.children[0].props.children[0],'关联项目待办 ');
  assert.match(text(byTestId('followup-project-tasks')),/Synthetic review action/);
@@ -68,8 +72,8 @@ try{
  console.log('PASS followup saves invalidate project data and older background reads cannot overwrite the saved linked action/date');
 
  props.initialFollowupId='followup';render();await settle();assert.equal(byLabel('下一步').props.value,'Updated shared action');
- const beforeDirtyFocus=reads;byLabel('下一步').props.onChange({target:{value:'Unsaved change'}});render();for(const listener of [...listeners.get('focus')])listener();await settle();assert.equal(reads,beforeDirtyFocus);assert.equal(byLabel('下一步').props.value,'Unsaved change');
- console.log('PASS project deep links open the exact followup and focus refresh preserves unsaved edits');
+ const beforeDirtyFocus=reads;byLabel('下一步').props.onChange({target:{value:'Unsaved change'}});render();for(const listener of listeners.get('focus')||[])listener();await settle();assert.equal(reads,beforeDirtyFocus);assert.equal(byLabel('下一步').props.value,'Unsaved change');
+ console.log('PASS project deep links open the exact followup, focus never reloads and manual refresh preserves save concurrency guards');
  button('关闭').props.onClick();render();
  source.teams=[{id:'custom',name:'Synthetic custom group',active:true,customerIds:['customer'],salesMemberIds:['sales'],leaderIds:[],serviceMemberIds:[]},{id:'stock',name:'Synthetic stock group',active:true,customerIds:['customer'],salesMemberIds:['sales'],leaderIds:[],serviceMemberIds:[]}];
  source.projects[0].teamId='custom';source.projects[1].teamId='stock';

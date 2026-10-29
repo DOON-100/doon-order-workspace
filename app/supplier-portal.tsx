@@ -49,7 +49,7 @@ export default function SupplierPortal(){
   catch(e){const cause=e as ApiError;setConnectionError(cause.message);if(cause.status===401){activeKeyRef.current='';setUser(null);setRecords(null);setSelected('');setError('登录已失效，请重新登录。草稿在此浏览器保留。');}}
   finally{setRefreshing(false);}
  },[user]);
- useEffect(()=>{void refresh();const timer=setInterval(()=>{if(!busyRef.current)void refresh();},30000);return()=>clearInterval(timer);},[refresh]);
+ useEffect(()=>{void refresh();},[refresh]);
  function storeDraft(storageKey:string,value:Draft,submission:Pending|null){
   if(!storageKey)return;
   try{const hasDraft=!!submission||value.note!==''||value.quantity!==''||value.reference!==''||value.promisedDate!==''||value.expectedDate!==''||value.attachmentIds.length>0||value.reworkId!=='';if(hasDraft)localStorage.setItem(storageKey,JSON.stringify({draft:value,pending:submission}));else localStorage.removeItem(storageKey);}

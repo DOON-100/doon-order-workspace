@@ -41,7 +41,7 @@ function EmptyRows({children}:{children:ReactNode}){return <div className="suppl
 
 export function SupplierOperationsPanel(props:Props){
  const {data,view,onNavigate}=props,description=descriptions[view]||descriptions['supplier-followup'];
- const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&view!=='supplier-outsourcing',refetchInterval:30000});
+ const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&view!=='supplier-outsourcing'});
  const snapshot=current.data?.snapshot,materials=useMemo(()=>pendingMaterials(snapshot),[snapshot]);
  if(!data.me.active||data.me.role==='supplier')return <section className="panel"><EmptyRows>当前账号没有内部供应商管理工作台的查看权限。</EmptyRows></section>;
  return <div className="supplier-operations">
@@ -113,7 +113,7 @@ function RiskView({data,materials,onNavigate,openOrder}:Props&{materials:Pending
 }
 
 function SamplesView({data,materials,onNavigate}:Props&{materials:PendingMaterial[]}){
- const projects=useQuery<ProjectResponse>({queryKey:['supplier-sample-projects'],queryFn:()=>request('customer-project-data'),refetchInterval:30000}),[query,setQuery]=useState(''),[page,setPage]=useState(0);
+ const projects=useQuery<ProjectResponse>({queryKey:['supplier-sample-projects'],queryFn:()=>request('customer-project-data')}),[query,setQuery]=useState(''),[page,setPage]=useState(0);
  const samples=[...new Map([...(projects.data?.samples||[]),...(projects.data?.internalSamples||[])].map(row=>[row.id,row])).values()].filter(row=>row.status!=='cancelled');
  const sampleRows=samples.filter(row=>matches([row.sampleNo,row.note,...(Array.isArray(row.itemSnapshot)?row.itemSnapshot:[]).flatMap((item:Entity)=>[item.model,item.customerModel,item.drawing,item.material])].join(' '),query));
  const clues=materials.filter(row=>row.sampleEvidence),statuses:Record<string,string>={pending:'待内部接单',accepted:'已接单',making:'制作中',qc:'检验中',ready:'可寄样',closed:'内部完成',cancelled:'已取消'};
@@ -128,7 +128,7 @@ function SamplesView({data,materials,onNavigate}:Props&{materials:PendingMateria
 }
 
 function ReconciliationView({data,materials,onNavigate}:Props&{materials:PendingMaterial[]}){
- const purchases=useQuery<{rows:Purchase[]}>({queryKey:['purchases'],queryFn:()=>request('purchase-data'),refetchInterval:30000});
+ const purchases=useQuery<{rows:Purchase[]}>({queryKey:['purchases'],queryFn:()=>request('purchase-data')});
  const [query,setQuery]=useState(''),[page,setPage]=useState(0),[receiptPage,setReceiptPage]=useState(0),[selected,setSelected]=useState<Purchase|null>(null);
  const history=useQuery<{events:Entity[];edits:Entity[]}>({queryKey:['supplier-reconciliation-history',selected?.id],queryFn:()=>request('purchase-history?id='+encodeURIComponent(selected!.id)),enabled:!!selected});
  const oldRows=purchases.data?.rows||[],filtered=oldRows.filter(row=>matches([row.po,row.supplier,row.itemCode,row.itemName,row.customerOrder,row.sourceFile].join(' '),query)),receipts=(data.receipts||[]).filter(row=>matches([row.supplier,row.deliveryNo,...(row.lines||[]).map((line:Entity)=>line.orderNo)].join(' '),query)).slice().reverse();

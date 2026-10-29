@@ -173,4 +173,8 @@ const {testIeManualWorkbook}=await import('./ie-quote-manual-workbook-cases.mjs'
 const {testIeMail}=await import('./ie-mail-cases.mjs');await testIeMail({pass});
 const {testWorkspaceAuditReads}=await import('./workspace-audit-read-cases.mjs');await testWorkspaceAuditReads({...projectHarness,admin});
 await import('./service-order-customer-keys.mjs');
+await import('./customer-project-list-filters-ui.mjs');
+await import('./customer-project-followup-links-ui.mjs');
+await import('./workspace-manual-refresh.mjs');
+await import('./project-collaboration-ui.mjs');
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

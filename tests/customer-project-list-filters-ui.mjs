@@ -4,6 +4,7 @@ import {pathToFileURL} from 'node:url';
 import {build} from 'esbuild';
 
 const react=`
+export const Fragment='fragment';
 export function useState(initial){const H=globalThis.__projectFilterFrame,i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,value=>{const next=typeof value==='function'?value(H.slots[i].value):value;if(!Object.is(next,H.slots[i].value)){H.slots[i].value=next;H.changed=true;}}];}
 export function useRef(value){const H=globalThis.__projectFilterFrame,i=H.index++;return H.slots[i]||(H.slots[i]={current:value});}
 export function useEffect(fn,deps){const H=globalThis.__projectFilterFrame,i=H.index++,old=H.slots[i];if(!old||deps.some((value,j)=>value!==old.deps[j])){H.slots[i]={deps,cleanup:old?.cleanup};H.effects.push(()=>{old?.cleanup?.();H.slots[i].cleanup=fn();});}}
@@ -18,6 +19,7 @@ const stubs={
  ui:`export const request=(...args)=>globalThis.__projectFilterRequest(...args);export const dateTime=value=>value||'—';`,
  'business-team-context':`export const useBusinessTeamScope=()=>globalThis.__projectFilterBusinessTeam||null;`,
  'customer-project-entry-forms':`export const customerProjectEntryForms=()=>({});`,
+ 'business-followup-panel':`export const BusinessFollowupProvider='followup-provider';export function BusinessFollowupSlot(){return null;}`,
  'customer-project-search-select':`export const CPSearchSelect='search-select';`,
  'customer-early-development':`export function CustomerEarlyDevelopment(){}`,
  'customer-project-finance-panel':`export function CustomerProjectFinancePanel(){}`,
@@ -106,7 +108,8 @@ export async function runCustomerProjectListFiltersUiTests(){
  const originals=new Map(globalKeys.map(key=>[key,Object.getOwnPropertyDescriptor(globalThis,key)]));
  const NativeDate=globalThis.Date;
  globalThis.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:['2026-10-13T04:00:00Z']));}static now(){return new NativeDate('2026-10-13T04:00:00Z').getTime();}};
- globalThis.window={addEventListener(){},removeEventListener(){},confirm(){confirmCalls++;return true;}};
+ const listeners=new Map();
+ globalThis.window={addEventListener(name,fn){if(!listeners.has(name))listeners.set(name,new Set());listeners.get(name).add(fn);},removeEventListener(name,fn){listeners.get(name)?.delete(fn);},confirm(){confirmCalls++;return true;}};
  globalThis.requestAnimationFrame=fn=>{fn();return 0;};
  let source,model,requests=[],checks=[],dirtyReports=[],confirmCalls=0;
  const pass=description=>{checks.push(description);console.log('PASS '+description);};
@@ -128,6 +131,15 @@ export async function runCustomerProjectListFiltersUiTests(){
   await settle(model);
  };
  try{
+  await mount();
+  for(const listener of listeners.get('focus')||[])listener();await settle(model);
+  for(const name of ['项目财务','客户项目清单','跟进与审核','客户项目清单','业务客服组','客户项目清单','回收站 1','客户项目清单']){button(model,name).props.onClick();await settle(model);}
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data'],'Focus and local view changes retain the initially loaded snapshot');
+  source.projects[0].title='Synthetic manually refreshed project';
+  button(model,'刷新').props.onClick();await settle(model);
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data','customer-project-data','project-finance-data']);
+  assert(text(tableFor(model).props.rows).includes('Synthetic manually refreshed project'),'Manual refresh displays the latest result');
+  pass('项目首次进入加载一次，窗口焦点和栏目切换不重读，刷新按钮更新项目及财务资料');
   await mount();
   expectCodes(model,['A','B','C','D','E','F','G','H']);
   assert.equal(button(model,'清空筛选').props.disabled,true);
@@ -315,7 +327,7 @@ export async function runCustomerProjectListFiltersUiTests(){
   linkedAction=tableFor(model).props.rows.find(row=>text(row[0]).includes('FLT-A'))[5];
   assert(text(linkedAction).includes('Updated linked client feedback'));
   assert(text(linkedAction).includes('2026-10-09'));
-  assert(requests.every(row=>['customer-project-data','project-finance-data'].includes(row.action)));
+  assert.deepEqual(requests.map(row=>row.action),['customer-project-data','project-finance-data','customer-project-data'],'Followup changes re-read projects once without re-reading unrelated finance data');
   metric('前期跟进中');expectCodes(model,['A','C','G','H'],'Paused/cancelled/archived projects are not counted as active development');
   pass('linked client followups share next-action date/owner with project lists; source links select the same followup and saves refresh the parent without inventing tasks');
   const sharedCustomerFixture=structuredClone(fixture);

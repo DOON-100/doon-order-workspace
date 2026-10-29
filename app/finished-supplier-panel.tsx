@@ -53,7 +53,7 @@ function SelectBox({label,value,onChange,children,disabled=false}:{label:string;
 
 export function FinishedSupplierPanel({data,initialOrderId='',onDirtyChange}:Props){
  const openedOrder=useRef(''),canClose=canCloseFinished(data.me),cache=useQueryClient(),manage=['admin','pmc'].includes(data.me.role),operate=manage||data.me.role==='production'||data.me.role==='clerk'&&!!data.me.departments?.includes('finished');
- const query=useQuery<FinishedData>({queryKey:['finished-supplier-data'],queryFn:()=>api('data'),refetchInterval:30000,retry:false});
+ const query=useQuery<FinishedData>({queryKey:['finished-supplier-data'],queryFn:()=>api('data'),retry:false});
  const records=query.data, tasks=records?.tasks||[],suppliers=records?.supplierMasters||data.suppliers?.filter(s=>s.active).map(s=>({id:s.id,name:String(s.name)}))||[];
  const [view,setView]=useState('tasks'),[search,setSearch]=useState(''),[selected,setSelected]=useState(''),[publish,setPublish]=useState<PublishForm>(blankPublish),[confirmBaseline,setConfirmBaseline]=useState<ConfirmBaselineForm>(blankConfirmBaseline),[form,setForm]=useState<CompanyForm>(blankOperation),[dirty,setDirty]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState(''),[pending,setPending]=useState<{action:string;body:Record<string,unknown>}|null>(null);
  const pendingRef=useRef<{action:string;body:Record<string,unknown>}|null>(null);

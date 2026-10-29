@@ -42,7 +42,7 @@ const title=(o:Row)=>`${o.orderNo} · ${o.drawing||'款号待核对'}${o.color?'
 
 export function HandoffBusinessPanel({data,onNavigate,onDirtyChange,initialSection='documents',quotePanel,initialContext}:{data:Data;onNavigate:(view:string,context?:InitialContext)=>void;onDirtyChange?:(dirty:boolean)=>void;initialSection?:string;quotePanel?:ReactNode;initialContext?:InitialContext}){
  const queryClient=useQueryClient(),key=['handoff-business',data.me.id,data.revision];
- const feedQuery=useQuery({queryKey:key,queryFn:({signal})=>api('data',undefined,signal) as Promise<Feed>,refetchInterval:15000,staleTime:0});
+ const feedQuery=useQuery({queryKey:key,queryFn:({signal})=>api('data',undefined,signal) as Promise<Feed>});
  const feed=feedQuery.isError?empty:feedQuery.data||empty;
  const [section,setSection]=useState(initialSection),[audience,setAudience]=useState('customer'),[reviewDirty,setReviewDirty]=useState(false),[fundingReview,setFundingReview]=useState<Row|null>(null),[configDirty,setConfigDirty]=useState(false),[customer,setCustomer]=useState(''),[order,setOrder]=useState(''),[search,setSearch]=useState(''),[financeFilter,setFinanceFilter]=useState(''),[draft,setDraft]=useState<Draft|null>(null),[baseline,setBaseline]=useState(''),[busy,setBusy]=useState(false),[pending,setPending]=useState<{action:string;body:Row|FormData}|null>(null),[error,setError]=useState(''),[notice,setNotice]=useState(''),[history,setHistory]=useState<Row|null>(null),[historyScope,setHistoryScope]=useState(''),[generation,setGeneration]=useState<{source:Row;type:string;number:string;piId:string;targetId?:string;expectedVersion?:number}|null>(null);
  const [financeTaskDirty,setFinanceTaskDirty]=useState(false);
@@ -144,7 +144,7 @@ function BusinessQueues({feed,customer,only,onNavigate}:{feed:Feed;customer:stri
 function QueueTable({headers,rows}:{headers:string[];rows:(string|number)[][]}){return <div className="hb-table"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i}>{row.map((v,j)=><td key={j}>{v||'—'}</td>)}</tr>)}</tbody></table>{!rows.length&&<p className="hb-empty">当前权限和筛选下没有记录。</p>}</div>;}
 
 export function ProductionReviewPanel({data,onDirtyChange,settings=false}:{data:Data;onDirtyChange?:(dirty:boolean)=>void;settings?:boolean}){
- const client=useQueryClient(),q=useQuery({queryKey:['handoff-production-review',data.me.id,data.revision],queryFn:({signal})=>api('review-data',undefined,signal),refetchInterval:15000}),value=q.isError?null:q.data;
+ const client=useQueryClient(),q=useQuery({queryKey:['handoff-production-review',data.me.id,data.revision],queryFn:({signal})=>api('review-data',undefined,signal)}),value=q.isError?null:q.data;
  const [selected,setSelected]=useState(''),[selectedVersion,setSelectedVersion]=useState(0),[selectedPolicy,setSelectedPolicy]=useState(0),[lead,setLead]=useState(''),[supervisor,setSupervisor]=useState(''),[note,setNote]=useState(''),[error,setError]=useState(''),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false),[pending,setPending]=useState<{action:string;body:Row}|null>(null);
  const dirty=!!note||!!lead||!!supervisor||!!pending||busy;
  useEffect(()=>{onDirtyChange?.(dirty);return()=>onDirtyChange?.(false);},[dirty,onDirtyChange]);

@@ -16,7 +16,7 @@ const emptyFilters={mode:'active',q:'',supplier:'',buyer:'',status:'',unit:'',fr
 const qty=(n:number|null)=>n===null?'待核对':n.toLocaleString('zh-CN',{maximumFractionDigits:4});
 const eventNames={opening:'核对初始数量',receipt:'普通收货',return:'退货待补',replacement:'退货补回',correction:'核对更正'};
 export function PurchasePanel({me,onDirtyChange}:{me:Member;onDirtyChange:(v:boolean)=>void}){
- const cache=useQueryClient(),editable=broad(me),query=useQuery<{rows:Purchase[];jobs:any[]}>({queryKey:['purchases'],queryFn:()=>request('purchase-data'),refetchInterval:30000});
+ const cache=useQueryClient(),editable=broad(me),query=useQuery<{rows:Purchase[];jobs:any[]}>({queryKey:['purchases'],queryFn:()=>request('purchase-data')});
  const [filters,setFilters]=useState(emptyFilters),[top,setTop]=useState(0),[drafts,setDrafts]=useState<Record<string,Draft>>({}),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false),[selected,setSelected]=useState<string[]>([]),[focus,setFocus]=useState(false),[showSource,setShowSource]=useState(false);
  const [importOpen,setImportOpen]=useState(false),[sourceDate,setSourceDate]=useState(today()),[file,setFile]=useState<File|null>(null),[job,setJob]=useState<any>(null),[detail,setDetail]=useState<Purchase|null>(null),[history,setHistory]=useState<any>(null),[form,setForm]=useState<any>(null),[archive,setArchive]=useState<Purchase[]|null>(null),[archiveDate,setArchiveDate]=useState(today()),[archiveNote,setArchiveNote]=useState('已与供应商及仓库核对，全部齐货');
  const draftRef=useRef(drafts),scroll=useRef<HTMLDivElement>(null),queue=useRef(Promise.resolve()),dirty=Object.keys(drafts).length>0,allRows=query.data?.rows||[];

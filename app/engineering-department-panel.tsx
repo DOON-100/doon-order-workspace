@@ -11,10 +11,11 @@ import type {WorkspaceNavigationContext} from '@/lib/handoff-navigation';
 
 export function EngineeringDepartmentPanel({data,onDirtyChange,initialContext={}}:{data:Data;onDirtyChange?:(dirty:boolean)=>void;initialContext?:WorkspaceNavigationContext}){
  const [tab,setTab]=useState<'board'|'drawing'|'sop'>('board'),[selected,setSelected]=useState(''),[dirty,setDirty]=useState(false),[error,setError]=useState('');
- const index=useQuery<{drawings:any[];sops:any[]}>({queryKey:['engineering-department-index',data.me.id],queryFn:async({signal})=>{const [d,s]=await Promise.all([request('drawing-data',undefined,{signal}),request('sop-data',undefined,{signal})]);return {drawings:d.records||[],sops:s.records||[]};},refetchInterval:30000,retry:false});
- // Refetch the same observer so ordinary workspace polling never remounts a dirty editor.
+ const index=useQuery<{drawings:any[];sops:any[]}>({queryKey:['engineering-department-index',data.me.id],queryFn:async({signal})=>{const [d,s]=await Promise.all([request('drawing-data',undefined,{signal}),request('sop-data',undefined,{signal})]);return {drawings:d.records||[],sops:s.records||[]};},retry:false});
+ // A changed shared revision rechecks this observer without remounting a dirty editor.
  // An authoritative denial or removal below immediately conceals the old selection.
- useEffect(()=>{void index.refetch();},[data.me.id,data.revision]);
+ const lastRevision=useRef(data.revision);
+ useEffect(()=>{if(lastRevision.current!==data.revision){lastRevision.current=data.revision;void index.refetch();}},[data.me.id,data.revision]);
  const visible=index.isError?undefined:index.data,drawings=visible?.drawings||[],sops=visible?.sops||[];
  const changed=useCallback((value:boolean)=>{setDirty(value);onDirtyChange?.(value);},[onDirtyChange]);
  useEffect(()=>()=>onDirtyChange?.(false),[onDirtyChange]);

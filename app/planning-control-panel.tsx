@@ -73,7 +73,7 @@ export function PlanningControlPanel({data,onDirtyChange,initialContext,onNaviga
  const inFlight=useRef(false),retry=useRef<{key:string;token:string}|null>(null),memberScope=useRef(data.me.id),locatorDone=useRef(''),requestedRecord=useRef(initialContext?.recordId||'');
  const dirty=!!editor&&JSON.stringify(editor.draft)!==editor.base;
  const isCapacity=scenarioId==='capacity';
- const query=useQuery<Feed>({queryKey:['planning-control',data.me.id,data.revision,scenarioId],queryFn:({signal})=>api<Feed>('planning-control-data?'+new URLSearchParams({scenarioId:isCapacity?'':scenarioId,includeArchived:'true'}),undefined,signal),retry:false,refetchInterval:30000});
+ const query=useQuery<Feed>({queryKey:['planning-control',data.me.id,data.revision,scenarioId],queryFn:({signal})=>api<Feed>('planning-control-data?'+new URLSearchParams({scenarioId:isCapacity?'':scenarioId,includeArchived:'true'}),undefined,signal),retry:false});
  const feed=!blocked&&!query.isError?query.data:undefined,records=feed?.records||[],calculations=feed?.calculations||[];
  const scenario=scenarios.find(item=>item.id===scenarioId)||scenarios[0],live=records.filter(record=>!record.archived),archived=records.filter(record=>record.archived),current=records.find(record=>record.id===selectedId);
  const person=(id:string)=>feed?.members.find(member=>member.id===id)?.name||'已登记负责人';
