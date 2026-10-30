@@ -12,7 +12,7 @@ const rule='kingdee-supplier-catalog-v1', pageSize=100, maxRows=10000;
 const catalogPrefix='kingdee_supplier_catalog_', receiptPrefix='kingdee_supplier_catalog_receipt_';
 const running=new Set<string>();
 type Source={id:string;code:string;name:string;groupName:string|null;taxRate:string|null};
-type Result={inserted:number;existing:number;changed:number;total:number;completedAt:string;durationMs?:number};
+type Result={inserted:number;existing:number;changed:number;total:number;completedAt:string;durationMs?:number;scope?:'baseline'|'last-24-hours';addedSuppliers?:{code:string;name:string}[]};
 function access(req:Request,m:Member){
  if(!m.active||!broad(m))throw new AppError('仅有效 PMC / 采购和管理员可访问金蝶供应商来源档案。',403);
  if(req.headers.get(businessTeamHeader)?.trim())throw new AppError('供应商来源档案须在全部业务范围操作。',403);
@@ -35,13 +35,15 @@ function optionalField(value:unknown,max:number){
 }
 async function idFor(accountId:string,id:string){return catalogPrefix+await sha(JSON.stringify([accountId,id]));}
 async function receiptId(memberId:string,requestId:string){return receiptPrefix+await sha(JSON.stringify([memberId,requestId]));}
-function publicReceipt(item:Entity):Result{return {inserted:item.inserted,existing:item.existing,changed:item.changed,total:item.total,completedAt:item.completedAt,...(typeof item.durationMs==='number'?{durationMs:item.durationMs}:{})};}
-async function checkedReceipt(s:State,receipt:Entity){
+function publicReceipt(item:Entity):Result{return {inserted:item.inserted,existing:item.existing,changed:item.changed,total:item.total,completedAt:item.completedAt,...(typeof item.durationMs==='number'?{durationMs:item.durationMs}:{}),...(item.scope==='baseline'||item.scope==='last-24-hours'?{scope:item.scope}:{})};}
+async function checkedReceipt(s:State,receipt:Entity,includeAdded=false){
  if(!Array.isArray(receipt.records)||!Array.isArray(receipt.issueRefs))throw new AppError('同步回执不完整，请核查原批次。',409);
  const byId=new Map(s.records.map(row=>[row.id,row]));
  for(const expected of receipt.records){const row=byId.get(expected.id);if(!row||row.batchId!==receipt.id||await sha(JSON.stringify(row))!==expected.hash)throw new AppError('同步回执回读未通过，请核查原批次。',409);}
  for(const expected of receipt.issueRefs){const row=byId.get(expected.id);if(!row||row.kind!=='kingdee_supplier_catalog_issue'||await sha(JSON.stringify(row))!==expected.hash)throw new AppError('同步核查记录回读未通过，请核查原批次。',409);}
- return publicReceipt(receipt);
+ const result=publicReceipt(receipt);
+ if(includeAdded){const added=receipt.records.map((expected:{id:string})=>byId.get(expected.id)).filter((row):row is Entity=>!!row&&row.kind==='kingdee_supplier_catalog');if(added.length!==receipt.inserted||added.some(row=>typeof row.code!=='string'||typeof row.name!=='string'))throw new AppError('同步回执的新增供应商不完整，请核查原批次。',409);result.addedSuppliers=added.map(row=>({code:row.code,name:row.name}));}
+ return result;
 }
 
 /** Capture only the required source projection. Compare two complete scans; this
@@ -105,7 +107,7 @@ export async function kingdeeSupplierCatalogGet(action:string,req:Request,s:Stat
   if([...params.keys()].some(k=>k!=='requestId')||params.getAll('requestId').length!==1)throw new AppError('请求编号无效。');
   const requestId=z.string().uuid().parse(params.get('requestId')),id=await receiptId(m.id,requestId),receipt=s.records.find(r=>r.id===id);
   if(!receipt)return json({status:'not-completed'});if(receipt.kind!=='kingdee_supplier_catalog_receipt'||receipt.actorId!==m.id||receipt.binding!==binding(c))throw new AppError('批次与当前账套不一致。',409);
-  return json({status:'complete',receipt:await checkedReceipt(s,receipt)});
+  return json({status:'complete',receipt:await checkedReceipt(s,receipt,true)});
  }
  if([...params.keys()].length)throw new AppError('供应商目录不接受查询参数。');
  const rows=all(s,'kingdee_supplier_catalog').filter(r=>r.accountId===c.accountId&&r.instanceId===c.instanceId&&r.clientId===c.clientId).map(r=>({id:r.id,code:r.code,name:r.name,groupName:r.groupName??null,taxRate:r.taxRate??null,firstSeen:r.firstSeen}));
@@ -121,14 +123,14 @@ export async function kingdeeSupplierCatalogGet(action:string,req:Request,s:Stat
 async function runCatalog(requestId:string,s:State,m:Member,signal:AbortSignal,req?:Request,lease?:Lease):Promise<Result>{
  const startedAt=Date.now();
  const c=configuration(),bound=binding(c),id=await receiptId(m.id,requestId);
- const previous=s.records.find(r=>r.id===id);if(previous){if(previous.kind!=='kingdee_supplier_catalog_receipt'||previous.actorId!==m.id||previous.binding!==bound)throw new AppError('请求编号已用于其他批次。',409);return checkedReceipt(s,previous);}
+ const previous=s.records.find(r=>r.id===id);if(previous){if(previous.kind!=='kingdee_supplier_catalog_receipt'||previous.actorId!==m.id||previous.binding!==bound)throw new AppError('请求编号已用于其他批次。',409);return checkedReceipt(s,previous,true);}
  if(running.has(bound))throw new AppError('该账套的供应商读取正在进行。',429);running.add(bound);
  try{
   const baseline=all(s,'kingdee_supplier_catalog_receipt').some(r=>r.binding===bound&&(r.scope==='baseline'||r.scope===undefined));
   const end=Date.now(),window=baseline?{start:end-86400000,end}:undefined;
   const captured=await completeSource(c,AbortSignal.any([signal,AbortSignal.timeout(120000)]),window),current=await kingdeeSupplierCatalogState(),member=req?all(current,'member').find(r=>r.id===m.id) as Member|undefined:m;
   if(!member)throw new AppError('当前账号已失效。',403);if(req)access(req,member);if(binding(configuration())!==bound)throw new AppError('金蝶账套配置已变化，请重新读取。',409);
-  const repeated=current.records.find(r=>r.id===id);if(repeated){if(repeated.kind!=='kingdee_supplier_catalog_receipt'||repeated.actorId!==m.id||repeated.binding!==bound)throw new AppError('请求编号已用于其他批次。',409);return checkedReceipt(current,repeated);}
+  const repeated=current.records.find(r=>r.id===id);if(repeated){if(repeated.kind!=='kingdee_supplier_catalog_receipt'||repeated.actorId!==m.id||repeated.binding!==bound)throw new AppError('请求编号已用于其他批次。',409);return checkedReceipt(current,repeated,true);}
   const existing=all(current,'kingdee_supplier_catalog').filter(r=>r.accountId===c.accountId&&r.instanceId===c.instanceId&&r.clientId===c.clientId),byCode=new Map<string,Entity>();
   for(const old of existing){if(typeof old.code!=='string'||typeof old.name!=='string'||typeof old.sourceId!=='string')throw new AppError('已保存的供应商来源格式无效，请先核查。',409);const k=normalized(old.code);if(byCode.has(k)&&byCode.get(k)?.sourceId!==old.sourceId)throw new AppError('已保存的供应商编码对应多个来源，请先核查。',409);byCode.set(k,old);}
   const created:Entity[]=[],issues:Entity[]=[],issueRefs:Entity[]=[];let already=0,changed=0;const completedAt=now(),currentById=new Map(current.records.map(r=>[r.id,r]));
@@ -168,7 +170,7 @@ async function runCatalog(requestId:string,s:State,m:Member,signal:AbortSignal,r
   await append(current.revision,[...created,...issues,receipt,auditEntry],lease);
   const readback=await kingdeeSupplierCatalogState(),saved=readback.records.find(r=>r.id===id),byId=new Map(readback.records.map(r=>[r.id,r]));
   if(!saved||saved.kind!=='kingdee_supplier_catalog_receipt'||saved.binding!==bound||[...created,...issues].some(r=>{const v=byId.get(r.id);return !v||v.kind!==r.kind||v.batchId!==id||v.code!==r.code||v.name!==r.name;}))throw new AppError('批次已提交但回读未通过，请核查原批次，不要使用新编号重试。',409);
-  return checkedReceipt(readback,saved);
+  return checkedReceipt(readback,saved,true);
  }finally{running.delete(bound);}
 }
 export async function kingdeeSupplierCatalogPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{

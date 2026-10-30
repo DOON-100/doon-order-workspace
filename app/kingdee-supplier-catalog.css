@@ -11,5 +11,10 @@
 .kingdee-catalog-table table.excel-table>thead>tr>th,.kingdee-catalog-table table.excel-table>tbody:not(.excel-filter-status)>tr>td{text-align:center}
 .kingdee-catalog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#7a8d82;font-size:12px}
 .kingdee-catalog-meta{color:#71867a;font-size:12px}
+.kingdee-catalog-toast{pointer-events:auto;max-height:min(60vh,480px);overflow:auto}
+.kingdee-catalog-toast>div{min-width:0;flex:1}
+.kingdee-catalog-toast p{margin:8px 0 2px;font-weight:600}
+.kingdee-catalog-toast ul{margin:0;padding-left:20px}
+.kingdee-catalog-toast>button{border:0;background:transparent;color:inherit;padding:0 2px;white-space:nowrap}
 .supplier-master-heading{padding:20px 24px 12px;border-top:1px solid #e2eae5;color:#214b3d}
 @media(max-width:640px){.kingdee-catalog{padding:16px}.kingdee-catalog-heading{align-items:flex-start;flex-direction:column}.kingdee-catalog-bar label,.kingdee-catalog-bar input{width:100%}}

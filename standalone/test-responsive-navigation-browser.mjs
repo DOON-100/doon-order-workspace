@@ -29,9 +29,9 @@ try{
  assert.equal(await toggle.getAttribute('aria-expanded'),'true');await nav.waitFor({state:'visible'});
  await settle(228,228);assert.equal(await railWidth(),228);assert.equal(await mainLeft(),228);
  assert.equal(await nav.locator('.department-navigation-studio').isVisible(),false,'the expanded rail keeps the brand-logo entry instead of the extra launcher');
- // The header trigger folds the rail down to a 64px icon strip; labels go, icons stay.
+ // The header trigger folds the rail down to a 59px icon strip; labels go, icons stay.
  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');await nav.waitFor({state:'visible'});
- await settle(64,64);assert.equal(await railWidth(),64);assert.equal(await mainLeft(),64);
+ await settle(59,59);assert.equal(await railWidth(),59);assert.equal(await mainLeft(),59);
  assert.equal(await nav.locator('.department-navigation-toggle>span').first().isVisible(),false,'labels are hidden in the icon strip');
  assert.equal(await nav.locator('.department-navigation-toggle>svg').first().isVisible(),true,'department icons stay reachable');
  // The brand logo is hidden in the icon strip, so Agent Studio gets its own launcher there,
@@ -53,7 +53,7 @@ try{
  const departmentIcon=nav.locator('.department-navigation-toggle').first();
  await departmentIcon.hover();
  const flyout=page.locator('.department-navigation-flyout');await flyout.waitFor({state:'visible'});
- assert.equal(await railWidth(),64,'the rail stays collapsed while the panel is open');
+ assert.equal(await railWidth(),59,'the rail stays collapsed while the panel is open');
  assert.ok(await flyout.locator('[data-nav-view]').count()>0,'the panel lists department pages');
  // The panel must read as a layer floating above the deep-green rail, not blend into it.
  const surface=await flyout.evaluate(el=>getComputedStyle(el));
@@ -77,10 +77,10 @@ try{
  await page.waitForFunction(()=>document.querySelectorAll('.department-navigation-flyout').length===1,{timeout:5000});
  await page.waitForTimeout(500);
  assert.equal(await page.locator('.department-navigation-flyout').count(),1,'the panel stays open while switching departments');
- assert.equal(await railWidth(),64,'switching departments keeps the rail collapsed');
+ assert.equal(await railWidth(),59,'switching departments keeps the rail collapsed');
  const flyoutLink=flyout.locator('[data-nav-view]').first(),flyoutView=await flyoutLink.getAttribute('data-nav-view');
  await flyoutLink.click();await flyout.waitFor({state:'detached'});
- assert.equal(await railWidth(),64,'navigating from the panel keeps the rail collapsed');
+ assert.equal(await railWidth(),59,'navigating from the panel keeps the rail collapsed');
  assert.equal(await toggle.getAttribute('aria-expanded'),'false');
  assert.ok(page.url().includes('/'+flyoutView),'the panel navigates to the selected page');
  // Moving the pointer away from the rail closes the panel again.
@@ -103,10 +103,10 @@ try{
  // The collapsed choice is remembered across reloads and survives wide viewports.
  // The rail is still collapsed here, so the trigger now expands it again.
  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');await settle(228,228);
- await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');await settle(64,64);
+ await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');await settle(59,59);
  await page.reload();await page.getByRole('button',{name:'展开导航栏'}).waitFor();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
- await settle(64,64);assert.equal(await railWidth(),64);
- for(const width of [1920,1024]){await page.setViewportSize({width,height:900});await nav.waitFor({state:'visible'});await settle(64,64);assert.equal(await railWidth(),64);assert.equal(await toggle.getAttribute('aria-expanded'),'false');}
+ await settle(59,59);assert.equal(await railWidth(),59);
+ for(const width of [1920,1024]){await page.setViewportSize({width,height:900});await nav.waitFor({state:'visible'});await settle(59,59);assert.equal(await railWidth(),59);assert.equal(await toggle.getAttribute('aria-expanded'),'false');}
  // Narrow screens fall back to an overlay drawer.
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'展开导航栏'}).waitFor();await nav.waitFor({state:'hidden'});
  await toggle.click();await nav.waitFor({state:'visible'});assert.equal(await toggle.getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert(await toggle.evaluate(n=>document.activeElement===n));
