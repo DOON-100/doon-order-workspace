@@ -20,7 +20,7 @@ const port=await new Promise((resolve,reject)=>{
 });
 assert.notEqual(port,8787);
 const origin='http://127.0.0.1:'+port;
-const env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_SYNTHETIC_ONLY:'1',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_REVIEW_MODE:'0',DOON_SERVER_MODE:'internal',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_SYNTHETIC_ONLY:'1',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_REVIEW_MODE:'0',DOON_SERVER_MODE:'internal',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const initial=(await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});

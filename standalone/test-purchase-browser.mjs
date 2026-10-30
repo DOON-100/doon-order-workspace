@@ -7,7 +7,7 @@ import {pathToFileURL} from 'node:url';
 import * as XLSX from 'xlsx';
 import {purchaseFixture} from '../tests/purchase-fixture.mjs';
 const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
-const root=await fs.mkdtemp(path.resolve('test-output/purchase-browser-')),dist=path.resolve('test-output/purchase-build'),origin='http://127.0.0.1:18792',env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18792',DOON_NO_AUTO_BACKUP:'1'};
+const root=await fs.mkdtemp(path.resolve('test-output/purchase-browser-')),dist=path.resolve('test-output/purchase-build'),origin='http://127.0.0.1:18792',env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18792',DOON_NO_AUTO_BACKUP:'1'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});let logs='';server.stderr.on('data',b=>logs+=b);server.stdout.on('data',()=>{});

@@ -6,7 +6,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import * as XLSX from 'xlsx';
 const dist=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist'),dir=await fs.mkdtemp(path.resolve('test-output/lan-test-')),port=18787,origin=`http://127.0.0.1:${port}`;
-const env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const text=await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8'),initial=text.match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});const serverDone=new Promise(resolve=>server.once('exit',resolve));let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
@@ -114,3 +114,4 @@ try{
  }
 }
 execFileSync(process.execPath,['standalone/test-snapshot-responsiveness.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['standalone/test-supplier-catalog-scheduler.mjs'],{stdio:'inherit',windowsHide:true});

@@ -11,7 +11,7 @@ assert(dist.startsWith(output+path.sep),'Only a build inside test-output may be 
 await fs.mkdir(output,{recursive:true});
 const root=await fs.mkdtemp(path.join(output,'outsourcing-workspaces-browser-'));
 const origin='http://127.0.0.1:18825';
-const env={...process.env,DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_DATA_DIR:root,DOON_BUILD_DIR:dist,DOON_HOST:'127.0.0.1',DOON_PORT:'18825',DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:'',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SUPPLIER_PUBLIC_ORIGIN:'',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_IE_MAIL_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_KINGDEE_SALES_WRITE_ENABLED:'0'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_DATA_DIR:root,DOON_BUILD_DIR:dist,DOON_HOST:'127.0.0.1',DOON_PORT:'18825',DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:'',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SUPPLIER_PUBLIC_ORIGIN:'',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_IE_MAIL_ENABLED:'0',DOON_KINGDEE_SALES_WRITE_ENABLED:'0'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const session={cookie:''},errors=[],checks=[];

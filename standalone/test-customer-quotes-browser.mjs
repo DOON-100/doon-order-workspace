@@ -9,7 +9,7 @@ import * as XLSX from 'xlsx';
 import {verifyCustomerPriceBuildEvidence} from '../scripts/customer-price-build-evidence.mjs';
 const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
 const root=await fs.mkdtemp(path.resolve('test-output/customer-quote-browser-')),dist=path.resolve(process.env.DOON_BUILD_DIR||'test-output/customer-quote-build');
-const origin='http://127.0.0.1:18797',env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18797',DOON_NO_AUTO_BACKUP:'1'};
+const origin='http://127.0.0.1:18797',env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18797',DOON_NO_AUTO_BACKUP:'1'};
 const checks=[],errors=[],pdfEvidence=[],pass=s=>{checks.push(s);console.log('PASS '+s);};
 const buildEvidence=await verifyCustomerPriceBuildEvidence(dist);
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});

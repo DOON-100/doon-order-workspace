@@ -31,7 +31,7 @@ const button=label=>nodes().find(n=>n.type==='button'&&n.props.children===label)
 let html=render();assert.ok(html.includes('测试金蝶供应商连接'));assert.equal(hooks.calls.length,0);
 hooks.response={readOnly:true,rows:[{name:'SYNTHETIC-PRIVATE-NAME'}],checkedAt:'2026-10-30T00:00:00Z'};
 button('测试金蝶供应商连接').props.onClick();await new Promise(resolve=>setTimeout(resolve,0));
-html=render();assert.deepEqual(hooks.calls,[{action:'kingdee-supplier-diagnostic',body:undefined}]);assert.ok(html.includes('首批返回 1 条'));assert.ok(html.includes('未导入档案，自动同步尚未接通'));assert.ok(!html.includes('SYNTHETIC-PRIVATE-NAME'));
+html=render();assert.deepEqual(hooks.calls,[{action:'kingdee-supplier-diagnostic',body:undefined}]);assert.ok(html.includes('首批返回 1 条'));assert.ok(html.includes('本次检查未导入档案'));assert.ok(!html.includes('SYNTHETIC-PRIVATE-NAME'));
 hooks.response=Promise.reject(new Error('尚未配置'));
 button('测试金蝶供应商连接').props.onClick();await new Promise(resolve=>setTimeout(resolve,0));html=render();assert.ok(html.includes('尚未配置'));assert.ok(!html.includes('首批返回 1 条'));
 delete globalThis.__supplierDiagnosticUi;

@@ -14,7 +14,8 @@ await fs.mkdir(path.resolve('test-output'),{recursive:true});
 const testRoot=await fs.mkdtemp(path.resolve('test-output/review-mode-'));
 const buildDir=path.join(testRoot,'build'),dataDir=path.join(testRoot,'data');
 await fs.mkdir(buildDir,{recursive:true});
-for(const name of ['runtime.mjs','auth.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(buildDir,name));
+for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(buildDir,name));
+await fs.cp(path.join(root,'standalone','schedule-engine'),path.join(buildDir,'schedule-engine'),{recursive:true});
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(buildDir,'workspace-api-real.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 // Instrument the synthetic test server only: enroll must never dispatch to the API.
 await fs.writeFile(path.join(buildDir,'workspace-api.mjs'),`import * as real from './workspace-api-real.mjs';
@@ -51,7 +52,7 @@ async function seed(target){
 }
 function snapshot(target){const db=new DatabaseSync(path.join(target,'workspace.sqlite'),{readOnly:true});try{return Object.fromEntries(['records','workspace_revision','local_accounts','local_meta','transaction_guards','sqlite_master'].map(table=>[table,db.prepare('SELECT * FROM '+table+' ORDER BY 1').all()]));}finally{db.close();}}
 async function freePort(){const server=net.createServer();server.listen(0,'127.0.0.1');await once(server,'listening');const port=server.address().port;await new Promise(r=>server.close(r));assert.notEqual(port,8787);return port;}
-const baseEnv={...process.env,DOON_BUILD_DIR:buildDir,DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_SERVER_MODE:'',DOON_PORT:String(await freePort()),DOON_REVIEW_MODE:'1',DOON_REVIEW_AS_OF:at,DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const baseEnv={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_BUILD_DIR:buildDir,DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_SERVER_MODE:'',DOON_PORT:String(await freePort()),DOON_REVIEW_MODE:'1',DOON_REVIEW_AS_OF:at,DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 // Do not suppress auto-backup through its normal option: review mode must disable it itself.
 delete baseEnv.DOON_NO_AUTO_BACKUP;
 let checks=0;const pass=name=>{checks++;console.log('PASS '+name);};

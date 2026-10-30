@@ -11,7 +11,7 @@ const evidence=await verifyCustomerPriceBuildEvidence(dist);
 await fs.mkdir(path.resolve('test-output'),{recursive:true});
 const dir=await fs.mkdtemp(path.resolve('test-output/customer-project-multiple-teams-browser-'));
 assert(dir.startsWith(path.resolve('test-output')+path.sep));
-const origin='http://127.0.0.1:18795',env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:'18795',DOON_NO_AUTO_BACKUP:'1'};
+const origin='http://127.0.0.1:18795',env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:'18795',DOON_NO_AUTO_BACKUP:'1'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const password=(await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});

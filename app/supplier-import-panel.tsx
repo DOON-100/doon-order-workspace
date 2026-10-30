@@ -42,10 +42,10 @@ export function SupplierImportPanel(){
   <Button variant="outline" onClick={()=>{reset();setOpen(true);}}><Upload size={16}/>导入金蝶供应商表</Button>
   <Button variant="outline" onClick={()=>{setSourceId('');setSearch('');setPage(0);setShowSources(true);}}>导入记录与源字段</Button>
   <Button variant="outline" disabled={checking} onClick={()=>void checkConnection()}>{checking?'正在只读测试…':'测试金蝶供应商连接'}</Button>
-  {diagnostic&&<p role="status">只读查询已响应，首批返回 {diagnostic.rows.length} 条（最多 10 条），测试时间 {dateTime(diagnostic.checkedAt)}。未导入档案，自动同步尚未接通。</p>}
+  {diagnostic&&<p role="status">只读查询已响应，首批返回 {diagnostic.rows.length} 条（最多 10 条），测试时间 {dateTime(diagnostic.checkedAt)}。本次检查未导入档案；自动同步状态请查看金蝶供应商档案。</p>}
   {diagnosticError&&<p className="error" role="alert">连接测试未完成：{diagnosticError}</p>}
   <Dialog open={open} onOpenChange={value=>{if(!busy){setOpen(value);if(!value)reset();}}}><DialogContent className="dialog-scroll sm:max-w-[850px]"><DialogHeader><DialogTitle>导入金蝶供应商档案</DialogTitle><DialogDescription>选择金蝶导出的供应商 Excel，先核对新增与冲突，再提交可安全新增的记录。</DialogDescription></DialogHeader>
-   <p className="muted">Excel 是导出时的快照，文件未标明金蝶账套。金蝶新增供应商不会自动进入中台；实时同步尚未接通，需要重新导出并导入。</p>
+   <p className="muted">Excel 是导出时的快照，文件未标明金蝶账套。金蝶来源档案独立保存，不会自动关联本次 Excel 导入。</p>
    <label>选择金蝶供应商 Excel<input className="block mt-2" type="file" accept=".xlsx" aria-label="选择金蝶供应商表" disabled={busy||!!preview} onChange={e=>{setFile(e.target.files?.[0]||null);setError('');}}/></label>
    {!preview&&<Button disabled={!file||busy} onClick={()=>void inspect()}>{busy?'正在核对…':'读取并预览'}</Button>}
    {preview&&<section className="space-y-3"><h3>{preview.fileName}</h3><p>来源 {preview.total} 行 · 可新增 {preview.candidateCount} 条 · 已存在 {preview.existingCount} 条 · 待核查 {preview.conflicts.length} 条</p><p>已导入且编码和名称一致时跳过；名称或编码冲突保留待核查，不会自动关联或覆盖已有供应商资料。</p>

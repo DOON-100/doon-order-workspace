@@ -55,6 +55,7 @@ import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {kingdeeReadonlyGet} from '@/lib/kingdee-readonly-api';
 import {kingdeeSyncGet,kingdeeSyncPost} from '@/lib/kingdee-sync-api';
+import {kingdeeSupplierCatalogGet,kingdeeSupplierCatalogPost,kingdeeSupplierCatalogState} from '@/lib/kingdee-supplier-catalog';
 import {kingdeeSyncState} from '@/lib/kingdee-sync-state';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 import {salesColorFieldsGet,salesColorFieldsPost} from '@/lib/sales-color-fields-api';
@@ -159,6 +160,10 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params;
  if(action==='read-version')return json(await readVersion());
+ if(action==='kingdee-supplier-catalog'||action==='kingdee-supplier-catalog-result'){
+  const s=await kingdeeSupplierCatalogState(),m=await actor(s),response=(await kingdeeSupplierCatalogGet(action,req,s,m))!;
+  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
+ }
  if(action==='kingdee-sync-result'||action==='kingdee-sync-ready'){
   const s=await kingdeeSyncState(),m=await actor(s),response=(await kingdeeSyncGet(action,req,s,m))!;
   response.headers.set('X-Workspace-Revision',String(s.revision));return response;
@@ -200,9 +205,10 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  return await scopeBusinessTeamResponse(action,req,s,m,response);
 }
 export async function POST(req:Request,ctx:Context){try{
- sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot(action==='enroll'?['member']:undefined);
+ sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():action==='kingdee-supplier-catalog-sync'?await kingdeeSupplierCatalogState():await snapshot(action==='enroll'?['member']:undefined);
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const kingdeeSupplierCatalog=await kingdeeSupplierCatalogPost(action,req,s,m);if(kingdeeSupplierCatalog)return kingdeeSupplierCatalog;
  const businessFollowup=await businessFollowupPost(action,req,s,m);if(businessFollowup)return businessFollowup;
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;
  const cliAr=await arCliPost(action,req,s,m);if(cliAr)return cliAr;

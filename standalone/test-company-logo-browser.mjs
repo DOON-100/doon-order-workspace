@@ -13,7 +13,7 @@ await fs.mkdir(path.resolve('test-output'),{recursive:true});
 const root=await fs.mkdtemp(path.resolve('test-output/company-logo-browser-'));
 const port=await new Promise((resolve,reject)=>{const probe=net.createServer();probe.once('error',reject);probe.listen(0,'127.0.0.1',()=>{const value=probe.address().port;probe.close(error=>error?reject(error):resolve(value));});});
 const origin=`http://127.0.0.1:${port}`;
-const env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
 const asset='/brand/doon-eyewear-manufacturing.jpg';
 const logoSelector=`img[src="${asset}"]`;
 const sourceBytes=await fs.readFile(path.resolve('public'+asset));

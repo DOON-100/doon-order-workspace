@@ -40,7 +40,7 @@ import {verifyQuoteFiles} from './quote-files.mjs';
 import {verifyPriceArchive} from './price-archive.mjs';
 
 const dir=await temporary(), runtime=path.join(dir,'runtime');await fs.mkdir(path.join(runtime,'client'),{recursive:true});
-for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(runtime,name));
+for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs','supplier-catalog-scheduler.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(runtime,name));
 await fs.cp(path.join(root,'standalone/schedule-engine'),path.join(runtime,'schedule-engine'),{recursive:true});
 await fs.writeFile(path.join(runtime,'client/index.html'),'Synthetic sales CLI integration');
 await build({absWorkingDir:root,entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(runtime,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'native-cli-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
@@ -126,10 +126,11 @@ const otherFinance=Object.entries(otherFinanceKinds).map(([category,kind])=>({id
 saveRecords([...otherFinance,...otherFinance.map(row=>({id:'history-'+row.id,kind:'project_finance_history',targetId:row.id,customerId:'c1',projectId:'p1',action:'创建',actor:'Synthetic',createdAt:at,before:null,after:row}))]);
 await fs.mkdir(path.join(dataDir,'files'),{recursive:true});await fs.writeFile(path.join(dataDir,'files','synthetic-original.bin'),'SYNTHETIC ORIGINAL BYTES');db.close();
 `);
-const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('DOON_')));
-Object.assign(env,{DOON_DATA_DIR:path.join(dir,'data'),DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_SYNTHETIC_ONLY:'1'});
+const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!/^DOON_/i.test(key)));
+Object.assign(env,{DOON_DATA_DIR:path.join(dir,'data'),DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_SYNTHETIC_ONLY:'1',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0'});
 execFileSync(process.execPath,[path.join(runtime,'seed.mjs')],{env,windowsHide:true,stdio:'pipe'});
 const port=await new Promise(resolve=>{const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});
+assert.notEqual(port,8787,'Protected production port');
 const origin='http://127.0.0.1:'+port;
 const child=spawn(process.execPath,[path.join(runtime,'server.mjs')],{env:{...env,DOON_PORT:String(port)},windowsHide:true,stdio:['ignore','ignore','pipe']});
 let logs='';child.stderr.on('data',b=>logs+=b);let exited=false;const done=new Promise(resolve=>child.once('exit',()=>{exited=true;resolve();}));
