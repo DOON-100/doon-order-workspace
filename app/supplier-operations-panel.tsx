@@ -25,6 +25,7 @@ type Props={data:Data;act:Act;busy:boolean;openOrder:(order:Order)=>void;onDirty
 type SnapshotResponse={snapshot:ProcurementSnapshot|null};
 type ProjectResponse={samples:Entity[];internalSamples:Entity[];projects:Entity[]};
 const descriptions:Record<string,{title:string;detail:string}>={
+ 'supplier-directory':{title:'供应商档案',detail:'查看和维护供应商资料，核对导入的金蝶供应商表。'},
  'supplier-followup':{title:'供应商与交期跟催',detail:'从最新采购未上货记录找出供应商与到期明细，再维护已有采购复期和催交记录。'},
  'supplier-kit':{title:'眼镜物料齐套与欠料',detail:'按板料、钛料、铰链、镜腿、镜片和包材查看采购，结合订单配件、板料、配套齐料日期逐单核对。'},
  'supplier-outsourcing':{title:'外协加工与未回货',detail:'按真实外发单跟进电镀、PVD、喷涂及其他工序；登记供应商回复、送货凭证与实际合格回货。'},
@@ -57,16 +58,17 @@ function EmptyRows({children}:{children:ReactNode}){return <div className="suppl
 export function SupplierOperationsPanel(props:Props){
  const {data,view,onNavigate}=props,description=descriptions[view]||descriptions['supplier-followup'];
  const outsourcingScope:OutsourcingScope|undefined=view==='supplier-semifinished'?'titanium':view==='supplier-semifinished-plastic'?'plastic':view==='supplier-plating'?'plating':view==='supplier-outsourcing'?'all':undefined;
- const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&!outsourcingScope});
+ const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&!outsourcingScope&&view!=='supplier-directory'});
  const snapshot=current.data?.snapshot,materials=useMemo(()=>pendingMaterials(snapshot),[snapshot]);
  if(!data.me.active||data.me.role==='supplier')return <section className="panel"><EmptyRows>当前账号没有内部供应商管理工作台的查看权限。</EmptyRows></section>;
  return <div className="supplier-operations">
   <section className="supplier-ops-intro"><div><span className="section-kicker">{outsourcingScope==='titanium'||outsourcingScope==='plastic'?'半成品外发':outsourcingScope==='plating'?'电镀外发':'供应商管理工作台'}</span><h2>{description.title}</h2><p>{description.detail}</p></div>{outsourcingScope&&outsourcingScope!=='all'?<Button variant="outline" onClick={()=>onNavigate(outsourcingScope==='plating'?'supplier-semifinished':'supplier-plating')}>{outsourcingScope==='plating'?'半成品外发':'电镀外发'}<ArrowRight size={16}/></Button>:<Button variant="outline" onClick={()=>onNavigate('supplier-pending')}>采购未上货总表<ArrowRight size={16}/></Button>}</section>
-  {!outsourcingScope&&<>
+  {!outsourcingScope&&view!=='supplier-directory'&&<>
    {current.isError&&<div className="error" role="alert">金蝶采购快照读取失败：{(current.error as Error).message} {snapshot?'下方保留上次读取的快照。':''}<Button variant="outline" size="sm" onClick={()=>void current.refetch()}>重试</Button></div>}
    {current.isPending?<div className="supplier-ops-source" role="status">正在读取金蝶采购最新快照…</div>:snapshot?<div className="supplier-ops-source"><strong>金蝶采购来源截至 {snapshot.metadata.sourceAsOf}</strong> · {snapshot.metadata.filename}<br/>本范围 {number(materials.length)} 条明细 · 导入 {dateTime(snapshot.metadata.importedAt)}。数量沿用源表口径，按单位分别展示。<span className="supplier-ops-actions"><Button variant="ghost" size="sm" onClick={()=>void current.refetch()} disabled={current.isFetching}><RefreshCw size={14}/>刷新快照</Button></span></div>:!current.isError&&<div className="supplier-ops-source">尚未导入金蝶采购未上货快照。请在总表上传金蝶导出的原始工作簿。</div>}
   </>}
   {view==='supplier-followup'&&<FollowupView materials={materials} {...props}/>}
+  {view==='supplier-directory'&&<LegacySupplierPanel key="directory" initialView="directory" data={data} act={props.act} busy={props.busy} openOrder={props.openOrder}/>}
   {view==='supplier-kit'&&<KitView materials={materials} {...props}/>}
   {outsourcingScope&&<LegacySupplierPanel key={outsourcingScope} scope={outsourcingScope} data={data} act={props.act} busy={props.busy} openOrder={props.openOrder}/>}
   {view==='supplier-risk'&&<RiskView materials={materials} {...props}/>}

@@ -33,7 +33,7 @@ const departmentRouteOrder:Record<WorkspaceDepartmentId,readonly string[]>={
  service:['service','service-workspace','service-followups','order-confirmations','factory-orders','kingdee-sales','production-orders','documents','process-complaint','completed'],
  engineering:['ie-quotes','engineering-materials','engineering-drawings','process-sample','process-engineering-change'],
  planning:['production-planning','pmc-handoff','process-material-kit','pmc','planning-control','orders','mine'],
- purchasing:['supplier-workspace','supplier-pending','supplier-followup','supplier-samples','supplier-kit','supplier-risk'],
+ purchasing:['supplier-workspace','supplier-pending','supplier-directory','supplier-followup','supplier-samples','supplier-kit','supplier-risk'],
  'semifinished-outsourcing':['supplier-semifinished','supplier-semifinished-plastic','process-packaging'],
  'plating-outsourcing':['supplier-plating'],
  warehouse:['receiving','process-warehouse','production-shipments','logistics-waybills','shipment-followups'],

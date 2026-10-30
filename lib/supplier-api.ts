@@ -7,11 +7,13 @@ import {canSeeSupplierPrice,managesSuppliers,supplierStatus,matchesSupplierStatu
 import {makeWorkbook,sha} from './workbooks';
 import {stageDefs} from './ledger';
 import {isOutsourcingScope,matchesOutsourcingScope} from './outsourcing-workspace';
+import {supplierImportGet,supplierImportPost} from './supplier-import-api';
 const key=(s:string)=>clean(s).toUpperCase();
 const stable=(v:any):string=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(stable).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}';
 const pmc=(m:Member)=>{if(!managesSuppliers(m))throw new AppError('权限受限：供应商资料、外发单和复期由 PMC / 采购（Candy、Tina）或管理员维护。',403);};
 const date=(v:string)=>{try{strictDate(v);return v;}catch(e){throw new AppError((e as Error).message);}};
 export async function supplierGet(action:string,req:Request,s:State,m:Member){
+ const supplierImport=await supplierImportGet(action,req,s,m);if(supplierImport)return supplierImport;
  if(action==='supplier-write-contract')return json({protocol:'doon-supplier-write-v1',quoteExpectedVersion:true,outsourceOrderVersion:true});
  if(action==='supplier-quote-files'){if(!canSeeSupplierPrice(m))throw new AppError('没有供应商价格权限。',403);return json({files:all(s,'supplier_quote_file').map(row=>({id:row.id,filename:row.filename,contentType:row.contentType,hash:row.hash,createdAt:row.createdAt,actor:row.actor}))});}
  if(action==='supplier-quote-template'){
@@ -34,6 +36,7 @@ export async function supplierGet(action:string,req:Request,s:State,m:Member){
  return new Response(makeWorkbook(data,'供应商交期跟进',data.length?undefined:['暂无符合筛选的外发记录']),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent('供应商交期跟进.xlsx'),'Cache-Control':'no-store','Vary':businessTeamHeader}});
 }
 export async function supplierPost(action:string,req:Request,s:State,m:Member){
+ const supplierImport=await supplierImportPost(action,req,s,m);if(supplierImport)return supplierImport;
  if(!['supplier-save','outsource-update','outsource-cancel','outsource-approve','supplier-quote-file','supplier-quote-save'].includes(action))return null;
  if(action==='supplier-quote-file'){
   if(!canSeeSupplierPrice(m))throw new AppError('没有供应商价格权限。',403);const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的报价单。');if(!/\.(xlsx?|pdf|jpe?g|png|webp)$/i.test(file.name))throw new AppError('报价单支持 XLSX、XLS、PDF、JPG、PNG 或 WebP。');const bytes=await file.arrayBuffer(),hash=await sha(bytes),prior=all(s,'supplier_quote_file').find(v=>v.hash===hash);if(prior)return json(prior);const item={id:newId('supplier_quote_file'),kind:'supplier_quote_file',filename:file.name.replace(/[\\/]/g,'_'),fileKey:newId('supplier_quote_source'),contentType:file.type||'application/octet-stream',hash,actorId:m.id,actor:m.name,createdAt:now()};await bucket().put(item.fileKey,bytes);await commit(s.revision,[item]);return json(item);

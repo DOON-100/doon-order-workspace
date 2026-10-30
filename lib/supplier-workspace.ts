@@ -5,6 +5,7 @@ export const SUPPLIER_WORKSPACE_ID='supplier-workspace';
 export const SUPPLIER_WORKSPACE_TITLE='供应商管理工作台';
 export const supplierWorkspaceSpaces=[
  {id:'supplier-pending',label:'采购未上货订单总表',area:'采购与交期',icon:'upload',detail:'按金蝶来源快照核对全部采购未上货明细、原表字段与导出范围。'},
+ {id:'supplier-directory',label:'供应商档案',area:'采购与交期',icon:'people',detail:'查看和维护供应商资料，导入金蝶供应商表。'},
  {id:'supplier-followup',label:'供应商与交期跟催',area:'采购与交期',icon:'people',detail:'维护供应商资料、承诺交期、最新复期与催交事项。'},
  {id:'supplier-kit',label:'眼镜物料齐套与欠料',area:'制造与备料',icon:'production',detail:'按订单、款号与物料规格核对板料、钛料、铰链、配件和包材欠料。'},
  {id:'supplier-semifinished',label:'钛架部',area:'半成品外发',icon:'factory',detail:'跟进钛焊、打磨和钛配套的外发、供应商复期与回货。'},

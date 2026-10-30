@@ -32,7 +32,7 @@ for(const role of roles){
  for(const space of nav.productionPlanningSpaces)assert(result.some(item=>item.view===space.id));
  for(const space of nav.supplierWorkspaceSpaces)assert(result.some(item=>item.view===space.id));
  assert.equal(result.filter(item=>item.view==='process-workspace').length,14);
- assert.deepEqual(groups.find(group=>group.id==='purchasing').children.map(item=>item.id),['supplier-workspace','supplier-pending','supplier-followup','supplier-samples','supplier-kit','supplier-risk']);
+ assert.deepEqual(groups.find(group=>group.id==='purchasing').children.map(item=>item.id),['supplier-workspace','supplier-pending','supplier-directory','supplier-followup','supplier-samples','supplier-kit','supplier-risk']);
  assert.deepEqual(groups.find(group=>group.id==='semifinished-outsourcing').children.map(item=>[item.id,item.label]),[['supplier-semifinished','钛架部'],['supplier-semifinished-plastic','胶架部'],['process-packaging','包装部']]);
  assert.equal(nav.departmentWorkspaceBreadcrumb(groups,'process-workspace',{tab:'packaging'}).departmentId,'semifinished-outsourcing');
  assert(!groups.find(group=>group.id==='warehouse').children.some(item=>item.id==='process-packaging'));
