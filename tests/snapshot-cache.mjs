@@ -23,7 +23,7 @@ const rows=()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r
 let readCalls=0;const nativeRead=env.DB.readSnapshot;
 env.DB.readSnapshot=async kinds=>{readCalls++;return nativeRead(kinds);};
 try{
- put('member','member',{userId:'synthetic-user',active:true,role:'admin'},1n);
+ put('member','member',{userId:'synthetic-user',active:true,role:'admin',nested:{items:[{value:'original'}]}},1n);
  for(let i=1;i<=200;i++)put('order-'+i,'order',{n:i},BigInt(i+1));
 
  // 1. Cold read populates the cache; a second full read hits it with no native read.
@@ -80,6 +80,9 @@ try{
  // receives a fresh array so it cannot corrupt the shared cache either.
  const frozen=await store.snapshot();
  assert.throws(()=>{frozen.records[0].n=12345;},TypeError,'cached entity must be frozen');
+ assert.throws(()=>{frozen.records[0].nested.items[0].value='changed';},TypeError,'nested cached values must be frozen');
+ assert.throws(()=>{frozen.records[0].nested.items.push('changed');},TypeError,'nested cached arrays must be frozen');
+ assert.equal((await store.snapshot()).records[0].nested.items[0].value,'original');
  const beforeLen=store.snapshotCacheStats().records;
  frozen.records.push({id:'x',kind:'order'});
  assert.equal(store.snapshotCacheStats().records,beforeLen,'caller push must not leak into the cache');

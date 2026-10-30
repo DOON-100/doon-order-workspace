@@ -163,6 +163,7 @@ await import('./fixed-tool-fees.mjs');
 await import('./fixed-data-tools.mjs');
 await import('./workspace-loading.mjs');
 execFileSync(process.execPath,['tests/native-snapshot.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/snapshot-cache.mjs'],{stdio:'inherit',windowsHide:true});
 await import('./process-change.mjs');
 await import('./purchase-change.mjs');
 await import('./sales-color-fields.mjs');

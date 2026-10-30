@@ -77,6 +77,10 @@ try{
  assert.equal(await editor.count(),0);assert.equal(await board.locator('input,textarea,select').count(),0,'The board contains no editing form');
  assert.equal(await board.locator('.sfb-metric').count(),4);assert.equal(await board.locator('.sfb-progress li').count(),5);
  assert.equal(await board.locator('.sfb-timeline>li').count(),7);assert.equal(await board.getByRole('link',{name:/合成客户需求/}).count(),1);
+ // Refresh must reload attachments as well as history from the server.
+ await page.route('**/api/workspace/service-data',async route=>{const response=await route.fetch(),data=await response.json();await route.fulfill({response,json:{...data,attachments:[...data.attachments,{id:'synthetic-refresh-file',recordId:record.id,filename:'合成刷新附件.pdf',createdAt:new Date().toISOString()}]}});},{times:1});
+ await board.getByRole('button',{name:'刷新跟进详情'}).click();
+ await board.getByRole('link',{name:/合成刷新附件/}).waitFor();
  const first=board.locator('.sfb-timeline>li').filter({has:page.locator('.sfb-version',{hasText:/^V1$/})});
  await first.locator('summary').click();await first.getByText('已登记客户需求，准备整理图纸。',{exact:true}).waitFor();
  await board.locator('.sfb-body').evaluate(n=>{n.scrollTop=0;});

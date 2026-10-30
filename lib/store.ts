@@ -11,11 +11,17 @@ export function bucket(){if(!env.BUCKET)throw new AppError('文件存储暂不�
 // external writer (saveRecords, D1 peers) simply invalidates it via the revision
 // guard. Frozen records keep callers from mutating the shared copy.
 let cache:{revision:number;records:readonly Entity[]}|null=null;
-// Shallow-freeze each entity so a shared cached row cannot be mutated in place by
-// a later request. Writers already create replacement objects; this only guards
-// the common `record.field = value` pattern. Deep-freezing the large audit
-// payloads would cost more than it protects.
-const freezeEntities=(rows:Entity[]):readonly Entity[]=>{for(const r of rows)Object.freeze(r);return Object.freeze(rows);};
+// Records are shared between requests, including nested arrays and objects.
+// Skip already frozen subtrees when a commit reuses unchanged cache entries.
+const freezeEntities=(rows:Entity[]):readonly Entity[]=>{
+ const freeze=(value:unknown):void=>{
+  if(!value||typeof value!=='object'||Object.isFrozen(value))return;
+  for(const child of Object.values(value))freeze(child);
+  Object.freeze(value);
+ };
+ for(const row of rows)freeze(row);
+ return Object.freeze(rows);
+};
 export function invalidateSnapshotCache(){cache=null;}
 export function snapshotCacheStats(){return cache?{revision:cache.revision,records:cache.records.length}:null;}
 // Validate speculative browser reads against the current membership and revision

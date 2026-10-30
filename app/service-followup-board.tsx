@@ -28,8 +28,9 @@ function changes(current:Row,previous?:Row){
  ].filter(Boolean);
 }
 
-export function ServiceFollowupBoard({record,customerLabel,teamLabel,orderLabel,memberName,attachments,canEdit,busy,onClose,onEdit}:{record:Row;customerLabel:string;teamLabel:string;orderLabel:string;memberName:(id?:string)=>string;attachments:Attachment[];canEdit:boolean;busy:boolean;onClose:()=>void;onEdit:()=>void}){
- const dialog=useRef<HTMLDialogElement>(null),heading=useId();
+export function ServiceFollowupBoard({record,customerLabel,teamLabel,orderLabel,memberName,attachments,canEdit,busy,onClose,onEdit,onRefresh}:{record:Row;customerLabel:string;teamLabel:string;orderLabel:string;memberName:(id?:string)=>string;attachments:Attachment[];canEdit:boolean;busy:boolean;onClose:()=>void;onEdit:()=>void;onRefresh:(signal:AbortSignal)=>Promise<void>}){
+ const dialog=useRef<HTMLDialogElement>(null),refreshController=useRef<AbortController|null>(null),heading=useId();
+ useEffect(()=>()=>{refreshController.current?.abort();},[]);
  const [history,setHistory]=useState<Revision[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[refresh,setRefresh]=useState(0);
  useEffect(()=>{const node=dialog.current;if(node&&!node.open)node.showModal();return()=>{if(node?.open)node.close();};},[]);
  useEffect(()=>{
@@ -42,6 +43,12 @@ export function ServiceFollowupBoard({record,customerLabel,teamLabel,orderLabel,
   }).catch(e=>{if(active&&(!controller.signal.aborted||timedOut)){setHistory([]);setError(timedOut?'读取跟进历史超时，请重试。':(e as Error).message);}}).finally(()=>{clearTimeout(timer);if(active)setLoading(false);});
   return()=>{active=false;clearTimeout(timer);controller.abort();};
  },[record.id,record.customerId,record.type,record.version,refresh]);
+ const refreshBoard=async()=>{
+  const controller=new AbortController();refreshController.current=controller;setLoading(true);setError('');
+  try{await onRefresh(controller.signal);if(!controller.signal.aborted)setRefresh(v=>v+1);}
+  catch(e){if(!controller.signal.aborted){setError((e as Error).message);setLoading(false);}}
+  finally{if(refreshController.current===controller)refreshController.current=null;}
+ };
  const ready=!loading&&!error,latest=history[0]?.snapshot;
  const current=latest&&latest.version>record.version?latest:record;
  const chronological=history.slice().reverse();
@@ -52,9 +59,9 @@ export function ServiceFollowupBoard({record,customerLabel,teamLabel,orderLabel,
  const details=Object.entries(fields).filter(([key])=>current.details?.[key]!==undefined&&current.details[key]!=='');
  return <dialog className="sfb-dialog" ref={dialog} aria-labelledby={heading} onCancel={event=>{event.preventDefault();onClose();}} onClick={event=>{if(event.target===event.currentTarget)onClose();}}>
   <div className="sfb-shell">
-   <header className="sfb-header"><div className="sfb-heading"><span className="sfb-eyebrow"><Activity size={14}/>跟进进度看板<span>只读查看</span></span><h2 id={heading}>{ready?current.title:'跟进详情'}</h2>{ready&&<p>{customerLabel}<span>·</span>{types[current.type]||current.type}<span>·</span>{teamLabel}</p>}</div><div className="sfb-header-actions"><Button variant="outline" disabled={!ready||busy} onClick={()=>setRefresh(v=>v+1)} aria-label="刷新跟进详情"><RefreshCw size={15}/></Button>{canEdit&&ready&&<Button disabled={busy} onClick={onEdit}><Pencil size={15}/>{busy?'正在读取最新资料…':'编辑跟进'}</Button>}<Button variant="ghost" aria-label="关闭跟进看板" onClick={onClose}><X size={20}/></Button></div></header>
+   <header className="sfb-header"><div className="sfb-heading"><span className="sfb-eyebrow"><Activity size={14}/>跟进进度看板<span>只读查看</span></span><h2 id={heading}>{ready?current.title:'跟进详情'}</h2>{ready&&<p>{customerLabel}<span>·</span>{types[current.type]||current.type}<span>·</span>{teamLabel}</p>}</div><div className="sfb-header-actions"><Button variant="outline" disabled={!ready||busy} onClick={()=>void refreshBoard()} aria-label="刷新跟进详情"><RefreshCw size={15}/></Button>{canEdit&&ready&&<Button disabled={busy} onClick={onEdit}><Pencil size={15}/>{busy?'正在读取最新资料…':'编辑跟进'}</Button>}<Button variant="ghost" aria-label="关闭跟进看板" onClick={onClose}><X size={20}/></Button></div></header>
    <div className="sfb-body">
-    {loading?<div className="sfb-loading" role="status"><div className="sfb-skeleton-cards">{[0,1,2,3].map(n=><i key={n}/>)}</div><div className="sfb-skeleton-line"/><p>正在读取跟进进度与历史…</p></div>:error?<div className="sfb-error" role="alert"><FileText size={32}/><h3>暂时无法查看详情</h3><p>{error}</p><Button variant="outline" onClick={()=>setRefresh(v=>v+1)}>重试读取</Button></div>:<>
+    {loading?<div className="sfb-loading" role="status"><div className="sfb-skeleton-cards">{[0,1,2,3].map(n=><i key={n}/>)}</div><div className="sfb-skeleton-line"/><p>正在读取跟进进度与历史…</p></div>:error?<div className="sfb-error" role="alert"><FileText size={32}/><h3>暂时无法查看详情</h3><p>{error}</p><Button variant="outline" onClick={()=>void refreshBoard()}>重试读取</Button></div>:<>
      <section className="sfb-metrics" aria-label="跟进进度概览">
       <article className={'sfb-metric state '+current.status}><div className="sfb-metric-icon"><StatusIcon status={current.status}/></div><div><span>当前状态</span><strong>{statuses[current.status]||current.status}</strong><small>当前版本 V{current.version}</small></div></article>
       <article className="sfb-metric"><div className="sfb-metric-icon"><Users/></div><div><span>当前等待</span><strong>{waiting[current.waitingFor]||'未登记'}</strong><small>{memberName(current.ownerId)}</small></div></article>
