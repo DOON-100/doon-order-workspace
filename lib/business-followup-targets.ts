@@ -88,7 +88,7 @@ function sourceIdentity(s:State,row:Entity,seen=new Set<string>()):unknown{
 /** The catalog only accepts rows already returned by the original scoped domain API. */
 export async function businessFollowupTargets(req:Request,s:State,m:Member,module:string,projectId='',targetRecordId=''){
  requireMember(s,m);const team=module==='ar-workspace'?(req.headers.get(businessTeamHeader)||'').trim():teamScope(req,s,m);if(team.length>160)throw new AppError('业务小组编号无效。');
- const outsourceScope:OutsourcingScope|undefined=module==='supplier-semifinished'?'semifinished':module==='supplier-plating'?'plating':['supplier-outsourcing','receiving'].includes(module)?'all':undefined;
+ const outsourceScope:OutsourcingScope|undefined=module==='supplier-semifinished'?'titanium':module==='supplier-semifinished-plastic'?'plastic':module==='supplier-plating'?'plating':['supplier-outsourcing','receiving'].includes(module)?'all':undefined;
  const targets:ResolvedFollowupTarget[]=[],canonicalModule=orderModules.has(module)?'orders':serviceModules.has(module)?'service-workspace':purchaseModules.has(module)?'purchase':documentModules.has(module)?'documents':['mail','whatsapp'].includes(module)?'communications':processModules.has(module)?'process-workspace':outsourceScope?'supplier-outsourcing':module;
  const virtual=(namespace:string,collection:string,recordId:string,label:string,scope:{customerId?:string;projectId?:string;orderId?:string;recordKind:string;scopeIdentity:string},canAppend:boolean)=>{
   if(recordId.length>160)throw new AppError('来源记录编号超出跟进长度限制。');

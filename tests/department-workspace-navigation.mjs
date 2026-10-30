@@ -19,7 +19,7 @@ const pass=message=>{checks.push(message);console.log('PASS '+message);};
 const destination=item=>item.view+'?'+(item.context?.tab||'');
 const roles=['admin','pmc','production','clerk','sales','finance','programmer','viewer'];
 
-assert.deepEqual(nav.departmentWorkspaceGroups.map(group=>group.label),['工作总览','业务部','客服与单证','工程部','PMC 计划','采购','半成品外发','外发电镀','仓储物流','生产车间','品质部','财务部','系统管理']);
+assert.deepEqual(nav.departmentWorkspaceGroups.map(group=>group.label),['工作总览','业务部','客服与单证','工程部','PMC 计划','采购','半成品外发','电镀外发','仓储物流','生产车间','品质部','财务部','系统管理']);
 for(const role of roles){
  const user=member(role,{departments:role==='clerk'?['finished','outsourcing']:[]}),items=nav.memberWorkspaceNavigation(user),before=JSON.stringify(items),groups=nav.departmentWorkspaceNavigation(items,user),result=leaves(groups);
  const legacy=flatten(nav.supplierWorkspaceNavigation(nav.productionPlanningNavigation(items,user),user));
@@ -33,7 +33,10 @@ for(const role of roles){
  for(const space of nav.supplierWorkspaceSpaces)assert(result.some(item=>item.view===space.id));
  assert.equal(result.filter(item=>item.view==='process-workspace').length,14);
  assert.deepEqual(groups.find(group=>group.id==='purchasing').children.map(item=>item.id),['supplier-workspace','supplier-pending','supplier-followup','supplier-samples','supplier-kit','supplier-risk']);
- for(const [view,department] of [['supplier-semifinished','semifinished-outsourcing'],['supplier-plating','plating-outsourcing'],['supplier-outsourcing','production'],['finished-outsourcing','production']])assert.equal(nav.departmentWorkspaceBreadcrumb(groups,view).departmentId,department,'Each outsourcing route has its own intended workspace');
+ assert.deepEqual(groups.find(group=>group.id==='semifinished-outsourcing').children.map(item=>[item.id,item.label]),[['supplier-semifinished','钛架部'],['supplier-semifinished-plastic','胶架部'],['process-packaging','包装部']]);
+ assert.equal(nav.departmentWorkspaceBreadcrumb(groups,'process-workspace',{tab:'packaging'}).departmentId,'semifinished-outsourcing');
+ assert(!groups.find(group=>group.id==='warehouse').children.some(item=>item.id==='process-packaging'));
+ for(const [view,department] of [['supplier-semifinished','semifinished-outsourcing'],['supplier-semifinished-plastic','semifinished-outsourcing'],['supplier-plating','plating-outsourcing'],['supplier-outsourcing','production'],['finished-outsourcing','production']])assert.equal(nav.departmentWorkspaceBreadcrumb(groups,view).departmentId,department,'Each outsourcing route has its own intended workspace');
 }
 pass('All legacy, production-planning and supplier destinations remain reachable exactly once across eight internal roles.');
 

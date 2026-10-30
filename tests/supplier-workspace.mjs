@@ -12,7 +12,7 @@ await fs.mkdir(output,{recursive:true});
 const outfile=path.join(output,'navigation.mjs');
 await build({stdin:{contents:"export * from './lib/supplier-workspace';export * from './lib/production-planning';export * from './lib/handoff-navigation';export {ProductionPlanningNavigation} from './app/production-planning-navigation';export {SidebarProvider} from './components/ui/sidebar';",resolveDir:process.cwd(),loader:'tsx'},outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},loader:{'.css':'empty'}});
 const nav=await import(pathToFileURL(outfile).href);
-const expected=['supplier-pending','supplier-followup','supplier-kit','supplier-semifinished','supplier-plating','supplier-outsourcing','supplier-risk','supplier-samples','supplier-reconciliation'];
+const expected=['supplier-pending','supplier-followup','supplier-kit','supplier-semifinished','supplier-semifinished-plastic','supplier-plating','supplier-outsourcing','supplier-risk','supplier-samples','supplier-reconciliation'];
 const ids=items=>items.map(item=>item.id),checks=[];
 const member=(role='pmc',departments=[])=>({id:'synthetic-supplier-navigation',kind:'member',email:'supplier-navigation@test.invalid',name:'合成采购导航成员',role,departments,customers:[],userId:'synthetic-supplier-user',active:true,createdAt:'2026-10-15T00:00:00Z'});
 const pass=message=>{checks.push(message);console.log('PASS '+message);};

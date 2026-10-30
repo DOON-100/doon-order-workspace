@@ -19,7 +19,7 @@ import {productTypeOf,type Entity,type Order} from '@/lib/domain';
 import type {Data} from './workspace';
 import {PurchasePanel} from './purchase-panel';
 import {SupplierQuotePanel} from './supplier-quote-panel';
-import {matchesOutsourcingScope,outsourcingStages,type OutsourcingScope} from '@/lib/outsourcing-workspace';
+import {matchesOutsourcingScope,outsourcingStages,outsourcingScopeLabel,type OutsourcingScope} from '@/lib/outsourcing-workspace';
 type Props={data:Data;act:Act;busy:boolean;openOrder:(o:Order)=>void};
 const number=(n:number)=>n.toLocaleString('zh-CN');
 const processName=(id:string)=>stageDefs.find(d=>d.id===id)?.name||id;
@@ -32,7 +32,7 @@ export function SupplierPanel(props:Props&{onDirtyChange:(v:boolean)=>void}){
 }
 export function LegacySupplierPanel({data,act,busy,openOrder,scope='all'}:Props&{scope?:OutsourcingScope}){
  const manage=managesSuppliers(data.me),createAllowed=canCreateOutsource(data.me),orders=data.orders.filter(active),sources=(data.outsource||[]).filter(source=>matchesOutsourcingScope(source.process,scope)),suppliers=data.suppliers||[],pending=sources.filter(supplierPending),buyers=data.members.filter(m=>m.active&&['pmc','admin'].includes(m.role)),stages=outsourcingStages(scope);
- const scopeLabel=scope==='plating'?'外发电镀':scope==='semifinished'?'半成品外发':'供应商交期与收货';
+ const scopeLabel=outsourcingScopeLabel(scope);
  const [view,setView]=useState('tracking'),[query,setQuery]=useState(''),[status,setStatus]=useState('pending'),[supplier,setSupplier]=useState(''),[buyer,setBuyer]=useState(''),[page,setPage]=useState(0),[orderQuery,setOrderQuery]=useState(''),[orderPage,setOrderPage]=useState(0),[error,setError]=useState(''),[create,setCreate]=useState<any>(null),[edit,setEdit]=useState<any>(null),[master,setMaster]=useState<any>(null),[cancel,setCancel]=useState(false),[cancelReason,setCancelReason]=useState(''),[receiptId,setReceiptId]=useState('');
  const byId=new Map(data.orders.map(o=>[o.id,o]));
  const baseRows=sources.filter(x=>(!query||[x.supplier,x.reference,byId.get(x.lineId)?.orderNo,byId.get(x.lineId)?.drawing,byId.get(x.lineId)?productTypeOf(byId.get(x.lineId)!):''].join(' ').toLowerCase().includes(query.toLowerCase()))&&(!supplier||x.supplier===supplier)&&(!buyer||x.buyerEmail===buyer)&&matchesSupplierStatus(x,status)).sort((a,b)=>arrivalDate(a).localeCompare(arrivalDate(b)));
