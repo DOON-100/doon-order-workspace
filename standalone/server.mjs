@@ -47,7 +47,7 @@ const api=await import('./workspace-api.mjs');
 let supplierCatalogScheduler=null;
 if(process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED==='1'){
  if(supplierOnly||reviewMode){runtime.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';console.error('当前入口未启动金蝶供应商定时同步。');}
- else try{const {supplierCatalogScheduleConfig,createSupplierCatalogScheduler}=await import('./supplier-catalog-scheduler.mjs');const config=supplierCatalogScheduleConfig();supplierCatalogScheduler=createSupplierCatalogScheduler({db,config,runWorker:(await import('./supplier-catalog-worker.mjs')).runKingdeeSupplierCatalogWorker});}
+ else try{const {supplierCatalogScheduleConfig,createSupplierCatalogScheduler}=await import('./supplier-catalog-job.mjs');const config=supplierCatalogScheduleConfig();supplierCatalogScheduler=createSupplierCatalogScheduler({db,config,runWorker:(await import('./supplier-catalog-worker.mjs')).runKingdeeSupplierCatalogWorker});}
  catch{runtime.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';console.error('金蝶供应商定时同步未启动，请检查服务端配置。');}
 }
 const scheduleConfig=await scheduleBridgeConfig();

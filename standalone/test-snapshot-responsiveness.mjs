@@ -21,7 +21,7 @@ assert(root.startsWith(path.resolve('test-output')+path.sep));
 const directories={};
 for(const mode of ['cooperative','blocking']){
  const dist=path.join(root,mode);directories[mode]=dist;await fs.mkdir(path.join(dist,'client'),{recursive:true});
- for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','supplier-catalog-scheduler.mjs'])await fs.copyFile(path.join('standalone',name),path.join(dist,name));
+ for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','supplier-catalog-job.mjs','fixed-scheduler.mjs','fixed-schedule.mjs'])await fs.copyFile(path.join('standalone',name),path.join(dist,name));
  await fs.writeFile(path.join(dist,'client/index.html'),'<html>测试环境，不含正式业务数据</html>');
  await build({entryPoints:['standalone/agent-schedules.mjs'],outfile:path.join(dist,'agent-schedules.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'});
  await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(dist,'workspace-api.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'native-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});

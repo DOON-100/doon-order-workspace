@@ -27,7 +27,7 @@ let html=render();assert.equal(H.calls.length,0);H.effects.splice(0).forEach(fn=
 H.mode='uncertain';button('手动更新金蝶档案').props.onClick();html=render();assert(button('更新中…').props.disabled);assert(!html.includes('核查本次结果'));await tick();html=render();assert(html.includes('同步结果尚未确认'));assert(H.calls.at(-1).action.startsWith('kingdee-supplier-catalog-result?'));
 H.mode='normal';button('手动更新金蝶档案').props.onClick();await tick();html=render();const writes=H.calls.filter(v=>v.action==='kingdee-supplier-catalog-sync');assert.equal(writes.length,2);assert.equal(writes[0].body.requestId,writes[1].body.requestId);assert(html.includes('新增 1 条'));assert(html.includes('新增供应商：'));assert(html.includes('合成甲（A）'));assert(button('手动更新金蝶档案'));
 H.mode='empty';button('手动更新金蝶档案').props.onClick();await tick();html=render();assert(html.includes('未查到 24 小时内新增的供应商。'));assert(!html.includes('已有 0 条'));
-H.mode='automatic';button('刷新列表').props.onClick();await tick();html=render();assert(html.includes('如长时间不更新请核查服务端'));
+H.mode='automatic';button('刷新列表').props.onClick();await tick();html=render();assert(!html.includes('后台最近尝试'));
 H.actor='another-user';html=render();assert(!html.includes('合成甲'));H.actor='synthetic-pmc';html=render();
 H.mode='read-error';button('刷新列表').props.onClick();await tick();html=render();assert(html.includes('无权查看'));assert(!html.includes('合成甲'));
 H.team='other';html=render();assert(button('手动更新金蝶档案').props.disabled);assert(!html.includes('合成甲'));

@@ -10,7 +10,6 @@
 .kingdee-catalog-table table{min-width:700px}
 .kingdee-catalog-table table.excel-table>thead>tr>th,.kingdee-catalog-table table.excel-table>tbody:not(.excel-filter-status)>tr>td{text-align:center}
 .kingdee-catalog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#7a8d82;font-size:12px}
-.kingdee-catalog-meta{color:#71867a;font-size:12px}
 .kingdee-catalog-toast{pointer-events:auto;max-height:min(60vh,480px);overflow:auto}
 .kingdee-catalog-toast>div{min-width:0;flex:1}
 .kingdee-catalog-toast p{margin:8px 0 2px;font-weight:600}

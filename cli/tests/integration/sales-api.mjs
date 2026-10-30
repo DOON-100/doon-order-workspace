@@ -40,7 +40,7 @@ import {verifyQuoteFiles} from './quote-files.mjs';
 import {verifyPriceArchive} from './price-archive.mjs';
 
 const dir=await temporary(), runtime=path.join(dir,'runtime');await fs.mkdir(path.join(runtime,'client'),{recursive:true});
-for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs','supplier-catalog-scheduler.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(runtime,name));
+for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','agent-schedules.mjs','supplier-catalog-job.mjs','fixed-scheduler.mjs','fixed-schedule.mjs'])await fs.copyFile(path.join(root,'standalone',name),path.join(runtime,name));
 await fs.cp(path.join(root,'standalone/schedule-engine'),path.join(runtime,'schedule-engine'),{recursive:true});
 await fs.writeFile(path.join(runtime,'client/index.html'),'Synthetic sales CLI integration');
 await build({absWorkingDir:root,entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(runtime,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':root},plugins:[{name:'native-cli-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});

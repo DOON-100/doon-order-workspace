@@ -4,7 +4,7 @@ import {AsyncLocalStorage} from 'node:async_hooks';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {randomUUID,createHash} from 'node:crypto';
-import {supplierCatalogScheduleConfig,createSupplierCatalogScheduler} from '../standalone/supplier-catalog-scheduler.mjs';
+import {supplierCatalogScheduleConfig,createSupplierCatalogScheduler} from '../standalone/supplier-catalog-job.mjs';
 await fs.mkdir('test-output',{recursive:true});
 const db=new DatabaseSync(':memory:');for(const name of (await fs.readdir('drizzle')).filter(n=>n.endsWith('.sql')).sort())db.exec(await fs.readFile('drizzle/'+name,'utf8'));
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args}bind(...args){return new Statement(this.sql,args)}async first(){return db.prepare(this.sql).get(...this.args)||null}async all(){return {results:db.prepare(this.sql).all(...this.args)}}async run(){return db.prepare(this.sql).run(...this.args)}}

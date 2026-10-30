@@ -3,14 +3,17 @@ import {DatabaseSync} from 'node:sqlite';
 import {mkdtemp} from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import {supplierCatalogScheduleConfig,createSupplierCatalogScheduler} from '../standalone/supplier-catalog-scheduler.mjs';
+import {supplierCatalogScheduleConfig,createSupplierCatalogScheduler} from '../standalone/supplier-catalog-job.mjs';
 
 assert.equal(supplierCatalogScheduleConfig({}),null);
 assert.equal(supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'true'}),null);
-assert.equal(supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1'}).intervalMs,86400000);
-assert.throws(()=>supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SYNC_INTERVAL_SECONDS:'59'}));
-assert.throws(()=>supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SYNC_INTERVAL_SECONDS:'1;DROP TABLE'}));
-const config=supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SYNC_INTERVAL_SECONDS:'60'});
+assert.deepEqual(supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1'}).schedule,{kind:'daily',startMinute:420,count:1,spacingMinutes:60,dayInterval:1});
+assert.throws(()=>supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SCHEDULE_MODE:'interval',DOON_KINGDEE_SUPPLIER_SCHEDULE_INTERVAL_SECONDS:'59'}));
+assert.throws(()=>supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SCHEDULE_MODE:'interval',DOON_KINGDEE_SUPPLIER_SCHEDULE_INTERVAL_SECONDS:'1;DROP TABLE'}));
+assert.deepEqual(supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SCHEDULE_MODE:'interval',DOON_KINGDEE_SUPPLIER_SCHEDULE_INTERVAL_SECONDS:'120',DOON_KINGDEE_SUPPLIER_SCHEDULE_MAX_RUNS:'3'}).schedule,{kind:'interval',intervalMs:120000,maxRuns:3});
+assert.equal(supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SCHEDULE_MODE:'interval',DOON_KINGDEE_SUPPLIER_SCHEDULE_MAX_RUNS:'1000000'}).schedule.maxRuns,1000000);
+assert.throws(()=>supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_SUPPLIER_SCHEDULE_MODE:'interval',DOON_KINGDEE_SUPPLIER_SCHEDULE_MAX_RUNS:'1000001'}));
+const config=supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1'});
 const dir=await mkdtemp(path.resolve('test-output','supplier-scheduler-')),file=path.join(dir,'synthetic.sqlite');
 const first=new DatabaseSync(file),second=new DatabaseSync(file);first.exec('PRAGMA journal_mode=WAL;CREATE TABLE protected_business(id TEXT PRIMARY KEY,value TEXT);INSERT INTO protected_business VALUES(\'original\',\'keep\');CREATE TABLE synthetic_effects(id TEXT PRIMARY KEY);');second.exec('PRAGMA busy_timeout=1000;');
 const original=first.prepare('SELECT * FROM protected_business').all();let time=Date.now(),releaseA,releaseB;
@@ -36,16 +39,16 @@ const s6=createSupplierCatalogScheduler({db:first,config,clock:()=>time,logger,r
 const s7=createSupplierCatalogScheduler({db:first,config,clock:()=>time,logger,runWorker:async()=>{first.prepare('INSERT INTO synthetic_effects VALUES(?)').run('committed-before-expiry');time+=45001}});s7.start();assert.deepEqual(await s7.runOnce(),{status:'failed'});s7.stop();assert(first.prepare("SELECT id FROM synthetic_effects WHERE id='committed-before-expiry'").get());assert.equal(first.prepare("SELECT last_result FROM kingdee_supplier_catalog_schedule_status WHERE id='scheduler'").get().last_result,'started');
 first.close();second.close();
 
-// A daily schedule persists its last attempt, including failures, so restarts
-// neither duplicate a day's run nor postpone one that was missed while offline.
+// Daily slots are in Shanghai time, independent of the host timezone.
 const scheduleDb=new DatabaseSync(':memory:'),daily=supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_ACCOUNT_ID:'synthetic-account'});
-let scheduleTime=Date.parse('2026-01-01T00:00:00.000Z'),calls=0,failNext=false;
+let scheduleTime=Date.parse('2026-01-01T22:59:00.000Z'),calls=0,failNext=false;
 function fakeTimers(){let queue=[];return {setTimeout(fn,ms){const item={fn,ms,unref(){}};queue.push(item);return item;},clearTimeout(item){queue=queue.filter(value=>value!==item);},peek(){return queue[0];},async fire(){const item=queue.shift();assert(item);await item.fn();}};}
-function scheduled(timers,config=daily){return createSupplierCatalogScheduler({db:scheduleDb,config,clock:()=>scheduleTime,logger, timers,runWorker:async()=>{calls++;if(failNext)throw Error('synthetic failure');}});}
-const timersA=fakeTimers(),timersB=fakeTimers(),aDaily=scheduled(timersA),bDaily=scheduled(timersB);aDaily.start();bDaily.start();assert.equal(timersA.peek().ms,1000);assert.equal(timersB.peek().ms,1000);
-await timersA.fire();assert.equal(calls,1);assert.equal(timersA.peek().ms,86400000);await timersB.fire();assert.equal(calls,1);assert.equal(timersB.peek().ms,86400000);aDaily.stop();bDaily.stop();
-scheduleTime+=3600000;const restartTimers=fakeTimers(),restart=scheduled(restartTimers);restart.start();assert.equal(restartTimers.peek().ms,23*3600000);restart.stop();
-scheduleTime+=24*3600000;const missedTimers=fakeTimers(),missed=scheduled(missedTimers);failNext=true;missed.start();assert.equal(missedTimers.peek().ms,1000);await missedTimers.fire();assert.equal(calls,2);assert.equal(scheduleDb.prepare("SELECT last_result FROM kingdee_supplier_catalog_schedule_status WHERE id='scheduler'").get().last_result,'failed');assert.equal(missedTimers.peek().ms,86400000);missed.stop();
-const retryTimers=fakeTimers(),retry=scheduled(retryTimers);retry.start();assert.equal(retryTimers.peek().ms,86400000);retry.stop();scheduleTime+=86400000;failNext=false;const dueTimers=fakeTimers(),due=scheduled(dueTimers);due.start();assert.equal(dueTimers.peek().ms,1000);await dueTimers.fire();assert.equal(calls,3);due.stop();
+function scheduled(timers,config=daily){return createSupplierCatalogScheduler({db:scheduleDb,config,clock:()=>scheduleTime,logger,timers,runWorker:async()=>{calls++;if(failNext)throw Error('synthetic failure');}});}
+const timersA=fakeTimers(),timersB=fakeTimers(),aDaily=scheduled(timersA),bDaily=scheduled(timersB);aDaily.start();bDaily.start();assert.equal(timersA.peek().ms,60000);assert.equal(timersB.peek().ms,60000);
+scheduleTime+=63000;await timersA.fire();assert.equal(calls,1);assert.equal(timersA.peek().ms,86400000-3000);await timersB.fire();assert.equal(calls,1);assert.equal(timersB.peek().ms,86400000-3000);aDaily.stop();bDaily.stop();
+scheduleTime+=3600000;const restartTimers=fakeTimers(),restart=scheduled(restartTimers);restart.start();assert.equal(restartTimers.peek().ms,23*3600000-3000);restart.stop();
+scheduleTime+=24*3600000;const missedTimers=fakeTimers(),missed=scheduled(missedTimers);failNext=true;missed.start();assert.equal(missedTimers.peek().ms,1000);await missedTimers.fire();assert.equal(calls,2);assert.equal(scheduleDb.prepare("SELECT last_result FROM kingdee_supplier_catalog_schedule_status WHERE id='scheduler'").get().last_result,'failed');assert.equal(missedTimers.peek().ms,23*3600000-3000);missed.stop();
+const retryTimers=fakeTimers(),retry=scheduled(retryTimers);retry.start();assert.equal(retryTimers.peek().ms,23*3600000-3000);retry.stop();scheduleTime+=23*3600000-3000;failNext=false;const dueTimers=fakeTimers(),due=scheduled(dueTimers);due.start();assert.equal(dueTimers.peek().ms,1000);await dueTimers.fire();assert.equal(calls,3);due.stop();
+// An uninitialized account does not run immediately before the next 07:00 slot.
 const different=supplierCatalogScheduleConfig({DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'1',DOON_KINGDEE_ACCOUNT_ID:'another-synthetic-account'}),otherTimers=fakeTimers(),accountChanged=scheduled(otherTimers,different);accountChanged.start();assert.equal(otherTimers.peek().ms,1000);await otherTimers.fire();assert.equal(calls,4);accountChanged.stop();scheduleDb.close();
-console.log('PASS supplier scheduler: daily persisted attempts, restart/missed/failure/account change, concurrency and unchanged original records');
+console.log('PASS supplier scheduler: Shanghai 07:00, persisted attempts, restart/missed/failure/account change, concurrency and unchanged original records');

@@ -13,7 +13,7 @@ import './supplier-workspace.css';
 type SupplierRow={id:string;code:string;name:string;firstSeen:string;groupName:string|null;taxRate:string|null};
 type Receipt={inserted:number;existing:number;changed:number;total:number;completedAt:string;scope?:'baseline'|'last-24-hours';addedSuppliers?:{code:string;name:string}[]};
 type Issue={code:string;name:string;reason:string;previousCode:string;previousName:string;groupName:string|null;taxRate:string|null;previousGroupName:string|null;previousTaxRate:string|null};
-type Catalog={rows:SupplierRow[];lastSync:Receipt|null;issues?:Issue[];autoEnabled?:boolean;autoStatus?:null|{lastAttemptAt:string;lastResult:'started'|'complete'|'failed';lastSuccessAt:string}};
+type Catalog={rows:SupplierRow[];lastSync:Receipt|null;issues?:Issue[]};
 const sourceValue=(value:string|null|undefined)=>value==null?'未提供':value===''?'空':value;
 
 /** The catalog is an independent Kingdee source, not a link to existing suppliers. */
@@ -57,7 +57,6 @@ export function KingdeeSupplierCatalogPanel({actorId}:{actorId:string}){
  useEffect(()=>setPage(p=>Math.min(p,Math.max(0,Math.ceil(filtered.length/30)-1))),[filtered.length]);
  return <section className="kingdee-catalog" aria-label="金蝶供应商来源档案">
     <div className="kingdee-catalog-heading"><div><h3>金蝶供应商档案</h3><p>按金蝶编码保存的来源资料</p></div><div className="kingdee-catalog-actions"><Button className="kingdee-catalog-sync" disabled={busy||!actorId||!!team} aria-busy={busy} onClick={()=>void sync()}>{busy?'更新中…':'手动更新金蝶档案'}</Button><Button variant="outline" disabled={busy||!actorId||!!team} onClick={()=>void load(scopeRef.current)}>刷新列表</Button></div></div>
-    {visibleData?.autoEnabled&&visibleData.autoStatus&&<p className="kingdee-catalog-meta">后台最近尝试 {dateTime(visibleData.autoStatus.lastAttemptAt)}：{visibleData.autoStatus.lastResult==='complete'?'已完成':visibleData.autoStatus.lastResult==='failed'?'未完成，请核查服务端':'已开始；如长时间不更新请核查服务端'}。最近后台成功 {dateTime(visibleData.autoStatus.lastSuccessAt)}。</p>}
     {error&&<p className="error" role="alert">{error}</p>}{notice&&createPortal(<div className={'kingdee-sync-toast kingdee-catalog-toast kingdee-sync-toast-'+notice.tone} role={notice.tone==='error'?'alert':'status'} aria-atomic="true">{notice.tone==='success'?<CircleCheck size={20}/>:<CircleAlert size={20}/>}<div><span>{notice.message}</span>{!!notice.addedSuppliers?.length&&<><p>新增供应商：</p><ul>{notice.addedSuppliers.map((supplier,index)=><li key={supplier.code+'-'+index}>{supplier.name}（{supplier.code}）</li>)}</ul></>}</div>{!!notice.addedSuppliers?.length&&<button type="button" aria-label="关闭同步结果" onClick={()=>setNotice(null)}>关闭</button>}</div>,document.body)}
     {visibleData&&<><div className="kingdee-catalog-bar"><label><span className="sr-only">搜索编码或名称</span><input aria-label="搜索编码或名称" placeholder="搜索供应商编码或名称" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></label><span>{filtered.length} 条 · 每页 30 条</span></div>
      <div className="kingdee-catalog-table"><ExcelTable filterModel={columnModel} className="w-full text-sm"><thead><tr><th>金蝶编码</th><th>供应商名称</th><th>分类原值</th><th>税率原值</th></tr></thead><tbody>{filtered.slice(page*30,page*30+30).map(row=><tr key={row.id}><td>{row.code}</td><td>{row.name}</td><td>{sourceValue(row.groupName)}</td><td>{sourceValue(row.taxRate)}</td></tr>)}</tbody></ExcelTable></div>

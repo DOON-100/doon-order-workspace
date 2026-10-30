@@ -10,7 +10,7 @@ import {temporary, root, testCodec} from './helpers.mjs';
 
 test('existing native auth: login reuse, initial-password state, logout and disabled-account revocation', async t => {
   const dir = await temporary(), build = path.join(dir, 'runtime'); await fs.mkdir(path.join(build, 'client'), {recursive: true});
-  for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs','supplier-catalog-scheduler.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
+  for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs','supplier-catalog-job.mjs','fixed-scheduler.mjs','fixed-schedule.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
   await fs.cp(path.join(root, 'standalone/schedule-engine'), path.join(build, 'schedule-engine'), {recursive: true});
   await fs.writeFile(path.join(build, 'client/index.html'), 'Synthetic CLI auth test');
   await fs.writeFile(path.join(build, 'workspace-api.mjs'), "export async function GET(){throw Error('Business API must not be called');} export const POST=GET;\n");
