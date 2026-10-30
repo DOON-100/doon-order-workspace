@@ -41,3 +41,14 @@
  .handoff-shell .navigation-backdrop{display:block;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.35);border:0}
 }
 @media print{.handoff-shell .workspace-navigation-toggle,.handoff-shell .navigation-backdrop{display:none!important}.handoff-shell[data-navigation-open=false] .main{margin:0;max-width:100%}}
+
+/* Unpinned desktop navigation floats over the page when the pointer reaches the left edge. */
+@media(min-width:761px){
+ .handoff-shell[data-navigation-pinned=false] .main{margin-left:0;max-width:100%;width:100%}
+ .handoff-shell .navigation-edge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:38}
+ .handoff-shell[data-navigation-pinned=false][data-navigation-open=true] .rail{box-shadow:4px 0 18px #102c2040}
+}
+.handoff-shell .brand{position:relative;padding-right:36px}
+.handoff-shell .navigation-pin{position:absolute;right:0;top:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:0;border-radius:5px;background:transparent;color:#c7d8d0;cursor:pointer}
+.handoff-shell .navigation-pin:hover{background:#245144;color:white}
+@media(max-width:760px){.handoff-shell .brand{padding-right:4px}}

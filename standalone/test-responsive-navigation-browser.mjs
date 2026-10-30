@@ -22,16 +22,20 @@ try{
  const context=await browser.newContext({viewport:{width:1440,height:900}});const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  const page=await context.newPage(),errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(origin+'/customer-projects');const nav=page.locator('#workspace-navigation'),toggle=page.locator('#workspace-navigation-toggle');await page.getByRole('navigation',{name:'部门与工序导航'}).waitFor();
- assert.equal(await toggle.getAttribute('aria-expanded'),'true');assert(await nav.isVisible());
- await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert.equal(await nav.getAttribute('inert'),'');
+ assert.equal(await toggle.getAttribute('aria-expanded'),'true');await nav.waitFor({state:'visible'});
+ await page.getByRole('button',{name:'取消固定导航栏'}).click();await page.getByRole('button',{name:'固定导航栏',exact:true}).waitFor();await page.mouse.move(600,400);await nav.waitFor({state:'hidden'});
  assert.equal(await page.locator('.main').evaluate(n=>Math.round(n.getBoundingClientRect().left)),0);
+ await page.mouse.move(2,400);await nav.waitFor({state:'visible'});assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+ assert.equal(await page.locator('.main').evaluate(n=>Math.round(n.getBoundingClientRect().left)),0,'hover navigation overlays content');
+ await page.mouse.move(600,400);await nav.waitFor({state:'hidden'});
  await page.reload();await page.getByRole('button',{name:'展开导航栏'}).waitFor();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
- await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');
- for(const width of [1920,1024]){await page.setViewportSize({width,height:900});assert(await nav.isVisible());assert(Math.round((await nav.boundingBox()).width)===228);assert.equal(await toggle.getAttribute('aria-expanded'),'true');}
+ await toggle.click();await nav.waitFor({state:'visible'});await page.getByRole('button',{name:'取消固定导航栏'}).waitFor();await page.mouse.move(600,400);assert.equal(await toggle.getAttribute('aria-expanded'),'true');assert.equal(await page.locator('.handoff-shell').getAttribute('data-navigation-pinned'),'true','manual expansion pins navigation');
+ await page.reload();await page.getByRole('button',{name:'取消固定导航栏'}).waitFor();
+ for(const width of [1920,1024]){await page.setViewportSize({width,height:900});await nav.waitFor({state:'visible'});assert(Math.round((await nav.boundingBox()).width)===228);assert.equal(await toggle.getAttribute('aria-expanded'),'true');}
  await page.setViewportSize({width:390,height:844});await page.getByRole('button',{name:'展开导航栏'}).waitFor();await nav.waitFor({state:'hidden'});
  await toggle.click();await nav.waitFor({state:'visible'});assert.equal(await toggle.getAttribute('aria-expanded'),'true');await page.keyboard.press('Escape');assert.equal(await toggle.getAttribute('aria-expanded'),'false');assert(await toggle.evaluate(n=>document.activeElement===n));
  await toggle.click();await page.getByRole('button',{name:'关闭导航遮罩'}).click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
  await toggle.click();const link=nav.locator('[data-nav-view]').first();await link.click();assert.equal(await toggle.getAttribute('aria-expanded'),'false');
- await page.setViewportSize({width:1024,height:900});await page.getByRole('button',{name:'收起导航栏'}).waitFor();assert(await nav.isVisible(),'desktop preference survives mobile drawer');
- assert.deepEqual(errors,[]);console.log('PASS responsive navigation: persistent desktop toggle, fixed sidebar, mobile drawer, dismissal, focus and navigation');
+ await page.setViewportSize({width:1024,height:900});await page.getByRole('button',{name:'取消固定导航栏'}).waitFor();assert(await nav.isVisible(),'desktop pin survives mobile drawer');
+ assert.deepEqual(errors,[]);console.log('PASS responsive navigation: desktop hover and persistent pin, mobile drawer, dismissal, focus and navigation');
 }finally{await browser?.close();server.kill('SIGTERM');await done;}
