@@ -21,34 +21,45 @@
 
 .business-team-bar{margin-bottom:22px;border:1px solid #dce5ed;border-radius:14px;background:#fff;padding:16px 20px}.business-team-scope{display:flex;align-items:center;justify-content:space-between;gap:16px}.business-team-scope>div{display:grid;gap:4px}.business-team-scope>div>span{font-size:12px;color:#64748b}.business-team-scope label{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}.business-team-scope select{min-width:180px;padding:8px 12px;border:1px solid #cbd5e1;border-radius:8px;background:#f8fafc}.business-team-roster{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.business-team-roster>div{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;border-radius:8px;padding:8px 12px;background:#f1f5f9;font-size:12px}.business-team-roster b{color:#134e4a}.business-team-bar p{margin:10px 0 0;font-size:13px;color:#64748b}.business-team-bar button{text-decoration:underline;margin-left:8px}@media(max-width:700px){.business-team-scope{align-items:flex-start;flex-direction:column}.business-team-scope select{min-width:150px}.business-team-bar{padding:14px}.business-team-roster>div{width:100%}}
 
-/* The navigation is fixed on wide screens and becomes a dismissible drawer on narrow screens. */
-.handoff-shell .rail{position:fixed;inset:0 auto 0 0;z-index:40;overflow:hidden;transition:transform .2s ease,visibility .2s;}
-.handoff-shell[data-navigation-open=false] .rail{transform:translateX(-100%);visibility:hidden}
-.handoff-shell[data-navigation-open=false] .main{margin-left:0;max-width:100%;width:100%}
+/* Collapsible workspace navigation. A single header trigger folds the desktop rail down to
+   a 64px icon strip; narrow screens open the same rail as an overlay drawer. The rail stays
+   visible and reachable in every state, so there is no hover hot zone and no pin control. */
+.handoff-shell .rail{position:fixed;inset:0 auto 0 0;z-index:40;width:228px;overflow:hidden;transition:width .2s ease,transform .2s ease,visibility .2s}
+.handoff-shell .main{margin-left:228px;max-width:calc(100% - 228px);transition:margin-left .2s ease,max-width .2s ease}
+.handoff-shell[data-navigation-collapsed=true] .rail{width:64px;padding-left:8px;padding-right:8px}
+.handoff-shell[data-navigation-collapsed=true] .main{margin-left:64px;max-width:calc(100% - 64px)}
 .handoff-shell .workspace-navigation-toggle{display:inline-flex;flex:none;align-items:center;justify-content:center;width:36px;height:36px;border:1px solid var(--border);border-radius:6px;background:#fff;color:#234c3b;cursor:pointer}
 .handoff-shell .workspace-navigation-toggle:hover{background:#edf5ef}
 .handoff-shell .production-planning-breadcrumb{min-width:0;overflow-wrap:anywhere}
 .handoff-shell .navigation-backdrop{display:none}
+
+/* Icon strip: department icons stay reachable, every label is dropped. */
+.handoff-shell[data-navigation-collapsed=true] .rail .brand-logo,
+.handoff-shell[data-navigation-collapsed=true] .rail .brand>span,
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-intro,
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-children,
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle>span,
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle>small,
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle>svg:last-child,
+.handoff-shell[data-navigation-collapsed=true] .rail .nav-item>span,
+.handoff-shell[data-navigation-collapsed=true] .rail .account>div{display:none}
+.handoff-shell[data-navigation-collapsed=true] .rail .brand{justify-content:center;padding:0 0 19px}
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-groups{gap:6px}
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle{justify-content:center;padding:12px 0}
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle>svg:first-child{width:22px;height:22px}
+.handoff-shell[data-navigation-collapsed=true] .rail .nav-item{justify-content:center;gap:0;padding:12px 0}
+.handoff-shell[data-navigation-collapsed=true] .rail .nav-item>svg{width:21px;height:21px}
+.handoff-shell[data-navigation-collapsed=true] .rail .account{justify-content:center;padding:13px 0 2px}
 @media(max-width:760px){
  .workspace.handoff-shell{display:block}
- .handoff-shell .rail{position:fixed;inset:0 auto 0 0;width:min(228px,85vw);height:100dvh;padding:20px 10px 12px;display:flex;flex-direction:column}
+ .handoff-shell .rail,.handoff-shell[data-navigation-collapsed=true] .rail{width:min(228px,85vw);height:100dvh;padding:20px 10px 12px;display:flex;flex-direction:column;transform:translateX(-100%);visibility:hidden}
+ .handoff-shell[data-navigation-drawer=true] .rail{transform:none;visibility:visible}
  .handoff-shell .brand{padding:0 4px 19px}
  .handoff-shell .rail nav.department-workspace-navigation{max-height:none;overflow:auto}
  .handoff-shell .rail nav [data-slot=sidebar-menu],.handoff-shell .rail .department-navigation-children [data-slot=sidebar-menu]{display:flex;flex-direction:column}
  .handoff-shell .rail .department-navigation-children .nav-child{margin-left:16px;padding-left:5px;border-left:1px solid #456754}
  .handoff-shell .rail-bottom{display:block}
- .handoff-shell .main,.handoff-shell[data-navigation-open=false] .main{margin:0;max-width:100%;width:100%}
+ .handoff-shell .main,.handoff-shell[data-navigation-collapsed=true] .main{margin:0;max-width:100%;width:100%}
  .handoff-shell .navigation-backdrop{display:block;position:fixed;inset:0;z-index:39;background:rgba(0,0,0,.35);border:0}
 }
-@media print{.handoff-shell .workspace-navigation-toggle,.handoff-shell .navigation-backdrop{display:none!important}.handoff-shell[data-navigation-open=false] .main{margin:0;max-width:100%}}
-
-/* Unpinned desktop navigation floats over the page when the pointer reaches the left edge. */
-@media(min-width:761px){
- .handoff-shell[data-navigation-pinned=false] .main{margin-left:0;max-width:100%;width:100%}
- .handoff-shell .navigation-edge{position:fixed;left:0;top:0;bottom:0;width:10px;z-index:38}
- .handoff-shell[data-navigation-pinned=false][data-navigation-open=true] .rail{box-shadow:4px 0 18px #102c2040}
-}
-.handoff-shell .brand{position:relative;padding-right:36px}
-.handoff-shell .navigation-pin{position:absolute;right:0;top:0;width:32px;height:32px;display:flex;align-items:center;justify-content:center;border:0;border-radius:5px;background:transparent;color:#c7d8d0;cursor:pointer}
-.handoff-shell .navigation-pin:hover{background:#245144;color:white}
-@media(max-width:760px){.handoff-shell .brand{padding-right:4px}}
+@media print{.handoff-shell .workspace-navigation-toggle,.handoff-shell .navigation-backdrop{display:none!important}.handoff-shell .main,.handoff-shell[data-navigation-collapsed=true] .main{margin:0;max-width:100%}}

@@ -10,6 +10,13 @@
 .department-navigation-toggle[aria-expanded=false]>svg:last-child{transform:rotate(-90deg)}
 .department-navigation-toggle:hover{background:#245144;color:white}
 .department-navigation-toggle[data-active=true]{background:#264f40;color:#dbf4bf}
+/* Collapsed-rail launcher for Agent Studio. The expanded rail keeps the brand-logo entry
+   that the server injects, so this icon exists only in the folded icon strip. */
+.department-navigation-studio{display:none}
+.handoff-shell[data-navigation-collapsed=true] .department-navigation-studio{display:flex;align-items:center;justify-content:center;width:100%;min-height:43px;margin-bottom:5px;border:0;border-radius:6px;background:transparent;color:#dce9e1;cursor:pointer;text-decoration:none}
+.handoff-shell[data-navigation-collapsed=true] .department-navigation-studio>svg{width:21px;height:21px;flex-shrink:0}
+.handoff-shell[data-navigation-collapsed=true] .department-navigation-studio:hover{background:#2a5b49;color:#dbf4bf}
+.handoff-shell[data-navigation-collapsed=true] .department-navigation-studio:focus-visible{outline:2px solid #c5e995;outline-offset:-2px}
 .department-navigation-toggle:focus-visible,.handoff-shell .department-workspace-navigation .nav-item:focus-visible{outline:2px solid #c5e995;outline-offset:-2px}
 .handoff-shell .department-navigation-children[hidden]{display:none}
 .handoff-shell .department-navigation-children{padding:3px 0 8px}
@@ -26,3 +33,25 @@
  .handoff-shell .rail .department-navigation-children .nav-item{min-height:44px;font-size:12px}
 }
 @media(prefers-reduced-motion:reduce){.department-navigation-toggle>svg:last-child{transition:none}}
+
+/* Collapsed rail launcher: hovering a department icon opens this floating panel with the
+   department's pages, so a page switch never requires expanding the full sidebar.
+   The panel is portalled to <body>, so it must not rely on an .handoff-shell ancestor.
+   It uses the light popover surface on purpose: against the deep-green rail a light
+   panel reads as a layer floating above the page, the way admin shells do it.
+   The panel sits flush against the rail so the pointer never crosses a dead gap
+   between the icon and the menu it opens. */
+.department-navigation-flyout{width:min(240px,80vw)!important;max-height:min(70vh,520px);overflow-y:auto;overscroll-behavior:contain;padding:5px!important;border:1px solid #dbe4e1!important;border-radius:10px!important;background:#fff!important;color:#15252b!important;box-shadow:0 10px 15px -3px #0f2e2526,0 4px 6px -4px #0f2e2526,0 20px 40px -12px #0f2e2540!important;opacity:1!important}
+.department-navigation-flyout:focus-visible{outline:2px solid #174b3d;outline-offset:2px}
+.department-navigation-flyout-head{padding:6px 9px 7px;margin-bottom:4px;border-bottom:1px solid #e6ece9;font-size:11px;font-weight:600;color:#65777c!important;letter-spacing:.02em}
+.department-navigation-flyout-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 9px;border:0;border-radius:6px;background:transparent;color:#15252b!important;text-align:left;font-size:13px;line-height:1.5;cursor:pointer}
+.department-navigation-flyout-item>svg{flex-shrink:0;color:#4d7c6a}
+.department-navigation-flyout-item>span{min-width:0;overflow-wrap:anywhere}
+.department-navigation-flyout-item:hover{background:#edf5ed;color:#174b3d!important}
+.department-navigation-flyout-item:hover>svg{color:#174b3d}
+.department-navigation-flyout-item[aria-current=page]{background:#e2f2d4;color:#174b3d!important;font-weight:600}
+.department-navigation-flyout-item[aria-current=page]>svg{color:#174b3d}
+.department-navigation-flyout-item:focus-visible{outline:2px solid #174b3d;outline-offset:-2px}
+
+/* The collapsed icon invites a hover, so it reads as a launcher rather than a dead label. */
+.handoff-shell[data-navigation-collapsed=true] .rail .department-navigation-toggle:hover{background:#2a5b49;color:#dbf4bf}
