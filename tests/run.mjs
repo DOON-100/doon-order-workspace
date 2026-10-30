@@ -146,6 +146,7 @@ const {runBusinessTeamExportCases}=await import('./business-team-export-cases.mj
 const {testProjectCollaboration}=await import('./project-collaboration-cases.mjs');await testProjectCollaboration({...projectHarness,api,identity});
 const {testProcessWorkspace}=await import('./process-workspace-cases.mjs');await testProcessWorkspace({...projectHarness,api,identity});
 await import('./department-workspace-navigation.mjs');
+await import('./outsourcing-workspace.mjs');
 await import('./business-followup.mjs');
 await import('./production-history-access.mjs');
 await import('./business-followup-ui.mjs');

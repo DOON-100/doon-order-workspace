@@ -12,7 +12,7 @@ await fs.mkdir(output,{recursive:true});
 const outfile=path.join(output,'navigation.mjs');
 await build({stdin:{contents:"export * from './lib/supplier-workspace';export * from './lib/production-planning';export * from './lib/handoff-navigation';export {ProductionPlanningNavigation} from './app/production-planning-navigation';export {SidebarProvider} from './components/ui/sidebar';",resolveDir:process.cwd(),loader:'tsx'},outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},loader:{'.css':'empty'}});
 const nav=await import(pathToFileURL(outfile).href);
-const expected=['supplier-pending','supplier-followup','supplier-kit','supplier-outsourcing','supplier-risk','supplier-samples','supplier-reconciliation'];
+const expected=['supplier-pending','supplier-followup','supplier-kit','supplier-semifinished','supplier-plating','supplier-outsourcing','supplier-risk','supplier-samples','supplier-reconciliation'];
 const ids=items=>items.map(item=>item.id),checks=[];
 const member=(role='pmc',departments=[])=>({id:'synthetic-supplier-navigation',kind:'member',email:'supplier-navigation@test.invalid',name:'合成采购导航成员',role,departments,customers:[],userId:'synthetic-supplier-user',active:true,createdAt:'2026-10-15T00:00:00Z'});
 const pass=message=>{checks.push(message);console.log('PASS '+message);};
@@ -26,7 +26,7 @@ for(const item of nav.supplierWorkspaceSpaces){assert(nav.isSupplierWorkspaceVie
 assert(nav.isSupplierWorkspaceView('supplier-workspace'));
 for(const id of ['receiving','finished-outsourcing','production-planning','supplier-pending-extra','unknown'])assert.equal(nav.isSupplierWorkspaceView(id),false);
 assert.equal(nav.supplierWorkspaceTitle('receiving'),undefined);
-pass('One supplier root has seven manufacturing procurement spaces and does not absorb receiving.');
+pass('Supplier routes include separate semifinished and plating spaces while preserving receiving and legacy outsourcing.');
 
 for(const role of ['admin','pmc','production','clerk','sales','finance','programmer','viewer']){
  const user=member(role,role==='clerk'?['finished','outsourcing']:[]),items=nav.memberWorkspaceNavigation(user),before=JSON.stringify(items),planning=nav.productionPlanningNavigation(items,user),result=group(items,user);

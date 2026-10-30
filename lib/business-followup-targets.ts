@@ -25,6 +25,7 @@ import {finishedSupplierGet} from './finished-supplier-api';
 import {canOperateFinished} from './finished-supplier';
 import {productionWorkspaceGet} from './production-workspace-api';
 import {canCreateOutsource} from './suppliers';
+import {matchesOutsourcingScope,type OutsourcingScope} from './outsourcing-workspace';
 import {arWorkspaceGet} from './ar-workspace-api';
 import {customerPriceArchiveGet} from './customer-price-archive-api';
 import {kingdeePendingGet} from './kingdee-pending-api';
@@ -87,7 +88,8 @@ function sourceIdentity(s:State,row:Entity,seen=new Set<string>()):unknown{
 /** The catalog only accepts rows already returned by the original scoped domain API. */
 export async function businessFollowupTargets(req:Request,s:State,m:Member,module:string,projectId='',targetRecordId=''){
  requireMember(s,m);const team=module==='ar-workspace'?(req.headers.get(businessTeamHeader)||'').trim():teamScope(req,s,m);if(team.length>160)throw new AppError('业务小组编号无效。');
- const targets:ResolvedFollowupTarget[]=[],canonicalModule=orderModules.has(module)?'orders':serviceModules.has(module)?'service-workspace':purchaseModules.has(module)?'purchase':documentModules.has(module)?'documents':['mail','whatsapp'].includes(module)?'communications':processModules.has(module)?'process-workspace':module==='receiving'?'supplier-outsourcing':module;
+ const outsourceScope:OutsourcingScope|undefined=module==='supplier-semifinished'?'semifinished':module==='supplier-plating'?'plating':['supplier-outsourcing','receiving'].includes(module)?'all':undefined;
+ const targets:ResolvedFollowupTarget[]=[],canonicalModule=orderModules.has(module)?'orders':serviceModules.has(module)?'service-workspace':purchaseModules.has(module)?'purchase':documentModules.has(module)?'documents':['mail','whatsapp'].includes(module)?'communications':processModules.has(module)?'process-workspace':outsourceScope?'supplier-outsourcing':module;
  const virtual=(namespace:string,collection:string,recordId:string,label:string,scope:{customerId?:string;projectId?:string;orderId?:string;recordKind:string;scopeIdentity:string},canAppend:boolean)=>{
   if(recordId.length>160)throw new AppError('来源记录编号超出跟进长度限制。');
   targets.push({module:namespace,collection,recordId,sectionKey:'record',sectionLabel:'本条记录',label:label.slice(0,500),canAppend:canAppend&&!paymentTermsReadOnly(s,m),customerId:scope.customerId||'',projectId:scope.projectId||'',orderId:scope.orderId||'',recordKind:scope.recordKind,scopeIdentity:scope.scopeIdentity});
@@ -120,8 +122,8 @@ export async function businessFollowupTargets(req:Request,s:State,m:Member,modul
   const data=await feed('finished-supplier-data',req,s,m,finishedSupplierGet);for(const collection of ['tasks','shipments','reworks'])add(collection,data[collection],()=>canOperateFinished(m));
  }else if(module==='mes'||module==='losses'){
   const data=await feed('production-workspace-data',req,s,m,productionWorkspaceGet);for(const collection of module==='mes'?['reports','corrections']:['losses'])add(collection,data[collection],(_row,raw)=>{const order=all(s,'order').find(o=>o.id===raw.lineId) as Order|undefined;return broad(m)||!!order&&allowedFields(m,order).length>0;});
- }else if(module==='supplier-outsourcing'||module==='receiving'){
-  add('outsource',all(s,'outsource').filter(row=>{const order=all(s,'order').find(o=>o.id===row.lineId) as Order|undefined;return !!order&&canRead(m,order);}),row=>canCreateOutsource(m)&&row.status!=='已取消');
+ }else if(outsourceScope){
+  add('outsource',all(s,'outsource').filter(row=>{const order=all(s,'order').find(o=>o.id===row.lineId) as Order|undefined;return !!order&&canRead(m,order)&&matchesOutsourcingScope(row.process,outsourceScope);}),row=>canCreateOutsource(m)&&row.status!=='已取消');
  }else if(serviceModules.has(module)){
   const data=await feed('service-data',req,s,m,serviceWorkspaceGet);add('records',data.records,()=>data.canWrite===true,row=>module!=='shipment-followups'&&module!=='service-receivables'||row.type===(module==='shipment-followups'?'shipment':'receivable'));
  }else if(processModules.has(module)){

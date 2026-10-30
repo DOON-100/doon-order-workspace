@@ -48,10 +48,10 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.DOON_CHROMIUM_PATH?{executablePath:process.env.DOON_CHROMIUM_PATH}:{channel:'chrome'}),args:['--no-proxy-server']});
  const signed=await signedPage(admin);page=signed.page;
  await page.goto(origin+'/business-process');await page.locator('.process-overview').waitFor();
- assert.equal(await page.locator('[data-department-id]').count(),11);assert.equal(await page.locator('.process-stage').count(),13);assert.equal(await page.locator('.process-paths article').count(),4);
+ assert.equal(await page.locator('[data-department-id]').count(),13);assert.equal(await page.locator('.process-stage').count(),13);assert.equal(await page.locator('.process-paths article').count(),4);
  assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').count(),1);
  await page.screenshot({path:path.join(root,'business-process-desktop.png'),fullPage:true});
- pass('11 departments, 13 stages and four actual business paths render with one active menu.');
+ pass('13 workspaces, 13 stages and four actual business paths render with one active menu.');
  const kinds=['rfq','sample','engineering-change','iqc','material-kit','warehouse','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release','supplier-reconciliation','complaint'];
  for(const kind of kinds){await openNav(page,'process-'+kind);await page.locator('.process-list').waitFor();assert.equal(new URL(page.url()).searchParams.get('tab'),kind);assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').getAttribute('data-nav-tab'),kind);}
  pass('All 14 process leaves open their own working list and preserve exact tab highlighting.');

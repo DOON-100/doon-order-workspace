@@ -7,6 +7,8 @@ export const supplierWorkspaceSpaces=[
  {id:'supplier-pending',label:'采购未上货订单总表',area:'采购与交期',icon:'upload',detail:'按金蝶来源快照核对全部采购未上货明细、原表字段与导出范围。'},
  {id:'supplier-followup',label:'供应商与交期跟催',area:'采购与交期',icon:'people',detail:'维护供应商资料、承诺交期、最新复期与催交事项。'},
  {id:'supplier-kit',label:'眼镜物料齐套与欠料',area:'制造与备料',icon:'production',detail:'按订单、款号与物料规格核对板料、钛料、铰链、配件和包材欠料。'},
+ {id:'supplier-semifinished',label:'半成品外发跟进',area:'半成品外发',icon:'factory',detail:'跟进钛焊、打磨、钛配套、脾加工、车房、出桶配套和钉装磨胶的外发、复期与回货。'},
+ {id:'supplier-plating',label:'电镀外发与回货',area:'外发电镀',icon:'factory',detail:'独立跟进电镀工序的外发数量、供应商交期、未回货和送货凭证。'},
  {id:'supplier-outsourcing',label:'外协加工与未回货',area:'制造与备料',icon:'factory',detail:'跟进外协加工、电镀、PVD、喷涂的送出、回厂与检验节点。'},
  {id:'supplier-risk',label:'采购异常与供应风险',area:'异常与新品',icon:'chart',detail:'汇总采购原表交期和信息缺失线索，核对外协逾期、复期与审批状态。'},
  {id:'supplier-samples',label:'样办与新品备料',area:'异常与新品',icon:'engineering',detail:'核对样办与试产清单、工程版本、供货承诺和物料变更。'},
