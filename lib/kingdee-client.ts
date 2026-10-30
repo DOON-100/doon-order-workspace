@@ -129,10 +129,11 @@ export async function kingdeeSupplierDiagnostic(config:KingdeeConfig,signal:Abor
 }
 
 /** Fixed supplier list projection. Page and size are server controlled. */
-export async function kingdeeSupplierCatalogPage(config:KingdeeConfig,page:number,signal:AbortSignal){
+export async function kingdeeSupplierCatalogPage(config:KingdeeConfig,page:number,signal:AbortSignal,window?:{start:number;end:number}){
  if(!Number.isInteger(page)||page<1||page>100)throw new AppError('金蝶供应商页码无效。');
+ if(window&&(!Number.isSafeInteger(window.start)||!Number.isSafeInteger(window.end)||window.start<0||window.end<window.start))throw new AppError('金蝶供应商时间范围无效。');
  const auth=await authorization(config);
- try{return object(await gatewayRequest(config,'supplierList',{page:String(page),page_size:'100',enable:'-1',show_contact_detail:'false'},signal,auth));}
+ try{return object(await gatewayRequest(config,'supplierList',{page:String(page),page_size:'100',enable:'-1',show_contact_detail:'false',...(window?{create_start_time:String(window.start),create_end_time:String(window.end)}:{})},signal,auth));}
  catch(error){if(error instanceof AppError&&error.status===502)authCache.cached=undefined;throw error;}
 }
 

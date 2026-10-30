@@ -45,17 +45,17 @@ export function createSupplierCatalogScheduler({db,config,runWorker,clock=Date.n
  function status(lease,result,attemptedAt){return db.prepare("INSERT INTO kingdee_supplier_catalog_schedule_status(id,binding_hash,last_attempt_at,last_result,last_success_at) SELECT 'scheduler',?,?,?,? WHERE EXISTS(SELECT 1 FROM kingdee_supplier_catalog_lease WHERE id='scheduler' AND worker=? AND fence=? AND expires_at>?) ON CONFLICT(id) DO UPDATE SET binding_hash=excluded.binding_hash,last_attempt_at=excluded.last_attempt_at,last_result=excluded.last_result,last_success_at=CASE WHEN excluded.last_result='complete' THEN excluded.last_success_at WHEN kingdee_supplier_catalog_schedule_status.binding_hash=excluded.binding_hash THEN kingdee_supplier_catalog_schedule_status.last_success_at ELSE '' END").run(config.bindingHash,attemptedAt,result,result==='complete'?new Date(clock()).toISOString():'',lease.workerId,lease.fence,clock()+1000).changes===1;}
  async function runOnce(onlyIfDue=false){
   if(stopped||running)return {status:'not_started'};
-  running=true;let lease,attemptedAt;
+  running=true;let lease,attemptedAt,startedMs;
   try{
    lease=acquire(randomUUID(),onlyIfDue);if(!lease)return {status:'busy'};if(lease.notDue){lease=null;return {status:'not_due'};}
    active=lease;
-   attemptedAt=new Date(clock()).toISOString();if(!status(lease,'started',attemptedAt))throw Error('lease expired');
+   startedMs=clock();attemptedAt=new Date(startedMs).toISOString();if(!status(lease,'started',attemptedAt))throw Error('lease expired');
    heartbeat=setInterval(()=>{try{if(!renew(lease)){clearInterval(heartbeat);heartbeat=null;}}catch{clearInterval(heartbeat);heartbeat=null;}},config.renewMs);heartbeat.unref?.();
    await runWorker({requestId:randomUUID(),lease});
    if(!status(lease,'complete',attemptedAt))throw Error('lease expired before completion status');
    return {status:'complete'};
   }catch{if(lease&&attemptedAt)try{status(lease,'failed',attemptedAt);}catch{}logger.error('金蝶供应商定时同步未完成，请检查服务端配置和最近成功时间。');return {status:'failed'};}
-  finally{if(heartbeat){clearInterval(heartbeat);heartbeat=null;}if(lease)try{release(lease);}catch{}active=null;running=false;}
+  finally{if(startedMs!==undefined)logger.info?.(`金蝶供应商定时检查耗时 ${Math.max(0,clock()-startedMs)} 毫秒。`);if(heartbeat){clearInterval(heartbeat);heartbeat=null;}if(lease)try{release(lease);}catch{}active=null;running=false;}
  }
  function schedule(minimumDelay=0){
   if(stopped)return;let delay;
