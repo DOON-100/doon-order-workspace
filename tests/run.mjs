@@ -176,6 +176,7 @@ const {testWorkspaceAuditReads}=await import('./workspace-audit-read-cases.mjs')
 await import('./service-order-customer-keys.mjs');
 await import('./customer-project-list-filters-ui.mjs');
 await import('./customer-project-followup-links-ui.mjs');
+await import('./excel-table-filters.mjs');
 await import('./workspace-manual-refresh.mjs');
 await import('./project-collaboration-ui.mjs');
 await import('./service-progress-contract.mjs');

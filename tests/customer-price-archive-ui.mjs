@@ -7,9 +7,11 @@ const react=`const H=globalThis.__cpaHooks;export function useState(initial){con
 const bundled=await build({entryPoints:['app/customer-price-archive-panel.tsx'],bundle:true,platform:'node',format:'esm',write:false,plugins:[{name:'synthetic-hooks',setup(b){
  b.onResolve({filter:/^(react|react\/jsx-runtime|lucide-react)$/},a=>({path:a.path,namespace:'synthetic'}));
  b.onResolve({filter:/components\/ui\/button$/},()=>({path:'button',namespace:'synthetic'}));
+ // Keep this business-rule harness independent of the separately tested table DOM and filtering hooks.
+ b.onResolve({filter:/excel-table$/},()=>({path:'excel',namespace:'synthetic'}));
  b.onResolve({filter:/business-team-client$/},()=>({path:'client',namespace:'synthetic'}));
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'synthetic'}));
- b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export function jsx(type,props){return {type,props:props||{}}}export const jsxs=jsx;`:a.path==='button'?`export const Button='button';`:a.path==='client'?`export const businessTeamFetch=(...args)=>globalThis.__cpaFetch(...args);export const downloadBusinessTeamFile=async()=>{};`:a.path==='lucide-react'?`export const Download='icon',FileText='icon',RefreshCw='icon',Search='icon';`:''}));
+ b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export function jsx(type,props){return {type,props:props||{}}}export const jsxs=jsx;`:a.path==='button'?`export const Button='button';`:a.path==='excel'?`export const ExcelTable='table';export function useExcelColumnFilters(rows){return {rows,filters:{},clearFilters(){}};}`:a.path==='client'?`export const businessTeamFetch=(...args)=>globalThis.__cpaFetch(...args);export const downloadBusinessTeamFile=async()=>{};`:a.path==='lucide-react'?`export const Download='icon',FileText='icon',RefreshCw='icon',Search='icon';`:''}));
  }}]});
 const {CustomerPriceArchivePanel}=await import('data:text/javascript;base64,'+Buffer.from(bundled.outputFiles[0].text).toString('base64'));
 const originals=Object.fromEntries(['window','location','setTimeout','clearTimeout','setInterval','clearInterval','addEventListener','removeEventListener'].map(k=>[k,globalThis[k]]));
@@ -37,11 +39,11 @@ try{
  change('RX 商用说明','Unsaved A');assert.equal(reportedDirty,true);assert.equal(unloadBlocked(),true);
  change('报价档案客户','synthetic-b');assert.equal(input('报价档案客户').props.value,'synthetic-a');assert.equal(input('RX 商用说明').props.value,'Unsaved A');
  change('报价档案搜索','Synthetic SKU');assert.equal(reportedDirty,true);assert.equal(input('RX 商用说明'),undefined);await read();assert.equal(input('RX 商用说明').props.value,'Unsaved A');assert.equal(reportedDirty,true);
- for(const fn of intervals.values())fn();render();await read();assert.equal(input('RX 商用说明').props.value,'Unsaved A');
- console.log('PASS unsaved customer notes protect workspace navigation and unload, reject customer switch, and survive search and polling');
+ button('刷新').props.onClick();render();await read();assert.equal(input('RX 商用说明').props.value,'Unsaved A');
+ console.log('PASS unsaved customer notes protect workspace navigation and unload, reject customer switch, and survive search and manual refresh');
 
  selection={...selection,version:2,sha256:'b'.repeat(64),configurationNotes:{rx:'Server revision two',solar:'Original SOLAR'}};
- for(const fn of intervals.values())fn();render();await read();assert.equal(input('RX 商用说明').props.value,'Unsaved A');assert.equal(button('保存客户规则').props.disabled,true);assert.ok(text().includes('当前客户规则已更新'));assert.equal(reportedDirty,true);
+ button('刷新').props.onClick();render();await read();assert.equal(input('RX 商用说明').props.value,'Unsaved A');assert.equal(button('保存客户规则').props.disabled,true);assert.ok(text().includes('当前客户规则已更新'));assert.equal(reportedDirty,true);
  button('放弃本次修改').props.onClick();render();assert.equal(input('RX 商用说明').props.value,'Server revision two');assert.equal(reportedDirty,false);
  change('RX 商用说明','Version two draft');post=async()=>Response.json({error:'Synthetic version conflict'},{status:409});await button('保存客户规则').props.onClick();render();assert.equal(requests.at(-1).expectedVersion,2);assert.equal(requests.at(-1).expectedSelectionSha256,'b'.repeat(64));assert.equal(requests.at(-1).customerAccountId,'synthetic-a');assert.equal(reportedDirty,true);assert.equal(input('RX 商用说明').props.value,'Version two draft');assert.ok(text().includes('Synthetic version conflict'));
  console.log('PASS changed source preserves draft, explicit discard adopts current version, and POST conflict keeps expected version and notes');
@@ -50,11 +52,11 @@ try{
  change('报价档案客户','synthetic-b');assert.equal(input('报价档案客户').props.value,'synthetic-a');
  selection={...selection,version:3,sha256:'c'.repeat(64),configurationNotes:{rx:'Version two draft',solar:'Original SOLAR'}};complete(Response.json({ok:true}));await pending;render();assert.equal(reportedDirty,false);assert.equal(unloadBlocked(),false);
  readFailure=true;await read();assert.ok(text().includes('Synthetic scope revoked'));assert.equal(input('RX 商用说明'),undefined);assert.equal(reportedDirty,false);
- readFailure=false;for(const fn of intervals.values())fn();render();await read();assert.equal(input('RX 商用说明').props.value,'Version two draft');assert.equal(reportedDirty,false);
+ readFailure=false;button('刷新').props.onClick();render();await read();assert.equal(input('RX 商用说明').props.value,'Version two draft');assert.equal(reportedDirty,false);
  console.log('PASS saving freezes editable scope, confirmed save clears dirty independently of refresh failure, and failed read conceals old editor');
 
  change('RX 商用说明','Network-failure draft');post=async()=>{throw Error('Synthetic network failure');};await button('保存客户规则').props.onClick();render();assert.equal(reportedDirty,true);assert.equal(input('RX 商用说明').props.value,'Network-failure draft');assert.equal(unloadBlocked(),true);
- readFailure=true;for(const fn of intervals.values())fn();render();await read();assert.equal(input('RX 商用说明'),undefined);assert.equal(reportedDirty,true);button('放弃本次修改').props.onClick();render();assert.equal(reportedDirty,false);
+ readFailure=true;button('刷新').props.onClick();render();await read();assert.equal(input('RX 商用说明'),undefined);assert.equal(reportedDirty,true);button('放弃本次修改').props.onClick();render();assert.equal(reportedDirty,false);
  readFailure=false;selection={customerAccountId:'synthetic-b',invoicePreference:null,configurationNotes:{rx:'B only',solar:''},version:0,sha256:null};change('报价档案客户','synthetic-b');await read();assert.equal(input('RX 商用说明').props.value,'B only');assert.equal(reportedDirty,false);change('RX 商用说明','B edited');post=async()=>Response.json({ok:true});await button('保存客户规则').props.onClick();render();assert.equal(requests.at(-1).customerAccountId,'synthetic-b');assert.equal(requests.at(-1).expectedVersion,0);assert.equal(requests.at(-1).configurationNotes.rx,'B edited');assert.equal(requests.at(-1).configurationNotes.solar,'');
  for(const slot of hooks.slots)slot?.cleanup?.();assert.equal(reportedDirty,false);assert.equal(unloadBlocked(),false);assert.equal(timers.size,0);assert.equal(intervals.size,0);
  console.log('PASS network error and permission refresh preserve guarded draft, explicit discard and unmount release navigation protection');

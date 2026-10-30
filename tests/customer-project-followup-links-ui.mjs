@@ -13,6 +13,7 @@ const stubs={react,
  button:`export const Button='button';`,
  'client-id':`let n=0;export const clientId=()=>'followup-links-test-'+(++n);`,
  'business-followup-panel':`export function BusinessFollowupSlot(){return null;}`,
+ 'excel-table':`export const ExcelTable='table';`,
  ui:`export const request=(...args)=>globalThis.__followupLinksRequest(...args);export const dateTime=value=>value||'—';`,
  'customer-project-ui':`export const CPBadge='badge',CPEmpty='empty',CPSection='section',CPTable='table';export const cpToday=()=>'2026-10-14';`,css:''
 };

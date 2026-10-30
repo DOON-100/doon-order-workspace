@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 
 const react=`
+export const Fragment='fragment';
 export function useState(initial){const H=globalThis.__trashFrame,i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,value=>{const next=typeof value==='function'?value(H.slots[i].value):value;if(!Object.is(next,H.slots[i].value)){H.slots[i].value=next;H.changed=true;}}];}
 export function useRef(value){const H=globalThis.__trashFrame,i=H.index++;return H.slots[i]||(H.slots[i]={current:value});}
 export function useEffect(fn,deps){const H=globalThis.__trashFrame,i=H.index++,old=H.slots[i];if(!old||deps.some((value,j)=>value!==old.deps[j])){H.slots[i]={deps,cleanup:old?.cleanup};H.effects.push(()=>{old?.cleanup?.();H.slots[i].cleanup=fn();});}}
@@ -17,6 +18,8 @@ const stubs={
  ui:`export const request=(...args)=>globalThis.__trashRequest(...args);export const dateTime=value=>value||'—';`,
  'business-team-context':`export const useBusinessTeamScope=()=>globalThis.__trashBusinessTeam||null;`,
  'customer-project-entry-forms':`export const customerProjectEntryForms=()=>({});`,
+ 'business-followup-panel':`export const BusinessFollowupProvider='followup-provider';export function BusinessFollowupSlot(){return null;}`,
+ 'excel-table':`export const ExcelTable='table';`,
  'customer-project-search-select':`export const CPSearchSelect='search-select';`,
  'customer-early-development':`export function CustomerEarlyDevelopment(){}`,
  'customer-project-finance-panel':`export function CustomerProjectFinancePanel(){}`,
