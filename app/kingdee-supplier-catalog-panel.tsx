@@ -57,7 +57,7 @@ export function KingdeeSupplierCatalogPanel({actorId}:{actorId:string}){
   <Dialog open={open&&openScope===scope&&!team} onOpenChange={value=>{if(!busy){setOpen(value);if(!value){setData(null);setDataScope('');setSearch('');setPage(0);}}}}>
    <DialogContent className="dialog-scroll sm:max-w-[950px]"><DialogHeader><DialogTitle>金蝶供应商档案</DialogTitle><DialogDescription>按金蝶供应商编码查看独立来源档案。</DialogDescription></DialogHeader>
     <p className="muted">这里是累计保留的金蝶来源档案，包含后来停用、删除或未在来源返回的记录，不代表供应商当前有效状态。更新只新增来源记录，不会自动关联已有供应商、外发或供应商门户，也不会覆盖历史资料。同名不同编码分别保留；来源变更须核查，旧名称保留。</p>
-    {visibleData&&<p>{visibleData.autoEnabled?'自动同步已配置；请以最近成功更新时间判断运行状态。':'自动同步未启用；请手动更新。'}</p>}
+    {visibleData&&<p>{visibleData.autoEnabled?'自动同步已配置，默认每天检查一次；请以最近成功更新时间判断运行状态。':'自动同步未启用；请手动更新。'}</p>}
     {visibleData?.autoEnabled&&visibleData.autoStatus&&<p>后台最近尝试 {dateTime(visibleData.autoStatus.lastAttemptAt)}：{visibleData.autoStatus.lastResult==='complete'?'已完成':visibleData.autoStatus.lastResult==='failed'?'未完成，请核查服务端':'已开始；如长时间不更新请核查服务端'}。最近后台成功 {dateTime(visibleData.autoStatus.lastSuccessAt)}。</p>}
     <div className="flex flex-wrap gap-2"><Button disabled={busy} onClick={()=>void sync()}>{busy?'正在处理…':pending?'使用同一编号重试':'手动更新金蝶档案'}</Button>{pending&&<Button variant="outline" disabled={busy} onClick={()=>void check()}>核查本次结果</Button>}<Button variant="outline" disabled={busy} onClick={()=>void load(scopeRef.current)}>刷新列表</Button></div>
     {error&&<p className="error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}

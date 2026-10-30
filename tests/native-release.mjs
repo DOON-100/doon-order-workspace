@@ -20,10 +20,18 @@ try {
   const mailModule = path.join(root, 'lan-dist/ie-mail.mjs');
   const mailSource = 'export const configured = false; // Synthetic mail adapter; never sends\n';
   await fs.writeFile(mailModule, mailSource);
+  for (const name of ['supplier-catalog-worker.mjs', 'supplier-catalog-scheduler.mjs']) await fs.writeFile(path.join(root, 'lan-dist', name), '// Synthetic supplier runtime\n');
   await fs.writeFile(path.join(root, 'package.json'), '{"private":true}\n');
   await fs.writeFile(path.join(root, 'release.json'), JSON.stringify({format: 'doon-native-release-v1', files: await inventory(root)}));
   const packaged = await verifyPackage(root);
   assert.equal(packaged.files['lan-dist/ie-mail.mjs'].type, 'file');
+  for (const name of ['supplier-catalog-worker.mjs', 'supplier-catalog-scheduler.mjs']) {
+    assert.equal(packaged.files['lan-dist/' + name].type, 'file');
+    const filename = path.join(root, 'lan-dist', name);
+    await fs.appendFile(filename, '// changed\n');
+    await assert.rejects(verifyPackage(root), /integrity mismatch/);
+    await fs.writeFile(filename, '// Synthetic supplier runtime\n');
+  }
   await fs.appendFile(mailModule, '// changed\n');
   await assert.rejects(verifyPackage(root), /integrity mismatch/);
   await fs.unlink(mailModule);
