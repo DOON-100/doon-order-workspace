@@ -28,7 +28,7 @@ async function openNav(id){
  if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
  const view=await item.getAttribute('data-nav-view'),tab=await item.getAttribute('data-nav-tab');
  await item.click();await page.waitForURL(url=>url.pathname==='/'+view&&(!tab||url.searchParams.get('tab')===tab));
- await page.locator(view==='process-workspace'?'.process-list':'.supplier-workspace').waitFor();
+  await page.locator(view==='process-workspace'?'.process-list':view==='outsourcing-workbooks'?'.owb-panel':'.supplier-workspace').waitFor();
 }
 async function displayedReferences(expected){
  const text=await page.locator('.supplier-workspace').innerText();
@@ -70,7 +70,7 @@ try{
  assert.equal(await page.locator('[data-department-id="purchasing"] [data-nav-id="supplier-semifinished"]').count(),0);
  assert.equal(await page.locator('[data-department-id="production"] [data-nav-id="finished-outsourcing"]').count(),1);
  const departmentalItems=page.locator('[data-department-id="semifinished-outsourcing"] [data-nav-id]');
- assert.deepEqual(await departmentalItems.evaluateAll(items=>items.map(item=>({id:item.getAttribute('data-nav-id'),label:item.querySelector('span')?.textContent}))),[{id:'supplier-semifinished',label:'钛架部'},{id:'supplier-semifinished-plastic',label:'胶架部'},{id:'process-packaging',label:'包装部'}]);
+  assert.deepEqual(await departmentalItems.evaluateAll(items=>items.map(item=>({id:item.getAttribute('data-nav-id'),label:item.querySelector('span')?.textContent}))),[{id:'supplier-semifinished',label:'钛架部'},{id:'supplier-semifinished-plastic',label:'胶架部'},{id:'process-packaging',label:'包装部'},{id:'outsourcing-catalog',label:'外发基础资料'},{id:'outsourcing-workbooks',label:'外发原表与字段查询'}]);
  assert.equal(await page.locator('[data-department-id="warehouse"] [data-nav-id="process-packaging"]').count(),0);
  assert.equal(await page.getByRole('button',{name:'展开外发电镀',exact:true}).count(),0);
  pass('半成品外发下钛架部、胶架部、包装部按顺序独立列出，电镀外发名称已统一。');
@@ -114,6 +114,9 @@ try{
  await page.screenshot({path:path.join(root,'packaging-department.png'),fullPage:true});
  await page.reload();await page.locator('.process-list').waitFor();assert.equal(new URL(page.url()).searchParams.get('tab'),'packaging');
  pass('包装部沿用原包装核对作业入口、记录与权限，直接刷新仍匹配半成品外发目录。');
+  await openNav('outsourcing-workbooks');await page.locator('.owb-panel').waitFor();
+  await page.reload();await page.locator('.owb-panel').waitFor();
+  pass('外发原工作簿页面按需加载，导航与直接刷新均可进入。');
  await openNav('supplier-outsourcing');await displayedReferences(['SYNTHETIC-SEMI-OUT','SYNTHETIC-PLASTIC-OUT','SYNTHETIC-PLATE-OUT']);
  const legacyRows=await exportRows();assert.equal(legacyRows.length,3);
  await page.reload();await page.locator('.supplier-workspace').waitFor();await displayedReferences(['SYNTHETIC-SEMI-OUT','SYNTHETIC-PLASTIC-OUT','SYNTHETIC-PLATE-OUT']);

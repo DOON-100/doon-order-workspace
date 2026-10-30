@@ -1,6 +1,6 @@
 'use client';
 
-import {useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {lazy,Suspense,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {ArrowRight,RefreshCw,FileText,Download} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -19,10 +19,10 @@ import {Pager} from './ledger-panels';
 import {PurchasePanel} from './purchase-panel';
 import {LegacySupplierPanel} from './supplier-panel';
 import {OutsourcingCatalogPanel} from './outsourcing-catalog-panel';
-import {OutsourcingWorkbookPanel} from './outsourcing-workbook-panel';
 import {BusinessTeamDownloadButton} from './business-team-download';
 import './supplier-operations-panel.css';
 
+const OutsourcingWorkbookPanel=lazy(()=>import('./outsourcing-workbook-panel').then(module=>({default:module.OutsourcingWorkbookPanel})));
 type Props={data:Data;act:Act;busy:boolean;openOrder:(order:Order)=>void;onDirtyChange:(dirty:boolean)=>void;onNavigate:(view:string,context?:WorkspaceNavigationContext)=>void;view:string};
 type SnapshotResponse={snapshot:ProcurementSnapshot|null};
 type ProjectResponse={samples:Entity[];internalSamples:Entity[];projects:Entity[]};
@@ -65,7 +65,7 @@ export function SupplierOperationsPanel(props:Props){
  const snapshot=current.data?.snapshot,materials=useMemo(()=>pendingMaterials(snapshot),[snapshot]);
  if(!data.me.active||data.me.role==='supplier')return <section className="panel"><EmptyRows>当前账号没有内部供应商管理工作台的查看权限。</EmptyRows></section>;
  if(view==='outsourcing-catalog')return <OutsourcingCatalogPanel me={data.me} onDirtyChange={props.onDirtyChange}/>;
- if(view==='outsourcing-workbooks')return <OutsourcingWorkbookPanel/>;
+ if(view==='outsourcing-workbooks')return <Suspense fallback={<section className="panel" role="status">正在加载原表与字段查询…</section>}><OutsourcingWorkbookPanel/></Suspense>;
  return <div className="supplier-operations">
   <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>onNavigate('outsourcing-catalog')}>公司共享外发基础资料</Button>{outsourcingScope&&<Button variant="outline" onClick={()=>onNavigate('outsourcing-workbooks')}>原Excel与字段查询</Button>}</div>
   <section className="supplier-ops-intro"><div><span className="section-kicker">{outsourcingScope==='titanium'||outsourcingScope==='plastic'?'半成品外发':outsourcingScope==='plating'?'电镀外发':'供应商管理工作台'}</span><h2>{description.title}</h2><p>{description.detail}</p></div>{outsourcingScope&&outsourcingScope!=='all'?<Button variant="outline" onClick={()=>onNavigate(outsourcingScope==='plating'?'supplier-semifinished':'supplier-plating')}>{outsourcingScope==='plating'?'半成品外发':'电镀外发'}<ArrowRight size={16}/></Button>:<Button variant="outline" onClick={()=>onNavigate('supplier-pending')}>采购未上货总表<ArrowRight size={16}/></Button>}</section>
