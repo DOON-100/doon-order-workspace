@@ -145,6 +145,7 @@ const {runBusinessTeamScopeCases}=await import('./business-team-scope-cases.mjs'
 const {runBusinessTeamExportCases}=await import('./business-team-export-cases.mjs');await runBusinessTeamExportCases({api,identity,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record)),pass});
 const {testProjectCollaboration}=await import('./project-collaboration-cases.mjs');await testProjectCollaboration({...projectHarness,api,identity});
 const {testProcessWorkspace}=await import('./process-workspace-cases.mjs');await testProcessWorkspace({...projectHarness,api,identity});
+const {testQuoteRequests}=await import('./quote-request-cases.mjs');await testQuoteRequests({...projectHarness,api,identity});
 await import('./department-workspace-navigation.mjs');
 await import('./outsourcing-workspace.mjs');
 await import('./business-followup.mjs');

@@ -43,6 +43,8 @@ import {PlanningControlPanel} from './planning-control-panel';
 import {DepartmentWorkspaceNavigation} from './department-workspace-navigation';
 import {departmentWorkspaceNavigation,departmentWorkspaceBreadcrumb} from '@/lib/department-workspace-navigation';
 import {ProcessWorkspacePanel} from './process-workspace-panel';
+import {RfqWorkspacePanel} from './rfq-workspace-panel';
+import {QuoteRequestTasksPanel} from './quote-request-panel';
 import {BusinessProcessPanel} from './business-process-panel';
 import {PRODUCTION_PLANNING_ID,PRODUCTION_PLANNING_TITLE,isProductionPlanningView} from '@/lib/production-planning';
 import {SUPPLIER_WORKSPACE_ID,SUPPLIER_WORKSPACE_TITLE,isSupplierWorkspaceView,supplierWorkspaceTitle,canSeeSupplierWorkspace} from '@/lib/supplier-workspace';
@@ -179,7 +181,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {notice&&<div role={notice.error?'alert':'status'} className={notice.error?'error notice':'success notice'}><span>{notice.text}</span><Button variant="ghost" size="icon" aria-label="关闭提示" onClick={()=>setNotice(null)}><X/></Button></div>}
  {!identity?<section className="panel"><Empty title="登录你的协作工作空间" detail="订单仅向获授权成员开放。"><Button asChild><a href={signInUrl} target="_top">登录并进入</a></Button></Empty></section>:query.isError&&!data?<section className="panel"><Empty title="暂时无法加载工作空间" detail={(query.error as Error).message}><Button onClick={()=>query.refetch()}>重新加载</Button></Empty></section>:!data?<section className="panel"><Empty title="正在读取共享订单…" detail="首次进入会初始化你的工作空间。"/></section>:<PanelBoundary key={view} onBack={()=>setView('workbench')}><BusinessFollowupProvider module={view} identityKey={data.me.id} enabled={!['settings','members','maintenance','workbench','business-rules','business-tools'].includes(view)} onDirtyChange={setEvidenceDirty}><DepartmentFrame view={view} context={navigationContext} data={data} onNavigate={setView}>
  {view==='business-process'&&<BusinessProcessPanel data={data} onNavigate={setView} initialContext={navigationContext}/>}
- {view==='process-workspace'&&<ProcessWorkspacePanel key={navigationContext.tab||'rfq'} data={data} initialContext={navigationContext} onDirtyChange={personalDirtyChanged} onNavigate={setView}/>}
+ {view==='process-workspace'&&((navigationContext.tab||'rfq')==='rfq'?<RfqWorkspacePanel data={data} initialContext={navigationContext} onDirtyChange={personalDirtyChanged} onNavigate={setView}/>:<ProcessWorkspacePanel key={navigationContext.tab} data={data} initialContext={navigationContext} onDirtyChange={personalDirtyChanged} onNavigate={setView}/>)}
  {view===PRODUCTION_PLANNING_ID&&<ProductionPlanningPanel data={data} onNavigate={setView}/>}
  {isSupplierWorkspaceView(view)&&(canSeeSupplierWorkspace(data.me)?(view===SUPPLIER_WORKSPACE_ID||view==='supplier-pending'?<KingdeePendingPanel overview={view===SUPPLIER_WORKSPACE_ID} onNavigate={setView} onDirtyChange={personalDirtyChanged}/>:<SupplierOperationsPanel view={view} data={data} act={action} busy={busy} openOrder={setSelected} onDirtyChange={personalDirtyChanged} onNavigate={setView}/>):<AccessNotice me={data.me} title="暂无供应商工作台访问权限" detail="请使用当前账号授权的工作空间。"/>)}
  {view==='planning-control'&&<PlanningControlPanel data={data} onNavigate={setView} onDirtyChange={personalDirtyChanged} initialContext={navigationContext}/>}
@@ -192,6 +194,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='sales'&&<CollaborationPanel side="sales" data={data} act={action} busy={busy} openOrder={setSelected}/>}
  {view==='ie-quotes'&&<IeQuotePanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext} onNavigate={setView}/>}
  {view==='personal-tasks'&&data.ieQuoteAccess&&<IeQuoteTasksPanel data={data} onNavigate={setView}/>}
+ {view==='personal-tasks'&&data.ieQuoteAccess&&<QuoteRequestTasksPanel data={data} onNavigate={setView}/>}
  {view==='customer-quotes'&&<CustomerQuotePanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='customer-price-archive'&&<CustomerPriceArchivePanel data={data} onDirtyChange={setPmcDirty}/>}
  {view==='personal-tasks'&&<PersonalTasksPanel data={data} onNavigate={(destination,context)=>{if(pmcDirtyRef.current)return;setView(destination,context);if(destination==='customer-projects'&&teamId)onTeamChange('');}} initialContext={navigationContext} onDirtyChange={personalDirtyChanged}/>}

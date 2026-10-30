@@ -35,6 +35,10 @@ try{
  const unrelatedLarge=await request('/api/workspace/receipt-photo',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(unrelatedLarge.status,413);await unrelatedLarge.arrayBuffer();
  largeIeForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-too-large.pdf',{type:'application/pdf'}));const tooLargeIe=await request('/api/workspace/ie-quote-attachment-upload',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(tooLargeIe.status,413);await tooLargeIe.arrayBuffer();
  pass('工程上传允许12MB文件通过HTTP边界并继续权限校验，超限及其他附件限额仍拒绝');
+ const requestForm=new FormData();requestForm.set('id','synthetic-missing-request');requestForm.set('version','1');requestForm.set('token',crypto.randomUUID());requestForm.set('file',new File([new Uint8Array(12*1024*1024)],'synthetic-request.pdf',{type:'application/pdf'}));
+ const requestBoundary=await request('/api/workspace/quote-request-upload',requestForm,adminCookie,{'Connection':'close'});assert.equal(requestBoundary.status,403);await requestBoundary.arrayBuffer();
+ requestForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-request-too-large.pdf',{type:'application/pdf'}));const requestOver=await request('/api/workspace/quote-request-upload',requestForm,adminCookie,{'Connection':'close'});assert.equal(requestOver.status,413);await requestOver.arrayBuffer();
+ pass('报价需求附件12MB请求进入记录权限校验，超限请求被HTTP边界拒绝');
  const followupForm=new FormData();for(const [key,value] of Object.entries({token:crypto.randomUUID(),module:'orders',collection:'orders',recordId:'synthetic-missing-order',sectionKey:'record',note:'Synthetic upload boundary'}))followupForm.set(key,value);
  followupForm.set('files',new File([new Uint8Array(20*1024*1024)],'synthetic-followup.txt'));
  const followupBoundary=await request('/api/workspace/business-followup-save',followupForm,adminCookie,{'Connection':'close'});assert.equal(followupBoundary.status,403);await followupBoundary.arrayBuffer();

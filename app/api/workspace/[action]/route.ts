@@ -3,6 +3,7 @@ import {workspaceToolsGet,workspaceToolsPost} from '@/lib/workspace-tools-api';
 import {businessFollowupGet,businessFollowupPost} from '@/lib/business-followup-api';
 import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
+import {quoteRequestGet,quoteRequestPost} from '@/lib/quote-request-api';
 import {productionWorkspaceGet,productionWorkspacePost} from '@/lib/production-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
 import {purchaseChangeGet,purchaseChangePost} from '@/lib/purchase-change-api';
@@ -76,7 +77,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  // Followup records keep exact source permissions.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('business_followup')))return false;
  // Process snapshots are available only through their responsibility-scoped history.
- if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('process_record')||v.kind.startsWith('quote_request'))))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_color_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_order_source')))return false;
@@ -185,6 +186,7 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  const purchaseChange=await purchaseChangeGet(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangeGet(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
+ const quoteRequest=await quoteRequestGet(action,req,s,m);if(quoteRequest)return quoteRequest;
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
@@ -212,6 +214,7 @@ export async function POST(req:Request,ctx:Context){try{
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;
+ const quoteRequest=await quoteRequestPost(action,req,s,m);if(quoteRequest)return quoteRequest;
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;
