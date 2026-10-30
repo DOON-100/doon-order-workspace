@@ -25,17 +25,30 @@ async function hashes(directory){
  }}
  await walk(directory);return result;
 }
-export async function verifyStage(stage,expectedHash){
+export async function verifyStage(stage,expectedHash,releaseSourceRoot){
  stage=await plainDirectory(stage);
  const staging=await plainDirectory(path.join(projectRoot,'test-output'));
  const relative=path.relative(staging,stage);
  if(!relative||relative.startsWith('..')||path.isAbsolute(relative))throw Error('Stage must be an existing directory below this project test-output.');
  await hashes(stage); // Reject junctions before the existing build verifier walks the tree.
+ const sourceRoot=await plainDirectory(releaseSourceRoot||projectRoot);
+ const sourceRelative=path.relative(staging,sourceRoot);
+ if(sourceRoot!==projectRoot&&(!sourceRelative||sourceRelative.startsWith('..')||path.isAbsolute(sourceRelative)))throw Error('Release source must be this project or an existing directory below its test-output.');
+ if(releaseSourceRoot){
+  // Only inspect the source paths used by the existing manifest. Dependencies,
+  // private data and other checkout contents are not part of release evidence.
+  for(const folder of ['app','lib','components','build','public','scripts','standalone'])await hashes(await plainDirectory(path.join(sourceRoot,folder)));
+  for(const name of ['package.json','tsconfig.json','postcss.config.mjs']){
+   const stat=await fs.lstat(path.join(sourceRoot,name));
+   if(!stat.isFile()||stat.isSymbolicLink())throw Error('Release source files must be regular files without links.');
+  }
+ }
  const original=process.cwd();let result;
- try{process.chdir(projectRoot);result=await verifyCustomerPriceBuildEvidence(stage);}finally{process.chdir(original);}
+ // Always use this project's imported verifier; never execute a source snapshot's scripts.
+ try{process.chdir(sourceRoot);result=await verifyCustomerPriceBuildEvidence(stage);}finally{process.chdir(original);}
  if(expectedHash&&result.manifestSha256!==expectedHash)throw Error('Stage does not match the explicitly selected build manifest.');
  for(const file of ['workspace-api.mjs','runtime.mjs','auth.mjs','server.mjs','manage.mjs','client/index.html'])if(!(await fs.stat(path.join(stage,file))).isFile())throw Error('Required build artifact missing.');
- return {stage,...result};
+ return {stage,sourceRoot,...result};
 }
 export async function verifyValidation(filename,manifestSha256){
  const bytes=await fs.readFile(filename),value=JSON.parse(bytes);
@@ -94,13 +107,13 @@ export async function snapshot(dataDirectory,destination){
 }
 async function main(){
  const [mode,...args]=process.argv.slice(2);let result;
- if(mode==='stage'&&args.length===2)result=await verifyStage(...args);
+ if(mode==='stage'&&(args.length===2||args.length===3))result=await verifyStage(...args);
  else if(mode==='validation'&&args.length===2)result=await verifyValidation(...args);
  else if(mode==='backup'&&args.length===2)result=await snapshot(...args);
  else if(mode==='before'&&args.length===2){const current=await capturePreservation(args[0]);await fs.writeFile(args[1],JSON.stringify(current),{flag:'wx'});result={checkpoint:args[1],integrity:current.integrity,recordCount:Object.keys(current.records).length,fileCount:Object.keys(current.files).length,accountCount:current.accountCount};}
  else if(mode==='after'&&args.length===2)result=comparePreservation(JSON.parse(await fs.readFile(args[1],'utf8')),await capturePreservation(args[0]));
  else if(mode==='tree'&&args.length===1)result={hash:sha(JSON.stringify(await hashes(await plainDirectory(args[0]))))};
- else throw Error('Usage: stage <stage> <manifest-sha> | validation <receipt> <manifest-sha> | backup <data-dir> <new-backup-dir> | before|after <data-dir> <checkpoint> | tree <code-dir>');
+ else throw Error('Usage: stage <stage> <manifest-sha> [release-source-root] | validation <receipt> <manifest-sha> | backup <data-dir> <new-backup-dir> | before|after <data-dir> <checkpoint> | tree <code-dir>');
  console.log(JSON.stringify(result));
 }
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url))await main();
