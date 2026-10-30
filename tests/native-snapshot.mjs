@@ -45,6 +45,7 @@ try{
  db.prepare("DELETE FROM records WHERE id='malformed-synthetic'").run();assert.deepEqual(await read(),rows());
  console.log('PASS Twenty bulk readers are limited to two, members bypass their queue, and failed reads release all permits.');
  let attempts=0;
+ store.invalidateSnapshotCache();
  env.DB.readSnapshot=async kinds=>{
   attempts++;const pending=read(kinds);
   if(attempts===1)setImmediate(()=>{
@@ -59,18 +60,22 @@ try{
  await assert.rejects(()=>store.commit(0,[{id:'forbidden-stale-write',kind:'synthetic'}]),error=>error.status===409);
  assert.equal(db.prepare("SELECT id FROM records WHERE id='forbidden-stale-write'").get(),undefined);
  env.DB.readSnapshot=async kinds=>{attempts++;const pending=read(kinds);setImmediate(bump);return pending;};
+ store.invalidateSnapshotCache();
  attempts=0;await assert.rejects(()=>store.snapshot(),error=>error.status===409);assert.equal(attempts,3);
  console.log('PASS Cross-batch revision changes retry the read only, exhaust after three attempts and retain stale-write CAS refusal.');
  attempts=0;
+ store.invalidateSnapshotCache();
  env.DB.readSnapshot=async kinds=>{attempts++;const pending=read(kinds);if(attempts===1)setImmediate(()=>{db.prepare("UPDATE records SET data=json_set(data,'$.active',json('false')) WHERE id='member'").run();bump();});return pending;};
  await assert.rejects(async()=>store.actor(await store.snapshot()),error=>error.status===403);assert.equal(attempts,2);
  env.DB.readSnapshot=read;
+ store.invalidateSnapshotCache();
  const native=await store.snapshot();delete env.DB.readSnapshot;
  assert.deepEqual(await store.snapshot(),native);
  assert.deepEqual((await store.snapshot(['member'])).records,native.records.filter(row=>row.kind==='member'));
  env.DB.readSnapshot=read;
  console.log('PASS Mid-read revocation is enforced; the unchanged D1-style fallback returns the same full snapshot.');
  const occupied=[read(),read()];let queuedAttempts=0;
+ store.invalidateSnapshotCache();
  env.DB.readSnapshot=kinds=>{queuedAttempts++;return read(kinds);};
  const queued=store.snapshot();
  setImmediate(()=>{db.prepare("UPDATE records SET data=json_set(data,'$.original','changed while queued') WHERE id='row-1'").run();bump();});

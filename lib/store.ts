@@ -5,6 +5,19 @@ import {newId,now,email,all} from './domain';
 export class AppError extends Error{constructor(message:string,public status=400){super(message);}}
 export function database(){if(!env.DB)throw new AppError('共享数据库暂不可用，请稍后重试。',503);return env.DB;}
 export function bucket(){if(!env.BUCKET)throw new AppError('文件存储暂不可用，请稍后重试。',503);return env.BUCKET;}
+// Snapshot cache (plan C). Every write path bumps the single 'main' revision, so a
+// cached read stays valid only while its revision matches the database. commit()
+// updates the cache in place to avoid a full re-read after a local write; any
+// external writer (saveRecords, D1 peers) simply invalidates it via the revision
+// guard. Frozen records keep callers from mutating the shared copy.
+let cache:{revision:number;records:readonly Entity[]}|null=null;
+// Shallow-freeze each entity so a shared cached row cannot be mutated in place by
+// a later request. Writers already create replacement objects; this only guards
+// the common `record.field = value` pattern. Deep-freezing the large audit
+// payloads would cost more than it protects.
+const freezeEntities=(rows:Entity[]):readonly Entity[]=>{for(const r of rows)Object.freeze(r);return Object.freeze(rows);};
+export function invalidateSnapshotCache(){cache=null;}
+export function snapshotCacheStats(){return cache?{revision:cache.revision,records:cache.records.length}:null;}
 // Validate speculative browser reads against the current membership and revision
 // without reading orders, archives, attachments or historical snapshots.
 export async function readVersion(){
@@ -20,11 +33,20 @@ export async function readVersion(){
 }
 export async function snapshot(kinds?:readonly string[]):Promise<State>{
  const db=database();await db.prepare("INSERT OR IGNORE INTO workspace_revision (id,revision) VALUES ('main',0)").run();
+ // The cache only serves the native standalone reader, whose whole-database read
+ // is the dominant cost (the audit trail alone is most of the DB). The D1 path and
+ // test harnesses have no readSnapshot and keep their original always-fresh reads.
+ const native=db as typeof db&{readSnapshot?:(kinds?:readonly string[])=>Promise<Entity[]>};
  for(let retry=0;retry<3;retry++){
   const start=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
+  // Cache hit: the single revision read above is the only database round-trip.
+  // Frozen cached rows are filtered by kind without copying.
+  if(native.readSnapshot&&cache&&cache.revision===start!.revision){
+   const records=kinds?(kinds.length?cache.records.filter(r=>kinds.includes(r.kind)):[]):cache.records.slice();
+   return {revision:start!.revision,records};
+  }
   // Native SQLite yields between bounded batches, including JSON parsing. D1
   // keeps its existing read path. Revision guards cover the complete read in both.
-  const native=db as typeof db&{readSnapshot?:(kinds?:readonly string[])=>Promise<Entity[]>};
   let records:Entity[];
   if(native.readSnapshot)records=await native.readSnapshot(kinds);
   else{
@@ -33,7 +55,10 @@ export async function snapshot(kinds?:readonly string[]):Promise<State>{
    records=result.results.map(r=>JSON.parse(r.data));
   }
   const end=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
-  if(start!.revision===end!.revision)return {revision:start!.revision,records};
+  if(start!.revision===end!.revision){
+   if(native.readSnapshot&&!kinds)cache={revision:start!.revision,records:freezeEntities(records)};
+   return {revision:start!.revision,records};
+  }
  }
  throw new AppError('其他成员正在更新，请刷新后重试。',409);
 }
@@ -43,6 +68,17 @@ export async function commit(revision:number,records:Entity[]){
  ...records.map(r=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').bind(r.id,r.kind,JSON.stringify(r))),
  db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'"),db.prepare('DELETE FROM transaction_guards WHERE id=?').bind(guard)];
  try{await db.batch(statements);}catch(e){if(String(e).includes('revision_must_match'))throw new AppError('数据刚被其他成员更新，本次未写入。请刷新并重新核对。',409);throw e;}
+ // Keep the cache warm on the writer's own process: fold the committed rows into
+ // the frozen snapshot at the next revision. On a mismatch we just drop the cache.
+ if(cache&&cache.revision===revision){
+  const byId=new Map(cache.records.map(r=>[r.id,r]));
+  // A JSON round-trip reproduces the exact persistence semantics of the SQLite
+  // write (undefined keys are dropped), so the cache mirrors what a re-read would
+  // return. Otherwise in-memory entities with explicit `undefined` fields would
+  // diverge from the stored record and change `hasOwnProperty`-based logic.
+  for(const r of records)byId.set(r.id,JSON.parse(JSON.stringify(r)));
+  cache={revision:revision+1,records:freezeEntities([...byId.values()])};
+ }
 }
 export async function actor(s:State):Promise<Member>{
  const user=await getChatGPTUser();if(!user)throw new AppError('请先登录工作空间。',401);
