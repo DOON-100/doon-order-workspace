@@ -86,6 +86,20 @@ try{
  // Moving the pointer away from the rail closes the panel again.
  await departmentIcon.hover();await flyout.waitFor({state:'visible'});
  await page.mouse.move(900,700);await flyout.waitFor({state:'detached',timeout:5000});
+ // Keyboard dismissal restores focus to its launcher without stealing focus for hover-only menus.
+ await departmentIcon.focus();await page.keyboard.press('Enter');await flyout.waitFor({state:'visible'});
+ await page.waitForFunction(()=>document.activeElement?.getAttribute('role')==='menuitem');
+ await page.keyboard.press('Escape');await flyout.waitFor({state:'detached'});
+ assert(await departmentIcon.evaluate(el=>document.activeElement===el),'Escape returns keyboard focus to the department');
+ // Leaving before the hover delay, or pressing Escape during it, must not open a stale panel.
+ const quickBox=await departmentIcon.boundingBox();
+ await page.mouse.move(quickBox.x+quickBox.width/2,quickBox.y+quickBox.height/2);
+ await page.mouse.move(900,700);await page.waitForTimeout(500);
+ assert.equal(await flyout.count(),0,'a quick pointer exit cancels the pending hover');
+ await page.mouse.move(quickBox.x+quickBox.width/2,quickBox.y+quickBox.height/2);
+ await page.keyboard.press('Escape');await page.waitForTimeout(500);
+ assert.equal(await flyout.count(),0,'Escape cancels the pending hover');
+ await page.mouse.move(900,700);
  // The collapsed choice is remembered across reloads and survives wide viewports.
  // The rail is still collapsed here, so the trigger now expands it again.
  await toggle.click();assert.equal(await toggle.getAttribute('aria-expanded'),'true');await settle(228,228);

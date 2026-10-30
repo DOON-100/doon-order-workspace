@@ -25,10 +25,10 @@ export function DepartmentWorkspaceNavigation({items,member,view,activeView,icon
  const domPrefix=useId(),navigationRef=useRef<HTMLElement>(null),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),closeTimer=useRef<ReturnType<typeof setTimeout>|null>(null),flyoutRefs=useRef<Record<string,HTMLDivElement|null>>({});
  useEffect(()=>{if(activeDepartment)setExpanded(current=>current[activeDepartment]?current:{...current,[activeDepartment]:true});},[activeDepartment,activeItem]);
  useEffect(()=>{const selected=navigationRef.current?.querySelector<HTMLElement>('[aria-current="page"]');if(selected&&!selected.closest('[hidden]'))selected.scrollIntoView?.({block:'nearest'});},[activeItem,expanded]);
- useEffect(()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);if(closeTimer.current)clearTimeout(closeTimer.current);},[]);
+ useEffect(()=>()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);if(closeTimer.current)clearTimeout(closeTimer.current);},[]);
  // Escape must close the panel even though the panel never takes focus (hover opens it, and
  // taking focus would steal it from whatever field the user is editing), so listen globally.
- useEffect(()=>{if(!collapsed)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key==='Escape')setOpenDepartment(null);};document.addEventListener('keydown',onKeyDown);return()=>document.removeEventListener('keydown',onKeyDown);},[collapsed]);
+ useEffect(()=>{if(!collapsed)return;const onKeyDown=(event:KeyboardEvent)=>{if(event.key!=='Escape')return;if(hoverTimer.current){clearTimeout(hoverTimer.current);hoverTimer.current=null;}if(closeTimer.current){clearTimeout(closeTimer.current);closeTimer.current=null;}const focused=document.activeElement;const groupId=Object.keys(flyoutRefs.current).find(id=>focused&&flyoutRefs.current[id]?.contains(focused));if(groupId)navigationRef.current?.querySelector<HTMLElement>(`[data-department-id="${groupId}"] .department-navigation-toggle`)?.focus();setOpenDepartment(null);};document.addEventListener('keydown',onKeyDown);return()=>document.removeEventListener('keydown',onKeyDown);},[collapsed]);
  // Hover opens the panel; the delay keeps a fast sweep across the icons from popping
  // unrelated panels. Open and close use separate timers so a pending close cannot cancel a
  // pending open while the pointer moves between two departments.
@@ -43,7 +43,7 @@ export function DepartmentWorkspaceNavigation({items,member,view,activeView,icon
  // Leaving the rail as a whole is what closes the panel, not leaving a single icon: the
  // pointer travels from the icon across to the panel, and only a move off both ends means
  // the user is done with the menu.
- const leaveRail=(event:ReactMouseEvent)=>{if(isInsidePanel(event.relatedTarget))return;scheduleClose(HOVER_CLOSE_DELAY);};
+ const leaveRail=(event:ReactMouseEvent)=>{if(isInsidePanel(event.relatedTarget))return;if(hoverTimer.current){clearTimeout(hoverTimer.current);hoverTimer.current=null;}scheduleClose(HOVER_CLOSE_DELAY);};
  return <nav className="department-workspace-navigation" aria-label="部门与工序导航" ref={navigationRef}
   onMouseLeave={collapsed?leaveRail:undefined}
   onMouseEnter={collapsed?()=>cancelClose():undefined}>
