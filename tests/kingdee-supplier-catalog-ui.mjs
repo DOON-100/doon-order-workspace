@@ -9,7 +9,7 @@ import {pathToFileURL} from 'node:url';
 const output=path.resolve('test-output','supplier-catalog-ui-'+process.pid);await fs.mkdir(output,{recursive:true});
 const H={slots:[],index:0,calls:[],team:'',actor:'synthetic-pmc',mode:'normal'};globalThis.__supplierCatalogUi=H;
 const modules={
- react:`const H=globalThis.__supplierCatalogUi;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,v=>{H.slots[i].value=typeof v==='function'?v(H.slots[i].value):v}]}export function useRef(initial){const i=H.index++;return H.slots[i]||(H.slots[i]={current:initial})}export function useEffect(){}`,
+ react:`const H=globalThis.__supplierCatalogUi;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,v=>{H.slots[i].value=typeof v==='function'?v(H.slots[i].value):v}]}export function useRef(initial){const i=H.index++;return H.slots[i]||(H.slots[i]={current:initial})}export function useEffect(){}export function useLayoutEffect(){}export const useMemo=fn=>fn();export const useCallback=fn=>fn;`,
  button:`export const Button='button';`,
  dialog:`export function Dialog({open,children}){return open?children:null}export const DialogContent='div',DialogHeader='div',DialogTitle='h2',DialogDescription='p';`,
  team:`export function getBusinessTeamScope(){return globalThis.__supplierCatalogUi.team}`,

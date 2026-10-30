@@ -5,20 +5,16 @@ import {createPortal} from 'react-dom';
 import {ChevronDown,Filter} from 'lucide-react';
 import {Popover as PopoverPrimitive} from 'radix-ui';
 import {Popover,PopoverTrigger} from '@/components/ui/popover';
+import {normalizeExcelValue,matchesExcelFilters,excelConditionError,describeExcelFilter,type ExcelColumnFilter,type ExcelCondition,type ExcelFilters} from '@/lib/excel-filters';
 import './excel-table.css';
 
-export type ExcelFilters=Record<number,string[]>;
-export function normalizeExcelValue(value:unknown):string {
-  return String(value??'').replace(/\s+/gu,' ').trim();
-}
-export function matchesExcelFilters(values:unknown[],filters:ExcelFilters):boolean {
-  return Object.entries(filters).every(([column,selected])=>selected.includes(normalizeExcelValue(values[Number(column)])));
-}
+export {normalizeExcelValue,matchesExcelFilters} from '@/lib/excel-filters';
+export type {ExcelColumnFilter,ExcelCondition,ExcelFilters} from '@/lib/excel-filters';
 export type ExcelFilterModel<T=unknown>={
   rows:T[];
   total:number;
   filters:ExcelFilters;
-  setFilter:(column:number,values:string[]|null)=>void;
+  setFilter:(column:number,values:ExcelColumnFilter|null)=>void;
   clearFilters:()=>void;
   values:(column:number)=>string[];
 };
@@ -27,15 +23,15 @@ const unique=(values:string[])=>[...new Set(values)].sort((a,b)=>a.localeCompare
 /** Filter the complete authorized list before a caller paginates or virtualizes it. */
 export function useExcelColumnFilters<T>(records:T[],getValues:(row:T)=>unknown[]):ExcelFilterModel<T> {
   const [filters,setFilters]=useState<ExcelFilters>({});
-  const prepared=useMemo(()=>records.map(row=>({row,values:getValues(row).map(normalizeExcelValue)})),[records,getValues]);
+  const prepared=useMemo(()=>records.map(row=>({row,values:getValues(row)})),[records,getValues]);
   const rows=useMemo(()=>prepared.filter(entry=>matchesExcelFilters(entry.values,filters)).map(entry=>entry.row),[prepared,filters]);
-  const setFilter=useCallback((column:number,values:string[]|null)=>setFilters(previous=>{
+  const setFilter=useCallback((column:number,values:ExcelColumnFilter|null)=>setFilters(previous=>{
     const next={...previous};
-    if(values===null)delete next[column];else next[column]=[...new Set(values.map(normalizeExcelValue))];
+    if(values===null)delete next[column];else next[column]=Array.isArray(values)?[...new Set(values.map(normalizeExcelValue))]:{...values};
     return next;
   }),[]);
   const clearFilters=useCallback(()=>setFilters(previous=>Object.keys(previous).length?{}:previous),[]);
-  const values=useCallback((column:number)=>unique(prepared.map(entry=>entry.values[column]??'')),[prepared]);
+  const values=useCallback((column:number)=>unique(prepared.map(entry=>normalizeExcelValue(entry.values[column]))),[prepared]);
   return {rows,total:records.length,filters,setFilter,clearFilters,values};
 }
 
@@ -125,20 +121,46 @@ function sameSnapshot(a:Snapshot,b:Snapshot):boolean {
     a.groups.every((group,index)=>{const next=b.groups[index];return group.rows.length===next.rows.length&&group.rows.every((row,i)=>row===next.rows[i])&&JSON.stringify(group.values)===JSON.stringify(next.values);});
 }
 
-function ColumnFilter({label,options,selected,onChange,disabled,container}:{label:string;options:string[];selected:string[]|undefined;onChange:(values:string[]|null)=>void;disabled:boolean;container?:HTMLElement}){
+const conditionOperators:Record<ExcelCondition['kind'],[string,string][]>= {
+  text:[['contains','包含'],['notContains','不包含'],['equals','等于'],['notEquals','不等于'],['startsWith','开头是'],['endsWith','结尾是']],
+  number:[['equals','等于'],['notEquals','不等于'],['gt','大于'],['gte','大于等于'],['lt','小于'],['lte','小于等于'],['between','区间（含两端）']],
+  date:[['equals','当天'],['before','早于'],['after','晚于'],['between','日期区间（含两端）']],
+  blank:[['empty','空白'],['notEmpty','非空']],
+};
+function initialCondition(kind:ExcelCondition['kind']):ExcelCondition {
+  if(kind==='blank')return {kind,operator:'empty'};
+  if(kind==='text')return {kind,operator:'contains',value:''};
+  return {kind,operator:'between',value:'',to:''};
+}
+function ColumnFilter({label,options,selected,onChange,disabled,container}:{label:string;options:string[];selected:ExcelColumnFilter|undefined;onChange:(values:ExcelColumnFilter|null)=>void;disabled:boolean;container?:HTMLElement}){
   const [open,setOpen]=useState(false),[search,setSearch]=useState(''),[draft,setDraft]=useState<string[]>([]);
-  const choices=unique([...options,...(selected||[])]);
+  const [mode,setMode]=useState<'values'|'condition'>('values'),[condition,setCondition]=useState<ExcelCondition>(initialCondition('text'));
+  const choices=unique([...options,...(Array.isArray(selected)?selected:[])]);
   const shown=choices.filter(value=>(value||'（空白）').toLocaleLowerCase().includes(search.toLocaleLowerCase()));
-  const begin=(next:boolean)=>{setOpen(next);if(next){setSearch('');setDraft(selected?[...selected]:[...options]);}};
+  const problem=mode==='condition'?excelConditionError(condition):'';
+  const updateBound=(key:'value'|'to',value:string)=>setCondition(previous=>({...previous,[key]:value} as ExcelCondition));
+  const begin=(next:boolean)=>{setOpen(next);if(next){setSearch('');setDraft(Array.isArray(selected)?[...selected]:[...options]);setMode(selected&&!Array.isArray(selected)?'condition':'values');setCondition(selected&&!Array.isArray(selected)?{...selected}:initialCondition('text'));}};
   return <Popover open={open&&!disabled} onOpenChange={begin}>
-    <PopoverTrigger asChild><button type="button" disabled={disabled} className={'excel-filter-trigger'+(selected!==undefined?' is-filtered':'')} aria-label={'筛选'+label} title={label+(selected===undefined?'：全部':'：已筛选')} onClick={event=>event.stopPropagation()}>{selected===undefined?<ChevronDown size={12} aria-hidden="true"/>:<Filter size={12} aria-hidden="true"/>}</button></PopoverTrigger>
+    <PopoverTrigger asChild><button type="button" disabled={disabled} className={'excel-filter-trigger'+(selected!==undefined?' is-filtered':'')} aria-label={'筛选'+label} title={label+(selected===undefined?'：全部':'：'+describeExcelFilter(selected))} onClick={event=>event.stopPropagation()}>{selected===undefined?<ChevronDown size={12} aria-hidden="true"/>:<Filter size={12} aria-hidden="true"/>}</button></PopoverTrigger>
     <PopoverPrimitive.Portal container={container}><PopoverPrimitive.Content className="excel-filter-popover" align="start" sideOffset={6} collisionPadding={12} aria-label={'筛选'+label} onClick={event=>event.stopPropagation()}>
       <strong>{label}</strong>
+      <div className="excel-filter-modes" aria-label="筛选方式"><button type="button" aria-pressed={mode==='values'} onClick={()=>setMode('values')}>按值选择</button><button type="button" aria-pressed={mode==='condition'} onClick={()=>setMode('condition')}>按条件筛选</button></div>
+      {mode==='values'?<>
       <input type="search" aria-label={'搜索'+label+'筛选值'} placeholder="搜索筛选值" value={search} onChange={event=>setSearch(event.target.value)}/>
-      <div className="excel-filter-select-actions"><button type="button" onClick={()=>setDraft([...choices])}>全选</button>{search&&<button type="button" onClick={()=>setDraft([...shown])}>仅选搜索结果</button>}<button type="button" onClick={()=>setDraft([])}>全不选</button></div>
+      <div className="excel-filter-select-actions"><button type="button" onClick={()=>setDraft([...choices])}>全选</button><button type="button" onClick={()=>setDraft(choices.filter(value=>!draft.includes(value)))}>反选</button>{search&&<button type="button" onClick={()=>setDraft([...shown])}>仅选搜索结果</button>}<button type="button" onClick={()=>setDraft([])}>全不选</button></div>
       <div className="excel-filter-options">{shown.map(value=><label key={value} title={value||'（空白）'}><input type="checkbox" checked={draft.includes(value)} onChange={event=>setDraft(previous=>event.target.checked?[...previous,value]:previous.filter(item=>item!==value))}/><span>{value||'（空白）'}</span></label>)}{!shown.length&&<p>没有匹配的值</p>}</div>
+      </>:<div className="excel-filter-condition">
+        <label>字段类型<select aria-label={'筛选'+label+'字段类型'} value={condition.kind} onChange={event=>setCondition(initialCondition(event.target.value as ExcelCondition['kind']))}><option value="text">文字</option><option value="number">数值</option><option value="date">日期</option><option value="blank">空白 / 非空</option></select></label>
+        <label>条件<select aria-label={'筛选'+label+'条件'} value={condition.operator} onChange={event=>{const operator=event.target.value;setCondition(previous=>({...previous,operator} as ExcelCondition));}}>{conditionOperators[condition.kind].map(([value,text])=><option key={value} value={value}>{text}</option>)}</select></label>
+        {condition.kind!=='blank'&&<label>{condition.operator==='between'?'起始值':'筛选值'}<input aria-label={'筛选'+label+'起始值'} type={condition.kind==='date'?'date':'text'} inputMode={condition.kind==='number'?'decimal':undefined} value={condition.value} onInput={event=>updateBound('value',event.currentTarget.value)} onChange={event=>updateBound('value',event.target.value)}/></label>}
+        {(condition.kind==='number'||condition.kind==='date')&&condition.operator==='between'&&<label>结束值<input aria-label={'筛选'+label+'结束值'} type={condition.kind==='date'?'date':'text'} inputMode={condition.kind==='number'?'decimal':undefined} value={condition.to||''} onInput={event=>updateBound('to',event.currentTarget.value)} onChange={event=>updateBound('to',event.target.value)}/></label>}
+        {condition.kind==='number'&&<small>只匹配完整数值；支持千分位和百分号，空白不会当作 0。</small>}
+        {condition.kind==='date'&&<small>按字段显示的年月日比较，不转换时区；只匹配日期值。</small>}
+        {problem&&<small role="status" className="excel-filter-error">{problem}</small>}
+      </div>}
+      <small className="excel-filter-hint">同列多选满足任一值；不同列条件同时满足。</small>
       <button type="button" className="excel-filter-clear" disabled={selected===undefined} onClick={()=>{onChange(null);setOpen(false);}}>清除此列筛选</button>
-      <div className="excel-filter-confirm"><button type="button" onClick={()=>setOpen(false)}>取消</button><button type="button" onClick={()=>{onChange(options.length>0&&options.every(value=>draft.includes(value))?null:draft);setOpen(false);}}>确定</button></div>
+      <div className="excel-filter-confirm"><button type="button" onClick={()=>setOpen(false)}>取消</button><button type="button" disabled={!!problem} onClick={()=>{if(disabled||problem)return;onChange(mode==='condition'?condition:options.length>0&&options.every(value=>draft.includes(value))?null:draft);setOpen(false);}}>确定</button></div>
     </PopoverPrimitive.Content></PopoverPrimitive.Portal>
   </Popover>;
 }
@@ -151,7 +173,7 @@ export function ExcelTable({children,className,filterModel,enhance=true,filterDi
   const table=useRef<HTMLTableElement|null>(null),scan=useRef<()=>void>(()=>{}),schema=useRef('');
   const [snapshot,setSnapshot]=useState<Snapshot>(emptySnapshot),[filters,setFilters]=useState<ExcelFilters>({});
   const activeFilters=filterModel?.filters||filters;
-  const setFilter=filterModel?.setFilter||((column:number,values:string[]|null)=>setFilters(previous=>{const next={...previous};if(values===null)delete next[column];else next[column]=values;return next;}));
+  const setFilter=filterModel?.setFilter||((column:number,values:ExcelColumnFilter|null)=>setFilters(previous=>{const next={...previous};if(values===null)delete next[column];else next[column]=values;return next;}));
   const clearFilters=filterModel?.clearFilters||(()=>setFilters({}));
   const controller=useRef({clearFilters});controller.current={clearFilters};
   const bind=useCallback((value:HTMLTableElement|null)=>{table.current=value;assignRef(ref,value);},[ref]);
@@ -198,7 +220,7 @@ export function ExcelTable({children,className,filterModel,enhance=true,filterDi
   const total=filterModel?.total??snapshot.groups.reduce((sum,group)=>sum+group.values.length,0);
   const visible=filterModel?.rows.length??snapshot.groups.reduce((sum,group)=>sum+(group.values.some(values=>matchesExcelFilters(values,activeFilters))?group.values.length:0),0);
   return <>
-    <table {...props} ref={bind} className={['excel-table',(filterModel||!enhance)&&'excel-table-windowed',className].filter(Boolean).join(' ')}>{children}{active&&<tbody data-excel-ui="" className="excel-filter-status"><tr><td colSpan={snapshot.columns}><span role="status">{visible===0?'没有匹配记录 · ':''}已筛选 {visible} / {total} 条</span><button type="button" disabled={filterDisabled} onClick={clearFilters}>清除全部筛选</button></td></tr></tbody>}</table>
+    <table {...props} ref={bind} className={['excel-table',(filterModel||!enhance)&&'excel-table-windowed',className].filter(Boolean).join(' ')}>{children}{active&&<tbody data-excel-ui="" className="excel-filter-status"><tr><td colSpan={snapshot.columns}><span role="status">{visible===0?'没有匹配记录 · ':''}已筛选 {visible} / {total} 条</span><button type="button" disabled={filterDisabled} onClick={clearFilters}>清除全部筛选</button><div className="excel-filter-summary">{Object.entries(activeFilters).map(([column,filter])=><span key={column} title={describeExcelFilter(filter)}>{snapshot.headers.find(header=>header.column===Number(column))?.label||'字段 '+(Number(column)+1)}：{describeExcelFilter(filter)}</span>)}</div></td></tr></tbody>}</table>
     {enhance&&snapshot.headers.map(header=>createPortal(<ColumnFilter label={header.label} options={filterModel?filterModel.values(header.column):unique(snapshot.groups.flatMap(group=>group.values.map(values=>values[header.column]??'')))} selected={activeFilters[header.column]} onChange={values=>setFilter(header.column,values)} disabled={filterDisabled} container={header.cell.closest('dialog')||undefined}/>,header.host,String(header.column)+':'+header.label))}
   </>;
 }

@@ -11,9 +11,9 @@ await fs.mkdir(output,{recursive:true});
 const hooks={slots:[],index:0,calls:[],response:null};
 globalThis.__supplierDiagnosticUi=hooks;
 const modules={
- react:`const H=globalThis.__supplierDiagnosticUi;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,v=>{H.slots[i].value=typeof v==='function'?v(H.slots[i].value):v}];}`,
+ react:`const H=globalThis.__supplierDiagnosticUi;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,v=>{H.slots[i].value=typeof v==='function'?v(H.slots[i].value):v}];}export function useRef(initial){const i=H.index++;return H.slots[i]||(H.slots[i]={current:initial})}export function useEffect(){}export function useLayoutEffect(){}export const useMemo=fn=>fn();export const useCallback=fn=>fn;`,
  query:`export function useQueryClient(){return {invalidateQueries:async()=>{}}}export function useQuery(){return {}}`,
- icons:`export const Upload='svg';`,
+ icons:`export const Upload='svg',ChevronDown='svg',Filter='svg';`,
  button:`export const Button='button';`,
  dialog:`export function Dialog(){return null}export const DialogContent='div',DialogHeader='div',DialogTitle='h2',DialogDescription='p';`,
  ui:`export const dateTime=v=>v;export async function request(action,body){const H=globalThis.__supplierDiagnosticUi;H.calls.push({action,body});return H.response;}`

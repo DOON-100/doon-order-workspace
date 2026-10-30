@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useMemo,useRef,useState} from 'react';
-import {ExcelTable,useExcelColumnFilters} from './excel-table';
+import {ExcelTable,useExcelColumnFilters,type ExcelColumnFilter} from './excel-table';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Download,RefreshCw,Upload,Archive,PackageCheck,Table2} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -28,7 +28,7 @@ export function PurchasePanel({me,onDirtyChange}:{me:Member;onDirtyChange:(v:boo
   ...(showSource?[p.orderDate,p.sourceAsOf,p.auditStatus,p.closeStatus,p.sourceNote,String(p.raw['剩余备货天数']??''),`${p.completedDate||p.sourceSheet} ${p.sourceFile}`]:[]),
   editable?(p.balanceKnown?'收货 / 退补 / 历史':'核对已收数量'):'查看记录',
  ]);
- const guardedColumnModel={...columnModel,setFilter:(index:number,values:string[]|null)=>{if(dirty){setError('请先保存或处理未保存单元格，再切换筛选。');return;}columnModel.setFilter(index,values);},clearFilters:()=>{if(!dirty)columnModel.clearFilters();}};
+ const guardedColumnModel={...columnModel,setFilter:(index:number,values:ExcelColumnFilter|null)=>{if(dirty){setError('请先保存或处理未保存单元格，再切换筛选。');return;}columnModel.setFilter(index,values);},clearFilters:()=>{if(!dirty)columnModel.clearFilters();}};
  const rows=columnModel.rows,start=Math.min(Math.max(0,rows.length-1),Math.max(0,Math.floor(Math.max(0,top-44)/80)-3)),end=Math.min(rows.length,start+30),visible=rows.slice(start,end);
  const columnFilterKey=JSON.stringify(columnModel.filters);
  useEffect(()=>{setTop(0);setSelected([]);if(scroll.current)scroll.current.scrollTop=0;},[columnFilterKey]);

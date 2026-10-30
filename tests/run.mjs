@@ -188,4 +188,6 @@ execFileSync(process.execPath,['tests/supplier-diagnostic-ui.mjs'],{stdio:'inher
 execFileSync(process.execPath,['tests/kingdee-supplier-catalog-ui.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/kingdee-supplier-catalog.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/kingdee-supplier-scheduler.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/outsourcing-catalog-cases.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/outsourcing-workbook-cases.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

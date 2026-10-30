@@ -30,7 +30,7 @@ function decide(rows:SourceRow[],suppliers:Entity[]):Decision[]{
   return {row:row.row,code:row.code,name:row.name,status,reason};
  });
 }
-function response(job:Entity,decisions:Decision[]){return {previewId:job.id,fileName:job.filename,total:decisions.length,candidateCount:decisions.filter(d=>d.status==='new').length,candidates:decisions.filter(d=>d.status==='new').slice(0,20).map(({row,code,name})=>({row,code,name})),conflicts:decisions.filter(d=>d.status==='conflict').map(({row,code,name,reason})=>({row,code,name,reason})),existingCount:decisions.filter(d=>d.status==='skip').length};}
+function response(job:Entity,decisions:Decision[]){return {previewId:job.id,fileName:job.filename,total:decisions.length,candidateCount:decisions.filter(d=>d.status==='new').length,candidates:decisions.filter(d=>d.status==='new').map(({row,code,name})=>({row,code,name})),conflicts:decisions.filter(d=>d.status==='conflict').map(({row,code,name,reason})=>({row,code,name,reason})),existingCount:decisions.filter(d=>d.status==='skip').length};}
 export async function supplierImportGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['supplier-import-sources','supplier-import-source'].includes(action))return null;
  if(!m.active||!managesSuppliers(m))throw new AppError('仅有效 PMC / 采购或管理员可查看供应商导入来源。',403);

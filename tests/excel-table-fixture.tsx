@@ -35,6 +35,7 @@ function Fixture(){
     <section>
       <h2>全量筛选后分页 · 65 条合成记录</h2>
       <p>筛选“客户 = 末页客户”应找到第 65 条；筛选“数量 = 0”应保留零值。</p>
+      <p>按条件筛选：数量区间 60—64 应有 5 条；叠加日期空白只剩第 64 条。日期区间 2026-10-30 至同日应有 55 条，叠加客户包含“末页”只剩第 65 条。</p>
       <div className="fixture-actions">
         <button onClick={()=>setRecords(rows=>[...rows,{id:'SYNTHETIC-NEW',customer:'刷新客户',status:'进行中',quantity:99,date:''}])}>增加合成记录</button>
         <button onClick={()=>{model.clearFilters();setAlternate(value=>!value);}}>切换字段顺序</button>

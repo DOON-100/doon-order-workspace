@@ -28,4 +28,5 @@ const again=await ok('supplier-import-preview',form(rows));assert.equal(again.ex
 const stale=await ok('supplier-import-preview',form([['S5','另一名称']]));await ok('supplier-save',{name:'另一名称'});assert.equal((await call('supplier-import-commit',{previewId:stale.previewId})).status,409);
 const duplicate=await ok('supplier-import-preview',form([['S6','甲'],['S6','乙']]));assert.equal(duplicate.candidateCount,0);assert.equal(duplicate.conflicts.length,2);
 const first=await ok('supplier-import-preview',form([['S7','竞争供应商']])),second=await ok('supplier-import-preview',form([['S7','竞争供应商']]));await ok('supplier-import-commit',{previewId:first.previewId});assert.equal((await call('supplier-import-commit',{previewId:second.previewId})).status,409);
+const fullPreview=await ok('supplier-import-preview',form(Array.from({length:65},(_,i)=>['FULL-'+i,'完整筛选候选-'+i])));assert.equal(fullPreview.candidateCount,65);assert.equal(fullPreview.candidates.length,65);assert.equal(fullPreview.candidates.at(-1).name,'完整筛选候选-64');
 console.log('PASS supplier import: permissions, source fields, collisions, stale preview and idempotency');

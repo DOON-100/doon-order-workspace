@@ -10,6 +10,8 @@ export const supplierWorkspaceSpaces=[
  {id:'supplier-kit',label:'眼镜物料齐套与欠料',area:'制造与备料',icon:'production',detail:'按订单、款号与物料规格核对板料、钛料、铰链、配件和包材欠料。'},
  {id:'supplier-semifinished',label:'钛架部',area:'半成品外发',icon:'factory',detail:'跟进钛焊、打磨和钛配套的外发、供应商复期与回货。'},
  {id:'supplier-semifinished-plastic',label:'胶架部',area:'半成品外发',icon:'factory',detail:'跟进脾加工、车房、出桶配套和钉装磨胶的外发、供应商复期与回货。'},
+ {id:'outsourcing-catalog',label:'外发基础资料',area:'公司共享',icon:'book',detail:'公司共用外发类型及工序，各外发负责人维护自己负责的资料和部门使用设置。'},
+ {id:'outsourcing-workbooks',label:'外发原表与字段查询',area:'外发原件',icon:'document',detail:'保留完整Excel原件，按字段筛选保存时的数据，并下载原件使用Excel功能。'},
  {id:'supplier-plating',label:'电镀外发与回货',area:'电镀外发',icon:'factory',detail:'独立跟进电镀工序的外发数量、供应商交期、未回货和送货凭证。'},
  {id:'supplier-outsourcing',label:'外协加工与未回货',area:'制造与备料',icon:'factory',detail:'跟进外协加工、电镀、PVD、喷涂的送出、回厂与检验节点。'},
  {id:'supplier-risk',label:'采购异常与供应风险',area:'异常与新品',icon:'chart',detail:'汇总采购原表交期和信息缺失线索，核对外协逾期、复期与审批状态。'},

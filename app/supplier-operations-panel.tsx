@@ -18,6 +18,8 @@ import {useExcelColumnFilters,type ExcelFilterModel} from './excel-table';
 import {Pager} from './ledger-panels';
 import {PurchasePanel} from './purchase-panel';
 import {LegacySupplierPanel} from './supplier-panel';
+import {OutsourcingCatalogPanel} from './outsourcing-catalog-panel';
+import {OutsourcingWorkbookPanel} from './outsourcing-workbook-panel';
 import {BusinessTeamDownloadButton} from './business-team-download';
 import './supplier-operations-panel.css';
 
@@ -58,10 +60,14 @@ function EmptyRows({children}:{children:ReactNode}){return <div className="suppl
 export function SupplierOperationsPanel(props:Props){
  const {data,view,onNavigate}=props,description=descriptions[view]||descriptions['supplier-followup'];
  const outsourcingScope:OutsourcingScope|undefined=view==='supplier-semifinished'?'titanium':view==='supplier-semifinished-plastic'?'plastic':view==='supplier-plating'?'plating':view==='supplier-outsourcing'?'all':undefined;
- const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&!outsourcingScope&&view!=='supplier-directory'});
+ const referenceView=view==='outsourcing-catalog'||view==='outsourcing-workbooks';
+ const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&!outsourcingScope&&view!=='supplier-directory'&&!referenceView});
  const snapshot=current.data?.snapshot,materials=useMemo(()=>pendingMaterials(snapshot),[snapshot]);
  if(!data.me.active||data.me.role==='supplier')return <section className="panel"><EmptyRows>当前账号没有内部供应商管理工作台的查看权限。</EmptyRows></section>;
+ if(view==='outsourcing-catalog')return <OutsourcingCatalogPanel me={data.me} onDirtyChange={props.onDirtyChange}/>;
+ if(view==='outsourcing-workbooks')return <OutsourcingWorkbookPanel/>;
  return <div className="supplier-operations">
+  <div className="flex flex-wrap gap-2"><Button variant="outline" onClick={()=>onNavigate('outsourcing-catalog')}>公司共享外发基础资料</Button>{outsourcingScope&&<Button variant="outline" onClick={()=>onNavigate('outsourcing-workbooks')}>原Excel与字段查询</Button>}</div>
   <section className="supplier-ops-intro"><div><span className="section-kicker">{outsourcingScope==='titanium'||outsourcingScope==='plastic'?'半成品外发':outsourcingScope==='plating'?'电镀外发':'供应商管理工作台'}</span><h2>{description.title}</h2><p>{description.detail}</p></div>{outsourcingScope&&outsourcingScope!=='all'?<Button variant="outline" onClick={()=>onNavigate(outsourcingScope==='plating'?'supplier-semifinished':'supplier-plating')}>{outsourcingScope==='plating'?'半成品外发':'电镀外发'}<ArrowRight size={16}/></Button>:<Button variant="outline" onClick={()=>onNavigate('supplier-pending')}>采购未上货总表<ArrowRight size={16}/></Button>}</section>
   {!outsourcingScope&&view!=='supplier-directory'&&<>
    {current.isError&&<div className="error" role="alert">金蝶采购快照读取失败：{(current.error as Error).message} {snapshot?'下方保留上次读取的快照。':''}<Button variant="outline" size="sm" onClick={()=>void current.refetch()}>重试</Button></div>}

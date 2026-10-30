@@ -5,6 +5,7 @@ import {Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle} from '@
 import {clientId} from '@/lib/client-id';
 import {getBusinessTeamScope} from './business-team-client';
 import {dateTime,request} from './ui';
+import {ExcelTable,useExcelColumnFilters} from './excel-table';
 
 type SupplierRow={id:string;code:string;name:string;firstSeen:string;groupName:string|null;taxRate:string|null};
 type Receipt={inserted:number;existing:number;changed:number;total:number;completedAt:string};
@@ -51,7 +52,12 @@ export function KingdeeSupplierCatalogPanel({actorId}:{actorId:string}){
   finally{busyRef.current=false;setBusy(false);}
  }
  const visibleData=dataScope===scope&&!team?data:null;
- const filtered=(visibleData?.rows||[]).filter(row=>[row.code,row.name].some(value=>value.toLowerCase().includes(search.toLowerCase())));
+ const baseRows=(visibleData?.rows||[]).filter(row=>[row.code,row.name].some(value=>value.toLowerCase().includes(search.toLowerCase())));
+ const columnModel=useExcelColumnFilters(baseRows,row=>[row.code,row.name,sourceValue(row.groupName),sourceValue(row.taxRate),row.firstSeen]);
+ const filtered=columnModel.rows;
+ useEffect(()=>setPage(0),[columnModel.filters]);
+ useEffect(()=>{columnModel.clearFilters();},[scope,columnModel.clearFilters]);
+ useEffect(()=>setPage(p=>Math.min(p,Math.max(0,Math.ceil(filtered.length/30)-1))),[filtered.length]);
  return <>
   <Button variant="outline" disabled={!actorId||!!team} onClick={()=>void show()}>金蝶供应商档案</Button>
   <Dialog open={open&&openScope===scope&&!team} onOpenChange={value=>{if(!busy){setOpen(value);if(!value){setData(null);setDataScope('');setSearch('');setPage(0);}}}}>
@@ -63,9 +69,9 @@ export function KingdeeSupplierCatalogPanel({actorId}:{actorId:string}){
     {error&&<p className="error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
     {visibleData&&<><p>档案 {visibleData.rows.length} 条 · {visibleData.lastSync?`最近留存批次 ${dateTime(visibleData.lastSync.completedAt)}，该批次变更待核查 ${visibleData.lastSync.changed} 条`:'尚无留存批次'}</p>
      <label>搜索编码或名称<input className="block mt-2" value={search} onChange={e=>{setSearch(e.target.value);setPage(0);}}/></label>
-     <p>{filtered.length} 条 · 每页 30 条</p><div className="overflow-auto"><table className="w-full text-sm"><thead><tr><th>金蝶编码</th><th>供应商名称</th><th>分类原值</th><th>税率原值</th><th>首次记录</th></tr></thead><tbody>{filtered.slice(page*30,page*30+30).map(row=><tr key={row.id}><td>{row.code}</td><td>{row.name}</td><td>{sourceValue(row.groupName)}</td><td>{sourceValue(row.taxRate)}</td><td>{dateTime(row.firstSeen)}</td></tr>)}</tbody></table></div>
+     <p>{filtered.length} 条 · 每页 30 条</p><div className="overflow-auto"><ExcelTable filterModel={columnModel} className="w-full text-sm"><thead><tr><th>金蝶编码</th><th>供应商名称</th><th>分类原值</th><th>税率原值</th><th>首次记录</th></tr></thead><tbody>{filtered.slice(page*30,page*30+30).map(row=><tr key={row.id}><td>{row.code}</td><td>{row.name}</td><td>{sourceValue(row.groupName)}</td><td>{sourceValue(row.taxRate)}</td><td>{dateTime(row.firstSeen)}</td></tr>)}</tbody></ExcelTable></div>
      {!filtered.length&&<p>暂无符合条件的供应商档案。</p>}<div className="flex gap-2"><Button variant="outline" size="sm" disabled={page===0} onClick={()=>setPage(page-1)}>上一页</Button><Button variant="outline" size="sm" disabled={(page+1)*30>=filtered.length} onClick={()=>setPage(page+1)}>下一页</Button></div>
-     {!!visibleData.issues?.length&&<section><h3>来源变化待核查 · {visibleData.issues.length} 条</h3><p>旧档案仍保留，请核对金蝶中的来源字段。</p><div className="overflow-auto max-h-64"><table className="w-full text-sm"><thead><tr><th>原编码 / 名称</th><th>金蝶当前编码 / 名称</th><th>原分类 / 税率</th><th>当前分类 / 税率</th><th>原因</th></tr></thead><tbody>{visibleData.issues.map((issue,index)=><tr key={index}><td>{issue.previousCode} / {issue.previousName}</td><td>{issue.code} / {issue.name}</td><td>{sourceValue(issue.previousGroupName)} / {sourceValue(issue.previousTaxRate)}</td><td>{sourceValue(issue.groupName)} / {sourceValue(issue.taxRate)}</td><td>{issue.reason}</td></tr>)}</tbody></table></div></section>}
+     {!!visibleData.issues?.length&&<section><h3>来源变化待核查 · {visibleData.issues.length} 条</h3><p>旧档案仍保留，请核对金蝶中的来源字段。</p><div className="overflow-auto max-h-64"><ExcelTable className="w-full text-sm"><thead><tr><th>原编码</th><th>原名称</th><th>当前编码</th><th>当前名称</th><th>原分类</th><th>原税率</th><th>当前分类</th><th>当前税率</th><th>原因</th></tr></thead><tbody>{visibleData.issues.map((issue,index)=><tr key={index}><td>{issue.previousCode}</td><td>{issue.previousName}</td><td>{issue.code}</td><td>{issue.name}</td><td>{sourceValue(issue.previousGroupName)}</td><td>{sourceValue(issue.previousTaxRate)}</td><td>{sourceValue(issue.groupName)}</td><td>{sourceValue(issue.taxRate)}</td><td>{issue.reason}</td></tr>)}</tbody></ExcelTable></div></section>}
     </>}
    </DialogContent>
   </Dialog>
