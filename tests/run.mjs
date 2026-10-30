@@ -183,4 +183,6 @@ await import('./workspace-manual-refresh.mjs');
 await import('./project-collaboration-ui.mjs');
 await import('./service-progress-contract.mjs');
 execFileSync(process.execPath,['tests/supplier-import.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/kingdee-supplier-diagnostic.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/supplier-diagnostic-ui.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

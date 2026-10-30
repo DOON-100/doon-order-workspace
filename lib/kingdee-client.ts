@@ -4,7 +4,7 @@ import {AppError} from './store';
 type Json=Record<string,unknown>;
 export type KingdeeConfig={clientId:string;clientSecret:string;instanceId:string;accountId:string};
 const gateway='https://api.kingdee.com';
-const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail'} as const;
+const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail',supplierList:'/jdy/v2/bd/supplier'} as const;
 const salesPaths={customer:'/jdy/v2/bd/customer_detail',material:'/jdy/v2/bd/material_detail',unit:'/jdy/v2/bd/measure_unit',currency:'/jdy/v2/bd/currency',employee:'/jdy/v2/bd/emp',salesList:'/jdy/v2/scm/sal_order',salesSave:'/jdy/v2/scm/sal_order',salesDetail:'/jdy/v2/scm/sal_order_detail'} as const;
 const encoder=new TextEncoder();
 export function kingdeeConfig():KingdeeConfig|null{
@@ -63,7 +63,7 @@ async function gatewayRequest(config:KingdeeConfig,operation:keyof typeof paths,
   const result=object(JSON.parse(new TextDecoder().decode(bytes)));
   if(operation==='authorize'?result.code!==200:result.errcode!==0){
    const code=operation==='authorize'?result.code:result.errcode;
-   throw new AppError(`金蝶${operation==='authorize'?'授权':operation==='token'?'令牌':'采购查询'}失败（代码 ${typeof code==='number'&&Number.isSafeInteger(code)?code:'未知'}），请核对接口权限和授权有效期。`,502);
+   throw new AppError(`金蝶${operation==='authorize'?'授权':operation==='token'?'令牌':operation==='supplierList'?'供应商查询':'采购查询'}失败（代码 ${typeof code==='number'&&Number.isSafeInteger(code)?code:'未知'}），请核对接口权限和授权有效期。`,502);
   }
   return result.data;
  }catch(error){
@@ -115,6 +115,13 @@ export async function kingdeeSalesRequest(config:KingdeeConfig,operation:keyof t
 export async function kingdeeRead(config:KingdeeConfig,operation:'list'|'detail',query:Record<string,string>,signal:AbortSignal){
  const auth=await authorization(config);
  try{return object(await gatewayRequest(config,operation,query,signal,auth));}
+ catch(error){if(error instanceof AppError&&error.status===502)cached=undefined;throw error;}
+}
+
+/** Fixed first page only, no caller-controlled filters or sensitive contacts. */
+export async function kingdeeSupplierDiagnostic(config:KingdeeConfig,signal:AbortSignal){
+ const auth=await authorization(config);
+ try{return object(await gatewayRequest(config,'supplierList',{page:'1',page_size:'10',show_contact_detail:'false'},signal,auth));}
  catch(error){if(error instanceof AppError&&error.status===502)cached=undefined;throw error;}
 }
 

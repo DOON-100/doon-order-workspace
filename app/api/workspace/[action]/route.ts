@@ -66,6 +66,7 @@ export const dynamic='force-dynamic';
 // their own records declare the kinds they need and skip the rest.
 const scopedReadKinds:Record<string,readonly string[]>={
  'service-history':['member','service_record','service_revision','customer_account','customer_quote_access'],
+ 'kingdee-supplier-diagnostic':['member'],
 };
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}

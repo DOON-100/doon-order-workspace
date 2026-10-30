@@ -4,7 +4,7 @@ import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Upload} from 'lucide-react';
 import {Button} from '@/components/ui/button';
 import {Dialog,DialogContent,DialogHeader,DialogTitle,DialogDescription} from '@/components/ui/dialog';
-import {request} from './ui';
+import {dateTime,request} from './ui';
 
 type SourceRow={row:number;code:string;name:string};
 type Conflict=SourceRow&{reason:string};
@@ -12,11 +12,13 @@ type Preview={previewId:string;fileName:string;total:number;candidateCount:numbe
 type Result={inserted:number;skipped:number;held:number};
 type Source={id:string;batchId:string;row:number;code:string;name:string;status:string;reason:string;supplierId:string};
 type Batch={id:string;filename:string;createdAt:string;completedAt:string};
+type Diagnostic={readOnly:true;rows:unknown[];checkedAt:string};
 
 /** A file is a point-in-time export; it cannot provide live ERP updates. */
 export function SupplierImportPanel(){
  const cache=useQueryClient();
  const [open,setOpen]=useState(false),[showSources,setShowSources]=useState(false),[sourceId,setSourceId]=useState(''),[search,setSearch]=useState(''),[page,setPage]=useState(0),[file,setFile]=useState<File|null>(null),[preview,setPreview]=useState<Preview|null>(null),[result,setResult]=useState<Result|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ const [checking,setChecking]=useState(false),[diagnostic,setDiagnostic]=useState<Diagnostic|null>(null),[diagnosticError,setDiagnosticError]=useState('');
  const sources=useQuery<{batches:Batch[];sources:Source[]}>({queryKey:['supplier-import-sources'],queryFn:()=>request('supplier-import-sources'),enabled:showSources});
  const detail=useQuery<{source:{fields:{label:string;value:string}[]}}>({queryKey:['supplier-import-source',sourceId],queryFn:()=>request('supplier-import-source?id='+encodeURIComponent(sourceId)),enabled:showSources&&!!sourceId});
  const filtered=(sources.data?.sources||[]).filter(row=>[row.code,row.name,row.status,row.reason].join(' ').toLowerCase().includes(search.toLowerCase()));
@@ -31,9 +33,17 @@ export function SupplierImportPanel(){
   try{const saved:Result=await request('supplier-import-commit',{previewId:preview.previewId});setResult(saved);await Promise.all([cache.invalidateQueries({queryKey:['workspace']}),cache.invalidateQueries({queryKey:['supplier-import-sources']})]);}
   catch(e){setError((e as Error).message+' 请先核查批次结果，再决定是否重试。');}finally{setBusy(false);}
  }
+ async function checkConnection(){
+  if(checking)return;setChecking(true);setDiagnostic(null);setDiagnosticError('');
+  try{setDiagnostic(await request('kingdee-supplier-diagnostic'));}
+  catch(e){setDiagnosticError((e as Error).message);}finally{setChecking(false);}
+ }
  return <>
   <Button variant="outline" onClick={()=>{reset();setOpen(true);}}><Upload size={16}/>导入金蝶供应商表</Button>
   <Button variant="outline" onClick={()=>{setSourceId('');setSearch('');setPage(0);setShowSources(true);}}>导入记录与源字段</Button>
+  <Button variant="outline" disabled={checking} onClick={()=>void checkConnection()}>{checking?'正在只读测试…':'测试金蝶供应商连接'}</Button>
+  {diagnostic&&<p role="status">只读查询已响应，首批返回 {diagnostic.rows.length} 条（最多 10 条），测试时间 {dateTime(diagnostic.checkedAt)}。未导入档案，自动同步尚未接通。</p>}
+  {diagnosticError&&<p className="error" role="alert">连接测试未完成：{diagnosticError}</p>}
   <Dialog open={open} onOpenChange={value=>{if(!busy){setOpen(value);if(!value)reset();}}}><DialogContent className="dialog-scroll sm:max-w-[850px]"><DialogHeader><DialogTitle>导入金蝶供应商档案</DialogTitle><DialogDescription>选择金蝶导出的供应商 Excel，先核对新增与冲突，再提交可安全新增的记录。</DialogDescription></DialogHeader>
    <p className="muted">Excel 是导出时的快照，文件未标明金蝶账套。金蝶新增供应商不会自动进入中台；实时同步尚未接通，需要重新导出并导入。</p>
    <label>选择金蝶供应商 Excel<input className="block mt-2" type="file" accept=".xlsx" aria-label="选择金蝶供应商表" disabled={busy||!!preview} onChange={e=>{setFile(e.target.files?.[0]||null);setError('');}}/></label>

@@ -3,6 +3,7 @@ import {AppError,json} from './store';
 import {businessTeamHeader} from './business-team-scope';
 import {kingdeeConfig,kingdeeRead,kingdeeDetails,object,sourceId,sourceText,type KingdeeConfig} from './kingdee-client';
 import type {KingdeeQueryPage,KingdeeQueryRow} from './kingdee-readonly-types';
+import {kingdeeSupplierDiagnosticGet} from './kingdee-supplier-diagnostic';
 
 const pageSize=5;
 const busy=new Set<string>();
@@ -61,6 +62,7 @@ export async function readKingdeePurchasePage(config:KingdeeConfig,page:number,s
 
 /** Live read only: no commit(), bucket writes, audit records, import batches or timers. */
 export async function kingdeeReadonlyGet(action:string,req:Request,m:Member):Promise<Response|null>{
+ const supplier=await kingdeeSupplierDiagnosticGet(action,req,m);if(supplier)return supplier;
  if(!['kingdee-readonly-status','kingdee-readonly-query'].includes(action))return null;
  if(!m.active||!broad(m))throw new AppError('仅现有 PMC / 采购和管理员可查询金蝶采购原表。',403);
  // The API's customer-order mapping is not verified. Never bypass a selected group
