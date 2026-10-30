@@ -1,0 +1,15 @@
+.kingdee-catalog{padding:24px;display:grid;gap:16px;border-top:1px solid #e2eae5;min-width:0}
+.kingdee-catalog-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.kingdee-catalog-heading h3{margin:0;color:#214b3d;font-size:16px;font-weight:650}
+.kingdee-catalog-heading p{margin:5px 0 0;color:#7a8d82;font-size:12px}
+.kingdee-catalog-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.kingdee-catalog-sync{min-width:152px}
+.kingdee-catalog-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#6e8075;font-size:12px}
+.kingdee-catalog-bar input{width:280px;max-width:100%;min-height:38px;padding:8px 12px;border:1px solid #d9e4de;border-radius:6px;background:#fff;color:#173e34}
+.kingdee-catalog-table{min-width:0;overflow:auto;border:1px solid #e0e8e3;border-radius:8px}
+.kingdee-catalog-table table{min-width:700px}
+.kingdee-catalog-table table.excel-table>thead>tr>th,.kingdee-catalog-table table.excel-table>tbody:not(.excel-filter-status)>tr>td{text-align:center}
+.kingdee-catalog-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#7a8d82;font-size:12px}
+.kingdee-catalog-meta{color:#71867a;font-size:12px}
+.supplier-master-heading{padding:20px 24px 12px;border-top:1px solid #e2eae5;color:#214b3d}
+@media(max-width:640px){.kingdee-catalog{padding:16px}.kingdee-catalog-heading{align-items:flex-start;flex-direction:column}.kingdee-catalog-bar label,.kingdee-catalog-bar input{width:100%}}
