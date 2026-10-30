@@ -3,6 +3,7 @@ import {workspaceToolsGet,workspaceToolsPost} from '@/lib/workspace-tools-api';
 import {businessFollowupGet,businessFollowupPost} from '@/lib/business-followup-api';
 import {arCliGet,arCliPost} from '@/lib/ar-cli-api';
 import {processWorkspaceGet,processWorkspacePost} from '@/lib/process-workspace-api';
+import {quoteRequestGet,quoteRequestPost} from '@/lib/quote-request-api';
 import {productionWorkspaceGet,productionWorkspacePost} from '@/lib/production-workspace-api';
 import {processChangeGet,processChangePost} from '@/lib/process-change-api';
 import {purchaseChangeGet,purchaseChangePost} from '@/lib/purchase-change-api';
@@ -54,17 +55,24 @@ import {paymentTermsGet,paymentTermsPost} from '@/lib/payment-terms-api';
 import {kingdeePendingGet,kingdeePendingPost} from '@/lib/kingdee-pending-api';
 import {kingdeeReadonlyGet} from '@/lib/kingdee-readonly-api';
 import {kingdeeSyncGet,kingdeeSyncPost} from '@/lib/kingdee-sync-api';
+import {kingdeeSupplierCatalogGet,kingdeeSupplierCatalogPost,kingdeeSupplierCatalogState} from '@/lib/kingdee-supplier-catalog';
 import {kingdeeSyncState} from '@/lib/kingdee-sync-state';
 import {fixedDataToolsGet,fixedDataToolsPost} from '@/lib/fixed-data-tools-api';
 import {salesColorFieldsGet,salesColorFieldsPost} from '@/lib/sales-color-fields-api';
 import {salesOrderSourcesGet,salesOrderSourcesPost} from '@/lib/sales-order-sources-api';
 import {kingdeeSalesGet,kingdeeSalesPost} from '@/lib/kingdee-sales-api';
+import {outsourcingCatalogGet,outsourcingCatalogPost} from '@/lib/outsourcing-catalog-api';
+import {outsourcingWorkbookGet,outsourcingWorkbookPost} from '@/lib/outsourcing-workbook-api';
 export const dynamic='force-dynamic';
 // Every action used to read the whole workspace on each request. The audit trail
 // and archive rows now make that tens of megabytes, so reads that only inspect
 // their own records declare the kinds they need and skip the rest.
 const scopedReadKinds:Record<string,readonly string[]>={
  'service-history':['member','service_record','service_revision','customer_account','customer_quote_access'],
+ 'kingdee-supplier-diagnostic':['member'],
+ 'outsourcing-workbooks':['member','outsourcing_workbook_archive'],
+ 'outsourcing-workbook-sheet':['member','outsourcing_workbook_archive'],
+ 'outsourcing-workbook-file':['member','outsourcing_workbook_archive'],
 };
 type Context={params:Promise<{action:string}>};
 function requireAdmin(m:Member){if(m.role!=='admin')throw new AppError('此操作需要管理员权限。',403);}
@@ -76,8 +84,10 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  // Followup records keep exact source permissions.
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('business_followup')))return false;
  // Process snapshots are available only through their responsibility-scoped history.
- if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('process_record')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('process_record')||v.kind.startsWith('quote_request'))))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
+ // Shared definitions and restricted originals have independent history/access rules.
+ if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('outsourcing_catalog')||v.kind.startsWith('outsourcing_workbook'))))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_color_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_order_source')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('kingdee_sales_')))return false;
@@ -116,6 +126,8 @@ function validatePatch(input:unknown){if(!input||typeof input!=='object'||Array.
 function fileResponse(bytes:BodyInit,name:string,type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'){return new Response(bytes,{headers:{'Content-Type':type,'Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store','X-Content-Type-Options':'nosniff'}});}
 async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
+ const catalog=await outsourcingCatalogGet(action,req,s,m);if(catalog)return catalog;
+ const workbook=await outsourcingWorkbookGet(action,req,s,m);if(workbook)return workbook;
  const businessFollowup=await businessFollowupGet(action,req,s,m);if(businessFollowup)return businessFollowup;
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
@@ -157,6 +169,10 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
 export async function GET(req:Request,ctx:Context){try{
  const {action}=await ctx.params;
  if(action==='read-version')return json(await readVersion());
+ if(action==='kingdee-supplier-catalog'||action==='kingdee-supplier-catalog-result'){
+  const s=await kingdeeSupplierCatalogState(),m=await actor(s),response=(await kingdeeSupplierCatalogGet(action,req,s,m))!;
+  response.headers.set('X-Workspace-Revision',String(s.revision));return response;
+ }
  if(action==='kingdee-sync-result'||action==='kingdee-sync-ready'){
   const s=await kingdeeSyncState(),m=await actor(s),response=(await kingdeeSyncGet(action,req,s,m))!;
   response.headers.set('X-Workspace-Revision',String(s.revision));return response;
@@ -185,6 +201,7 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  const purchaseChange=await purchaseChangeGet(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangeGet(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspaceGet(action,req,s,m);if(processWorkspace)return processWorkspace;
+ const quoteRequest=await quoteRequestGet(action,req,s,m);if(quoteRequest)return quoteRequest;
  const fixedTools=await fixedDataToolsGet(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlGet(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspaceGet(action,req,s,m);if(ar)return ar;
@@ -197,9 +214,12 @@ async function workspaceRead(req:Request,ctx:Context,action:string,s:State,m:Mem
  return await scopeBusinessTeamResponse(action,req,s,m,response);
 }
 export async function POST(req:Request,ctx:Context){try{
- sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():await snapshot(action==='enroll'?['member']:undefined);
+ sameOrigin(req);const {action}=await ctx.params;let s=action==='kingdee-sync-run'?await kingdeeSyncState():action==='kingdee-supplier-catalog-sync'?await kingdeeSupplierCatalogState():await snapshot(action==='enroll'?['member']:undefined);
  if(action==='enroll'){await enroll(s);return json({ok:true});}
  const m=await actor(s);
+ const catalog=await outsourcingCatalogPost(action,req,s,m);if(catalog)return catalog;
+ const workbook=await outsourcingWorkbookPost(action,req,s,m);if(workbook)return workbook;
+ const kingdeeSupplierCatalog=await kingdeeSupplierCatalogPost(action,req,s,m);if(kingdeeSupplierCatalog)return kingdeeSupplierCatalog;
  const businessFollowup=await businessFollowupPost(action,req,s,m);if(businessFollowup)return businessFollowup;
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;
  const cliAr=await arCliPost(action,req,s,m);if(cliAr)return cliAr;
@@ -212,6 +232,7 @@ export async function POST(req:Request,ctx:Context){try{
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;
+ const quoteRequest=await quoteRequestPost(action,req,s,m);if(quoteRequest)return quoteRequest;
  const fixedTools=await fixedDataToolsPost(action,req,s,m);if(fixedTools)return fixedTools;
  const planning=await planningControlPost(action,req,s,m);if(planning)return planning;
  const ar=await arWorkspacePost(action,req,s,m);if(ar)return ar;

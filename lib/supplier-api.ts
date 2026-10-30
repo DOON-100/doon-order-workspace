@@ -6,11 +6,14 @@ import {AppError,audit,bucket,commit,json} from './store';
 import {canSeeSupplierPrice,managesSuppliers,supplierStatus,matchesSupplierStatus} from './suppliers';
 import {makeWorkbook,sha} from './workbooks';
 import {stageDefs} from './ledger';
+import {isOutsourcingScope,matchesOutsourcingScope} from './outsourcing-workspace';
+import {supplierImportGet,supplierImportPost} from './supplier-import-api';
 const key=(s:string)=>clean(s).toUpperCase();
 const stable=(v:any):string=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(stable).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}';
 const pmc=(m:Member)=>{if(!managesSuppliers(m))throw new AppError('权限受限：供应商资料、外发单和复期由 PMC / 采购（Candy、Tina）或管理员维护。',403);};
 const date=(v:string)=>{try{strictDate(v);return v;}catch(e){throw new AppError((e as Error).message);}};
 export async function supplierGet(action:string,req:Request,s:State,m:Member){
+ const supplierImport=await supplierImportGet(action,req,s,m);if(supplierImport)return supplierImport;
  if(action==='supplier-write-contract')return json({protocol:'doon-supplier-write-v1',quoteExpectedVersion:true,outsourceOrderVersion:true});
  if(action==='supplier-quote-files'){if(!canSeeSupplierPrice(m))throw new AppError('没有供应商价格权限。',403);return json({files:all(s,'supplier_quote_file').map(row=>({id:row.id,filename:row.filename,contentType:row.contentType,hash:row.hash,createdAt:row.createdAt,actor:row.actor}))});}
  if(action==='supplier-quote-template'){
@@ -25,13 +28,15 @@ export async function supplierGet(action:string,req:Request,s:State,m:Member){
   if(!canSeeSupplierPrice(m))throw new AppError('没有供应商价格权限。',403);const teamId=requestedExportBusinessTeam(s,m,req),orderIds=new Set((all(s,'order') as Order[]).filter(o=>canRead(m,o)).map(o=>o.id)),suppliers=new Set(filterBusinessTeamRows(s,all(s,'outsource').filter(row=>orderIds.has(row.lineId)),teamId).map(row=>row.supplier));const rows=all(s,'supplier_quote').filter(row=>!teamId||suppliers.has(row.supplier)).map(q=>({'供应商':q.supplier,'报价类别':q.category,'配件/工序编码':q.itemCode,'配件名称/加工工序':q.itemName,'规格/材料/颜色':q.specification,'计价单位':q.unit,'数量下限':q.qtyFrom,'数量上限':q.qtyTo||'','未税单价':q.priceExTax,'含税单价':q.priceIncTax,'税率(%)':q.taxRate,'币种':q.currency,'最小起订量':q.moq,'最低加工费':q.minimumCharge,'打样费':q.sampleFee,'模具费':q.mouldFee,'损耗比例(%)':q.lossRate,'样品交期(天)':q.sampleLeadDays,'量产交期(天)':q.massLeadDays,'报价有效期起':q.validFrom,'报价有效期止':q.validTo,'版本':`V${q.version}`,'状态':q.status,'录入人':q.createdBy,'录入时间':q.createdAt}));return new Response(makeWorkbook(rows,'供应商报价档案'),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent('供应商报价档案.xlsx'),'Cache-Control':'no-store','Vary':businessTeamHeader}});
  }
  if(action!=='supplier-export')return null;
- const url=new URL(req.url),q=clean(url.searchParams.get('q')).toLowerCase(),status=clean(url.searchParams.get('status')),supplier=clean(url.searchParams.get('supplier')),buyer=clean(url.searchParams.get('buyer'));
+ const url=new URL(req.url),q=clean(url.searchParams.get('q')).toLowerCase(),status=clean(url.searchParams.get('status')),supplier=clean(url.searchParams.get('supplier')),buyer=clean(url.searchParams.get('buyer')),scope=clean(url.searchParams.get('scope'))||'all';
+ if(!isOutsourcingScope(scope))throw new AppError('请选择有效的外发工作空间。');
  const orders=(all(s,'order') as Order[]).filter(o=>canRead(m,o)),ids=new Set(orders.map(o=>o.id));
- const rows=all(s,'outsource').filter(x=>ids.has(x.lineId)&&matchesSupplierStatus(x,status)&&(!supplier||x.supplier===supplier)&&(!buyer||x.buyerEmail===buyer)&&(!q||[x.supplier,x.reference,orders.find(o=>o.id===x.lineId)?.orderNo,orders.find(o=>o.id===x.lineId)?.drawing].join(' ').toLowerCase().includes(q)));
+ const rows=all(s,'outsource').filter(x=>ids.has(x.lineId)&&matchesOutsourcingScope(x.process,scope)&&matchesSupplierStatus(x,status)&&(!supplier||x.supplier===supplier)&&(!buyer||x.buyerEmail===buyer)&&(!q||[x.supplier,x.reference,orders.find(o=>o.id===x.lineId)?.orderNo,orders.find(o=>o.id===x.lineId)?.drawing].join(' ').toLowerCase().includes(q)));
  const data=filterBusinessTeamRows(s,rows,requestedExportBusinessTeam(s,m,req)).map(x=>{const o=orders.find(o=>o.id===x.lineId)!;return {'供应商':x.supplier,'外发单号':x.reference,'订单号':o.orderNo,'客户':o.customer,'产品类型':productTypeOf(o),'款号':o.drawing,'色号':o.color,'工序':stageDefs.find(d=>d.id===x.process)?.name,'外发数量':x.quantity,'合格回货':x.received,'未回数量':x.status==='已取消'?0:Math.max(0,x.quantity-x.received),'原始要求交期':x.originalDueDate||x.dueDate,'当前要求交期':x.dueDate,'供应商回复日期':x.replyDate||'','供应商承诺交期':x.promisedDate||'待复期','复期数量':x.promisedQuantity??'','预计到货日':x.expectedDate||'','下次催交日':x.nextFollowupDate||'','采购跟进人':x.buyerName||x.actor,'状态':supplierStatus(x),'延期原因':x.delayReason||'','最新跟进':x.latestNote||'','更新人':x.updatedBy||x.actor};});
  return new Response(makeWorkbook(data,'供应商交期跟进',data.length?undefined:['暂无符合筛选的外发记录']),{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':"attachment; filename*=UTF-8''"+encodeURIComponent('供应商交期跟进.xlsx'),'Cache-Control':'no-store','Vary':businessTeamHeader}});
 }
 export async function supplierPost(action:string,req:Request,s:State,m:Member){
+ const supplierImport=await supplierImportPost(action,req,s,m);if(supplierImport)return supplierImport;
  if(!['supplier-save','outsource-update','outsource-cancel','outsource-approve','supplier-quote-file','supplier-quote-save'].includes(action))return null;
  if(action==='supplier-quote-file'){
   if(!canSeeSupplierPrice(m))throw new AppError('没有供应商价格权限。',403);const form=await req.formData(),file=form.get('file');if(!(file instanceof File)||!file.size||file.size>10*1024*1024)throw new AppError('请上传不超过 10 MB 的报价单。');if(!/\.(xlsx?|pdf|jpe?g|png|webp)$/i.test(file.name))throw new AppError('报价单支持 XLSX、XLS、PDF、JPG、PNG 或 WebP。');const bytes=await file.arrayBuffer(),hash=await sha(bytes),prior=all(s,'supplier_quote_file').find(v=>v.hash===hash);if(prior)return json(prior);const item={id:newId('supplier_quote_file'),kind:'supplier_quote_file',filename:file.name.replace(/[\\/]/g,'_'),fileKey:newId('supplier_quote_source'),contentType:file.type||'application/octet-stream',hash,actorId:m.id,actor:m.name,createdAt:now()};await bucket().put(item.fileKey,bytes);await commit(s.revision,[item]);return json(item);

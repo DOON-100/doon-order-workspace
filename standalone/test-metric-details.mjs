@@ -7,7 +7,7 @@ import {DatabaseSync} from 'node:sqlite';
 import {pathToFileURL} from 'node:url';
 import * as XLSX from 'xlsx';
 const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(process.env.DOON_PLAYWRIGHT_MODULE).href:'playwright');
-const root=await fs.mkdtemp(path.resolve('test-output/metric-acceptance-')),dist=path.resolve('test-output/metric-build'),origin='http://127.0.0.1:18796',env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18796',DOON_NO_AUTO_BACKUP:'1'};
+const root=await fs.mkdtemp(path.resolve('test-output/metric-acceptance-')),dist=path.resolve('test-output/metric-build'),origin='http://127.0.0.1:18796',env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18796',DOON_NO_AUTO_BACKUP:'1'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const db=new DatabaseSync(path.join(root,'workspace.sqlite'));

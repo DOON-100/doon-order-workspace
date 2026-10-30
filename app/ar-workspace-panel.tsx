@@ -1,4 +1,5 @@
 'use client';
+import {ExcelTable} from './excel-table';
 import {useState,useRef,useEffect,useCallback} from 'react';
 import {useQuery,useQueryClient} from '@tanstack/react-query';
 import {Download,RefreshCw,ArrowUpRight,Wallet,Clock3,CheckCircle2,AlertCircle} from 'lucide-react';
@@ -16,7 +17,7 @@ type Row=Record<string,any>;
 const money=(cents:unknown,currency='')=>typeof cents==='number'&&Number.isFinite(cents)?`${currency} ${(cents/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'待核实';
 const statuses:Record<string,string>={draft:'草稿',open:'未收款',partial:'部分收款',settled:'已结清',pending:'待核对',cancelled:'已取消',reviewed:'业务已审核',issued:'已签发',confirmed:'待业务审核',unsupported:'原订单 PI 待接入'};
 const tabs=[['master','应收总表'],['overview','回款总览'],['invoices','发票与对账单'],['profiles','客户模板与追踪'],['process','流程说明'],['receivables','应收明细'],['documents','PI 审核与签发'],['history','收款与历史'],['contribution','业绩与客户贡献'],['pending','待核对']] as const;
-function Table({headers,rows,empty='当前范围暂无记录'}:{headers:string[];rows:React.ReactNode[][];empty?:string}){return <div className="ar-table-wrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((cell,j)=><td key={j}>{cell??'—'}</td>)}</tr>):<tr><td colSpan={headers.length}><div className="ar-empty">{empty}</div></td></tr>}</tbody></table></div>;}
+function Table({headers,rows,empty='当前范围暂无记录'}:{headers:string[];rows:React.ReactNode[][];empty?:string}){return <div className="ar-table-wrap"><ExcelTable><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((cell,j)=><td key={j}>{cell??'—'}</td>)}</tr>):<tr><td colSpan={headers.length}><div className="ar-empty">{empty}</div></td></tr>}</tbody></ExcelTable></div>;}
 function Customer({row}:{row:Row}){return <span className="ar-customer"><b>{row.customerCode||row.customer||'待匹配客户'}</b>{row.customerCode&&<small>{row.customer}</small>}</span>;}
 function Badge({children,tone=''}:{children:React.ReactNode;tone?:string}){return <span className={'ar-badge '+tone}>{children}</span>;}
 export function ArWorkspacePanel({data,onNavigate,onDirtyChange}:{data:any;onNavigate:WorkspaceNavigate;onDirtyChange?:(dirty:boolean)=>void}){

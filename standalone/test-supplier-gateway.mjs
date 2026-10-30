@@ -22,7 +22,7 @@ export async function POST(req,ctx){const {action}=await ctx.params;const body=a
 await fs.writeFile(path.join(build,'seed.mjs'),`import {db,saveRecords,memberFor} from './runtime.mjs';import {createAccount} from './auth.mjs';
 saveRecords([{id:'supplier_alpha',kind:'supplier',name:'Synthetic Alpha',active:true},{id:'supplier_inactive',kind:'supplier',name:'Synthetic Inactive',active:false}]);
 const admin=await createAccount({username:'admin',name:'Synthetic Admin',role:'admin',password:'Synthetic-Admin-2026!'},null,{owner:true});db.prepare('UPDATE local_accounts SET must_change=0 WHERE member_id=?').run(admin.memberId);console.log(JSON.stringify(admin));db.close();`);
-const baseEnv={...process.env,DOON_DATA_DIR:dataDir,DOON_NO_AUTO_BACKUP:'1'};
+const baseEnv={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:dataDir,DOON_NO_AUTO_BACKUP:'1'};
 delete baseEnv.DOON_TLS_CERT;delete baseEnv.DOON_TLS_KEY;delete baseEnv.DOON_SERVER_MODE;delete baseEnv.DOON_SUPPLIER_PUBLIC_ORIGIN;
 const seeded=JSON.parse(execFileSync(process.execPath,[path.join(build,'seed.mjs')],{env:baseEnv,encoding:'utf8',stdio:['ignore','pipe','pipe']}));
 async function freePort(){return new Promise((resolve,reject)=>{const server=net.createServer();server.on('error',reject);server.listen(0,'127.0.0.1',()=>{const port=server.address().port;server.close(()=>resolve(port));});});}

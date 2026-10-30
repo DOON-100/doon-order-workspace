@@ -13,7 +13,7 @@ await fs.mkdir('test-output',{recursive:true});
 const root=await fs.mkdtemp(path.resolve('test-output/customer-quote-template-browser-'));
 const dist=path.resolve(process.env.DOON_BUILD_DIR||'test-output/customer-quote-template-build');
 const origin='http://127.0.0.1:18796';
-const env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18796',DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'127.0.0.1',DOON_PORT:'18796',DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 const checks=[],pageErrors=[],httpErrors=[],pass=name=>{checks.push(name);console.log('PASS '+name);};
 const buildEvidence=await verifyCustomerPriceBuildEvidence(dist);
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});

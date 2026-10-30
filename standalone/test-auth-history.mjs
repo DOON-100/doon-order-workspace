@@ -9,7 +9,8 @@ import {DatabaseSync} from 'node:sqlite';
 await fs.mkdir('test-output',{recursive:true});
 const root=await fs.mkdtemp(path.resolve('test-output/auth-history-')),build=path.join(root,'build'),data=path.join(root,'data');
 await fs.mkdir(path.join(build,'client'),{recursive:true});
-for(const name of ['runtime.mjs','auth.mjs','personnel.mjs','server.mjs','employee-gateway.mjs','supplier-gateway.mjs'])await fs.copyFile(path.join('standalone',name),path.join(build,name));
+for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','employee-gateway.mjs','supplier-gateway.mjs','agent-schedules.mjs'])await fs.copyFile(path.join('standalone',name),path.join(build,name));
+await fs.cp(path.join('standalone','schedule-engine'),path.join(build,'schedule-engine'),{recursive:true});
 await fs.writeFile(path.join(build,'client','index.html'),'<html>Synthetic authentication test</html>');
 await fs.writeFile(path.join(build,'workspace-api.mjs'),`export async function GET(){return Response.json({ok:true});}export async function POST(){return Response.json({ok:true});}`);
 const password='Synthetic-Auth-History-2026!';
@@ -17,7 +18,7 @@ await fs.writeFile(path.join(build,'seed.mjs'),`import {db,saveRecords} from './
 saveRecords([{id:'synthetic-order',kind:'order',quantity:17},{id:'synthetic-supplier',kind:'supplier',active:true,name:'Synthetic Supplier'}]);
 for(const [username,role] of [['admin','admin'],['alice','sales'],['locked','viewer'],['supplier','supplier']])await createAccount({username,name:'Synthetic '+username,role,password:${JSON.stringify(password)},supplierId:role==='supplier'?'synthetic-supplier':undefined},null);
 db.prepare('UPDATE local_accounts SET must_change=0').run();db.close();`);
-const env={...process.env,DOON_DATA_DIR:data,DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_SYNTHETIC_ONLY:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:data,DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_SYNTHETIC_ONLY:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 execFileSync(process.execPath,[path.join(build,'seed.mjs')],{env,stdio:'pipe',windowsHide:true});
 const db=new DatabaseSync(path.join(data,'workspace.sqlite'));
 const original=db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),accounts=db.prepare('SELECT * FROM local_accounts ORDER BY id').all();

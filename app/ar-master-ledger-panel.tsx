@@ -1,6 +1,7 @@
 'use client';
 
 import {useEffect, useMemo, useRef, useState} from 'react';
+import {ExcelTable,useExcelColumnFilters} from './excel-table';
 import {useQuery, useQueryClient} from '@tanstack/react-query';
 import {AlertTriangle, ArrowUpRight, Check, ClipboardList, Download, Link2, RefreshCw, Save, Search, Unlink, X} from 'lucide-react';
 import type {WorkspaceNavigate} from '@/lib/handoff-navigation';
@@ -74,7 +75,7 @@ function InvoiceVersions({row, disabled, onOpenSource}: {row: Entry; disabled: b
   const history = row.historicalAmounts;
   return <section className="aml-source"><h4>发票原始版本与历史核对依据</h4>
     {history ? <div className="aml-history-fact"><b>唯一已核对历史版本</b><p>{history.currency || row.currency} · 历史净应收 {money(history.amountCents)} · 历史已核对实收 {money(history.receivedCents)} · 历史未收 {money(history.balanceCents)}</p><p>{history.sourceAsOf ? `原依据截至 ${history.sourceAsOf}` : '原依据截至日未明，不计作当前余额。'} {history.paymentRemark}</p></div> : <p className="aml-muted">尚无唯一已核对历史版本。以下版本逐一保留，不代替财务选择有效金额。</p>}
-    <div className="ar-table-wrap"><table><thead><tr><th>发票 / 源版本</th><th>来源 / 日期</th><th>历史净应收</th><th>历史核对状态</th><th>原备注与异常</th><th>原发票</th></tr></thead><tbody>{(row.sourceSnapshots || []).map((source, index) => <tr key={source.id || index}><td><b>{source.invoiceNo || '票号待补'}</b><small>源版本 {source.sourceVersion || index + 1}</small></td><td>{source.sourceSheet || '工作表待补'}<small>{source.invoiceDate || '日期待补'}</small></td><td>{source.currency || row.currency} {money(source.amountCents)}</td><td>{source.status === 'confirmed' ? '历史已核对' : '待核对'}{source.status === 'confirmed' && <><small>实收 {money(source.id === history?.invoiceId ? history.receivedCents : source.receivedCents)}</small><small>未收 {money(source.id === history?.invoiceId ? history.balanceCents : source.balanceCents)}</small></>}</td><td><span className="aml-raw-text">{source.remarks || source.paymentRemark || '—'}</span>{source.issues?.map((issue, issueIndex) => <small className="aml-issue" key={issueIndex}>{issue}</small>)}</td><td><button disabled={disabled || !source.id} onClick={() => onOpenSource({kind: 'ar_invoice', id: source.id, label: source.invoiceNo || '历史发票', version: source.version || 1, view: 'ar-workspace', relations: ['origin']})}>查看原发票 <ArrowUpRight size={13}/></button></td></tr>)}</tbody></table></div>
+    <div className="ar-table-wrap"><ExcelTable><thead><tr><th>发票 / 源版本</th><th>来源 / 日期</th><th>历史净应收</th><th>历史核对状态</th><th>原备注与异常</th><th>原发票</th></tr></thead><tbody>{(row.sourceSnapshots || []).map((source, index) => <tr key={source.id || index}><td><b>{source.invoiceNo || '票号待补'}</b><small>源版本 {source.sourceVersion || index + 1}</small></td><td>{source.sourceSheet || '工作表待补'}<small>{source.invoiceDate || '日期待补'}</small></td><td>{source.currency || row.currency} {money(source.amountCents)}</td><td>{source.status === 'confirmed' ? '历史已核对' : '待核对'}{source.status === 'confirmed' && <><small>实收 {money(source.id === history?.invoiceId ? history.receivedCents : source.receivedCents)}</small><small>未收 {money(source.id === history?.invoiceId ? history.balanceCents : source.balanceCents)}</small></>}</td><td><span className="aml-raw-text">{source.remarks || source.paymentRemark || '—'}</span>{source.issues?.map((issue, issueIndex) => <small className="aml-issue" key={issueIndex}>{issue}</small>)}</td><td><button disabled={disabled || !source.id} onClick={() => onOpenSource({kind: 'ar_invoice', id: source.id, label: source.invoiceNo || '历史发票', version: source.version || 1, view: 'ar-workspace', relations: ['origin']})}>查看原发票 <ArrowUpRight size={13}/></button></td></tr>)}</tbody></ExcelTable></div>
     <p>历史净应收可能仅对应 PI 订金或分期，不代表整张订单货值或全订单结清。原件与付款凭证可在“发票与对账单”页查看。</p>
   </section>;
 }
@@ -147,7 +148,7 @@ export function ArMasterLedgerPanel({data, onNavigate, onDirtyChange}: {data: {m
   }), [rows, customerId, feed?.customers]);
   const totals = useMemo(() => sourceTotals(customerRows), [customerRows]);
   const originalCustomerCodes = [...new Set(rows.map(originalCustomerCode).filter(Boolean))].sort();
-  const filtered = useMemo(() => customerRows.filter(row => {
+  const baseRows = useMemo(() => customerRows.filter(row => {
     const issues = rowIssues(row), raw = row.sourceSnapshot;
     if (completeness === 'pending' && row.reviewStatus !== 'pending') return false;
     if (completeness === 'confirmed' && row.reviewStatus !== 'confirmed') return false;
@@ -158,7 +159,30 @@ export function ArMasterLedgerPanel({data, onNavigate, onDirtyChange}: {data: {m
     if (completeness === 'issues' && !issues.length) return false;
     return !search || [row.customer, row.customerCode, raw.customerLabel, raw.title, raw.poPlRaw, raw.remarkRaw, raw.paymentTermsRaw, row.teamName, ...activeLinks(row).map(link => link.targetSnapshot?.label || '')].join(' ').toLowerCase().includes(search.trim().toLowerCase());
   }), [customerRows, search, completeness]);
+  const columnModel=useExcelColumnFilters(baseRows,row=>{
+    const source=row.sourceSnapshot,links=activeLinks(row),versions=row.sourceSnapshots||[],history=row.historicalAmounts,issues=rowIssues(row);
+    const amount=row.sourceKind==='ar_invoice_group'?history?.amountCents??(versions.length===1?versions[0].amountCents:null):null;
+    const evidence=(field:'receivedCents'|'balanceCents')=>{
+      const label=field==='receivedCents'?'实收':'未收',historicalDate=history?.sourceAsOf?`（截至 ${history.sourceAsOf}）`:'（截至日未明）';
+      const parts=row[field]!=null?[money(row[field]),`总表${row.reviewStatus==='confirmed'?'已核实':'待核实'} · ${row.asOf?'截至 '+row.asOf:'截至日待补'}`,...(history?[`历史已核对${label}：${money(history[field])}${historicalDate}`]:[])]:history&&history[field]!=null?[money(history[field]),`历史已核对${label}${historicalDate}`,'总表核定金额：待补']:['待补',row.sourceKind==='ar_invoice_group'?'来源尚无唯一已核对版本':'总表金额待核实'];
+      if(field==='balanceCents'&&!row.includedInTotals)parts.push('不计独立核对汇总');
+      return parts.join(' · ');
+    };
+    return [
+      [row.customerCode||source.customerLabel||'客户待匹配',row.customerId?row.customer:'原表客户名称 · 尚未关联客户档案',source.title||'历史明细',row.sourceKind==='ar_invoice_group'?`发票来源 · ${versions.length} 个版本`:sourcePosition(source)].join(' · '),
+      links.length?links.map(link=>[link.targetSnapshot?.label||'原单暂不可访问',relationLabels[link.relation],link.targetChanged?'原单已变更':'',link.targetUnavailable?'来源不可访问':''].filter(Boolean).join(' · ')).join('；'):'待关联',
+      [row.currency||'币种待补',row.sourceKind==='ar_invoice_group'?(amount==null&&versions.length>1?'多个来源版本':money(amount)):displayDecimal(source.originalAmountDecimal)].join(' '),
+      [money(row.amountCents),row.amountBasis==='opening_balance'?'期初口径，非总应收':row.reviewStatus==='confirmed'?'总表已核实':'总表待核实'].join(' · '),
+      evidence('receivedCents'),evidence('balanceCents'),
+      [source.paymentTermsRaw||row.additionalSources?.map(item=>item.paymentTermsRaw).filter(Boolean).join('；')||'付款条件待补',source.invoiceDateRaw||[...new Set(versions.map(item=>item.invoiceDate).filter(Boolean))].join('；')||'待补',source.dueDateRaw||'待补'].join(' · '),
+      row.teamName||'待确认',[row.reviewStatus==='confirmed'?'金额已核实':'已登记 · 待核实',issues.length?`${issues.length} 项核查事项`:'',!row.customerId?'客户待匹配':'',row.sourceChanged?'原来源已变更':''].filter(Boolean).join(' · '),'查看与核对',
+    ];
+  });
+  const filtered=columnModel.rows;
   const pageSize = 20, pages = Math.max(1, Math.ceil(filtered.length / pageSize)), currentPage = Math.min(page, pages - 1);
+  const columnFilterKey=JSON.stringify(columnModel.filters);
+  useEffect(()=>setPage(0),[columnFilterKey]);
+  useEffect(()=>columnModel.clearFilters(),[customerId,teamId]);
   const registrationStale = !!registration && registration.previewHash !== feed?.registration.previewHash;
   const selectedCustomer = (detailQuery.data?.customers || feed?.customers || []).find(customer => customer.id === draft?.customerId);
   const sameReceivable = !!baseline && activeLinks(current || baseline).some(link => link.relation === 'same_receivable');
@@ -242,7 +266,7 @@ export function ArMasterLedgerPanel({data, onNavigate, onDirtyChange}: {data: {m
       <div className="aml-raw-totals">{totals.map(total => <article key={total.currency}><span>{total.currency} · 历史总表已知金额</span><strong title={total.known ? total.decimal : '原表金额均待补'}>{total.known ? displayDecimal(total.decimal) : '待补'}</strong><p>{total.known} 笔已知 · {total.missing} 笔原金额待补 · {total.negative} 笔贷 / 扣项</p><small>未核实金额口径 · 保留原始精度{total.precise ? ` · ${total.precise} 笔超过两位小数` : ''}</small></article>)}</div>
       {feed.registration.newEntryCount > 0 && <div className="aml-registration"><div><b>{feed.registration.newEntryCount} 条去重明细尚未登记总表</b><p>登记全部授权历史来源，合并重叠的总表与发票来源；不受本页客户或资料筛选限制。同票全部版本继续保留，金额与截至日不自动确认。</p></div>{feed.canWrite && <button className="aml-primary" disabled={busy || dirty || query.isFetching || !feed.registration.newEntryCount} onClick={() => {setRegistration({...feed.registration, sourceIds: [...feed.registration.sourceIds], invoiceCustomerIds: [...feed.registration.invoiceCustomerIds]}); setRegisterVerified(false); setRegisterOpen(true); setError('');}}>预览批量登记</button>}</div>}
       <div className="aml-list-heading"><p>显示 {filtered.length} / {rows.length} 条正式登记 · 每笔均保留原始来源</p><small>客户筛选按主档或原表代码查看，不确认归属；导出包含当前授权组全部行。</small></div>
-      <div className="ar-table-wrap aml-table"><table><thead><tr><th>客户 / 原始来源</th><th>订单 / 发票追踪</th><th>原表 / 发票来源金额</th><th>总表核对应收</th><th>实收 / 历史依据</th><th>未收 / 历史依据</th><th>原付款条件 / 日期</th><th>所属组</th><th>资料完整度</th><th>操作</th></tr></thead><tbody>{filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
+      <div className="ar-table-wrap aml-table"><ExcelTable filterModel={columnModel} filterDisabled={busy||dirty}><thead><tr><th>客户 / 原始来源</th><th>订单 / 发票追踪</th><th>原表 / 发票来源金额</th><th>总表核对应收</th><th>实收 / 历史依据</th><th>未收 / 历史依据</th><th>原付款条件 / 日期</th><th>所属组</th><th>资料完整度</th><th>操作</th></tr></thead><tbody>{filtered.slice(currentPage * pageSize, (currentPage + 1) * pageSize).map(row => {
         const source = row.sourceSnapshot, issues = rowIssues(row), links = activeLinks(row), negative = /^-/.test(source.originalAmountDecimal || '');
         return <tr key={row.id}>
           <td><b>{row.customerCode || source.customerLabel || '客户待匹配'}</b><small>{row.customerId ? row.customer : '原表客户名称 · 尚未关联客户档案'}</small><small>{source.title || '历史明细'}</small><small>{row.sourceKind === 'ar_invoice_group' ? `发票来源 · ${(row.sourceSnapshots || []).length} 个版本${row.additionalSources?.length ? ` · 另含 ${row.additionalSources.length} 条总表来源` : ''}` : sourcePosition(source)}</small></td>
@@ -256,7 +280,7 @@ export function ArMasterLedgerPanel({data, onNavigate, onDirtyChange}: {data: {m
           <td><span className={'ar-badge ' + (row.reviewStatus === 'confirmed' ? 'green' : 'amber')}>{row.reviewStatus === 'confirmed' ? '金额已核实' : '已登记 · 待核实'}</span>{issues.length > 0 && <small className="aml-issue" title={issues.join('\n')}>{issues.length} 项核查事项</small>}{!row.customerId && <small className="aml-issue">客户待匹配</small>}{row.sourceChanged && <small className="aml-issue">原来源已变更</small>}</td>
           <td><button onClick={() => openEntry(row)}>查看与核对</button></td>
         </tr>;
-      })}{!filtered.length && <tr><td colSpan={10}><p className="aml-empty">{rows.length ? '当前筛选没有匹配记录。' : '当前范围尚无正式总表记录；可先预览历史来源并批量登记。'}</p></td></tr>}</tbody></table></div>
+      })}{!filtered.length && <tr><td colSpan={10}><p className="aml-empty">{rows.length ? '当前筛选没有匹配记录。' : '当前范围尚无正式总表记录；可先预览历史来源并批量登记。'}</p></td></tr>}</tbody></ExcelTable></div>
       <div className="aml-pagination"><span>第 {currentPage + 1} / {pages} 页 · {filtered.length} 条</span><button disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>上一页</button><button disabled={currentPage + 1 >= pages} onClick={() => setPage(currentPage + 1)}>下一页</button></div>
       <details className="aml-confirmed-totals"><summary>当前授权工作组 · 已核实部分的汇总口径</summary><p>仅汇总已核实且未关联为同一笔现有应收的独立记录。不同截至日不能视为同日余额；原表已知金额、历史发票金额和这里的核实小计不可相加。</p>{Object.entries(feed.totalsByCurrency).map(([currency, total]) => <article key={currency}><b>{currency} · {total.includedCount} 条独立记录</b>{total.includedCount ? <p>应收 {money(total.knownReceivableCents)}（{total.unknownReceivableCount} 项待补） · 实收 {money(total.knownReceivedCents)}（{total.unknownReceivedCount} 项待补） · 未收 / 余额 {money(total.knownBalanceCents)}（{total.unknownBalanceCount} 项待补）</p> : <p>暂无可汇总的独立核实金额。</p>}<small>{total.mixedAsOf ? '包含多个截至日，不能作为当前余额' : `截至日：${total.asOfDates.join('、') || '待补'}`} · {total.excludedLinkedCount} 条关联现有应收，已排除重复计账</small></article>)}</details>
     </>}

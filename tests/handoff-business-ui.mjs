@@ -11,8 +11,11 @@ globalThis.__hbHooks=hooks;
 await build({entryPoints:['app/handoff-business-panel.tsx'],outfile:'test-output/handoff-business-ui.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'synthetic-hooks',setup(b){
  b.onResolve({filter:/^(react|react\/jsx-runtime|@tanstack\/react-query)$/},a=>({path:a.path,namespace:'synthetic'}));
  b.onResolve({filter:/components\/ui\/button$/},()=>({path:'button',namespace:'synthetic'}));
+ // This harness checks handoff editing and review guards; table DOM and finance child panels are isolated.
+ b.onResolve({filter:/excel-table$/},()=>({path:'excel-table',namespace:'synthetic'}));
+ b.onResolve({filter:/framework-finance-task-panel$/},()=>({path:'finance-panel',namespace:'synthetic'}));
  b.onResolve({filter:/\.css$/},()=>({path:'css',namespace:'synthetic'}));
- b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export function jsx(type,props){return {type,props:props||{}}};export const jsxs=jsx;`:a.path==='@tanstack/react-query'?`export function useQuery(o){return globalThis.__hbQueries[o.queryKey[0]];}export function useQueryClient(){return globalThis.__hbClient;}`:a.path==='button'?`export const Button='button';`:''}));
+ b.onLoad({filter:/.*/,namespace:'synthetic'},a=>({contents:a.path==='react'?react:a.path==='react/jsx-runtime'?`export const Fragment='fragment';export function jsx(type,props){return {type,props:props||{}}};export const jsxs=jsx;`:a.path==='@tanstack/react-query'?`export function useQuery(o){return globalThis.__hbQueries[o.queryKey[0]];}export function useQueryClient(){return globalThis.__hbClient;}`:a.path==='button'?`export const Button='button';`:a.path==='excel-table'?`export const ExcelTable='table';`:a.path==='finance-panel'?`export function FrameworkFinanceTaskPanel(){return null;}`:''}));
  }}]});
 const {HandoffBusinessPanel,ProductionReviewPanel}=await import(pathToFileURL(path.resolve('test-output/handoff-business-ui.mjs')).href);
 globalThis.window={confirm:()=>true,addEventListener(){},removeEventListener(){}};

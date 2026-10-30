@@ -11,7 +11,7 @@ assert(dist.startsWith(output+path.sep),'Use a build inside test-output, never t
 await fs.mkdir(output,{recursive:true});
 const root=await fs.mkdtemp(path.join(output,'department-process-browser-'));
 const port=18824,origin=`http://127.0.0.1:${port}`;
-const env={...process.env,DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_DATA_DIR:root,DOON_BUILD_DIR:dist,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_DATA_DIR:root,DOON_BUILD_DIR:dist,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe',windowsHide:true});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const admin={cookie:''},viewer={cookie:''},errors=[],checks=[];
@@ -28,6 +28,7 @@ async function signedPage(session,viewport={width:1536,height:1000}){
  const p=await context.newPage();p.on('pageerror',error=>errors.push(error.message));return {context,page:p};
 }
 async function openNav(p,id){
+ const railToggle=p.locator('#workspace-navigation-toggle');if(await railToggle.getAttribute('aria-expanded')!=='true')await railToggle.click();
  const item=p.locator(`[data-nav-id="${id}"]`),group=item.locator('xpath=ancestor::*[@data-department-id]'),toggle=group.locator('.department-navigation-toggle');
  if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
  await item.click();
@@ -48,12 +49,12 @@ try{
  browser=await chromium.launch({headless:true,...(process.env.DOON_CHROMIUM_PATH?{executablePath:process.env.DOON_CHROMIUM_PATH}:{channel:'chrome'}),args:['--no-proxy-server']});
  const signed=await signedPage(admin);page=signed.page;
  await page.goto(origin+'/business-process');await page.locator('.process-overview').waitFor();
- assert.equal(await page.locator('[data-department-id]').count(),11);assert.equal(await page.locator('.process-stage').count(),13);assert.equal(await page.locator('.process-paths article').count(),4);
+ assert.equal(await page.locator('[data-department-id]').count(),13);assert.equal(await page.locator('.process-stage').count(),13);assert.equal(await page.locator('.process-paths article').count(),4);
  assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').count(),1);
  await page.screenshot({path:path.join(root,'business-process-desktop.png'),fullPage:true});
- pass('11 departments, 13 stages and four actual business paths render with one active menu.');
+ pass('13 workspaces, 13 stages and four actual business paths render with one active menu.');
  const kinds=['rfq','sample','engineering-change','iqc','material-kit','warehouse','first-article','process-quality','outsourcing-quality','oqc','packaging','shipment-release','supplier-reconciliation','complaint'];
- for(const kind of kinds){await openNav(page,'process-'+kind);await page.locator('.process-list').waitFor();assert.equal(new URL(page.url()).searchParams.get('tab'),kind);assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').getAttribute('data-nav-tab'),kind);}
+ for(const kind of kinds){await openNav(page,'process-'+kind);if(kind==='rfq')await page.getByRole('button',{name:'原询价评估记录',exact:true}).click();await page.locator('.process-list').waitFor();assert.equal(new URL(page.url()).searchParams.get('tab'),kind);assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').getAttribute('data-nav-tab'),kind);}
  pass('All 14 process leaves open their own working list and preserve exact tab highlighting.');
  await openNav(page,'process-iqc');await page.getByRole('button',{name:'新增作业',exact:true}).click();
  let editor=page.getByRole('region',{name:'流程作业记录编辑'});
@@ -83,7 +84,7 @@ try{
  await page.getByRole('button',{name:'保留输入',exact:true}).click();assert.equal(await editor.getByLabel('补充说明 / 本次修改原因',{exact:true}).inputValue(),'Unsaved local change');
  await page.locator('.process-related').getByRole('button',{name:'供应商收货',exact:false}).click();await page.getByRole('button',{name:'放弃本次输入并继续',exact:true}).click();
  assert.equal(new URL(page.url()).pathname,'/receiving');
- await page.goto(origin+'/process-workspace');await page.locator('.process-list').waitFor();assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').getAttribute('data-nav-tab'),'rfq');
+ await page.goto(origin+'/process-workspace');await page.getByRole('button',{name:'原询价评估记录',exact:true}).click();await page.locator('.process-list').waitFor();assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').getAttribute('data-nav-tab'),'rfq');
  await page.goto(origin+'/process-workspace?tab=unknown');await page.getByRole('heading',{name:'未找到这个流程作业类型',exact:true}).waitFor();assert.equal(await page.locator('.department-workspace-navigation [aria-current="page"]').count(),0);
  pass('Explicit discard works, an omitted tab highlights RFQ, and an invalid tab never opens a different process.');
  await signed.context.close();

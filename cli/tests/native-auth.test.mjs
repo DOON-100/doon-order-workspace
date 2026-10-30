@@ -10,15 +10,16 @@ import {temporary, root, testCodec} from './helpers.mjs';
 
 test('existing native auth: login reuse, initial-password state, logout and disabled-account revocation', async t => {
   const dir = await temporary(), build = path.join(dir, 'runtime'); await fs.mkdir(path.join(build, 'client'), {recursive: true});
-  for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
+  for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs','supplier-catalog-scheduler.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
   await fs.cp(path.join(root, 'standalone/schedule-engine'), path.join(build, 'schedule-engine'), {recursive: true});
   await fs.writeFile(path.join(build, 'client/index.html'), 'Synthetic CLI auth test');
   await fs.writeFile(path.join(build, 'workspace-api.mjs'), "export async function GET(){throw Error('Business API must not be called');} export const POST=GET;\n");
-  await fs.writeFile(path.join(build, 'seed.mjs'), `import {db,saveRecords} from './runtime.mjs';import {createAccount} from './auth.mjs';await createAccount({username:'synthetic',name:'Synthetic CLI Employee',role:'viewer',password:'Synthetic-Only-2026!'},null,{owner:true});db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'viewer',password:'Synthetic-Only-2026!'},null);saveRecords([{id:'synthetic_business',kind:'synthetic_fixture',value:'unchanged'}]);db.close();`);
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('DOON_')));
-  Object.assign(env, {DOON_DATA_DIR: path.join(dir, 'data'), DOON_HOST: '127.0.0.1', DOON_NO_AUTO_BACKUP: '1', DOON_SYNTHETIC_ONLY: '1'});
+  await fs.writeFile(path.join(build, 'seed.mjs'), `import {db,saveRecords} from './runtime.mjs';import {createAccount} from './auth.mjs';const allowed=new Set(['DOON_KINGDEE_READONLY_ENABLED','DOON_KINGDEE_SUPPLIER_SYNC_ENABLED']);if(Object.keys(process.env).some(k=>/^DOON_KINGDEE_/i.test(k)&&!allowed.has(k))||process.env.DOON_KINGDEE_READONLY_ENABLED!=='0'||process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED!=='0')throw Error('Synthetic runtime inherited Kingdee configuration');await createAccount({username:'synthetic',name:'Synthetic CLI Employee',role:'viewer',password:'Synthetic-Only-2026!'},null,{owner:true});db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'viewer',password:'Synthetic-Only-2026!'},null);saveRecords([{id:'synthetic_business',kind:'synthetic_fixture',value:'unchanged'}]);db.close();`);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^DOON_/i.test(key)));
+  Object.assign(env, {DOON_DATA_DIR: path.join(dir, 'data'), DOON_HOST: '127.0.0.1', DOON_NO_AUTO_BACKUP: '1', DOON_SYNTHETIC_ONLY: '1', DOON_KINGDEE_READONLY_ENABLED: '0', DOON_KINGDEE_SUPPLIER_SYNC_ENABLED: '0'});
   execFileSync(process.execPath, [path.join(build, 'seed.mjs')], {env, windowsHide: true, stdio: 'pipe'});
   const port = await new Promise(resolve => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
+  assert.notEqual(port, 8787, 'Protected production port');
   const origin = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [path.join(build, 'server.mjs')], {env: {...env, DOON_PORT: String(port)}, windowsHide: true, stdio: 'pipe'});
   let exited = false; const done = new Promise(resolve => child.once('exit', () => { exited = true; resolve(); }));

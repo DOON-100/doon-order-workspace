@@ -2,7 +2,8 @@
  [Parameter(Mandatory=$true)][string]$StagePath,
  [Parameter(Mandatory=$true)][ValidatePattern('^[a-f0-9]{64}$')][string]$ExpectedManifestSha256,
  [Parameter(Mandatory=$true)][string]$ValidationPath,
- [string]$SmokePath='/'
+ [string]$SmokePath='/',
+ [string]$ReleaseSourceRoot=''
 )
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
@@ -29,7 +30,9 @@ function Assert-PlainPath([string]$Value,[string]$Expected) {
 }
 Assert-PlainPath $live (Join-Path $projectRoot 'lan-dist')
 Assert-PlainPath $data (Join-Path $projectRoot 'lan-data')
-$build=Node-Json @('stage',$stage,$ExpectedManifestSha256)
+$stageArguments=@('stage',$stage,$ExpectedManifestSha256)
+if ($ReleaseSourceRoot) { $stageArguments+=@((Resolve-Path -LiteralPath $ReleaseSourceRoot).Path) }
+$build=Node-Json $stageArguments
 $checks=Node-Json @('validation',$validation,$ExpectedManifestSha256)
 function Test-ScriptProcess($Process,[string]$Script) {
  if (-not $Process -or -not $Process.CommandLine -or -not $Process.ExecutablePath) { return $false }
@@ -135,7 +138,7 @@ $preserved=$null
 $rollbackState='not-needed'
 try {
  # Recheck after snapshot and before taking the service down.
- $null=Node-Json @('stage',$stage,$ExpectedManifestSha256)
+ $null=Node-Json $stageArguments
  Assert-Owners
  $paused=$true
  Stop-OwnedService

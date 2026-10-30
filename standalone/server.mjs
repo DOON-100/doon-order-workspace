@@ -44,6 +44,12 @@ if(reviewMode){
 }
 const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
+let supplierCatalogScheduler=null;
+if(process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED==='1'){
+ if(supplierOnly||reviewMode){runtime.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';console.error('当前入口未启动金蝶供应商定时同步。');}
+ else try{const {supplierCatalogScheduleConfig,createSupplierCatalogScheduler}=await import('./supplier-catalog-scheduler.mjs');const config=supplierCatalogScheduleConfig();supplierCatalogScheduler=createSupplierCatalogScheduler({db,config,runWorker:(await import('./supplier-catalog-worker.mjs')).runKingdeeSupplierCatalogWorker});}
+ catch{runtime.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';console.error('金蝶供应商定时同步未启动，请检查服务端配置。');}
+}
 const scheduleConfig=await scheduleBridgeConfig();
 if(scheduleConfig&&(supplierOnly||reviewMode))throw Error('此入口不允许启用后台只读调度');
 const scheduleBridge=scheduleConfig?createScheduleBridge({db,config:scheduleConfig,currentForOwner:async ownerId=>{
@@ -88,7 +94,7 @@ async function handle(req,res){
    const customerWorkflowUpload=req.method==='POST'&&url.pathname==='/api/workspace/customer-workflow-file-upload';
    const businessFollowupUpload=req.method==='POST'&&url.pathname==='/api/workspace/business-followup-save';
    const invoiceUpload=req.method==='POST'&&['/api/workspace/ar-invoice-import','/api/workspace/ar-invoice-proof'].includes(url.pathname);
-   const ieUpload=req.method==='POST'&&['/api/workspace/ie-quote-attachment-upload','/api/workspace/ie-quote-template-register'].includes(url.pathname);
+   const ieUpload=req.method==='POST'&&['/api/workspace/ie-quote-attachment-upload','/api/workspace/ie-quote-template-register','/api/workspace/quote-request-upload'].includes(url.pathname);
    const requestLimit=(followupImport?80:largeArchiveUpload?65:projectUpload?51:businessFollowupUpload?50:invoiceUpload?25:customerWorkflowUpload?21:ieUpload?13:11)*1024*1024;
    const parts=[];let size=0;for await(const part of req){size+=part.length;if(size>requestLimit)fail(followupImport?'跟进迁移 JSON 不能超过 80 MiB；原件每件 20 MiB、合计 50 MiB。':largeArchiveUpload?'归档原件不能超过 64 MB。':projectUpload?'项目附件每件不能超过 50 MiB。':businessFollowupUpload?'附件与沟通一次提交不能超过 50 MiB，每个附件不能超过 20 MiB。':invoiceUpload?'发票原件或付款凭证不能超过 20 MiB，含解析清单的请求不能超过 25 MiB。':customerWorkflowUpload?'客户原始附件不能超过 20 MiB。':ieUpload?'工程图纸或模板不能超过 12 MB。':'文件不能超过 10 MB。',413);parts.push(part);}
   const request=new Request(url,{method:req.method,headers:req.headers,body:req.method==='POST'?Buffer.concat(parts):undefined});
@@ -168,7 +174,8 @@ server.on('error',e=>{console.error(e.code==='EADDRINUSE'?'网站已在运行，
 server.listen(port,host,async()=>{
  const status={pid:process.pid,port,startedAt:new Date().toISOString(),localUrl:`${protocol}://${host==='::1'?'[::1]':'127.0.0.1'}:${port}`,...(reviewMode?{mode:'review',readOnly:true,asOf:reviewAsOf}:supplierOnly?{mode:'supplier',publicOrigin:gateway.origin}:employeeGateway?{mode:'employee',publicOrigin:employeeGateway.origin}:{lanUrls:addresses.map(a=>`${protocol}://${a}:${port}`)})};
  await fs.writeFile(path.join(dataDir,reviewMode?'review-server-status.json':supplierOnly?'supplier-server-status.json':'server-status.json'),JSON.stringify(status,null,2));console.log(JSON.stringify(status));
+ supplierCatalogScheduler?.start();
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
 if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>server.close(()=>{db.close();process.exit(0);}));
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{supplierCatalogScheduler?.stop();server.close(()=>{db.close();process.exit(0);});});

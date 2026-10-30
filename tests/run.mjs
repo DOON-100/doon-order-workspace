@@ -145,7 +145,9 @@ const {runBusinessTeamScopeCases}=await import('./business-team-scope-cases.mjs'
 const {runBusinessTeamExportCases}=await import('./business-team-export-cases.mjs');await runBusinessTeamExportCases({api,identity,admin,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record)),pass});
 const {testProjectCollaboration}=await import('./project-collaboration-cases.mjs');await testProjectCollaboration({...projectHarness,api,identity});
 const {testProcessWorkspace}=await import('./process-workspace-cases.mjs');await testProcessWorkspace({...projectHarness,api,identity});
+const {testQuoteRequests}=await import('./quote-request-cases.mjs');await testQuoteRequests({...projectHarness,api,identity});
 await import('./department-workspace-navigation.mjs');
+await import('./outsourcing-workspace.mjs');
 await import('./business-followup.mjs');
 await import('./production-history-access.mjs');
 await import('./business-followup-ui.mjs');
@@ -176,7 +178,16 @@ const {testWorkspaceAuditReads}=await import('./workspace-audit-read-cases.mjs')
 await import('./service-order-customer-keys.mjs');
 await import('./customer-project-list-filters-ui.mjs');
 await import('./customer-project-followup-links-ui.mjs');
+await import('./excel-table-filters.mjs');
 await import('./workspace-manual-refresh.mjs');
 await import('./project-collaboration-ui.mjs');
 await import('./service-progress-contract.mjs');
+execFileSync(process.execPath,['tests/supplier-import.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/kingdee-supplier-diagnostic.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/supplier-diagnostic-ui.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/kingdee-supplier-catalog-ui.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/kingdee-supplier-catalog.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/kingdee-supplier-scheduler.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/outsourcing-catalog-cases.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/outsourcing-workbook-cases.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

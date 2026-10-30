@@ -4,7 +4,7 @@ import {AppError} from './store';
 type Json=Record<string,unknown>;
 export type KingdeeConfig={clientId:string;clientSecret:string;instanceId:string;accountId:string};
 const gateway='https://api.kingdee.com';
-const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail'} as const;
+const paths={authorize:'/jdyconnector/app_management/push_app_authorize',token:'/jdyconnector/app_management/kingdee_auth_token',list:'/jdy/v2/scm/pur_order',detail:'/jdy/v2/scm/pur_order_detail',supplierList:'/jdy/v2/bd/supplier'} as const;
 const salesPaths={customer:'/jdy/v2/bd/customer_detail',material:'/jdy/v2/bd/material_detail',unit:'/jdy/v2/bd/measure_unit',currency:'/jdy/v2/bd/currency',employee:'/jdy/v2/bd/emp',salesList:'/jdy/v2/scm/sal_order',salesSave:'/jdy/v2/scm/sal_order',salesDetail:'/jdy/v2/scm/sal_order_detail'} as const;
 const encoder=new TextEncoder();
 export function kingdeeConfig():KingdeeConfig|null{
@@ -63,7 +63,7 @@ async function gatewayRequest(config:KingdeeConfig,operation:keyof typeof paths,
   const result=object(JSON.parse(new TextDecoder().decode(bytes)));
   if(operation==='authorize'?result.code!==200:result.errcode!==0){
    const code=operation==='authorize'?result.code:result.errcode;
-   throw new AppError(`金蝶${operation==='authorize'?'授权':operation==='token'?'令牌':'采购查询'}失败（代码 ${typeof code==='number'&&Number.isSafeInteger(code)?code:'未知'}），请核对接口权限和授权有效期。`,502);
+   throw new AppError(`金蝶${operation==='authorize'?'授权':operation==='token'?'令牌':operation==='supplierList'?'供应商查询':'采购查询'}失败（代码 ${typeof code==='number'&&Number.isSafeInteger(code)?code:'未知'}），请核对接口权限和授权有效期。`,502);
   }
   return result.data;
  }catch(error){
@@ -72,17 +72,20 @@ async function gatewayRequest(config:KingdeeConfig,operation:keyof typeof paths,
  }
 }
 type Authorization={token:string;domain:string;expiresAt:number};
-let cached:{key:string;value:Authorization}|undefined;
-let inFlight:{key:string;promise:Promise<Authorization>}|undefined;
-let lastAttempt:{key:string;at:number}|undefined;
+type AuthorizationCache={cached?:{key:string;value:Authorization};inFlight?:{key:string;promise:Promise<Authorization>};lastAttempt?:{key:string;at:number}};
+// Standalone bundles the HTTP route and fixed background worker separately.
+// Share only this in-memory cache between those bundles in the same process;
+// its key is a hash of configuration and the token is never persisted.
+const cacheKey=Symbol.for('doon.kingdee.authorization.v1'),globalCache=globalThis as unknown as Record<symbol,AuthorizationCache|undefined>;
+const authCache=globalCache[cacheKey]||(globalCache[cacheKey]={});
 async function authorization(config:KingdeeConfig){
  // Include credential rotation in the fingerprint without retaining plaintext in cache keys.
  const hash=await crypto.subtle.digest('SHA-256',encoder.encode(JSON.stringify(config)));
  const key=Array.from(new Uint8Array(hash),v=>v.toString(16).padStart(2,'0')).join('');
- if(cached?.key===key&&cached.value.expiresAt>Date.now())return cached.value;
- if(inFlight?.key===key)return inFlight.promise;
- if(lastAttempt?.key===key&&Date.now()-lastAttempt.at<31000)throw new AppError('金蝶授权刚刚请求过，请稍后重试，避免令牌接口限流。',429);
- lastAttempt={key,at:Date.now()};
+ if(authCache.cached?.key===key&&authCache.cached.value.expiresAt>Date.now())return authCache.cached.value;
+ if(authCache.inFlight?.key===key)return authCache.inFlight.promise;
+ if(authCache.lastAttempt?.key===key&&Date.now()-authCache.lastAttempt.at<31000)throw new AppError('金蝶授权刚刚请求过，请稍后重试，避免令牌接口限流。',429);
+ authCache.lastAttempt={key,at:Date.now()};
  const promise=(async()=>{
   const signal=AbortSignal.timeout(30000),data=await gatewayRequest(config,'authorize',{outerInstanceId:config.instanceId},signal);
   if(!Array.isArray(data))throw new AppError('金蝶企业授权返回格式异常。',502);
@@ -93,9 +96,9 @@ async function authorization(config:KingdeeConfig){
   if(!appKey||!appSecret||route.protocol!=='https:'||!route.hostname.endsWith('.jdy.com')||route.port||route.username||route.password||route.pathname!=='/'||route.search||route.hash)throw new AppError('金蝶授权材料或路由无效。',502);
   const tokenData=object(await gatewayRequest(config,'token',{app_key:appKey,app_signature:await hmacBase64Hex(appSecret,appKey)},signal));
   const token=sourceText(tokenData['app-token']);if(!token)throw new AppError('金蝶没有返回有效令牌。',502);
-  const value={token,domain,expiresAt:Date.now()+23*60*60*1000};cached={key,value};return value;
- })();inFlight={key,promise};
- try{return await promise;}finally{if(inFlight?.promise===promise)inFlight=undefined;}
+  const value={token,domain,expiresAt:Date.now()+23*60*60*1000};authCache.cached={key,value};return value;
+ })();authCache.inFlight={key,promise};
+ try{return await promise;}finally{if(authCache.inFlight?.promise===promise)authCache.inFlight=undefined;}
 }
 /** Prepare only the cached connection; never fetch or write business records. */
 export async function prepareKingdeeConnection(config:KingdeeConfig){await authorization(config);}
@@ -115,7 +118,22 @@ export async function kingdeeSalesRequest(config:KingdeeConfig,operation:keyof t
 export async function kingdeeRead(config:KingdeeConfig,operation:'list'|'detail',query:Record<string,string>,signal:AbortSignal){
  const auth=await authorization(config);
  try{return object(await gatewayRequest(config,operation,query,signal,auth));}
- catch(error){if(error instanceof AppError&&error.status===502)cached=undefined;throw error;}
+ catch(error){if(error instanceof AppError&&error.status===502)authCache.cached=undefined;throw error;}
+}
+
+/** Fixed first page only, no caller-controlled filters or sensitive contacts. */
+export async function kingdeeSupplierDiagnostic(config:KingdeeConfig,signal:AbortSignal){
+ const auth=await authorization(config);
+ try{return object(await gatewayRequest(config,'supplierList',{page:'1',page_size:'10',show_contact_detail:'false'},signal,auth));}
+ catch(error){if(error instanceof AppError&&error.status===502)authCache.cached=undefined;throw error;}
+}
+
+/** Fixed supplier list projection. Page and size are server controlled. */
+export async function kingdeeSupplierCatalogPage(config:KingdeeConfig,page:number,signal:AbortSignal){
+ if(!Number.isInteger(page)||page<1||page>100)throw new AppError('金蝶供应商页码无效。');
+ const auth=await authorization(config);
+ try{return object(await gatewayRequest(config,'supplierList',{page:String(page),page_size:'100',enable:'-1',show_contact_detail:'false'},signal,auth));}
+ catch(error){if(error instanceof AppError&&error.status===502)authCache.cached=undefined;throw error;}
 }
 
 /** Independent detail GETs, at most three in flight; drain a wave before failing. */

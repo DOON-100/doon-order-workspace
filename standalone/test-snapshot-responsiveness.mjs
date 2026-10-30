@@ -14,13 +14,14 @@ import {performance} from 'node:perf_hooks';
 import {build} from 'esbuild';
 
 await fs.mkdir('test-output',{recursive:true});
+for(const name of Object.keys(process.env))if(/^DOON_KINGDEE_/i.test(name))delete process.env[name];
 const root=await fs.mkdtemp(path.resolve('test-output/snapshot-responsiveness-')),data=path.join(root,'data');
-const env={...process.env,DOON_DATA_DIR:data,DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_IE_MAIL_ENABLED:'0',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_SYNTHETIC_ONLY:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_DATA_DIR:data,DOON_HOST:'127.0.0.1',DOON_NO_AUTO_BACKUP:'1',DOON_STUDIO_SCHEDULES_ENABLED:'0',DOON_IE_MAIL_ENABLED:'0',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SERVER_MODE:'internal',DOON_REVIEW_MODE:'0',DOON_SYNTHETIC_ONLY:'1',DOON_TLS_CERT:'',DOON_TLS_KEY:''};
 assert(root.startsWith(path.resolve('test-output')+path.sep));
 const directories={};
 for(const mode of ['cooperative','blocking']){
  const dist=path.join(root,mode);directories[mode]=dist;await fs.mkdir(path.join(dist,'client'),{recursive:true});
- for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs'])await fs.copyFile(path.join('standalone',name),path.join(dist,name));
+ for(const name of ['runtime.mjs','ie-mail.mjs','auth.mjs','personnel.mjs','server.mjs','supplier-gateway.mjs','employee-gateway.mjs','supplier-catalog-scheduler.mjs'])await fs.copyFile(path.join('standalone',name),path.join(dist,name));
  await fs.writeFile(path.join(dist,'client/index.html'),'<html>测试环境，不含正式业务数据</html>');
  await build({entryPoints:['standalone/agent-schedules.mjs'],outfile:path.join(dist,'agent-schedules.mjs'),bundle:true,platform:'node',format:'esm',packages:'external'});
  await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(dist,'workspace-api.mjs'),bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'native-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});

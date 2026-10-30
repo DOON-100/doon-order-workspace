@@ -32,7 +32,10 @@ export async function testKingdeePending({ok,call,api,identity,admin,rawRecords,
  assert.deepEqual(snapshot.rows[0].values,source.rows[0]);assert.deepEqual(snapshot.rows[0].values,snapshot.rows[1].values);
  assert.equal(snapshot.rows[2].values[5],'手动关闭');assert.equal(snapshot.rows[4].values[10],102.5);assert.match(snapshot.rows[0].displayValues[1],/^\d{4}-\d{2}-\d{2}$/);
  assert(!('remaining' in snapshot.rows[0]));assert.match(snapshot.metadata.quantityMeaning,/未推定/);
- assert(before.every(([id,value])=>JSON.stringify(rawRecords().find(row=>row.id===id))===value));
+ // Read the preserved fixture once; repeatedly decoding the entire SQLite
+ // database for each earlier record makes this assertion quadratic in I/O.
+ const preservedAfter=new Map(rawRecords().map(row=>[row.id,JSON.stringify(row)]));
+ assert(before.every(([id,value])=>preservedAfter.get(id)===value));
  pass('金蝶未上货独立快照逐值保存重复明细、关闭行、空行及源合计，不覆盖原采购或其他记录');
 
  const repeated=await ok('kingdee-pending-preview',form());assert.equal(repeated.id,job.id);assert.equal(repeated.status,'已完成');

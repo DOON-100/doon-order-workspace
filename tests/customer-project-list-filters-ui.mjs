@@ -20,6 +20,7 @@ const stubs={
  'business-team-context':`export const useBusinessTeamScope=()=>globalThis.__projectFilterBusinessTeam||null;`,
  'customer-project-entry-forms':`export const customerProjectEntryForms=()=>({});`,
  'business-followup-panel':`export const BusinessFollowupProvider='followup-provider';export function BusinessFollowupSlot(){return null;}`,
+ 'excel-table':`export const ExcelTable='table';`,
  'customer-project-search-select':`export const CPSearchSelect='search-select';`,
  'customer-early-development':`export function CustomerEarlyDevelopment(){}`,
  'customer-project-finance-panel':`export function CustomerProjectFinancePanel(){}`,

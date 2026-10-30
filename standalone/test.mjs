@@ -6,7 +6,7 @@ import {spawn,execFileSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import * as XLSX from 'xlsx';
 const dist=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist'),dir=await fs.mkdtemp(path.resolve('test-output/lan-test-')),port=18787,origin=`http://127.0.0.1:${port}`;
-const env={...process.env,DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const text=await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8'),initial=text.match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});const serverDone=new Promise(resolve=>server.once('exit',resolve));let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
@@ -35,6 +35,10 @@ try{
  const unrelatedLarge=await request('/api/workspace/receipt-photo',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(unrelatedLarge.status,413);await unrelatedLarge.arrayBuffer();
  largeIeForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-too-large.pdf',{type:'application/pdf'}));const tooLargeIe=await request('/api/workspace/ie-quote-attachment-upload',largeIeForm,adminCookie,{'Connection':'close'});assert.equal(tooLargeIe.status,413);await tooLargeIe.arrayBuffer();
  pass('工程上传允许12MB文件通过HTTP边界并继续权限校验，超限及其他附件限额仍拒绝');
+ const requestForm=new FormData();requestForm.set('id','synthetic-missing-request');requestForm.set('version','1');requestForm.set('token',crypto.randomUUID());requestForm.set('file',new File([new Uint8Array(12*1024*1024)],'synthetic-request.pdf',{type:'application/pdf'}));
+ const requestBoundary=await request('/api/workspace/quote-request-upload',requestForm,adminCookie,{'Connection':'close'});assert.equal(requestBoundary.status,403);await requestBoundary.arrayBuffer();
+ requestForm.set('file',new File([new Uint8Array(13*1024*1024)],'synthetic-request-too-large.pdf',{type:'application/pdf'}));const requestOver=await request('/api/workspace/quote-request-upload',requestForm,adminCookie,{'Connection':'close'});assert.equal(requestOver.status,413);await requestOver.arrayBuffer();
+ pass('报价需求附件12MB请求进入记录权限校验，超限请求被HTTP边界拒绝');
  const followupForm=new FormData();for(const [key,value] of Object.entries({token:crypto.randomUUID(),module:'orders',collection:'orders',recordId:'synthetic-missing-order',sectionKey:'record',note:'Synthetic upload boundary'}))followupForm.set(key,value);
  followupForm.set('files',new File([new Uint8Array(20*1024*1024)],'synthetic-followup.txt'));
  const followupBoundary=await request('/api/workspace/business-followup-save',followupForm,adminCookie,{'Connection':'close'});assert.equal(followupBoundary.status,403);await followupBoundary.arrayBuffer();
@@ -110,3 +114,4 @@ try{
  }
 }
 execFileSync(process.execPath,['standalone/test-snapshot-responsiveness.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['standalone/test-supplier-catalog-scheduler.mjs'],{stdio:'inherit',windowsHide:true});

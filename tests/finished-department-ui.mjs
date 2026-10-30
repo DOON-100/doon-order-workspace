@@ -20,13 +20,15 @@ export async function testFinishedDepartmentUi({pass=name=>console.log('PASS '+n
   download:`export const BusinessTeamDownloadButton='a';`,
   access:`export function AccessNotice(){return null;}`,
   loss:`export function LossRecorder(){return null;}`,
+  // Excel filtering has its own interaction suite; this harness exercises department permissions and writes.
+  excel:`export function useExcelColumnFilters(rows){return {rows,filters:{},clearFilters(){}};}`,
   ui:`export const Input='input';export function Field({label,children}){return <label>{label}{children}</label>;}export function Choice(){return null;}export function Empty(){return null;}export function Grid({headers,rows}){return <table><thead><tr>{headers.map((h,i)=><th key={i}>{h}</th>)}</tr></thead><tbody>{rows.map((r,i)=><tr key={i}>{r.map((c,j)=><td key={j}>{c}</td>)}</tr>)}</tbody></table>;}export const dateTime=v=>v;export async function request(){throw Error('unexpected network request');}`
  };
  await build({entryPoints:['app/ledger-panels.tsx'],outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},jsx:'automatic',plugins:[{name:'synthetic-finished-department-ui',setup(b){
   b.onResolve({filter:/^react$/},()=>({path:'react',namespace:'synthetic-finished'}));
   b.onResolve({filter:/^lucide-react$/},()=>({path:'icons',namespace:'synthetic-finished'}));
   b.onResolve({filter:/components\/ui\/(button|progress|textarea)$/},a=>({path:a.path.split('/').at(-1),namespace:'synthetic-finished'}));
-  for(const [name,file] of [['ui','ui'],['download','business-team-download'],['access','access-notice'],['loss','loss-panel']])b.onResolve({filter:new RegExp('^\\./'+file+'$')},()=>({path:name,namespace:'synthetic-finished'}));
+  for(const [name,file] of [['ui','ui'],['download','business-team-download'],['access','access-notice'],['loss','loss-panel'],['excel','excel-table']])b.onResolve({filter:new RegExp('^\\./'+file+'$')},()=>({path:name,namespace:'synthetic-finished'}));
   b.onLoad({filter:/.*/,namespace:'synthetic-finished'},a=>({contents:modules[a.path],loader:'jsx',resolveDir:process.cwd()}));
  }}]});
  const {DepartmentPanel,LedgerEditor}=await import(pathToFileURL(outfile).href);

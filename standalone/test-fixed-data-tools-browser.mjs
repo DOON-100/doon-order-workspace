@@ -21,7 +21,7 @@ const port=18799,origin=`http://127.0.0.1:${port}`;
 await new Promise((resolve,reject)=>{const probe=net.createServer();probe.once('error',reject);probe.listen(port,'127.0.0.1',()=>probe.close(error=>error?reject(error):resolve()));});
 const root=await fs.mkdtemp(path.join(output,'fixed-data-tools-browser-'));
 const dataDir=path.join(root,'data');await fs.mkdir(path.join(dataDir,'files'),{recursive:true});
-const env={...process.env,DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_SERVER_MODE:'',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SUPPLIER_PUBLIC_ORIGIN:'',DOON_REVIEW_MODE:'',DOON_TLS_CERT:'',DOON_TLS_KEY:'',DOON_STUDIO_ENABLED:'0'};
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:dataDir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_SERVER_MODE:'',DOON_EMPLOYEE_PUBLIC_ORIGIN:'',DOON_SUPPLIER_PUBLIC_ORIGIN:'',DOON_REVIEW_MODE:'',DOON_TLS_CERT:'',DOON_TLS_KEY:'',DOON_STUDIO_ENABLED:'0'};
 const modulePath=process.env.DOON_PLAYWRIGHT_MODULE;
 const {chromium}=await import(modulePath?pathToFileURL(path.resolve(modulePath)).href:'playwright');
 const at=new Date().toISOString(),password='Synthetic-Fixed-Tools-2026!';

@@ -10,7 +10,7 @@ const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(p
 const root=await fs.mkdtemp(path.resolve('test-output/browser-fixes-')),port=18788;
 const lan=Object.values(os.networkInterfaces()).flat().find(a=>a?.family==='IPv4'&&!a.internal&&a.address.startsWith('192.168.'))?.address;
 assert(lan,'A LAN IP is required to reproduce insecure-context behavior');
-const origin=`http://${lan}:${port}`,env={...process.env,DOON_DATA_DIR:root,DOON_HOST:'0.0.0.0',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
+const origin=`http://${lan}:${port}`,env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_DATA_DIR:root,DOON_HOST:'0.0.0.0',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1'};
 execFileSync(process.execPath,['lan-dist/manage.mjs','init'],{env,stdio:'pipe'});
 const initial=(await fs.readFile(path.join(root,'管理员首次登录.txt'),'utf8')).match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,['lan-dist/server.mjs'],{env,stdio:'pipe'});let logs='';server.stderr.on('data',b=>logs+=b);server.stdout.on('data',()=>{});

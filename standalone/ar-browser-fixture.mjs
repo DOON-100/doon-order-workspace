@@ -7,6 +7,8 @@ const dist=path.resolve('test-output/ar-workspace-build');
 const dir=await fs.mkdtemp(path.resolve('test-output/ar-browser-'));
 assert(dir.startsWith(path.resolve('test-output')+path.sep));
 const port=process.env.AR_QA_PORT||'18835';assert(/^1883[5-9]$/.test(port));
+for(const name of Object.keys(process.env))if(/^DOON_KINGDEE_/i.test(name))delete process.env[name];
+process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';process.env.DOON_KINGDEE_READONLY_ENABLED='0';
 process.env.DOON_DATA_DIR=dir;process.env.DOON_HOST='127.0.0.1';process.env.DOON_PORT=port;process.env.DOON_NO_AUTO_BACKUP='1';
 const runtime=await import(pathToFileURL(path.join(dist,'runtime.mjs'))),auth=await import(pathToFileURL(path.join(dist,'auth.mjs')));
 const acct=await auth.createAccount({username:'ar-qa',name:'合成验收业务',password:'Synthetic-AR-2026!',role:'admin'},null,{owner:true});

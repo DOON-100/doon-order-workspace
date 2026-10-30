@@ -36,7 +36,7 @@ if(checkOnly){
  console.log(JSON.stringify({verified:true,buildDir,evidence,verifiedAt:saved.verifiedAt}));
 }else{
  const commands=[['business',['tests/run.mjs']],['types',['node_modules/typescript/bin/tsc','--noEmit']],['standalone',['standalone/test.mjs']],['drawing-import',['standalone/test-engineering-drawing-import.mjs']],['drawing-browser',['standalone/test-engineering-drawing-browser.mjs']],['sop-browser',['standalone/test-engineering-sop-browser.mjs']]],checks=[];
- const env={...process.env,DOON_BUILD_DIR:buildDir};delete env.DOON_DATA_DIR;delete env.DOON_TEST_ORIGINALS;delete env.DOON_TEST_ORIGINALS_MANIFEST;
+ const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0',DOON_BUILD_DIR:buildDir};delete env.DOON_DATA_DIR;delete env.DOON_TEST_ORIGINALS;delete env.DOON_TEST_ORIGINALS_MANIFEST;
  for(const [name,command] of commands){
   console.log(`Verifying ${name}…`);execFileSync(process.execPath,command,{cwd:root,env,stdio:'inherit'});checks.push({name,passed:true});
  }

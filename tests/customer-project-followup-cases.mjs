@@ -9,15 +9,15 @@ import path from 'node:path';
 const db=new DatabaseSync(':memory:');
 db.exec("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT NOT NULL,data TEXT NOT NULL);CREATE TABLE workspace_revision(id TEXT PRIMARY KEY,revision INTEGER NOT NULL);INSERT INTO workspace_revision VALUES('main',0);CREATE TABLE transaction_guards(id TEXT PRIMARY KEY,valid INTEGER NOT NULL CONSTRAINT revision_must_match CHECK(valid=1));");
 class Statement{constructor(sql,args=[]){this.sql=sql;this.args=args;}bind(...args){return new Statement(this.sql,args);}async first(){return db.prepare(this.sql).get(...this.args)||null;}async all(){return {results:db.prepare(this.sql).all(...this.args)};}async run(){return db.prepare(this.sql).run(...this.args);}}
-const files=new Map();globalThis.__followupTestEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=statements.map(s=>db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key)}:null}};
+const files=new Map();globalThis.__followupTestEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=statements.map(s=>db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key),arrayBuffer:async()=>new Response(files.get(key)).arrayBuffer()}:null}};
 await fs.mkdir('test-output',{recursive:true});
-await build({stdin:{contents:"export * from './lib/customer-project-followup-api';export {collaborationPost} from './lib/collaboration-api';export {customerProjectGet,customerProjectPost} from './lib/customer-project-api';export {scopeBusinessTeamPayload} from './lib/business-team-scope';",resolveDir:process.cwd(),loader:'ts'},outfile:'test-output/customer-project-followup-api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'followup-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},a=>({contents:a.path==='env'?'export const env=globalThis.__followupTestEnv;':'export async function getChatGPTUser(){return null;}'}));}}]});
+await build({stdin:{contents:"export * from './lib/customer-project-followup-api';export {collaborationPost} from './lib/collaboration-api';export {customerProjectGet,customerProjectPost} from './lib/customer-project-api';export {scopeBusinessTeamPayload} from './lib/business-team-scope';",resolveDir:process.cwd(),loader:'ts'},outfile:'test-output/customer-project-followup-api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'followup-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},a=>({contents:a.path==='env'?'export const env=globalThis.__followupTestEnv;':'export async function getChatGPTUser(){return {userId:"login-alice"};}'}));}}]});
 const api=await import(pathToFileURL(path.resolve('test-output/customer-project-followup-api.mjs')).href);
 const put=row=>db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(row.id,row.kind,JSON.stringify(row));
 const records=()=>db.prepare('SELECT data FROM records').all().map(r=>JSON.parse(r.data));
 const state=()=>({revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get().revision,records:records()});
 const one=id=>records().find(r=>r.id===id),uuid=()=>crypto.randomUUID();
-const admin={id:'admin',kind:'member',name:'Synthetic admin',role:'admin',active:true},alice={id:'alice',kind:'member',name:'Synthetic Alice',role:'sales',active:true},service={id:'service',kind:'member',name:'Synthetic service',role:'clerk',active:true},other={id:'other',kind:'member',name:'Synthetic other',role:'sales',active:true};
+const admin={id:'admin',kind:'member',name:'Synthetic admin',role:'admin',active:true},alice={id:'alice',kind:'member',name:'Synthetic Alice',role:'sales',active:true,userId:'login-alice'},service={id:'service',kind:'member',name:'Synthetic service',role:'clerk',active:true},other={id:'other',kind:'member',name:'Synthetic other',role:'sales',active:true};
 const customer={id:'c1',kind:'customer_account',customer:'Synthetic customer',customerCode:'TEST-1',active:true,salesMemberIds:['alice'],serviceMemberIds:['service'],salesName:'Synthetic Alice',serviceName:'Synthetic service'};
 for(const r of [admin,alice,service,other,customer,{...customer,id:'c2',customerCode:'TEST-2',salesMemberIds:['other'],serviceMemberIds:[]}])put(r);
 async function call(name,body,actor=alice,s=state()){
@@ -36,6 +36,43 @@ assert.equal((await ok('import',payload,admin)).idempotent,true);
 assert.equal((await ok('data',undefined,alice)).followups.length,2);assert.equal((await ok('data',undefined,service)).followups.length,1);assert.equal((await ok('data',undefined,other)).followups.length,0);
 assert.equal((await ok('data',undefined,service)).mails.length,1);assert.equal((await ok('data',undefined,service)).sourceBundles.length,0);
 console.log('PASS owner/admin unassigned isolation and existing customer scopes');
+{
+ const owner=(id,role='clerk',active=false)=>({id,kind:'member',name:'Synthetic '+id,role,active,userId:'login-'+id,email:id+'@example.invalid',customers:[]});
+ const rosterMembers=[owner('project-sales','sales'),owner('project-service','clerk',true),owner('legacy-service'),owner('task-owner','production'),owner('collaboration-owner','finance',true),owner('followup-owner'),owner('mail-owner'),owner('source-owner'),owner('hidden-owner'),owner('invalid-task-owner'),owner('trashed-owner'),owner('unreferenced-owner'),owner('unreferenced-active','clerk',true)];
+ const project={id:'roster-project',kind:'customer_project',customerId:'c1',title:'Synthetic roster project',code:'ROSTER',salesMemberId:'project-sales',serviceMemberIds:['project-service'],status:'active'};
+ const legacyProject={...project,id:'roster-legacy',serviceMemberIds:undefined,serviceMemberId:'legacy-service'};
+ const hiddenProject={...project,id:'roster-hidden',customerId:'c2',salesMemberId:'hidden-owner',serviceMemberIds:[]};
+ const trashedProject={...project,id:'roster-trashed',salesMemberId:'trashed-owner',serviceMemberIds:[],trashedAt:'2026-10-01T00:00:00.000Z'};
+ const visibleFollowup={id:'roster-followup',kind:'customer_project_followup',...followup({ownerId:'followup-owner',customerId:'c1',projectId:project.id})};
+ const rosterRecords=[admin,alice,service,other,customer,{...customer,id:'c2',salesMemberIds:['other'],serviceMemberIds:[]},...rosterMembers,project,legacyProject,hiddenProject,trashedProject,visibleFollowup,
+  {...visibleFollowup,id:'roster-hidden-followup',ownerId:'hidden-owner',customerId:'c2',projectId:hiddenProject.id},
+  {...visibleFollowup,id:'roster-trashed-followup',ownerId:'trashed-owner',projectId:trashedProject.id},
+  {id:'roster-task',kind:'customer_project_task',customerId:'c1',projectId:project.id,ownerId:'task-owner'},
+  {id:'roster-collaboration',kind:'customer_project_collaboration_task',customerId:'c1',projectId:project.id,ownerId:'collaboration-owner'},
+  {id:'roster-invalid-task',kind:'customer_project_task',customerId:'c2',projectId:project.id,ownerId:'invalid-task-owner'},
+  {id:'roster-hidden-task',kind:'customer_project_task',customerId:'c2',projectId:hiddenProject.id,ownerId:'hidden-owner'},
+  {id:'roster-trashed-task',kind:'customer_project_task',customerId:'c1',projectId:trashedProject.id,ownerId:'trashed-owner'},
+  {id:'roster-mail',kind:'customer_project_followup_mail',ownerId:'mail-owner',followupIds:[visibleFollowup.id]},
+  {id:'roster-hidden-mail',kind:'customer_project_followup_mail',ownerId:'hidden-owner',followupIds:['roster-hidden-followup']},
+  {id:'roster-source',kind:'customer_project_followup_source',ownerId:'source-owner',filename:'synthetic-source.html',fileKey:'synthetic-private-key'},
+ ];
+ const rosterState={revision:0,records:rosterRecords},before=JSON.stringify(rosterState),rosterFeed=await ok('data',undefined,alice,rosterState);
+ assert.deepEqual(rosterFeed.people.map(person=>person.id),['alice','other','project-sales','project-service','legacy-service','task-owner','collaboration-owner','followup-owner','mail-owner']);
+ assert.ok(rosterFeed.people.every(person=>Object.keys(person).sort().join(',')==='id,name'));
+ assert.ok(rosterFeed.people.every(person=>!person.id.startsWith('login-')),'Responsibility IDs must remain member IDs, not authentication user IDs');
+ assert.equal(rosterFeed.people.find(person=>person.id==='task-owner').name,'Synthetic task-owner');
+ assert.deepEqual(rosterFeed.members.map(member=>member.id),rosterRecords.filter(row=>row.kind==='member'&&row.active&&['admin','sales','clerk','pmc'].includes(row.role)).map(member=>member.id),'Display-only historical owners must not expand assignment candidates');
+ assert.deepEqual(rosterFeed.projectTasks.map(task=>task.id),['roster-task','roster-collaboration']);
+ assert.deepEqual(rosterFeed.followups.map(row=>row.id),[visibleFollowup.id]);
+ assert.deepEqual(rosterFeed.mails.map(row=>row.id),['roster-mail']);
+ assert.deepEqual(rosterFeed.sourceBundles,[]);
+ const adminRosterFeed=await ok('data',undefined,admin,rosterState);
+ assert.ok(adminRosterFeed.people.some(person=>person.id==='source-owner'),'Source owners are included only when their source is authorized');
+ assert.equal(adminRosterFeed.sourceBundles.find(row=>row.id==='roster-source').fileKey,undefined);
+ assert.ok(!adminRosterFeed.people.some(person=>['invalid-task-owner','trashed-owner','unreferenced-owner','unreferenced-active'].includes(person.id)));
+ assert.equal(JSON.stringify(rosterState),before,'Reading the roster must not modify original records');
+ console.log('PASS people include visible project, legacy service, task, followup, mail and authorized source owners without widening data or assignment permissions');
+}
 const edit={token:uuid(),id:f1,version:1,...followup({customerId:'c1',status:'completed',followUpDate:'2026-10-20',notes:'Human changed note',checklist:[{id:'check1',text:'Review original request',checked:true}]})};
 await ok('save',edit);await denied('save',{...edit,token:uuid()},alice,409);await denied('save',{...edit,token:uuid(),version:2,source:{overwritten:true}},alice,400);
 await denied('save',{...edit,token:uuid(),version:2,customerId:'c2'},alice);
