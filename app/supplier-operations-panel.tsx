@@ -1,6 +1,6 @@
 'use client';
 
-import {lazy,Suspense,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
+import {lazy,Suspense,useCallback,useEffect,useMemo,useRef,useState,type ReactNode} from 'react';
 import {useQuery} from '@tanstack/react-query';
 import {ArrowRight,RefreshCw,FileText,Download} from 'lucide-react';
 import {Button} from '@/components/ui/button';
@@ -23,6 +23,7 @@ import {BusinessTeamDownloadButton} from './business-team-download';
 import './supplier-operations-panel.css';
 
 const OutsourcingWorkbookPanel=lazy(()=>import('./outsourcing-workbook-panel').then(module=>({default:module.OutsourcingWorkbookPanel})));
+const MetalOutsourcingPanel=lazy(()=>import('./metal-outsourcing-panel').then(module=>({default:module.MetalOutsourcingPanel})));
 type Props={data:Data;act:Act;busy:boolean;openOrder:(order:Order)=>void;onDirtyChange:(dirty:boolean)=>void;onNavigate:(view:string,context?:WorkspaceNavigationContext)=>void;view:string};
 type SnapshotResponse={snapshot:ProcurementSnapshot|null};
 type ProjectResponse={samples:Entity[];internalSamples:Entity[];projects:Entity[]};
@@ -31,7 +32,7 @@ const descriptions:Record<string,{title:string;detail:string}>={
  'supplier-followup':{title:'供应商与交期跟催',detail:'从最新采购未上货记录找出供应商与到期明细，再维护已有采购复期和催交记录。'},
  'supplier-kit':{title:'眼镜物料齐套与欠料',detail:'按板料、钛料、铰链、镜腿、镜片和包材查看采购，结合订单配件、板料、配套齐料日期逐单核对。'},
  'supplier-outsourcing':{title:'外协加工与未回货',detail:'按真实外发单跟进电镀、PVD、喷涂及其他工序；登记供应商回复、送货凭证与实际合格回货。'},
- 'supplier-semifinished':{title:'钛架部',detail:'按钛焊、打磨和钛配套工序，跟进半成品送出、供应商复期与实际回货。'},
+ 'supplier-semifinished':{title:'钛架部',detail:'按订单和款式汇总全部SKU，选择BOM配件与工序，办理报价、外发送货、收回质检和对账。'},
  'supplier-semifinished-plastic':{title:'胶架部',detail:'按脾加工、车房、出桶配套和钉装磨胶工序，跟进半成品送出、供应商复期与实际回货。'},
  'supplier-plating':{title:'电镀外发与回货',detail:'按电镀工序跟进外发单、供应商复期、未回数量与送货凭证，核对实际合格回货。'},
  'supplier-risk':{title:'采购异常与供应风险',detail:'集中检查采购原表交期、缺失信息和已登记外协的逾期、复期风险。'},
@@ -59,6 +60,8 @@ function EmptyRows({children}:{children:ReactNode}){return <div className="suppl
 
 export function SupplierOperationsPanel(props:Props){
  const {data,view,onNavigate}=props,description=descriptions[view]||descriptions['supplier-followup'];
+ const [metalMode,setMetalMode]=useState(true),[metalDirty,setMetalDirty]=useState(false);
+ const metalDirtyChanged=useCallback((dirty:boolean)=>{setMetalDirty(dirty);props.onDirtyChange(dirty);},[props.onDirtyChange]);
  const outsourcingScope:OutsourcingScope|undefined=view==='supplier-semifinished'?'titanium':view==='supplier-semifinished-plastic'?'plastic':view==='supplier-plating'?'plating':view==='supplier-outsourcing'?'all':undefined;
  const referenceView=view==='outsourcing-catalog'||view==='outsourcing-workbooks';
  const current=useQuery<SnapshotResponse>({queryKey:['kingdee-pending',''],queryFn:()=>request('kingdee-pending-data'),enabled:data.me.active&&data.me.role!=='supplier'&&!outsourcingScope&&view!=='supplier-directory'&&!referenceView});
@@ -76,7 +79,8 @@ export function SupplierOperationsPanel(props:Props){
   {view==='supplier-followup'&&<FollowupView materials={materials} {...props}/>}
   {view==='supplier-directory'&&<LegacySupplierPanel key="directory" initialView="directory" data={data} act={props.act} busy={props.busy} openOrder={props.openOrder}/>}
   {view==='supplier-kit'&&<KitView materials={materials} {...props}/>}
-  {outsourcingScope&&<LegacySupplierPanel key={outsourcingScope} scope={outsourcingScope} data={data} act={props.act} busy={props.busy} openOrder={props.openOrder}/>}
+  {outsourcingScope==='titanium'&&<div className="supplier-top-tabs" aria-label="钛架部外发办理方式"><button className={metalMode?'selected':''} disabled={metalDirty} onClick={()=>setMetalMode(true)}>金属外发</button><button className={!metalMode?'selected':''} disabled={metalDirty} onClick={()=>setMetalMode(false)}>原工序跟进</button></div>}
+  {outsourcingScope==='titanium'&&metalMode?<Suspense fallback={<p role="status">正在读取金属外发工作台…</p>}><MetalOutsourcingPanel me={data.me} onDirtyChange={metalDirtyChanged}/></Suspense>:outsourcingScope&&<LegacySupplierPanel key={outsourcingScope} scope={outsourcingScope} data={data} act={props.act} busy={props.busy} openOrder={props.openOrder}/>}
   {view==='supplier-risk'&&<RiskView materials={materials} {...props}/>}
   {view==='supplier-samples'&&<SamplesView materials={materials} {...props}/>}
   {view==='supplier-reconciliation'&&<ReconciliationView materials={materials} {...props}/>}

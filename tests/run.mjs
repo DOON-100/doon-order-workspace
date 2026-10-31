@@ -192,4 +192,5 @@ execFileSync(process.execPath,['tests/kingdee-pending-scheduler.mjs'],{stdio:'in
 execFileSync(process.execPath,['tests/fixed-schedule.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/outsourcing-catalog-cases.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/outsourcing-workbook-cases.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/metal-outsourcing-cases.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

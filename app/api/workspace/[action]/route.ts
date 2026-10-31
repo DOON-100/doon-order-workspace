@@ -63,6 +63,7 @@ import {salesOrderSourcesGet,salesOrderSourcesPost} from '@/lib/sales-order-sour
 import {kingdeeSalesGet,kingdeeSalesPost} from '@/lib/kingdee-sales-api';
 import {outsourcingCatalogGet,outsourcingCatalogPost} from '@/lib/outsourcing-catalog-api';
 import {outsourcingWorkbookGet,outsourcingWorkbookPost} from '@/lib/outsourcing-workbook-api';
+import {metalOutsourcingGet,metalOutsourcingPost} from '@/lib/metal-outsourcing-api';
 export const dynamic='force-dynamic';
 // Every action used to read the whole workspace on each request. The audit trail
 // and archive rows now make that tens of megabytes, so reads that only inspect
@@ -88,6 +89,9 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('fixed_tool_')))return false;
  // Shared definitions and restricted originals have independent history/access rules.
  if(parts.some(v=>typeof v.kind==='string'&&(v.kind.startsWith('outsourcing_catalog')||v.kind.startsWith('outsourcing_workbook'))))return false;
+ // Metal prices and multi-source documents have independent access rules. A
+ // readable legacy SKU must not expose a commercial snapshot through this feed.
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('metal_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_color_')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('sales_order_source')))return false;
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('kingdee_sales_')))return false;
@@ -128,6 +132,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const {action}=await ctx.params,url=new URL(req.url),orders=visible(s,m),ids=new Set(orders.map(o=>o.id));
  const catalog=await outsourcingCatalogGet(action,req,s,m);if(catalog)return catalog;
  const workbook=await outsourcingWorkbookGet(action,req,s,m);if(workbook)return workbook;
+ const metal=await metalOutsourcingGet(action,req,s,m);if(metal)return metal;
  const businessFollowup=await businessFollowupGet(action,req,s,m);if(businessFollowup)return businessFollowup;
  const supplier=await finishedSupplierGet(action,req,s,m);if(supplier)return supplier;
  if(m.role==='supplier')throw new AppError('供应商只能访问获分配的成品外发任务。',403);
@@ -219,6 +224,7 @@ export async function POST(req:Request,ctx:Context){try{
  const m=await actor(s);
  const catalog=await outsourcingCatalogPost(action,req,s,m);if(catalog)return catalog;
  const workbook=await outsourcingWorkbookPost(action,req,s,m);if(workbook)return workbook;
+ const metal=await metalOutsourcingPost(action,req,s,m);if(metal)return metal;
  const kingdeeSupplierCatalog=await kingdeeSupplierCatalogPost(action,req,s,m);if(kingdeeSupplierCatalog)return kingdeeSupplierCatalog;
  const businessFollowup=await businessFollowupPost(action,req,s,m);if(businessFollowup)return businessFollowup;
  const production=await productionWorkspacePost(action,req,s,m);if(production)return production;

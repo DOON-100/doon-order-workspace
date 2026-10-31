@@ -231,15 +231,27 @@ export function inspectFixedWorkbook(bytes: ArrayBuffer, input: FixedWorkbookInp
   const sheets = sources.map(source => {
    checkTime();
    let formulaCells = 0, missingFormulaCaches = 0, errorCells = 0;
+   let contentBox: Box | null = null;
    const sheet = book.Sheets[source.name];
    for (const [address, raw] of source.cells) {
     checkTime();
     if (!sheet[address]) fail('解析器遗漏原件单元格，未返回不完整结果。');
     if (raw.hasFormula || sheet[address]?.F) { formulaCells++; if (!raw.hasCache) missingFormulaCaches++; }
     if (raw.type === 'e') errorCells++;
+    // A distant format-only cell must not turn a small field query into XFD-wide
+    // data. Keep stored dimensions unchanged and publish a separate content box.
+    // Empty-string formula results, missing caches, zero, false and error cells
+    // still count as content. No stored cell or original byte is removed.
+    const cell = reportCell(sheet, source, cellPosition(address).r + 1, cellPosition(address).c + 1);
+    if (cell.cacheStatus !== 'not-formula' || cell.value !== null || cell.unknownReason === 'error' || cell.unknownReason === 'unsupported-value') {
+     const pos = cellPosition(address);
+     if (!contentBox) contentBox = {s: {...pos}, e: {...pos}};
+     else {contentBox.s.r = Math.min(contentBox.s.r, pos.r); contentBox.s.c = Math.min(contentBox.s.c, pos.c); contentBox.e.r = Math.max(contentBox.e.r, pos.r); contentBox.e.c = Math.max(contentBox.e.c, pos.c);}
+    }
    }
    if (source.declaredDimension && source.declaredDimension !== source.dimension) warnings.push(`工作表“${source.name}”声明范围与实际存储坐标不同，摘要采用实际坐标。`);
    return {name: source.name, state: source.state, dimension: source.dimension, declaredDimension: source.declaredDimension,
+    contentDimension: contentBox ? XLSX.utils.encode_range(contentBox) : null,
     rows: source.box ? source.box.e.r + 1 : 0, columns: source.box ? source.box.e.c + 1 : 0,
     storedCellCount: source.cells.size, formulaCells, missingFormulaCaches, errorCells, mergedRangeCount: sheet['!merges']?.length || 0};
   });

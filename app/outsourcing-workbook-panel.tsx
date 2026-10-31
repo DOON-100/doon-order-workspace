@@ -12,7 +12,7 @@ type Archive={id:string;title:string;filename:string;sha256:string;size:number;v
 type Catalog={canManage:boolean;archives:Archive[];members:{id:string;name:string;departments:string[]}[]};
 type Cell={address:string;column:number;type:string;value:string|number|boolean|null;cachedValue:string|number|boolean|null;display:string;formula:string|null;rawFormula:string|null;numberFormat:string|null;cacheStatus:string;unknownReason:string|null};
 type Row={row:number;hidden:boolean;cells:Cell[]};
-type Query={archive:Archive;sheet:Sheet;headerRow:number;columns:{column:number;letter:string;label:string;hidden:boolean}[];rows:Row[];total:number;formulaCachesRecalculated:false;date1904:boolean};
+type Query={archive:Archive;sheet:Sheet;headerRow:number;queriedRange?:string|null;omittedFormattingOnly?:boolean;columns:{column:number;letter:string;label:string;hidden:boolean}[];rows:Row[];total:number;formulaCachesRecalculated:false;date1904:boolean};
 
 function FieldQuery({data}:{data:Query}){
  const [showHidden,setShowHidden]=useState(false),[page,setPage]=useState(0),[selected,setSelected]=useState<Cell|null>(null);
@@ -24,6 +24,7 @@ function FieldQuery({data}:{data:Query}){
  const last=Math.max(0,Math.ceil(model.rows.length/30)-1),current=Math.min(page,last);
  return <section className="owb-query"><p><strong>字段查询 · 保存时结果</strong>　{data.sheet.name}（{data.sheet.state==='visible'?'可见表':data.sheet.state==='hidden'?'原隐藏表':'原深度隐藏表'}）</p>
   <p className="muted">公式没有重新计算，外链没有刷新。此处按字段查询，原版式、打印及完整Excel操作请下载原件使用Excel／WPS打开。</p>
+  {data.omittedFormattingOnly&&<p className="muted">本次查询内容范围 {data.queriedRange||'无内容'}；外围仅有空白格式的区域未展开。原件中的全部格式、行列和打印设置仍完整保留。</p>}
   <p className="muted">按值选择使用显示文字；数值条件使用未舍入原值，日期条件按原日期格式和日期系统识别。公式使用已保存结果，缺失缓存不会当作空白或零。</p>
   <label><input type="checkbox" checked={showHidden} onChange={e=>{setShowHidden(e.target.checked);model.clearFilters();setSelected(null);}}/> 显示原隐藏行／字段</label>
   <p>查询当前所选工作表全部已读取行，先筛选后分页。命中 {model.rows.length} / {rows.length} 行；原表 {data.total} 行含内容或公式。</p>

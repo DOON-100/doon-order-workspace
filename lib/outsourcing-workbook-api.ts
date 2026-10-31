@@ -27,8 +27,9 @@ export function outsourcingWorkbookSheet(bytes:ArrayBuffer,sheetName:string,head
  const inspection=inspectFixedWorkbook(bytes,{operation:'inspect'}),meta=inspection.sheets.find(sheet=>sheet.name===sheetName);
  if(!meta)throw new AppError('原件中不存在所选工作表。',404);
  if(!Number.isSafeInteger(headerRow)||headerRow<0||headerRow>meta.rows)throw new AppError('表头行超出工作表范围。');
- if(!meta.dimension)return {sheet:meta,headerRow,columns:[],rows:[],total:0,formulaCachesRecalculated:false,date1904:inspection.date1904};
- const range=XLSX.utils.decode_range(meta.dimension),width=range.e.c-range.s.c+1,height=range.e.r-range.s.r+1;
+ const queriedRange=meta.contentDimension,omittedFormattingOnly=queriedRange!==meta.dimension;
+ if(!queriedRange)return {sheet:meta,headerRow,queriedRange,omittedFormattingOnly,columns:[],rows:[],total:0,formulaCachesRecalculated:false,date1904:inspection.date1904};
+ const range=XLSX.utils.decode_range(queriedRange),width=range.e.c-range.s.c+1,height=range.e.r-range.s.r+1;
  if(width>200||height>5000||width*height>100000)throw new AppError('该表范围超过字段查询上限（5000行、200列、100000格）。原件已完整保留，请下载原件查看；未返回截断数据。',413);
  // The shared reader has already bounded inflation, XML and stored cells. This
  // second parse reads only presentation metadata; it never evaluates a formula.
@@ -44,7 +45,7 @@ export function outsourcingWorkbookSheet(bytes:ArrayBuffer,sheetName:string,head
  const blank=(row:number,column:number):FixedWorkbookCell=>({address:XLSX.utils.encode_cell({r:row-1,c:column-1}),row,column,type:'blank',value:null,formula:null,rawFormula:null,cachedValue:null,cacheStatus:'not-formula',unknown:true,unknownReason:'blank',sourceValue:null,numberFormat:null,arrayFormulaRange:null});
  const columns=Array.from({length:width},(_,index)=>{const c=index+range.s.c,cell=map.get(headerRow)?.[index],letter=XLSX.utils.encode_col(c);return {column:c+1,letter,label:(cell?display(cell,inspection.date1904):'')||letter,hidden:!!sheet['!cols']?.[c]?.hidden};});
  const rows=[...map].sort(([a],[b])=>a-b).map(([row,cells])=>({row,hidden:!!sheet['!rows']?.[row-1]?.hidden,cells:columns.map((column,index)=>{const cell=cells[index]||blank(row,column.column);return {...cell,display:display(cell,inspection.date1904)};})}));
- return {sheet:meta,headerRow,columns,rows,total:rows.length,formulaCachesRecalculated:false,date1904:inspection.date1904};
+ return {sheet:meta,headerRow,queriedRange,omittedFormattingOnly,columns,rows,total:rows.length,formulaCachesRecalculated:false,date1904:inspection.date1904};
 }
 
 export async function outsourcingWorkbookGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{

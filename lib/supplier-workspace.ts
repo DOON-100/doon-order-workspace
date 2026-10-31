@@ -8,7 +8,7 @@ export const supplierWorkspaceSpaces=[
  {id:'supplier-directory',label:'供应商档案',area:'采购与交期',icon:'people',detail:'查看和维护供应商资料，导入金蝶供应商表。'},
  {id:'supplier-followup',label:'供应商与交期跟催',area:'采购与交期',icon:'people',detail:'维护供应商资料、承诺交期、最新复期与催交事项。'},
  {id:'supplier-kit',label:'眼镜物料齐套与欠料',area:'制造与备料',icon:'production',detail:'按订单、款号与物料规格核对板料、钛料、铰链、配件和包材欠料。'},
- {id:'supplier-semifinished',label:'钛架部',area:'半成品外发',icon:'factory',detail:'跟进钛焊、打磨和钛配套的外发、供应商复期与回货。'},
+ {id:'supplier-semifinished',label:'钛架部',area:'半成品外发',icon:'factory',detail:'按款汇总SKU和共用BOM配件，办理金属外发报价、送货、收回、质检与对账。'},
  {id:'supplier-semifinished-plastic',label:'胶架部',area:'半成品外发',icon:'factory',detail:'跟进脾加工、车房、出桶配套和钉装磨胶的外发、供应商复期与回货。'},
  {id:'outsourcing-catalog',label:'外发基础资料',area:'公司共享',icon:'book',detail:'公司共用外发类型及工序，各外发负责人维护自己负责的资料和部门使用设置。'},
  {id:'outsourcing-workbooks',label:'外发原表与字段查询',area:'外发原件',icon:'document',detail:'保留完整Excel原件，按字段筛选保存时的数据，并下载原件使用Excel功能。'},

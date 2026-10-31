@@ -63,7 +63,7 @@ try{
  await context.addCookies([{name:session.cookie.slice(0,split),value:session.cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  await context.addInitScript(()=>document.addEventListener('DOMContentLoaded',()=>{const banner=document.createElement('div');banner.textContent='测试环境，不含正式业务数据';banner.style.cssText='position:fixed;bottom:0;right:0;z-index:999999;background:#fff7cd;color:#7a5000;padding:5px 12px;font:12px sans-serif';document.body.append(banner);}));
  page=await context.newPage();page.on('pageerror',error=>errors.push(error.message));
- await page.goto(origin+'/supplier-semifinished');await page.locator('.supplier-workspace').waitFor();
+ await page.goto(origin+'/supplier-semifinished');await page.getByRole('button',{name:'原工序跟进',exact:true}).click();await page.locator('.supplier-workspace').waitFor();
  const names=[['purchasing','采购'],['semifinished-outsourcing','半成品外发'],['plating-outsourcing','电镀外发']];
  for(const [id,label] of names)assert.equal(await page.locator(`[data-department-id="${id}"] .department-navigation-toggle > span`).innerText(),label);
  assert.equal(await page.locator('[data-department-id]').count(),13);

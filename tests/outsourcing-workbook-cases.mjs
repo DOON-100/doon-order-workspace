@@ -79,6 +79,25 @@ const malicious=zipSync({...archive,'xl/worksheets/sheet1.xml':strToU8(strFromU8
 assert.equal((await call('outsourcing-workbook-sheet?id='+id+'&sheet=Sheet1&headerRow=-1')).status,400);
 pass('macro, malformed XML, oversized uploads/inflation and invalid header selection fail closed');
 
+// Format-only cells at the Excel boundary must not hide real columns, formula
+// tails or data. Inspection still reports the original full stored dimension.
+const paddedBook=XLSX.utils.book_new(),paddedSheet=XLSX.utils.aoa_to_sheet([['订单','编号','数量'],['SYNTHETIC-PAD','001',0]]);
+paddedSheet.D2={t:'b',v:false};paddedSheet.AT4={t:'n',f:'1+2',v:3};paddedSheet['!ref']='A1:AT4';
+XLSX.utils.book_append_sheet(paddedBook,paddedSheet,'Padded');
+const paddedZip=unzipSync(new Uint8Array(XLSX.write(paddedBook,{type:'array',bookType:'xlsx'})));
+function paddingCell(xml){const entries={...paddedZip};entries['xl/worksheets/sheet1.xml']=strToU8(strFromU8(entries['xl/worksheets/sheet1.xml']).replace(/<dimension ref="[^"]+"\s*\/>/,'<dimension ref="A1:XFD4"/>').replace('</row>',xml+'</row>'));return zipSync(entries);}
+const paddedBytes=paddingCell('<c r="XFD1" s="0"/>'),paddedHash=sha(paddedBytes),paddedArchive=await ok('outsourcing-workbook-upload',upload(paddedBytes));
+const padded=await ok('outsourcing-workbook-sheet?id='+paddedArchive.archive.id+'&sheet=Padded&headerRow=1');
+assert.equal(padded.sheet.dimension,'A1:XFD4');assert.equal(padded.queriedRange,'A1:AT4');assert.equal(padded.omittedFormattingOnly,true);assert.equal(padded.columns.length,46);
+assert.equal(padded.rows.find(r=>r.row===2).cells[1].value,'001');assert.equal(padded.rows.find(r=>r.row===2).cells[2].value,0);assert.equal(padded.rows.find(r=>r.row===2).cells[3].value,false);
+assert.equal(padded.rows.find(r=>r.row===4).cells[45].formula,'1+2');assert.equal(padded.rows.find(r=>r.row===4).cells[45].cachedValue,3);
+assert.equal(sha(await (await call('outsourcing-workbook-file?id='+paddedArchive.archive.id)).arrayBuffer()),paddedHash);
+for(const remoteCell of ['<c r="XFD1" t="str"><f>""</f><v></v></c>','<c r="XFD1"><f>1+2</f></c>','<c r="XFD1" t="n"><v>0</v></c>','<c r="XFD1" t="e"><v>#N/A</v></c>']){
+ const far=await ok('outsourcing-workbook-upload',upload(paddingCell(remoteCell)));
+ assert.equal((await call('outsourcing-workbook-sheet?id='+far.archive.id+'&sheet=Padded')).status,413);
+}
+pass('format-only XFD padding is omitted from field query, while originals, all real fields, empty-result formulas, missing caches and errors remain intact');
+
 const largeBook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(largeBook,{A1:{t:'s',v:'header'},Z6000:{t:'s',v:'last'},'!ref':'A1:Z6000'},'Large');const largeBytes=XLSX.write(largeBook,{type:'array',bookType:'xlsx'});
 const largeArchive=await ok('outsourcing-workbook-upload',upload(largeBytes));assert.equal((await call('outsourcing-workbook-sheet?id='+largeArchive.archive.id+'&sheet=Large')).status,413);assert.equal((await call('outsourcing-workbook-file?id='+largeArchive.archive.id)).status,200);
 const collisionBook=XLSX.utils.book_new();XLSX.utils.book_append_sheet(collisionBook,XLSX.utils.aoa_to_sheet([['synthetic concurrent']]),'Concurrent');const collisionBytes=XLSX.write(collisionBook,{type:'array',bookType:'xlsx'}),oldState=state();
