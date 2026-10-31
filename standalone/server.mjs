@@ -50,6 +50,12 @@ if(process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED==='1'){
  else try{const {supplierCatalogScheduleConfig,createSupplierCatalogScheduler}=await import('./supplier-catalog-job.mjs');const config=supplierCatalogScheduleConfig();supplierCatalogScheduler=createSupplierCatalogScheduler({db,config,runWorker:(await import('./supplier-catalog-worker.mjs')).runKingdeeSupplierCatalogWorker});}
  catch{runtime.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED='0';console.error('金蝶供应商定时同步未启动，请检查服务端配置。');}
 }
+let kingdeePendingScheduler=null;
+if(process.env.DOON_KINGDEE_PENDING_SYNC_ENABLED==='1'){
+ if(supplierOnly||reviewMode){runtime.env.DOON_KINGDEE_PENDING_SYNC_ENABLED='0';console.error('当前入口未启动金蝶采购未上货定时同步。');}
+ else try{const {kingdeePendingScheduleConfig,createKingdeePendingScheduler}=await import('./kingdee-pending-job.mjs');kingdeePendingScheduler=createKingdeePendingScheduler({db,config:kingdeePendingScheduleConfig(),runWorker:(await import('./kingdee-pending-worker.mjs')).runKingdeePendingWorker});}
+ catch{runtime.env.DOON_KINGDEE_PENDING_SYNC_ENABLED='0';console.error('金蝶采购未上货定时同步未启动，请检查服务端配置。');}
+}
 const scheduleConfig=await scheduleBridgeConfig();
 if(scheduleConfig&&(supplierOnly||reviewMode))throw Error('此入口不允许启用后台只读调度');
 const scheduleBridge=scheduleConfig?createScheduleBridge({db,config:scheduleConfig,currentForOwner:async ownerId=>{
@@ -175,7 +181,8 @@ server.listen(port,host,async()=>{
  const status={pid:process.pid,port,startedAt:new Date().toISOString(),localUrl:`${protocol}://${host==='::1'?'[::1]':'127.0.0.1'}:${port}`,...(reviewMode?{mode:'review',readOnly:true,asOf:reviewAsOf}:supplierOnly?{mode:'supplier',publicOrigin:gateway.origin}:employeeGateway?{mode:'employee',publicOrigin:employeeGateway.origin}:{lanUrls:addresses.map(a=>`${protocol}://${a}:${port}`)})};
  await fs.writeFile(path.join(dataDir,reviewMode?'review-server-status.json':supplierOnly?'supplier-server-status.json':'server-status.json'),JSON.stringify(status,null,2));console.log(JSON.stringify(status));
  supplierCatalogScheduler?.start();
+ kingdeePendingScheduler?.start();
  if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1')makeBackup().catch(e=>console.error('启动备份失败',e.message));
 });
 if(!supplierOnly&&!reviewMode&&process.env.DOON_NO_AUTO_BACKUP!=='1'){const timer=setInterval(()=>makeBackup().catch(e=>console.error('自动备份失败',e.message)),24*3600000);timer.unref();}
-for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{supplierCatalogScheduler?.stop();server.close(()=>{db.close();process.exit(0);});});
+for(const signal of ['SIGINT','SIGTERM'])process.on(signal,()=>{supplierCatalogScheduler?.stop();kingdeePendingScheduler?.stop();server.close(()=>{db.close();process.exit(0);});});

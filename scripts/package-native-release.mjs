@@ -12,6 +12,7 @@ const allowedRoots = new Set(['lan-dist', 'node_modules', 'package.json', 'packa
 const distFiles = new Set(['workspace-api.mjs', 'agent-schedules.mjs', 'runtime.mjs', 'ie-mail.mjs', 'auth.mjs',
   'personnel.mjs', 'server.mjs', 'manage.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs',
   'supplier-catalog-worker.mjs', 'supplier-catalog-job.mjs', 'fixed-scheduler.mjs', 'fixed-schedule.mjs',
+  'kingdee-pending-worker.mjs', 'kingdee-pending-job.mjs',
   'customer-price-build-evidence.json']);
 
 export async function sha256(filename) {

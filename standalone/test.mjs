@@ -115,3 +115,4 @@ try{
 }
 execFileSync(process.execPath,['standalone/test-snapshot-responsiveness.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['standalone/test-supplier-catalog-scheduler.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['standalone/test-kingdee-pending-scheduler.mjs'],{stdio:'inherit',windowsHide:true});
