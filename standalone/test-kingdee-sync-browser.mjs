@@ -25,7 +25,10 @@ try{
  const preparation=page.waitForResponse(response=>response.url().endsWith('/kingdee-sync-ready'));
  await page.goto(origin+'/supplier-pending');await preparation;
  assert.deepEqual(await api('workspace/data').then(({asOf,...rest})=>rest),(({asOf,...rest})=>rest)(before));
- await page.getByRole('button',{name:'更新金蝶总表',exact:true}).waitFor();
+ await page.getByRole('button',{name:'同步金蝶总表',exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'更新金蝶总表',exact:true}).count(),0);
+ assert.equal(await page.locator('input[type="file"]').count(),0);
+ assert.equal(await page.getByRole('button',{name:'刷新中台',exact:true}).count(),1);
  await page.clock.install();
  const syncButton=page.getByRole('button',{name:'同步金蝶总表',exact:true}),toast=page.locator('.kingdee-sync-toast');
  const bounds=()=>syncButton.boundingBox(),baseline=await bounds();
