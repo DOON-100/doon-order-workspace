@@ -8,7 +8,7 @@ import {filterBusinessTeamRows} from './business-team-scope';
 export const KINGDEE_PENDING_QUANTITY_MEANING='原表数量，未推定剩余未上货数量';
 export type KingdeePendingValue=string|number|boolean|null;
 export type KingdeePendingRow={sourceRow:number;values:KingdeePendingValue[];displayValues:string[];rowType:'data'|'summary'|'blank'};
-export type KingdeePendingMetadata={filename:string;hash:string;sourceAsOf:string;sourceFilter:string;sourceAccount:string;sourceSheet:string;headerRow:number;importedAt:string;importedBy:string;rowCount:number;sourceRowCount:number;orderCount:number;supplierCount:number;quantityMeaning:string;scope?:'all'|'authorized';apiAddedCount?:number};
+export type KingdeePendingMetadata={filename:string;hash:string;sourceAsOf:string;sourceFilter:string;sourceAccount:string;sourceSheet:string;headerRow:number;importedAt:string;importedBy:string;rowCount:number;sourceRowCount:number;orderCount:number;supplierCount:number;quantityMeaning:string;scope?:'all'|'authorized';apiAddedCount?:number;syncMode?:string;fullSyncedAt?:string};
 export type KingdeePendingSnapshot=Entity&{kind:'kingdee_pending_snapshot';headers:string[];metadata:KingdeePendingMetadata;hash:string;rowsHash:string;rowsKey:string;fileKey:string;committedRevision:number;createdAt:string};
 export type KingdeePendingImport=Entity&{kind:'kingdee_pending_import';headers:string[];metadata:KingdeePendingMetadata;hash:string;rowsHash:string;rowsKey:string;fileKey:string;sample:KingdeePendingRow[];status:'待确认'|'已完成';snapshotId?:string;createdAt:string};
 

@@ -134,14 +134,14 @@ export async function businessFollowupTargets(req:Request,s:State,m:Member,modul
  }else if(module==='engineering-drawings'){
   const data=await feed('drawing-data',req,s,m,engineeringDrawingGet);add('records',data.records,row=>row.canEdit===true||row.canManage===true||row.canApprove===true);
  }else if(pendingModules.has(module)){
-  // Snapshot source rows are immutable projections, not ordinary Entity records.
+  // Source rows are projections; API targets use stable account, document and line IDs.
   // Resolve historical file rows through that exact snapshot's original API.
   const historical=targetRecordId.startsWith('kingdee_pending_snapshot_')?targetRecordId.split(':')[0]:'';
   const data=await feed('kingdee-pending-data',req,s,m,kingdeePendingGet,historical?{id:historical}:{}),source=data.snapshot;
   if(source){
    const headers=source.headers as string[],column=(row:Row,name:string)=>clean(row.values?.[headers.indexOf(name)]);
    for(const row of source.rows||[]){if(row.rowType!=='data')continue;
-    const api=column(row,'来源类型')==='金蝶 API 新增',identity=api?[column(row,'金蝶账套 ID'),column(row,'金蝶单据 ID'),column(row,'金蝶行 ID')]:[source.id,row.sourceRow];
+    const api=['金蝶 API 新增','金蝶 API 当前记录'].includes(column(row,'来源类型')),identity=api?[column(row,'金蝶账套 ID'),column(row,'金蝶单据 ID'),column(row,'金蝶行 ID')]:[source.id,row.sourceRow];
     if(api&&identity.some(value=>!value))continue;
     const recordId=api?'api:'+await sha(JSON.stringify(identity)):String(source.id)+':'+row.sourceRow;
     const values=headers.map((header,index)=>[header,row.values?.[index]]).filter(([,value])=>value!==''&&value!==null&&value!==undefined).sort((a,b)=>String(a[0]).localeCompare(String(b[0])));

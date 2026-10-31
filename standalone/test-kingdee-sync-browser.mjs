@@ -50,7 +50,7 @@ try{
  mode='slow';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();
  assert(await syncButton.isDisabled());assert.equal(await syncButton.getAttribute('aria-busy'),'true');await stationary();await topToast();
  for(let i=0;i<50&&!release;i++)await new Promise(r=>setTimeout(r,20));assert(release);release();
- await page.getByRole('status').filter({hasText:'本次新增 1 条，已有跳过 29 条，待核查 0 条'}).waitFor();assert.equal(runs,1);assert.equal(await page.getByRole('dialog').count(),0);assert.match(await page.getByRole('status').innerText(),/仅同步最新 30 条未上货明细，历史记录保留/);assert.doesNotMatch(await page.getByRole('status').innerText(),/下一页|继续|1263/);
+ await page.getByRole('status').filter({hasText:'本次新增 1 条，更新 0 条，无变化 29 条，待核查 0 条'}).waitFor();assert.equal(runs,1);assert.equal(await page.getByRole('dialog').count(),0);assert.match(await page.getByRole('status').innerText(),/仅同步最新 30 条未上货明细，范围外数据由定时全量同步更新/);assert.doesNotMatch(await page.getByRole('status').innerText(),/下一页|继续|1263/);
  await stationary();await topToast();await page.screenshot({path:path.join(dir,'kingdee-sync-desktop.png'),fullPage:true});await expires();await stationary();
  mode='lost';await page.getByRole('button',{name:'同步金蝶总表',exact:true}).click();
  await page.getByRole('status').filter({hasText:'本次新增 1 条'}).waitFor();assert.equal(runs,2);assert(checks>=1);

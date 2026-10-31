@@ -296,7 +296,7 @@ await reject('kingdee-pending-file?id='+snapshot1.id,undefined,user('sales'),403
 await reject('kingdee-pending-file?id='+snapshot1.id,undefined,admin,403,teamHeader(teamA.id));
 for(const alias of ['supplier-workspace','supplier-followup','supplier-kit','supplier-risk','supplier-samples','supplier-reconciliation'])assert((await ok(dataAction({...oldSnapshotTarget,module:alias}))).entries.some(row=>row.id===pendingSaved.entry.id),'Supplier alias shares exact source history: '+alias);
 replace({...snapshot2,createdAt:'2026-10-04T00:00:00Z',committedRevision:100});
-assert((await catalogOf('supplier-pending')).some(row=>row.recordId===snapshot2.id+':4'));assert(!(await catalogOf('supplier-pending')).some(row=>row.recordId===oldSnapshotTarget.recordId));
+assert((await catalogOf('supplier-pending')).every(row=>row.recordId.startsWith('api:')),'Current API table excludes Excel snapshots');assert(!(await catalogOf('supplier-pending')).some(row=>row.recordId===oldSnapshotTarget.recordId));
 assert.deepEqual((await ok(dataAction({...oldSnapshotTarget,recordId:snapshot2.id+':4'}))).entries,[],'A new immutable source snapshot has its own version history');
 assert((await ok(dataAction(oldSnapshotTarget))).entries.some(row=>row.id===pendingSaved.entry.id),'Old exact snapshot remains addressable after a new import');replace(snapshot2);
 const purchaseTarget={module:'purchase',collection:'rows',recordId:purchase.id,sectionKey:'record'},purchaseSubmission=form(purchaseTarget,{note:'合成采购原订单归属'},evidence),purchaseSaved=await ok('business-followup-save',purchaseSubmission);
@@ -306,8 +306,13 @@ for(const [key,saved]of [[oldSnapshotTarget,pendingSaved],[purchaseTarget,purcha
 await reject('business-followup-save',pendingSubmission,admin,409);await reject('business-followup-save',purchaseSubmission,admin,409);replace(orderA);
 for(const [key,saved]of [[oldSnapshotTarget,pendingSaved],[purchaseTarget,purchaseSaved]])assert((await ok(dataAction(key))).entries.some(row=>row.id===saved.entry.id));
 const apiTarget=keyOf((await catalogOf('supplier-pending')).find(row=>row.recordId.startsWith('api:'))),apiSaved=await ok('business-followup-save',form(apiTarget,{note:'合成API稳定来源历史'},evidence));
+assert.equal(apiTarget.recordId,'api:'+sha256(JSON.stringify([apiRow.accountId,apiRow.row.values[14],apiRow.row.values[15]])),'Current-source label preserves the former API identity');
 const updatedValues=[...apiRow.row.values];updatedValues[9]='35';updatedValues[10]='2026-12-20';updatedValues[11]='部分入库';replace({...apiRow,row:{...apiRow.row,values:updatedValues}});
 assert((await ok(dataAction(apiTarget))).entries.some(row=>row.id===apiSaved.entry.id),'API quantity, delivery date and receipt status updates must not erase history');replace(apiRow);
+const otherApi={...apiRow,id:'bf_kingdee_api_other',row:{...apiRow.row,values:apiRow.row.values.map((v,i)=>i===15?'OTHER-LINE-ID':v)}};insert(otherApi);replace(otherApi);
+assert((await ok(dataAction(apiTarget))).entries.some(row=>row.id===apiSaved.entry.id),'Reordered current rows still use source IDs');
+db.prepare('DELETE FROM records WHERE id=?').run(apiRow.id);replace(otherApi);await reject(dataAction(apiTarget),undefined,admin,403);
+insert(apiRow);db.prepare('DELETE FROM records WHERE id=?').run(otherApi.id);replace(apiRow);assert((await ok(dataAction(apiTarget))).entries.some(row=>row.id===apiSaved.entry.id));
 await reject(dataAction(apiTarget),undefined,user('sales'),403);
 pass('采购快照依原订单与小组过滤，原件权限不扩张；新快照独立版本并可追溯旧历史，采购/API正常状态保留历史，底层订单改客户禁止原附件');
 

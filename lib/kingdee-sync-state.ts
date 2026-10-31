@@ -6,7 +6,7 @@ export async function kingdeeSyncState():Promise<State>{
  const db=database();
  for(let retry=0;retry<3;retry++){
   const start=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
-  const rows=await db.prepare("SELECT data FROM records WHERE kind IN ('member','purchase','kingdee_pending_snapshot','kingdee_pending_api_row','kingdee_sync_receipt') OR id LIKE 'kingdee_api_row_%' OR id LIKE 'kingdee_sync_receipt_%' ORDER BY rowid").all<{data:string}>();
+  const rows=await db.prepare("SELECT data FROM records WHERE kind IN ('member','purchase','kingdee_pending_snapshot','kingdee_pending_api_row','kingdee_pending_sync_state','kingdee_sync_receipt') OR id LIKE 'kingdee_api_row_%' OR id LIKE 'kingdee_sync_receipt_%' OR id GLOB 'kingdee_pending_sync_state_*' ORDER BY rowid").all<{data:string}>();
   const end=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
   if((start?.revision||0)===(end?.revision||0))return {revision:end?.revision||0,records:rows.results.map(row=>JSON.parse(row.data))};
  }

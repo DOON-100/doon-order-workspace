@@ -6,7 +6,7 @@ import {KINGDEE_PENDING_QUANTITY_MEANING,pendingCounts,type KingdeePendingRow,ty
 import type {KingdeeQueryRow} from './kingdee-readonly-types';
 
 export const KINGDEE_SYNC_LIMIT=30;
-export const KINGDEE_SYNC_RULE='kingdee-purchase-append-v1';
+export const KINGDEE_SYNC_RULE='kingdee-purchase-current-v2';
 export type KingdeeApiRecord=Entity&{kind:'kingdee_pending_api_row';accountId:string;instanceId:string;clientId:string;row:KingdeeQueryRow;sourceHash:string;createdAt:string;actorId:string;batchId:string};
 export async function savedKingdeeRows(source:KingdeePendingSnapshot|KingdeePendingImport){
  const blob=await bucket().get(source.rowsKey);if(!blob)throw new AppError('金蝶源表快照暂不可用，请重试。',503);
@@ -41,22 +41,21 @@ export function classifyKingdeeRow(row:KingdeeQueryRow,id:string,index:Awaited<R
  return 'new';
 }
 
-/** Compose a read view. Existing Excel snapshots, headers and blobs are never rewritten. */
+/** The current API table never appends Excel snapshots or historical row copies. */
 export function appendKingdeeView(s:State,selected:KingdeePendingSnapshot|undefined,originalRows:KingdeePendingRow[]){
- const records=apiRecords(s).slice().sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
- const baseHeaders=selected?.headers||purchaseHeaders;
+ const latest=all(s,'kingdee_pending_sync_state').slice().sort((a,b)=>b.committedRevision-a.committedRevision)[0];
+ const records=apiRecords(s).filter(r=>!latest||r.accountId===latest.accountId&&r.instanceId===latest.instanceId&&r.clientId===latest.clientId).sort((a,b)=>a.createdAt.localeCompare(b.createdAt)||a.id.localeCompare(b.id));
+ const baseHeaders=purchaseHeaders;
  const extras=['来源类型','金蝶账套 ID','金蝶单据 ID','金蝶行 ID','行入库状态','行关闭状态','商品规格'];
  const headers=[...baseHeaders,...extras.filter(header=>!baseHeaders.includes(header))];
- const rows:KingdeePendingRow[]=originalRows.map(row=>({...row,values:[...row.values,...headers.slice(baseHeaders.length).map(()=> '')],displayValues:[...row.displayValues,...headers.slice(baseHeaders.length).map(()=> '')]}));
- let sourceRow=Math.max(0,...originalRows.map(row=>row.sourceRow));
+ const rows:KingdeePendingRow[]=[];
+ let sourceRow=0;
  for(const record of records){
   const v=record.row.values;
-  const fields:Record<string,string>={'单据编号':v[0],'单据日期':v[1],'供应商':v[2],'业务员':v[3],'单据状态':'已审核','关闭状态':v[4],'预计交货日期':v[10],'商品编码':v[5],'商品名称':v[6],'单位':v[8],'数量':v[9],'商品行备注':v[13],'剩余备货天数':'','客户订单编号':'','来源类型':'金蝶 API 新增','金蝶账套 ID':record.accountId,'金蝶单据 ID':v[14],'金蝶行 ID':v[15],'行入库状态':v[11],'行关闭状态':v[12],'商品规格':v[7]};
-  // Later file uploads are displayed as their own source. Never replace an immutable
-  // API record's captured fields with a newer file or API response.
+  const fields:Record<string,string>={'单据编号':v[0],'单据日期':v[1],'供应商':v[2],'业务员':v[3],'单据状态':'已审核','关闭状态':v[4],'预计交货日期':v[10],'商品编码':v[5],'商品名称':v[6],'单位':v[8],'数量':v[9],'商品行备注':v[13],'剩余备货天数':'','客户订单编号':'','来源类型':'金蝶 API 当前记录','金蝶账套 ID':record.accountId,'金蝶单据 ID':v[14],'金蝶行 ID':v[15],'行入库状态':v[11],'行关闭状态':v[12],'商品规格':v[7]};
   const values=headers.map(header=>fields[header]??'');rows.push({sourceRow:++sourceRow,values,displayValues:values,rowType:'data'});
  }
- const last=records.at(-1),timestamp=last?.createdAt||now();
- const metadata:KingdeePendingMetadata={...(selected?.metadata||{filename:'金蝶 API 新增记录',hash:'',sourceAsOf:timestamp.slice(0,10),sourceFilter:'已审核采购订单的未入库、部分入库商品行；仅新增，不更新既有记录。',sourceAccount:'已核验的金蝶账套',sourceSheet:'采购订单 API',headerRow:0,importedAt:timestamp,importedBy:'',quantityMeaning:KINGDEE_PENDING_QUANTITY_MEANING}),...pendingCounts(headers,rows),apiAddedCount:records.length};
- return {id:selected?.id||'kingdee_api_current',headers,rows,metadata};
+ const last=records.at(-1),timestamp=latest?.createdAt||last?.updatedAt||last?.createdAt||now();
+ const metadata:KingdeePendingMetadata={filename:'金蝶当前未上货明细',hash:'',sourceAsOf:latest?.sourceAsOf||timestamp,sourceFilter:'已审核采购订单的未入库、部分入库商品行。定时全量同步；手动同步最近30条，窗口外明细等待定时核对。',sourceAccount:'已核验的金蝶账套',sourceSheet:'采购订单 API',headerRow:0,importedAt:timestamp,importedBy:'',quantityMeaning:KINGDEE_PENDING_QUANTITY_MEANING,...pendingCounts(headers,rows),apiAddedCount:records.length,syncMode:latest?.mode,fullSyncedAt:latest?.fullSyncedAt||''};
+ return {id:'kingdee_api_current',headers,rows,metadata};
 }

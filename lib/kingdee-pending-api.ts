@@ -22,9 +22,9 @@ export async function kingdeePendingGet(action:string,req:Request,s:State,m:Memb
   const source=await bucket().get(selected.fileKey);if(!source)throw new AppError('金蝶原始文件暂不可用。',503);
   return new Response(source.body,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(selected.metadata.filename)}`,'Cache-Control':'no-store','Vary':businessTeamHeader,'X-Content-Type-Options':'nosniff'}});
  }
- if(!id&&apiRecords(s).length){
-  const combined=appendKingdeeView(s,selected,selected?await readRows(selected):[]),visible=visibleKingdeePending(s,m,combined.headers,combined.rows,teamId);
-  const response=json({snapshot:{...combined,rows:visible.rows,metadata:pendingMetadata(combined.metadata,combined.headers,visible.rows,visible.full)},canImport:broad(m),canDownloadOriginal:!!selected&&visible.full,history:visible.full?history.map(snapshot=>({id:snapshot.id,metadata:snapshot.metadata})):[]});
+ if(!id&&(apiRecords(s).length||all(s,'kingdee_pending_sync_state').length)){
+  const combined=appendKingdeeView(s,undefined,[]),visible=visibleKingdeePending(s,m,combined.headers,combined.rows,teamId);
+  const response=json({snapshot:{...combined,rows:visible.rows,metadata:pendingMetadata(combined.metadata,combined.headers,visible.rows,visible.full)},canImport:broad(m),canDownloadOriginal:false,history:[]});
   response.headers.set('Vary',businessTeamHeader);return response;
  }
  if(!selected)return json({snapshot:null,canImport:broad(m),canDownloadOriginal:false,history:[]});

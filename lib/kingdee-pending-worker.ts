@@ -1,11 +1,11 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
-import {type Entity,type State,newId,now} from './domain';
+import {type Entity,type State,newId} from './domain';
 import {AppError,database} from './store';
 import {sha} from './workbooks';
 import {kingdeeConfig,kingdeeRead,kingdeeDetails,object,sourceId,sourceText,type KingdeeConfig} from './kingdee-client';
 import {kingdeeDetailRows} from './kingdee-readonly-api';
-import {apiRecordId,classifyKingdeeRow,existingKingdeeIndex,type KingdeeApiRecord} from './kingdee-sync-records';
+import {planKingdeeCurrent,commitKingdeeCurrent,kingdeeCurrentVersion} from './kingdee-current';
 import type {KingdeeQueryRow} from './kingdee-readonly-types';
 
 type Lease={workerId:string;fence:number};
@@ -18,7 +18,7 @@ const binding=(c:KingdeeConfig)=>JSON.stringify(['kingdee-pending-schedule-v1',c
 async function state():Promise<State>{
  const db=database();for(let retry=0;retry<3;retry++){
   const before=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
-  const result=await db.prepare("SELECT data FROM records WHERE kind IN ('kingdee_pending_snapshot','kingdee_pending_api_row') OR id GLOB 'kingdee_api_row_*' OR id GLOB 'kingdee_pending_schedule_*' ORDER BY rowid").all<{data:string}>();
+  const result=await db.prepare("SELECT data FROM records WHERE kind IN ('kingdee_pending_sync_state','kingdee_pending_api_row') OR id GLOB 'kingdee_api_row_*' OR id GLOB 'kingdee_pending_schedule_*' OR id GLOB 'kingdee_pending_sync_state_*' ORDER BY rowid").all<{data:string}>();
   const after=await db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").first<{revision:number}>();
   if(before?.revision===after?.revision)return {revision:after?.revision||0,records:result.results.map(r=>JSON.parse(r.data))};
  }throw new AppError('采购来源正在变化，请稍后重试。',409);
@@ -47,13 +47,15 @@ async function scan(c:KingdeeConfig,signal:AbortSignal,lease:Lease){
     rows.push(...mapped.rows.filter(r=>!r.uncertain));if(rows.length>100000)throw new AppError('金蝶采购明细超过全量范围上限。',502);
    }
   }
-  if(page*30>=count)return {rows,unknown,sourceAsOf:new Date(cutoff).toISOString()};
+  if(page*30>=count){
+   if(unknown)throw new AppError('金蝶存在入库状态不明的明细，全量同步未执行，当前表保持原样。',409);
+   return {rows,unknown,sourceAsOf:new Date(cutoff).toISOString()};
+  }
  }throw new AppError('金蝶采购全量分页未完成。',502);
 }
 async function checked(s:State,receipt:Entity){
- const byId=new Map(s.records.map(r=>[r.id,r]));
- for(const expected of receipt.records){const record=byId.get(expected.id);if(!record||await sha(JSON.stringify(record))!==expected.hash)throw new AppError('采购定时同步回读未通过，请核查原批次。',409);}
- return {inserted:receipt.inserted,existing:receipt.existing,held:receipt.held,changed:receipt.changed,total:receipt.total};
+ // Receipts describe the completed transaction; current rows may have changed since then.
+ return {inserted:receipt.inserted,existing:receipt.existing,held:receipt.held,changed:receipt.changed,removed:receipt.removed||0,total:receipt.total};
 }
 /** Native worker only; service identity is never accepted from HTTP or a browser. */
 export async function runKingdeePendingWorker(input:{requestId:string;lease:Lease}){
@@ -62,30 +64,12 @@ export async function runKingdeePendingWorker(input:{requestId:string;lease:Leas
  await leaseValid(parsed.lease);
  const initial=await state(),prior=initial.records.find(r=>r.id===id);if(prior){if(prior.kind!=='kingdee_pending_schedule_receipt'||prior.binding!==sourceBinding)throw new AppError('采购定时批次冲突。',409);return checked(initial,prior);}
  const source=await scan(c,AbortSignal.timeout(900000),parsed.lease),current=await state();
+ if(await kingdeeCurrentVersion(current,c)!==await kingdeeCurrentVersion(initial,c))throw new AppError('全量读取期间采购来源已变化，本次未同步，请重新执行。',409);
  if(binding(configuration())!==sourceBinding)throw new AppError('金蝶账套配置已变化，本次未写入。',409);
  const previous=current.records.find(r=>r.id===id);if(previous){if(previous.kind!=='kingdee_pending_schedule_receipt'||previous.binding!==sourceBinding)throw new AppError('采购定时批次冲突。',409);return checked(current,previous);}
- // Legacy purchase ledgers are not part of this source table. Do not suppress a
- // source row merely because a matching purchase exists elsewhere; never edit it.
- // Excel snapshots ARE shown in this table and retain their conservative dedup.
- const index=await existingKingdeeIndex(current),byId=new Map(current.records.map(r=>[r.id,r])),seen=new Set<string>(),created:Entity[]=[],issues:Entity[]=[];
- let existing=0,held=source.unknown,changed=0;const createdAt=now();
- for(const row of source.rows){
-  const recordId=await apiRecordId(c.accountId,row),hash=await sha(JSON.stringify(row));if(seen.has(recordId))throw new AppError('金蝶商品行标识重复，本次未写入。',409);seen.add(recordId);
-  const old=byId.get(recordId);
-  if(old){
-   if(old.kind!=='kingdee_pending_api_row'||old.accountId!==c.accountId||old.sourceHash!==await sha(JSON.stringify(old.row)))throw new AppError('采购来源记录身份或校验异常。',409);
-   existing++;
-   if(old.sourceHash!==hash){changed++;const issueId='kingdee_pending_schedule_issue_'+await sha(JSON.stringify([recordId,hash]));const issue={id:issueId,kind:'kingdee_pending_schedule_issue',recordId,sourceHash:hash,previousHash:old.sourceHash,row,createdAt,actorId};
-    const priorIssue=byId.get(issueId);if(priorIssue){if(priorIssue.kind!==issue.kind||priorIssue.recordId!==recordId||priorIssue.sourceHash!==hash||await sha(JSON.stringify(priorIssue.row))!==hash)throw new AppError('采购核查记录冲突。',409);}else issues.push(issue);
-   }continue;
-  }
-  const decision=classifyKingdeeRow(row,recordId,index);if(decision==='existing'){existing++;continue;}if(decision==='uncertain'){held++;continue;}
-  const record:KingdeeApiRecord={id:recordId,kind:'kingdee_pending_api_row',accountId:c.accountId,instanceId:c.instanceId,clientId:c.clientId,row,sourceHash:hash,createdAt,actorId,batchId:id};created.push(record);
- }
- const receipt:Entity={id,kind:'kingdee_pending_schedule_receipt',binding:sourceBinding,actorId,createdAt,sourceAsOf:source.sourceAsOf,inserted:created.length,existing,held,changed,total:source.rows.length,records:await Promise.all([...created,...issues].map(async r=>({id:r.id,hash:await sha(JSON.stringify(r))})))};
- const audit:Entity={id:newId('audit'),kind:'audit',targetId:id,lineId:'',actorId,actor:'金蝶采购未上货定时同步',action:'全量检查并补齐采购来源',source:'固定程序定时任务',before:null,after:{inserted:created.length,existing,held,changed,total:source.rows.length},createdAt};
- const db=database(),guard=newId('txn');
- const statements=[db.prepare("INSERT INTO transaction_guards(id,valid) VALUES(?,CASE WHEN (SELECT revision FROM workspace_revision WHERE id='main')=? AND EXISTS(SELECT 1 FROM kingdee_pending_schedule_lease WHERE id='scheduler' AND worker=? AND fence=? AND expires_at>(CAST(strftime('%s','now') AS INTEGER)*1000+1000)) THEN 1 ELSE 0 END)").bind(guard,current.revision,parsed.lease.workerId,parsed.lease.fence),
-  ...[...created,...issues,receipt,audit].map(r=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').bind(r.id,r.kind,JSON.stringify(r))),db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'"),db.prepare('DELETE FROM transaction_guards WHERE id=?').bind(guard)];
- await db.batch(statements);return checked(await state(),receipt);
+ const plan=await planKingdeeCurrent(current,c,source.rows,{full:true,sourceAsOf:source.sourceAsOf,actorId,batchId:id}),createdAt=String(plan.marker.createdAt);
+ const {inserted,updated:changed,removed,unchanged:existing,held}=plan.result;
+ const receipt:Entity={id,kind:'kingdee_pending_schedule_receipt',binding:sourceBinding,actorId,createdAt,sourceAsOf:source.sourceAsOf,inserted,existing,held,changed,removed,total:source.rows.length};
+ const audit:Entity={id:newId('audit'),kind:'audit',targetId:id,lineId:'',actorId,actor:'金蝶采购未上货定时同步',action:'全量同步金蝶当前未上货明细',source:'固定程序定时任务',before:null,after:plan.result,createdAt};
+ await commitKingdeeCurrent(current,plan,[receipt,audit],parsed.lease);return checked(await state(),receipt);
 }
