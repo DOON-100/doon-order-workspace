@@ -30,3 +30,9 @@ test('unconfirmed team and unsupported writes fail closed',async()=>{
  const f=await fixture();await assert.rejects(new EngineeringService(f.state,async()=>Response.json({records:[]})).execute('drawings','list',{team:'t1'}),{code:'SCOPE_NOT_CONFIRMED'});
  for(const r of ['drawings','sops','samples','ie-quotes'])await assert.rejects(f.service.execute(r,'approve',{},'id'),{code:'UNSUPPORTED_OPERATION'});
 });
+
+test('drawing table lookup searches customer codes and preserves legacy status symbols without raw columns',async()=>{
+ const f=await fixture();Object.assign(f.data['drawing-data'].records[0],{customerCode:'SYN-001',requester:'synthetic',approval:'待审核',source:{rawColumns:{状态:'❗❗',secret:'SOURCE-SECRET'}}});
+ const result=await f.service.execute('drawings','list',{search:'syn-001'});assert.equal(result.page.total,1);assert.equal(result.page.rows[0].displayStatus,'❗❗');assert.equal(result.page.rows[0].sheetStatus,'❗❗');assert(!JSON.stringify(result).includes('SOURCE-SECRET'));
+ f.data['drawing-data'].records[0].approval='通过';assert.equal((await f.service.execute('drawings','show',{},'d1')).record.displayStatus,'✅已完成');
+});

@@ -77,6 +77,13 @@ export const engineeringSchemas={
         "历史待核对"
       ]
     },
+    "sheetStatus": {
+      "type": "string",
+      "enum": [
+        "⌛️",
+        "❗❗"
+      ]
+    },
     "upstreamDepartment": {
       "type": "string",
       "max": 120
@@ -180,6 +187,13 @@ export const engineeringSchemas={
         "历史待核对"
       ]
     },
+    "sheetStatus": {
+      "type": "string",
+      "enum": [
+        "⌛️",
+        "❗❗"
+      ]
+    },
     "upstreamDepartment": {
       "type": "string",
       "max": 120
@@ -220,6 +234,9 @@ export const engineeringSchemas={
       "type": "string",
       "min": 8,
       "max": 160
+    },
+    "tableEntry": {
+      "type": "boolean"
     }
   },
   "drawingImport": {
@@ -330,6 +347,13 @@ export const engineeringSchemas={
               "已交接",
               "已取消",
               "历史待核对"
+            ]
+          },
+          "sheetStatus": {
+            "type": "string",
+            "enum": [
+              "⌛️",
+              "❗❗"
             ]
           },
           "upstreamDepartment": {

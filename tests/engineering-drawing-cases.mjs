@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,rawInsert}){
  const token=()=>crypto.randomUUID(),users={},members={};
  for(const [name,role,departments] of [['engineer','clerk',['engineering']],['reviewer','clerk',['engineering_review']],['upstream','sales',[]],['outsider','sales',[]],['pmc','pmc',[]],['sameName','sales',[]],['viewer','viewer',[]]]){
-  users[name]={userId:'drawing_user_'+name,email:'drawing_'+name+'@test.invalid',displayName:name,fullName:name};
+  users[name]={userId:'drawing_user_'+name,email:'drawing_'+name+'@test.invalid',displayName:name,fullName:name,username:name==='engineer'?'dengkai':name==='reviewer'?'zhengzw':name};
   members[name]={id:'drawing_member_'+name,kind:'member',userId:users[name].userId,email:users[name].email,name:name==='sameName'?'upstream':name,role,customers:[],departments,active:true,createdAt:'2026-10-13T00:00:00Z'};
   rawInsert(members[name]);
  }
@@ -12,6 +12,8 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  const payload={token:token(),customerId:customer.id,customerCode:customer.customerCode,drawingType:'新款',requestedDate:'2026-10-13',newCount:2,revisionCount:null,requester:'合成业务',upstreamDepartment:'业务部',priority:'普通',requirement:'两款钛架，合成测试，不含真实业务'};
  const save=async(fields,user=users.engineer)=>(await ok('drawing-save',fields,user)).record;
  const get=async(id,user=users.engineer)=>(await ok('drawing-data',undefined,user)).records.find(r=>r.id===id);
+ assert.deepEqual((await ok('drawing-data',undefined,users.engineer)).requesters,[]);
+ assert.deepEqual((await ok('drawing-data',undefined,users.viewer)).requesters,[]);
  const denied=async(action,body,user,status=403)=>assert.equal((await call(action,body,user)).status,status,`${action} should be ${status}`);
  await denied('drawing-data',undefined,null,401);
  let record=await save(payload,users.upstream);assert.equal(record.status,'待分配');assert.equal(record.revisionCount,null);
@@ -19,6 +21,23 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  assert(!(await ok('drawing-data',undefined,users.sameName)).records.some(r=>r.id===record.id));
  for(const name of ['outsider','pmc','viewer']){assert(!(await ok('drawing-data',undefined,users[name])).records.some(r=>r.id===record.id));await denied('drawing-history?id='+record.id,undefined,users[name]);}
  await denied('drawing-save',{...payload,token:token()},users.outsider);await denied('drawing-save',{...payload,token:token()},users.viewer);
+ const tableInput={token:token(),tableEntry:true,revisionCount:0};let partial=await save(tableInput);assert.equal(partial.customerCode,'');assert.equal(partial.revisionCount,0);assert.equal((await save(tableInput)).id,partial.id);
+ partial=await save({id:partial.id,version:partial.version,customerCode:'SYN-PARTIAL'});assert.equal(partial.customerCode,'SYN-PARTIAL');assert.equal(partial.drawingType,'');
+ await denied('drawing-save',{token:token(),tableEntry:true},users.engineer,400);await denied('drawing-save',{token:token(),tableEntry:true,revisionCount:0},users.upstream,400);await denied('drawing-save',{id:record.id,version:record.version,tableEntry:true},users.engineer,400);
+ pass('表格首项输入自动建行、零值保留和重试幂等，空行不保存且不能扩大客户权限');
+ const ordered=[];
+ for(const firstType of [true,false]){
+  let row=await save({token:token(),tableEntry:true,...(firstType?{drawingType:'改图'}:{customerCode:customer.customerCode})});
+  row=await save({id:row.id,version:row.version,...(firstType?{customerCode:customer.customerCode}:{drawingType:'改图'})});
+  assert.equal(row.customerId,customer.id);assert.equal(rawRecords().filter(s=>s.kind==='engineering_sop'&&s.drawingRecordId===row.id).length,1);
+  row=await save({id:row.id,version:row.version,customerCode:customer.customerCode});
+  assert.equal(rawRecords().filter(s=>s.kind==='engineering_sop'&&s.drawingRecordId===row.id).length,1);ordered.push(row);
+ }
+ assert.equal(ordered[0].drawingType,ordered[1].drawingType);
+ pass('逐格录入先类型或先客户均关联同一客户并仅建立一项SOP义务');
+ const manual=await save({token:token(),customerCode:'SYN-MANUAL',drawingType:'印字资料',requestedDate:'2026-10-13',requester:'engineer',sheetStatus:'❗❗'},users.engineer);
+ assert.equal(manual.customerId,'');assert.equal(manual.customerCode,'SYN-MANUAL');assert.equal(manual.sheetStatus,'❗❗');
+ await denied('drawing-save',{token:token(),customerCode:'SYN-MANUAL',drawingType:'印字资料',requestedDate:'2026-10-13',requester:'upstream'},users.upstream,400);
  await denied('drawing-save',{id:record.id,version:record.version,status:'画图中'},users.upstream);
  await denied('drawing-review',{id:record.id,version:record.version,approval:'通过',note:'越权'},users.engineer);
  pass('工程需求按明确客户责任开放，上游和工程执行/审图隔离，名称与PMC总表权限不会扩权');
@@ -39,6 +58,14 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  record=await save({id:record.id,version:record.version,status:'待审核',completedDate:'2026-10-14',modelNo:'SYN-DRAW-01'},users.engineer);
  record=(await ok('drawing-review',{id:record.id,version:record.version,approval:'通过',note:'合成尺寸与需求审核通过'},users.reviewer)).record;
  assert.equal(record.status,'已完成');assert.equal(record.approvalBy,members.reviewer.id);
+ await denied('drawing-approval-toggle',{id:record.id,version:record.version,checked:false},users.upstream);
+ const approvedVersion=record.version;
+ record=(await ok('drawing-approval-toggle',{id:record.id,version:record.version,checked:false},users.engineer)).record;
+ assert.equal(record.approval,'待审核');assert.equal(record.status,'待审核');
+ await denied('drawing-approval-toggle',{id:record.id,version:approvedVersion,checked:true},users.reviewer,409);
+ record=(await ok('drawing-approval-toggle',{id:record.id,version:record.version,checked:true},users.reviewer)).record;
+ assert.equal(record.approval,'通过');assert.equal(record.status,'已完成');
+ pass('审批复选框仅审图成员可切换，取消和重选均递增版本并保留审计');
  await denied('drawing-save',{id:record.id,version:record.version,status:'已交接'},users.engineer,400);
  record=await save({id:record.id,version:record.version,status:'已交接',deliveredDate:'2026-10-15',downstream:'客服部',deliveryNote:'合成图纸 V1 交回客服'},users.engineer);
  assert.equal(record.status,'已交接');
@@ -85,7 +112,7 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  const imported={format:'doon-engineering-drawing-import-v1',source:{filename:'合成工程原表.xlsx',sheet:'合成历史',sha256:'d'.repeat(64)},rows:[{sourceRow:2,rawColumns,customerCode:'SYN-HISTORY',drawingType:'新款',requestedDate:'2026-10-10',requester:'合成历史业务',newCount:null,revisionCount:2,completedDate:'2026-10-12'},{sourceRow:3,rawColumns:{...rawColumns,状态:'🔋',老郑审批确认:''},customerCode:'SYN-HISTORY',drawingType:'新款',requestedDate:'2026-10-10',requester:'合成历史业务'}]};
  assert.equal((await ok('drawing-import',imported)).imported,2);assert.equal((await ok('drawing-import',imported)).skipped,2);
  const historyRecords=rawRecords().filter(r=>r.kind==='engineering_drawing'&&r.source?.hash==='d'.repeat(64));assert.equal(historyRecords.length,2);
- assert.equal(historyRecords[0].status,'已完成');assert.equal(historyRecords[0].approval,'通过');assert.equal(historyRecords[0].newCount,null);assert.equal(historyRecords[1].status,'历史待核对');assert.deepEqual(historyRecords[0].source.rawColumns,rawColumns);
+ assert.equal(historyRecords[0].status,'已完成');assert.equal(historyRecords[0].approval,'通过');assert.equal(historyRecords[0].newCount,null);assert.equal(historyRecords[1].status,'历史待核对');assert.equal(historyRecords[1].sheetStatus,'⌛️');assert.deepEqual(historyRecords[0].source.rawColumns,rawColumns);
  for(const name of ['upstream','reviewer','pmc'])assert(!(await ok('drawing-data',undefined,users[name])).records.some(r=>historyRecords.some(h=>h.id===r.id)));
  assert((await ok('drawing-data',undefined,users.engineer)).records.some(r=>r.id===historyRecords[0].id));
  await denied('drawing-import',imported,users.engineer);assert.equal((await call('drawing-delete',{id:record.id},users.engineer)).status,404);

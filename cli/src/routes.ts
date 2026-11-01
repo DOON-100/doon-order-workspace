@@ -270,6 +270,7 @@ export const routes = {
   '/api/workspace/purchase-archive': {method:'POST',business:true,write:true},
   '/api/workspace/drawing-save': {method:'POST',business:true,write:true},
   '/api/workspace/drawing-review': {method:'POST',business:true,write:true},
+  '/api/workspace/drawing-approval-toggle': {method:'POST',business:true,write:true},
   '/api/workspace/drawing-event-review': {method:'POST',business:true,write:true},
   '/api/workspace/drawing-detail-add': {method:'POST',business:true,write:true},
   '/api/workspace/drawing-import': {method:'POST',business:true,write:true,maxInputBytes:8*1024*1024},

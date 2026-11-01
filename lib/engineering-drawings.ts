@@ -5,7 +5,7 @@ export const drawingStatuses=['待分配','画图中','待审核','已完成','�
 export const drawingApprovals=['待审核','通过','退回'] as const;
 export const drawingOriginalColumns=['状态','客户编号','画图类型','需求发出时间','新款数量','改图数量','需求者','款号','画图备注','画图人员','截止日期','完成日期','老郑审批确认'] as const;
 export const drawingRequestFields=['customerId','customerCode','drawingType','requestedDate','newCount','revisionCount','requester','upstreamDepartment','priority','requirement'] as const;
-export const drawingExecutionFields=['status','modelNo','drawingNotes','assigneeId','assignee','deadline','completedDate','downstream','deliveredDate','deliveryNote'] as const;
+export const drawingExecutionFields=['status','sheetStatus','modelNo','drawingNotes','assigneeId','assignee','deadline','completedDate','downstream','deliveredDate','deliveryNote'] as const;
 export type DrawingStatus=typeof drawingStatuses[number];
 export type DrawingApproval=typeof drawingApprovals[number];
 export type DrawingSource={type:'manual'|'excel'|'email';filename?:string;sheet?:string;hash?:string;row?:number;rawColumns?:Record<string,string|number>;messageId?:string;itemKey?:string;threadId?:string};
@@ -14,7 +14,7 @@ export type EngineeringDrawing=Entity & {
  newCount:number|null;revisionCount:number|null;requester:string;modelNo:string;drawingNotes:string;assigneeId:string;assignee:string;
  deadline:string;completedDate:string;approval:DrawingApproval;status:DrawingStatus;upstreamDepartment:string;priority:'普通'|'紧急';
  requirement:string;downstream:string;deliveredDate:string;deliveryNote:string;source:DrawingSource;legacyNeedsReview:boolean;
- approvalNote:string;approvalBy:string;approvalAt:string;createdAt:string;updatedAt:string;updatedBy:string;createdBy:string;
+ sheetStatus:'⌛️'|'❗❗';approvalNote:string;approvalBy:string;approvalAt:string;createdAt:string;updatedAt:string;updatedBy:string;createdBy:string;
 };
 export type DrawingRevision=Entity & {kind:'engineering_drawing_revision';recordId:string;customerId:string;version:number;action:string;actorId:string;actor:string;createdAt:string;snapshot:EngineeringDrawing};
 export type DrawingEvent=Entity & {kind:'engineering_drawing_event';recordId:string;customerId:string;messageId:string;itemKey:string;threadId:string;sender:string;subject:string;receivedAt:string;request:Record<string,unknown>;fingerprint:string;status:'created'|'pending'|'accepted'|'rejected';reviewNote:string;actorId:string;createdAt:string};
@@ -25,10 +25,10 @@ const count=z.number().int().min(0).max(100000).nullable().default(null);
 export const drawingFieldsSchema=z.object({
  customerId:txt(160),customerCode:txt(160),drawingType:txt(120),requestedDate:day,newCount:count,revisionCount:count,requester:txt(160),
  modelNo:txt(3000),drawingNotes:txt(12000),assigneeId:txt(160),assignee:txt(500),deadline:day,completedDate:day,
- approval:z.enum(drawingApprovals).default('待审核'),status:z.enum(drawingStatuses).default('待分配'),upstreamDepartment:txt(120),
+ approval:z.enum(drawingApprovals).default('待审核'),status:z.enum(drawingStatuses).default('待分配'),sheetStatus:z.enum(['⌛️','❗❗']).default('⌛️'),upstreamDepartment:txt(120),
  priority:z.enum(['普通','紧急']).default('普通'),requirement:txt(16000),downstream:txt(160),deliveredDate:day,deliveryNote:txt(6000),
 }).strict();
-export const drawingSaveSchema=drawingFieldsSchema.partial().extend({id:z.string().trim().min(1).max(800).optional(),version:z.number().int().positive().optional(),token:z.string().trim().min(8).max(160).optional()}).strict();
+export const drawingSaveSchema=drawingFieldsSchema.partial().extend({id:z.string().trim().min(1).max(800).optional(),version:z.number().int().positive().optional(),token:z.string().trim().min(8).max(160).optional(),tableEntry:z.boolean().optional()}).strict();
 export type DrawingFields=z.output<typeof drawingFieldsSchema>;
 export const drawingDefaultFields=():DrawingFields=>drawingFieldsSchema.parse({});
 
@@ -54,7 +54,7 @@ export function buildImportedDrawings(payload:unknown,actor:{id:string;name:stri
  const input=validateDrawingImport(payload),records:EngineeringDrawing[]=[],revisions:DrawingRevision[]=[];
  for(const row of input.rows){const {sourceRow,rawColumns,qualityIssues,...values}=row;
   const historicalComplete=clean(rawColumns['状态'])==='✅已完成'&&clean(rawColumns['老郑审批确认'])==='✅'&&!!values.completedDate;
-  const fields=drawingFieldsSchema.parse({...values,status:historicalComplete?'已完成':'历史待核对',approval:historicalComplete?'通过':'待审核',assigneeId:''});
+  const fields=drawingFieldsSchema.parse({...values,status:historicalComplete?'已完成':'历史待核对',sheetStatus:clean(rawColumns['状态'])==='❗❗'?'❗❗':'⌛️',approval:historicalComplete?'通过':'待审核',assigneeId:''});
   const record=createDrawing(fields,actor,{type:'excel',filename:input.source.filename,sheet:input.source.sheet,hash:input.source.sha256,row:sourceRow,rawColumns},at);
   record.id=`drawing_import_${input.source.sha256}_${encodeURIComponent(input.source.sheet)}_${sourceRow}`;record.legacyNeedsReview=true;record.qualityIssues=qualityIssues||[];
   records.push(record);revisions.push(drawingRevision(record,actor,'导入工程历史原表（待核对）'));

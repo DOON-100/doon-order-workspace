@@ -1,3 +1,4 @@
+import {drawingTableState} from './engineering-drawing-table.js';
 import {ApiClient} from './client.js';
 import {StateStore} from './state.js';
 import {CliError} from './errors.js';
@@ -7,7 +8,7 @@ import type {Route} from './routes.js';
 export type EngineeringResource = 'drawings'|'sops'|'samples'|'ie-quotes';
 export type EngineeringAction = 'list'|'show'|'history'|'version';
 export type EngineeringOptions = {team?:string;customer?:string;project?:string;search?:string;limit?:string;offset?:string};
-const drawingFields=fields('id version customerId customerCode drawingType requestedDate newCount revisionCount requester modelNo drawingNotes assigneeId assignee deadline completedDate approval status upstreamDepartment priority requirement downstream deliveredDate deliveryNote legacyNeedsReview approvalNote approvalBy approvalAt createdAt updatedAt updatedBy canEdit canManage canApprove');
+const drawingFields=fields('id version customerId customerCode drawingType requestedDate newCount revisionCount requester modelNo drawingNotes assigneeId assignee deadline completedDate approval status sheetStatus displayStatus tableEntry upstreamDepartment priority requirement downstream deliveredDate deliveryNote legacyNeedsReview approvalNote approvalBy approvalAt createdAt updatedAt updatedBy canEdit canManage canApprove');
 const sopFields=fields('id version drawingRecordId customerId modelNo targetVersion currentVersion status mode requirement isCurrent predecessorId sourceEventId preparedVersion targetNote confirmationNote confirmedBy confirmedAt createdAt updatedAt updatedBy canManage canApprove canInstruct');
 const sampleFields=fields('id version projectId customerId roundId sampleNo purpose ownerId requiredDate plannedDate promisedDate promiseNote status note canExecute canCommunicate createdAt updatedAt updatedBy');
 const quoteFields=fields('id version revision customerAccountId customerName customerCode quoteNo quoteDate validUntil batchId exchangeRateCnyPerUsd exchangeRateDate exchangeRateSource notes status policyVersion requiredReviewMemberId createdAt createdBy updatedAt updatedBy submittedAt submittedBy reviewedAt reviewedBy reviewReason canEdit canSubmit canReview canRevise canExport canHandoff issues');
@@ -27,7 +28,7 @@ export class EngineeringService {
     const read=async(route:Route,query?:Record<string,string>)=>{try{const data=(await api.request(route,saved,undefined,{team,query})).data;if(team&&['/api/workspace/drawing-data','/api/workspace/sop-data','/api/workspace/customer-project-data'].includes(route)&&data?.businessTeamScope?.teamId!==team)throw new CliError('SCOPE_NOT_CONFIRMED','服务器未确认所选业务组范围。',5);return data;}catch(e){if(e instanceof CliError&&e.code==='AUTH_REQUIRED')await this.store.clearSession();throw e;}};
     const route=resource==='drawings'?'/api/workspace/drawing-data':resource==='sops'?'/api/workspace/sop-data':resource==='samples'?'/api/workspace/customer-project-data':'/api/workspace/ie-quotes';
     const data=await read(route),key=resource==='samples'?'samples':resource==='ie-quotes'?'quotes':'records';
-    const rows=collection(data,key).filter(r=>(!customer||r[resource==='ie-quotes'?'customerAccountId':'customerId']===customer)&&(!project||r.projectId===project)&&(!search||['id','modelNo','sampleNo','quoteNo','customerName','status'].some(k=>typeof r[k]==='string'&&r[k].toLocaleLowerCase().includes(search.toLocaleLowerCase()))));
+    const rows=collection(data,key).map(r=>resource==='drawings'?{...r,...drawingTableState(r)}:r).filter(r=>(!customer||r[resource==='ie-quotes'?'customerAccountId':'customerId']===customer)&&(!project||r.projectId===project)&&(!search||(resource==='drawings'?['id','customerCode','modelNo','requester','drawingNotes','assignee','drawingType','displayStatus','status']:['id','modelNo','sampleNo','quoteNo','customerName','status']).some(k=>typeof r[k]==='string'&&r[k].toLocaleLowerCase().includes(search.toLocaleLowerCase()))));
     const keys=resource==='drawings'?drawingFields:resource==='sops'?sopFields:resource==='samples'?sampleFields:quoteFields;
     if(action==='list')return {scope,page:page(rows.map(r=>pick(r,keys)),window)};
     const current=find(rows,id!);

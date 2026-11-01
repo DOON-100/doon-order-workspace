@@ -1,6 +1,6 @@
-# 批次 3：工程、样品和 IE 报价查询
+# 工程查询与维护
 
-版本 0.4.0 新增 12 个查询命令，总计 50 个已支持命令。使用员工原有登录及服务器权限；不提供审核、批准、提交、发送、上传、制造或其他业务写入。
+以下查询命令最初在 0.4.0 接入；当时只提供查询。当前工程写入命令见后文“W4 工程需求、SOP、项目工程与签样”，画图跟进表新增与修改见“画图跟进表录入”。全部沿用员工登录身份及服务器权限。
 
 | 命令组 | 动作 | 数据来源 |
 | --- | --- | --- |
@@ -74,6 +74,61 @@ doon engineering drawings events <id> --json
 `action --type review|event-review|detail-add`分别复用审图、核对现有变更事件、追加需求明细。审图文件含id/approval(通过或退回)/note；事件核对含eventId/recordId/decision(accepted或rejected)/note；明细含recordId/modelNo/requirement/note。版本均指工程需求版本。采纳事件只登记取舍，不擅自替换业务字段；events查询变更候选和当前明细，不接入或发送真实邮箱。
 
 管理员`import --input history.json`按drawing-import契约追加历史原表证据（8MiB上限）；保留文件名、工作表、SHA-256、来源行号、原始列及待核对状态。重复来源跳过，同来源冲突拒绝，不以新文件覆盖旧记录。
+
+### 画图跟进表录入
+
+CLI 的新增记录与网页“画图跟进表”使用同一套接口和记录，无需再导入 Excel。需要同时使用支持本次表格接口的服务器；客户端源码更新或本地检查通过不代表正式服务器已经发布。
+
+**新增一行是 `save --version 0`。** JSON 加 `tableEntry: true` 后，可以只填写一项，其余字段以后再补；仅工程维护人员可新增未绑定客户的行，其他员工仍受客户范围限制。完全空白的行被拒绝，明确填写的数量 `0` 会保存。
+
+例如把以下合成示例替换为实际内容，存为 UTF-8 的 `new-drawing.json`：
+
+```json
+{
+  "tableEntry": true,
+  "customerCode": "SYN-001",
+  "drawingType": "新款画图",
+  "requestedDate": "2026-11-01",
+  "requester": "dengkai",
+  "newCount": 2,
+  "drawingNotes": "画图需求说明"
+}
+```
+
+```powershell
+doon engineering drawings references --json
+$requestId = [guid]::NewGuid().ToString()
+doon engineering drawings save --input .\new-drawing.json --version 0 --request-id $requestId --json
+doon engineering drawings list --search SYN-001 --json
+```
+
+保存成功会回读新记录并返回 `record.id` 和 `record.version`，网页刷新后即可看到。同一次新增保持相同请求标识和相同内容，重复提交返回同一条记录；下一次独立新增使用新标识。出现结果不明时先查询，不自动重新生成标识重试。
+
+`references.requesters` 是登录账号名，`requestersAvailable=false` 表示旧服务器尚未提供该目录，不能用成员姓名冒充账号名。`drawingTypes` 包含六种原表选项及现有数据类型，`assignees` 是当前三名画图人员；历史人员原值保持不变。
+
+`schema --type save` 的 `tableColumns` 给出全部13列的字段对应关系。字段为 `customerCode`、`drawingType`、`requestedDate`、`newCount`、`revisionCount`、`requester`、`modelNo`、`drawingNotes`、`assignee`、`deadline`、`completedDate`，状态符号使用 `sheetStatus`，审批使用下述独立动作。日期填 `YYYY-MM-DD`；数量空白为 `null`，零为 `0`；文字和日期可用空字符串表示清空。
+
+修改时先 `form <id>` 取得当前版本，然后提交只包含 `id` 和待改字段的 JSON，例如：
+
+```json
+{"id":"<记录ID>","modelNo":"SYN-MODEL","assignee":"邓凯","deadline":"2026-11-05","sheetStatus":"❗❗"}
+```
+
+```powershell
+doon engineering drawings form <记录ID> --json
+doon engineering drawings save --input .\patch.json --version <当前版本> --json
+```
+
+修改时省略 `tableEntry` 和 `--request-id`；未提供的字段保留原值，旧版本不能覆盖新版本。`sheetStatus` 只能是 `⌛️` 或 `❗❗`；`displayStatus` 是只读显示值，包含 `✅已完成`。内部流程 `status` 与表格状态符号不同，不要互相替代。
+
+“老郑审批确认”使用 `action --type approval-toggle`，JSON 为 `{"id":"<记录ID>","checked":true}`；取消勾选用 `false`，可同时指定 `sheetStatus`。只允许真实登录账号 `dengkai` 或 `zhengzw` 执行，其他管理员也不能通过姓名或输入字段冒充。完成日期、款号、画图人员、当前版本及记录范围仍须通过服务器校验。
+
+```powershell
+doon engineering drawings schema --type approval-toggle --json
+doon engineering drawings action --type approval-toggle --input .\approval.json --version <当前版本> --json
+```
+
+维护验证：先在仓库 `test-output/` 下构建隔离的当前原生服务，将 `DOON_BUILD_DIR` 设为该目录的绝对路径，再在 `cli/` 执行 `npm run test:drawings`。测试使用临时数据目录、随机端口和合成账号，不读取正式库；Windows 上包含实际 CLI 进程、加密会话及网页接口回读。
 
 ### SOP与实际MES凭证
 

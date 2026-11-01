@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {getChatGPTUser} from '@/app/chatgpt-auth';
 import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
@@ -16,6 +17,7 @@ function lifecycle(r:EngineeringDrawing){try{assertDrawingLifecycle(r);}catch(e)
 function account(s:State,m:Member,customerId:string){const c=all(s,'customer_account').find(c=>c.id===customerId) as CustomerAccount|undefined;if(!c?.active)throw new AppError('请选择有效客户责任档案。');if(!canManageDrawings(m)&&!assignedDrawingCustomer(m,c))throw new AppError('只能提交明确绑定给本人的客户需求。',403);return c;}
 function assignee(s:State,r:EngineeringDrawing){if(!r.assigneeId)return;const a=all(s,'member').find(a=>a.id===r.assigneeId) as Member|undefined;if(!a||!canManageDrawings(a))throw new AppError('画图人员必须是有效工程画图成员。');if(!r.assignee)r.assignee=a.name;}
 function pending(s:State,r:EngineeringDrawing){return all(s,'engineering_drawing_event').some(e=>e.recordId===r.id&&e.status==='pending');}
+async function canToggleDrawingApproval(m:Member){const identity=await getChatGPTUser() as {userId?:string;username?:string}|null;return m.active&&m.userId===identity?.userId&&['dengkai','zhengzw'].includes(identity?.username||'');}
 function advance(r:EngineeringDrawing,m:Member){return {...r,version:r.version+1,updatedAt:now(),updatedBy:m.name};}
 function changed(a:unknown,b:unknown){return JSON.stringify(a)!==JSON.stringify(b);}
 /** Applying one accepted proposal to the editable fields consumes that event once
@@ -38,9 +40,10 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
   const records=(all(s,'engineering_drawing') as EngineeringDrawing[]).filter(r=>canReadDrawing(s,m,r)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),ids=new Set(records.map(r=>r.id));
   return json({records:records.map(r=>publicDrawing(s,m,r)),customers:drawingCustomers(s,m).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),
    members:(all(s,'member') as Member[]).filter(a=>canManageDrawings(a)||canApproveDrawings(a)).map(a=>({id:a.id,name:a.name,active:a.active,canManage:canManageDrawings(a),canApprove:canApproveDrawings(a)})),
+   requesters:[],
    events:all(s,'engineering_drawing_event').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    details:all(s,'engineering_drawing_detail').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
-   canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m)});
+   canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canToggleApproval:await canToggleDrawingApproval(m)});
  }
  const record=readable(s,m,new URL(req.url).searchParams.get('id')||'');
  return json({history:all(s,'engineering_drawing_revision').filter(r=>r.recordId===record.id&&r.snapshot&&canReadDrawing(s,m,r.snapshot)).sort((a,b)=>b.version-a.version),
@@ -48,7 +51,7 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
 }
 
 export async function engineeringDrawingPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['drawing-save','drawing-review','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
+ if(!['drawing-save','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
  if(action==='drawing-email-intake')return emailIntake(s,m,await req.json());
  if(action==='drawing-import'){
   if(m.role!=='admin')throw new AppError('只有管理员可导入历史工程表。',403);
@@ -59,6 +62,21 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
   return json({ok:true,imported:fresh.length,skipped:built.records.length-fresh.length});
  }
  if(action==='drawing-save')return save(s,m,await req.json());
+ if(action==='drawing-approval-toggle'){
+  if(!await canToggleDrawingApproval(m))throw new AppError('仅 dengkai 和 zhengzw 登录账号可以勾选画图审批。',403);
+  const input=parse(z.object({id,version,checked:z.boolean(),sheetStatus:z.enum(['⌛️','❗❗']).optional()}).strict(),await req.json()),before=readable(s,m,input.id);current(before,input.version);
+  if((before.approval==='通过')===input.checked)throw new AppError('审批状态已变化，请刷新后核对。',409);
+  if(input.checked){
+   if(['已交接','已取消'].includes(before.status))throw new AppError('已交接或取消的需求不能直接确认完成。');
+   if(pending(s,before))throw new AppError('邮件变更尚未核对，不能确认。',409);
+  }else if(before.status==='已交接')throw new AppError('已交接图纸须先核对下游凭证，不能直接取消审批。');
+  const r=advance(before,m);
+  r.approval=input.checked?'通过':'待审核';r.approvalBy=input.checked?m.id:'';r.approvalAt=input.checked?now():'';r.approvalNote=input.checked?'画图跟进表勾选确认':'';
+  if(!input.checked&&input.sheetStatus)r.sheetStatus=input.sheetStatus;
+  r.status=input.checked?'已完成':before.legacyNeedsReview?'历史待核对':'待审核';r.legacyNeedsReview=input.checked?false:before.legacyNeedsReview;
+  if(input.checked)lifecycle(r);
+  return persist(s,m,r,before,input.checked?'画图跟进表勾选审批确认':'画图跟进表取消审批确认');
+ }
  if(action==='drawing-review'){
   if(!canApproveDrawings(m))throw new AppError('仅明确分配审图权限的成员或管理员可以审批。',403);
   const input=parse(z.object({id,version,approval:z.enum(['通过','退回']),note:z.string().trim().min(1).max(6000)}).strict(),await req.json()),before=readable(s,m,input.id);current(before,input.version);
@@ -92,13 +110,17 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
 }
 
 async function save(s:State,m:Member,body:unknown){
- const input=parse(drawingSaveSchema,body),{id:recordId,version:expected,token,...patch}=input,before=recordId?readable(s,m,recordId):null;
+ const input=parse(drawingSaveSchema,body),{id:recordId,version:expected,token,tableEntry,...patch}=input,before=recordId?readable(s,m,recordId):null;
+ if(before&&tableEntry!==undefined)throw new AppError('表格录入标识仅用于新增行。');
  if(before)current(before,expected);else if(!canCreateDrawings(s,m))throw new AppError('没有新建画图需求权限。',403);
  if(before&&!canManageDrawings(m)&&!canEditDrawingRequest(s,m,before))throw new AppError('没有当前画图需求的修改权限，请使用对应的审图操作。',403);
  if(!before&&!token)throw new AppError('新建需求须提供操作标识，请刷新后重试。');
  if(!before&&expected!==undefined)throw new AppError('新建需求不能指定历史版本。');
- const fields=parse(drawingFieldsSchema,{...drawingDefaultFields(),...(before?Object.fromEntries(Object.keys(drawingDefaultFields()).map(k=>[k,before[k]])):{}),...patch});
- const mutationKey=!before?`drawing_create_${await fingerprint({actorId:m.id,token})}`:'',digest=!before?await fingerprint(patch):'';
+ const previous=before?Object.fromEntries(Object.keys(drawingDefaultFields()).map(k=>[k,before[k]])):{};
+ if(before&&!previous.sheetStatus)previous.sheetStatus=before.source?.rawColumns?.['状态']==='❗❗'?'❗❗':'⌛️';
+ const fields=parse(drawingFieldsSchema,{...drawingDefaultFields(),...previous,...patch});
+ if(!before&&tableEntry&&!['customerCode','drawingType','requestedDate','newCount','revisionCount','requester','modelNo','drawingNotes','assignee','deadline','completedDate'].some(k=>String(fields[k as keyof typeof fields]??'').trim())&&fields.sheetStatus!=='❗❗')throw new AppError('空白行无需保存，请先填写内容。');
+ const mutationKey=!before?`drawing_create_${await fingerprint({actorId:m.id,token})}`:'',digest=!before?await fingerprint(tableEntry?{...patch,tableEntry:true}:patch):'';
  if(!before){const prior=s.records.find(e=>e.id===mutationKey);if(prior){if(prior.fingerprint!==digest)throw new AppError('操作标识已用于不同需求，请重新核对。',409);const record=readable(s,m,prior.recordId);return json({ok:true,idempotent:true,record:publicDrawing(s,m,record),item:publicDrawing(s,m,record)});}}
  const defaults=drawingDefaultFields(),comparison=before||defaults;
  for(const key of Object.keys(patch)){
@@ -109,11 +131,16 @@ async function save(s:State,m:Member,body:unknown){
  }
  if(!before&&fields.status!=='待分配')throw new AppError('新需求从待分配开始，接单后再更新进度。');
  if(before&&fields.customerId!==before.customerId&&before.customerId)throw new AppError('已绑定客户的需求不能更换归属，请建立新需求。');
+ // A partial table row may receive its customer code after its first saved cell.
+ // Do not opportunistically bind historical rows when editing unrelated fields.
+ const resolveCustomer=!before||before.tableEntry&&Object.hasOwn(patch,'customerCode');
+ if(resolveCustomer&&!fields.customerId&&fields.customerCode){const matches=drawingCustomers(s,m).filter(c=>c.customerCode?.trim().toLowerCase()===fields.customerCode.trim().toLowerCase());if(matches.length>1)throw new AppError('客户编号对应多个档案，请先核对客户资料。',409);if(matches.length===1)fields.customerId=matches[0].id;}
  if(fields.customerId){const c=account(s,m,fields.customerId);if(!fields.customerCode)fields.customerCode=c.customerCode||c.customer;}
- else if(!canManageDrawings(m)||!before?.source||before.source.type!=='excel')throw new AppError('请先在客户责任清单中选择客户。');
- if(!fields.drawingType||!fields.requestedDate||!fields.requester)throw new AppError('请填写画图类型、需求日期与需求者。');
+ else if(!canManageDrawings(m)||!fields.customerCode&&!tableEntry&&!before?.tableEntry)throw new AppError('请手动填写客户编号；非工程人员仍需关联本人负责的客户。');
+ if(!tableEntry&&!before?.tableEntry&&(!fields.drawingType||!fields.requestedDate||!fields.requester))throw new AppError('请填写画图类型、需求日期与需求者。');
  if(before&&fields.status==='历史待核对'&&before.status!=='历史待核对')throw new AppError('历史待核对仅用于原表迁移。');
  const r:EngineeringDrawing=before?{...advance(before,m),...fields}:createDrawing(fields,m);
+ if(!before&&tableEntry)r.tableEntry=true;
  const assigneeChanged=!before||fields.assigneeId!==before.assigneeId||fields.assignee!==before.assignee;
  if(assigneeChanged)assignee(s,r);
  const approvalSensitive=['drawingType','newCount','revisionCount','requirement','modelNo','drawingNotes','assigneeId','assignee','completedDate'];
@@ -121,12 +148,13 @@ async function save(s:State,m:Member,body:unknown){
  if(r.status==='已交接'&&pending(s,r))throw new AppError('邮件变更尚未核对，不能交接。',409);
  if(r.status!=='历史待核对'){
   // Unchanged historical completions remain evidence; any execution change enters the current workflow.
-  const executionChanged=!before||drawingExecutionFields.some(k=>changed(r[k],before[k]));
+  const executionChanged=!before||drawingExecutionFields.filter(k=>k!=='sheetStatus').some(k=>changed(r[k],before[k]));
   if(!r.legacyNeedsReview||executionChanged)lifecycle(r);
   if(executionChanged)r.legacyNeedsReview=false;
  }
  const extra:Entity[]=mutationKey?[{id:mutationKey,kind:'engineering_drawing_mutation',recordId:r.id,actorId:m.id,fingerprint:digest,createdAt:now()}]:[];
- if(isDrawingChangeType(r.drawingType)&&(!before||['drawingType','requirement'].some(k=>changed(r[k],before[k])))){if(!r.customerId)throw new AppError('请先明确绑定客户，再发出改图并建立SOP义务。');const applied=before?adoptedSopApplication(s,m,before,r):null;extra.push(...(applied||planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'改图需求待明确SOP版本'},'change_instruction').updates));}
+ const newlyBoundTableRow=before?.tableEntry&&!before.customerId&&!!r.customerId;
+ if(isDrawingChangeType(r.drawingType)&&r.customerId&&(!before||newlyBoundTableRow||['drawingType','requirement'].some(k=>changed(r[k],before[k])))){const applied=before?adoptedSopApplication(s,m,before,r):null;extra.push(...(applied||planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'改图需求待明确SOP版本'},'change_instruction').updates));}
  return persist(s,m,r,before,before?'更新工程画图跟进':'新建画图需求',extra);
 }
 

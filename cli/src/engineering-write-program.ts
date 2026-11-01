@@ -2,11 +2,11 @@ import {Command} from 'commander';import {FoundationService} from './service.js'
 export function registerEngineeringWrites(program:Command,foundation:()=>FoundationService,result:(name:string,data:unknown)=>void){
  const engineering=program.commands.find(c=>c.name()==='engineering')!,group=(resource:string)=>engineering.commands.find(c=>c.name()===resource)||engineering.command(resource),drawings=group('drawings'),sops=group('sops'),projects=group('projects'),records=group('records');
  const input=(c:Command)=>c.requiredOption('--input <file>','UTF-8 JSON文件'),pages=(c:Command)=>c.option('--limit <number>','每页1至100','20').option('--offset <number>','起始偏移','0');
- drawings.command('schema').option('--type <type>','save|import|review|event-review|detail-add','save').action(o=>result('engineering drawings schema',foundation().engineeringWrite().schema('drawing',o.type)));
+ drawings.command('schema').option('--type <type>','save|import|approval-toggle|review|event-review|detail-add','save').action(o=>result('engineering drawings schema',foundation().engineeringWrite().schema('drawing',o.type)));
  drawings.command('form <id>').action(async id=>result('engineering drawings form',await foundation().engineeringWrite().form('drawing',id)));
  pages(drawings.command('references')).action(async o=>result('engineering drawings references',await foundation().engineeringWrite().references('drawing',o)));
  input(drawings.command('save')).requiredOption('--version <number>','新建0，修改当前版本').option('--request-id <id>','新建操作标识').action(async o=>result('engineering drawings save',await foundation().engineeringWrite().saveDrawing(o.input,o.version,o.requestId)));
- input(drawings.command('action')).requiredOption('--type <type>','review|event-review|detail-add').requiredOption('--version <number>','工程需求当前版本').action(async o=>result('engineering drawings action',await foundation().engineeringWrite().drawingAction(o.type,o.input,o.version)));
+ input(drawings.command('action')).requiredOption('--type <type>','approval-toggle|review|event-review|detail-add').requiredOption('--version <number>','工程需求当前版本').action(async o=>result('engineering drawings action',await foundation().engineeringWrite().drawingAction(o.type,o.input,o.version)));
  pages(drawings.command('events <id>')).action(async(id,o)=>result('engineering drawings events',await foundation().engineeringWrite().events(id,o)));
  input(drawings.command('import')).action(async o=>result('engineering drawings import',await foundation().engineeringWrite().importDrawings(o.input)));
  sops.command('schema').requiredOption('--type <type>','create|change|target|prepare|mes-upload|confirm|cancel').action(o=>result('engineering sops schema',foundation().engineeringWrite().schema('sop',o.type)));

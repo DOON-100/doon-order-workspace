@@ -70,7 +70,7 @@
 | 客服与单证 | `completed` | W3/W7/W9 | 待核验 | 候选源码：lib/service-workspace-api.ts、lib/handoff-business-api.ts、lib/collaboration-api.ts | 待核验 | 待核验 |
 | 工程部 | `ie-quotes` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
 | 工程部 | `engineering-materials` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
-| 工程部 | `engineering-drawings` | W2/W4 | 待核验 | 候选源码：lib/engineering-drawing-api.ts、lib/engineering-sop-api.ts、lib/ie-quote-api.ts | 待核验 | 待核验 |
+| 工程部 | `engineering-drawings` | W2/W4 | 画图跟进表13列；schema/form/references，账号名与原表状态符号 | `engineering drawings save --version 0`新增、save增量修改、action approval-toggle审批；同网页drawing-save接口 | tableEntry允许部分字段新增、空行拒绝、请求标识去重；审批勾选只限dengkai/zhengzw；客户范围与版本仍由服务端校验 | 2026-11-01隔离合成数据6项联调通过，包含实际CLI进程新增后由网页接口回读；尚未正式发布，其他工程页不在本次验收范围 |
 | 工程部 | `process-sample` | W2/W4 | 已接入schema/form及保存字段，见下方流程矩阵 | `engineering records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | 工程部 | `process-engineering-change` | W2/W4 | 已接入schema/form及保存字段，见下方流程矩阵 | `engineering records`；固定process-data/history/save | 沿用原流程角色、客户/业务组、版本及状态规则 | 所属W1/W4/W6/W7/W8/W9合成及成品验证已记录；不代表隐藏按钮逐一验收 |
 | PMC 计划 | `production-planning` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
@@ -82,6 +82,7 @@
 | PMC 计划 | `mine` | W5–W6 | 待核验 | 候选源码：lib/pmc-api.ts、lib/planning-control-api.ts | 待核验 | 待核验 |
 | 采购与外协 | `supplier-workspace` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 采购与外协 | `supplier-pending` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
+| 采购与外协 | `supplier-directory` | W5–W6/W8 | 待核验（补登记现有导航入口） | 待核验 | 待核验 | 本次仅补清单，不代表已接入CLI |
 | 采购与外协 | `supplier-followup` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 采购与外协 | `supplier-samples` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |
 | 采购与外协 | `supplier-kit` | W5–W6/W8 | 待核验 | 候选源码：lib/purchase-api.ts、lib/supplier-api.ts、lib/finished-supplier-api.ts | 待核验 | 待核验 |

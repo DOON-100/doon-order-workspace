@@ -206,9 +206,9 @@
 | `doon purchasing purchases action --type <type> --input <file> [--version <number>] [--request-id <uuid>]` | 登记采购核数、退补或齐货存档并回读 | business-write |
 | `doon engineering drawings schema [--type <type>]` | 查询工程需求及动作字段 | local-read |
 | `doon engineering drawings form <id>` | 读取工程需求完整编辑字段 | business-read-and-session-last-seen |
-| `doon engineering drawings references [--limit <number>] [--offset <number>]` | 查询授权工程需求、客户及画图/审图人员 | business-read-and-session-last-seen |
+| `doon engineering drawings references [--limit <number>] [--offset <number>]` | 查询授权画图需求、客户、需求者账号和画图人员选项 | business-read-and-session-last-seen |
 | `doon engineering drawings save --input <file> --version <number> [--request-id <id>]` | 新增工程需求或修改指定字段 | business-write |
-| `doon engineering drawings action --type <type> --input <file> --version <number>` | 审图、核对变更或追加明细 | business-write |
+| `doon engineering drawings action --type <type> --input <file> --version <number>` | 审批勾选、审图、核对变更或追加明细 | business-write |
 | `doon engineering drawings events <id> [--limit <number>] [--offset <number>]` | 查看工程变更事件及需求明细 | business-read-and-session-last-seen |
 | `doon engineering drawings import --input <file>` | 管理员追加工程历史原表证据 | business-write |
 | `doon engineering sops schema --type <type>` | 查询SOP任务动作字段 | local-read |

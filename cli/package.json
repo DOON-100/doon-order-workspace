@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test tests/*.test.mjs",
     "test:integration": "npm run build && node tests/integration/sales-api.mjs",
+    "test:drawings": "npm run build && node tests/integration/drawing-table.mjs",
     "docs": "npm run build && node scripts/command-docs.mjs",
     "docs:check": "node scripts/command-docs.mjs --check",
     "package:windows": "npm run build && npm run docs:check && node scripts/package-windows.mjs"
