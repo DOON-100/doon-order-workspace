@@ -12,11 +12,11 @@ const done=(task:EngineeringTaskCard)=>terminal.has(task.status);
 const pageSize=8;
 
 export function EngineeringTaskBoard({tasks,onOpen}:{tasks:EngineeringTaskCard[];onOpen:(task:EngineeringTaskCard)=>void}){
- const [groupBy,setGroupBy]=useState<GroupBy>('category'),[scope,setScope]=useState<Scope>('all'),[query,setQuery]=useState(''),[limits,setLimits]=useState<Record<string,number>>({});
+ const [groupBy,setGroupBy]=useState<GroupBy>('category'),[scope,setScope]=useState<Scope>('open'),[query,setQuery]=useState(''),[limits,setLimits]=useState<Record<string,number>>({});
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
  const isOverdue=(task:EngineeringTaskCard)=>!done(task)&&/^\d{4}-\d{2}-\d{2}$/.test(task.deadline)&&task.deadline<today;
  const needsAttention=(task:EngineeringTaskCard)=>!done(task)&&(!!task.attention||isOverdue(task));
- const metrics=[{key:'all' as const,label:'任务总数',value:tasks.length},{key:'open' as const,label:'未完成',value:tasks.filter(task=>!done(task)).length},{key:'attention' as const,label:'需处理',value:tasks.filter(needsAttention).length}];
+ const metrics=[{key:'open' as const,label:'未完成',value:tasks.filter(task=>!done(task)).length},{key:'attention' as const,label:'需处理',value:tasks.filter(needsAttention).length}];
  useEffect(()=>setLimits({}),[groupBy,scope,query]);
  const filtered=useMemo(()=>{
   const search=query.trim().toLocaleLowerCase();
@@ -35,13 +35,13 @@ export function EngineeringTaskBoard({tasks,onOpen}:{tasks:EngineeringTaskCard[]
   }
   return [...map.values()].sort((a,b)=>Number(b.tasks.some(needsAttention))-Number(a.tasks.some(needsAttention))||a.label.localeCompare(b.label,'zh-CN'));
  },[filtered,groupBy,today]);
- const reset=()=>{setQuery('');setScope('all');};
+ const reset=()=>{setQuery('');setScope('open');};
  return <section className="engineering-task-board" aria-label="工程任务看板">
-  <div className="etb-heading"><div><h2>工程任务看板</h2><p>画图与 SOP 任务分类展示，点击卡片查看完整资料和处理记录。</p></div><span className="etb-total">{tasks.length} 项任务</span></div>
-  <div className="etb-metrics" aria-label="工程任务范围">{metrics.map(metric=><button type="button" key={metric.key} className={scope===metric.key?'selected':''} aria-pressed={scope===metric.key} onClick={()=>setScope(metric.key)}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.key==='all'?'包含已完成与历史任务':metric.key==='open'?'跟进尚未结束的任务':'需要核对、更新或处理的任务'}</small></button>)}</div>
-  <div className="etb-controls"><label className="etb-search"><Search size={17} aria-hidden="true"/><input aria-label="搜索工程任务" placeholder="搜索客户、任务、款号或负责人" value={query} onChange={event=>setQuery(event.target.value)}/></label><label className="etb-group-select"><span>分组方式</span><select aria-label="工程任务分组方式" value={groupBy} onChange={event=>setGroupBy(event.target.value as GroupBy)}><option value="category">按任务分类</option><option value="status">按跟进状态</option><option value="assignee">按负责人</option></select></label></div>
-  <div className="etb-result" aria-live="polite"><span>{scope==='all'?'全部任务':scope==='open'?'未完成任务':'需处理任务'} · 当前显示 {filtered.length} 项，共 {groups.length} 组</span>{(query||scope!=='all')&&<button type="button" onClick={reset}>显示全部任务</button>}</div>
-  {!groups.length?<div className="etb-empty"><ClipboardList size={28} aria-hidden="true"/><strong>{tasks.length?'没有符合条件的任务':'暂无工程任务'}</strong><p>{tasks.length?'调整搜索或切回全部任务查看。':'登记画图需求或 SOP 任务后，会在这里按分类显示。'}</p></div>:<div className="etb-groups">{groups.map(group=>{
+  <div className="etb-heading"><div><h2>工程任务看板</h2><p>优先跟进未完成的画图与 SOP 任务，点击卡片查看资料和处理记录。</p></div><span className="etb-total">{metrics[0].value} 项未完成</span></div>
+  <div className="etb-metrics" aria-label="工程任务范围">{metrics.map(metric=><button type="button" key={metric.key} className={scope===metric.key?'selected':''} aria-pressed={scope===metric.key} onClick={()=>setScope(metric.key)}><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.key==='open'?'跟进尚未结束的任务':'需要核对、更新或处理的任务'}</small></button>)}</div>
+  <div className="etb-controls"><label className="etb-search"><Search size={17} aria-hidden="true"/><input aria-label="搜索工程任务" placeholder="搜索客户、任务、款号或负责人" value={query} onChange={event=>setQuery(event.target.value)}/></label><label className="etb-group-select"><span>任务范围</span><select aria-label="工程任务范围" value={scope} onChange={event=>setScope(event.target.value as Scope)}><option value="open">未完成</option><option value="attention">需处理</option><option value="all">全部（含已完成）</option></select></label><label className="etb-group-select"><span>分组方式</span><select aria-label="工程任务分组方式" value={groupBy} onChange={event=>setGroupBy(event.target.value as GroupBy)}><option value="category">按任务分类</option><option value="status">按跟进状态</option><option value="assignee">按负责人</option></select></label></div>
+  <div className="etb-result" aria-live="polite"><span>{scope==='all'?'全部任务':scope==='open'?'未完成任务':'需处理任务'} · 当前显示 {filtered.length} 项，共 {groups.length} 组</span>{(query||scope!=='open')&&<button type="button" onClick={reset}>重置为未完成</button>}</div>
+  {!groups.length?<div className="etb-empty"><ClipboardList size={28} aria-hidden="true"/><strong>{tasks.length?'没有符合条件的任务':'暂无工程任务'}</strong><p>{tasks.length?'调整搜索或任务范围查看，已完成及历史记录仍保留。':'登记画图需求或 SOP 任务后，会在这里按分类显示。'}</p></div>:<div className="etb-groups">{groups.map(group=>{
    const limit=limits[group.key]||pageSize,visible=group.tasks.slice(0,limit),remaining=group.tasks.length-visible.length;
    return <section key={group.key} className="etb-group" aria-label={group.label}><header><div><h3>{group.label}</h3><span>{group.tasks.length}</span></div><small>{group.tasks.filter(task=>!done(task)).length} 项未完成</small></header><div className="etb-cards">{visible.map(task=>{
     const complete=done(task),attention=needsAttention(task),overdue=isOverdue(task);

@@ -1,5 +1,7 @@
 'use client';
 import {ExcelTable} from './excel-table';
+import {useQueryClient} from '@tanstack/react-query';
+import {engineeringDataQuery} from './engineering-data-query';
 import {cloneElement,isValidElement,useCallback,useEffect,useRef,useState,type ReactElement,type ReactNode} from 'react';
 import {Button} from '@/components/ui/button';
 import {clientId} from '@/lib/client-id';
@@ -11,13 +13,14 @@ import './engineering-sop.css';
 type Sop={id:string;version:number;drawingRecordId:string;customerId:string;modelNo:string;targetVersion:string;currentVersion:string;status:string;mode:string;requirement:string;isCurrent:boolean;predecessorId:string;sourceEventId:string;sopFileId:string;preparedVersion:string;latestUploadId:string;confirmationNote:string;confirmedBy:string;confirmedAt:string;createdAt:string;updatedAt:string;updatedBy:string;canManage?:boolean;canApprove?:boolean};
 type Attachment={id:string;sopId:string;purpose:string;filename:string;createdAt:string;actor?:string;size?:number};
 type Upload={id:string;sopId:string;uploadedVersion:string;uploadedAt:string;mesReference:string;mesUrl:string;actualUploader:string;proofFileId:string;actorId?:string;createdBy?:string;createdAt:string;note:string};
-type SopData={records:Sop[];attachments:Attachment[];uploads:Upload[];canCreateChange:boolean;canManage:boolean;canApprove:boolean};
+export type SopData={records:Sop[];attachments:Attachment[];uploads:Upload[];canCreateChange:boolean;canManage:boolean;canApprove:boolean};
 type Drawing={id:string;customerCode:string;drawingType:string;modelNo:string;status:string;canEdit?:boolean;canManage?:boolean};
 const empty:SopData={records:[],attachments:[],uploads:[],canCreateChange:false,canManage:false,canApprove:false};
 const day=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 function Field({label,children,wide=false}:{label:string;children:ReactNode;wide?:boolean}){return <label className={'ed-field'+(wide?' ed-wide':'')}><span>{label}</span>{isValidElement(children)?cloneElement(children as ReactElement<{'aria-label'?:string}>,{'aria-label':label}):children}</label>;}
-export function EngineeringSopPanel({data,initialSopId='',onDirtyChange}:{data:Data;initialSopId?:string;onDirtyChange?:(v:boolean)=>void}){
- const [work,setWork]=useState<SopData>(empty),[drawings,setDrawings]=useState<Drawing[]>([]),[selectedId,setSelectedId]=useState(initialSopId),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[filter,setFilter]=useState('待处理'),[search,setSearch]=useState('');
+export function EngineeringSopPanel({data,initialSopId='',initialData,initialDrawings,onDirtyChange}:{data:Data;initialSopId?:string;initialData?:SopData;initialDrawings?:Drawing[];onDirtyChange?:(v:boolean)=>void}){
+ const cache=useQueryClient(),seeded=useRef(!!initialData&&!!initialDrawings);
+ const [work,setWork]=useState<SopData>(()=>({...empty,...initialData})),[drawings,setDrawings]=useState<Drawing[]>(initialDrawings||[]),[selectedId,setSelectedId]=useState(initialSopId),[loading,setLoading]=useState(!seeded.current),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[filter,setFilter]=useState('待处理'),[search,setSearch]=useState('');
  const [create,setCreate]=useState<null|{mode:'change'|'upload';drawingRecordId:string;modelNo:string;targetVersion:string;requirement:string;token:string}>(null);
  const [snapshot,setSnapshot]=useState<Sop|null>(null),[targetModel,setTargetModel]=useState('');
  const [target,setTarget]=useState(''),[targetNote,setTargetNote]=useState(''),[preparedVersion,setPreparedVersion]=useState(''),[prepareNote,setPrepareNote]=useState(''),[sopFile,setSopFile]=useState<File|null>(null),[savedSopFile,setSavedSopFile]=useState('');
@@ -26,8 +29,8 @@ export function EngineeringSopPanel({data,initialSopId='',onDirtyChange}:{data:D
  const active=selected?.isCurrent!==false,manage=(selected?.canManage??work.canManage)&&active,approve=(selected?.canApprove??work.canApprove)&&active;
  const dirty=!!create||!!sopFile||!!proof||!!prepareNote||!!target||!!targetModel||!!targetNote||!!preparedVersion||!!uploadedVersion||uploadedAt!==day()||confirmedActual||!!mesReference||!!mesUrl||!!actualUploader||!!uploadNote||!!reviewNote;
  const reset=()=>{setTargetModel('');setTarget('');setTargetNote('');setPreparedVersion('');setPrepareNote('');setSopFile(null);setSavedSopFile('');setUploadedVersion('');setUploadedAt(day());setMesReference('');setMesUrl('');setActualUploader('');setUploadNote('');setProof(null);setSavedProof('');setConfirmedActual(false);setReviewNote('');setHistory([]);historyGeneration.current++;};
- const reload=useCallback(async()=>{const seq=++generation.current;setLoading(true);try{const [s,d]=await Promise.all([request('sop-data'),request('drawing-data')]);if(seq===generation.current){setWork({...empty,...s});setDrawings(d.records||[]);}}finally{if(seq===generation.current)setLoading(false);}},[]);
- useEffect(()=>{void reload().catch(e=>setError(e.message));return()=>{generation.current++;historyGeneration.current++;};},[reload]);
+ const reload=useCallback(async()=>{const seq=++generation.current;setLoading(true);try{const [s,d]=await Promise.all([cache.fetchQuery({...engineeringDataQuery<SopData>(data.me.id,'sop-data'),staleTime:0}),cache.fetchQuery({...engineeringDataQuery<{records:Drawing[]}>(data.me.id,'drawing-data'),staleTime:0})]);if(seq===generation.current){setWork({...empty,...s});setDrawings(d.records||[]);}}finally{if(seq===generation.current)setLoading(false);}},[cache,data.me.id]);
+ useEffect(()=>{if(!seeded.current)void reload().catch(e=>setError(e.message));return()=>{generation.current++;historyGeneration.current++;};},[reload]);
  useEffect(()=>{onDirtyChange?.(dirty);return()=>onDirtyChange?.(false);},[dirty,onDirtyChange]);
  useEffect(()=>{if(!dirty)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};addEventListener('beforeunload',leave);return()=>removeEventListener('beforeunload',leave);},[dirty]);
  useEffect(()=>{if(!snapshot&&selected)setSnapshot(selected);},[snapshot,selected]);

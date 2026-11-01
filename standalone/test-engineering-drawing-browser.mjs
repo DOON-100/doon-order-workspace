@@ -29,7 +29,22 @@ try{
  await context.addInitScript(()=>Object.defineProperty(Crypto.prototype,'randomUUID',{value:undefined,configurable:true}));
  const split=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  const page=await context.newPage(),dialogs=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>{dialogs.push(d.message());return d.accept();});
- await page.goto(origin+'/engineering-drawings');await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('heading',{name:'工程画图跟进表',exact:true}).waitFor();
+ // Hold the unrelated feed until the drawing table is ready. This would deadlock
+ // the former combined index and catches duplicate downloads when switching tabs.
+ const readCounts={'drawing-data':0,'sop-data':0};let releaseSop;
+ const sopGate=new Promise(resolve=>releaseSop=resolve);
+ page.on('request',r=>{const action=new URL(r.url()).pathname.split('/').at(-1);if(r.method()==='GET'&&action in readCounts)readCounts[action]++;});
+ await page.route('**/api/workspace/sop-data',async route=>{await sopGate;await route.continue();});
+ await page.goto(origin+'/engineering-drawings');await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('button',{name:'新增空行',exact:true}).waitFor();
+ assert.equal(readCounts['drawing-data'],1);assert.equal(readCounts['sop-data'],1);
+ const sopReady=page.waitForResponse(r=>r.url().endsWith('/sop-data'));releaseSop();await sopReady;
+ await page.getByRole('button',{name:'工程管理看板',exact:true}).click();await page.getByRole('heading',{name:'工程任务看板',exact:true}).waitFor();
+ assert.equal(await page.locator('.etb-metrics button').count(),2);assert.equal(await page.getByRole('combobox',{name:'工程任务范围',exact:true}).inputValue(),'open');
+ await page.getByRole('button',{name:'MES 待上传 SOP',exact:true}).click();await page.locator('.sop-table').waitFor();
+ await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('button',{name:'新增空行',exact:true}).waitFor();
+ assert.deepEqual(readCounts,{'drawing-data':1,'sop-data':1});
+ assert.equal(await page.locator('.ed-metrics button').count(),2);assert.equal(await page.locator('.ed-metrics').getByText('全部需求',{exact:true}).count(),0);assert.equal(await page.locator('.ed-tabs .selected').innerText(),'未完成');
+ pass('首次画图表不等待 SOP，切换三个页签复用授权数据；看板默认未完成且只有两张统计卡');
  const add=()=>page.getByRole('button',{name:'新增空行',exact:true}).click();
  const choose=async(label,value)=>{await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('option',{name:value,exact:true}).click();};
  const chooseDate=async(label,value)=>{await page.getByRole('button',{name:'选择'+label,exact:true}).click();await page.getByRole('dialog',{name:label+'日历',exact:true}).getByRole('button',{name:value,exact:true}).click();};
@@ -50,8 +65,9 @@ try{
  await page.getByRole('combobox',{name:'画图类型',exact:true}).click();assert.deepEqual(await page.getByRole('listbox').getByRole('option').allTextContents(),['—','改图','新款画图','印字资料','配件图','3D图','图纸确认，发图']);await page.screenshot({path:path.join(dir,'engineering-type-menu.png'),fullPage:false,animations:'disabled'});await page.keyboard.press('Escape');assert.equal((await api('workspace/drawing-data')).records.length,0);pass('自定义下拉保留全部画图类型，关闭菜单不保存空行');
  await page.getByRole('separator',{name:'调整状态列宽',exact:true}).dblclick();assert(Math.abs((await widths())[0]-originalWidths[0])<2);pass('调整列宽后首两列仍冻结，双击可恢复默认宽度');
  await page.getByRole('button',{name:'填写客户编号',exact:true}).hover();assert.equal(await page.getByRole('button',{name:'填写客户编号',exact:true}).evaluate(el=>getComputedStyle(el).textDecorationLine),'none');await page.getByRole('button',{name:'填写客户编号',exact:true}).click();assert.deepEqual(await page.getByLabel('客户编号',{exact:true}).evaluate(el=>({focused:document.activeElement===el,border:getComputedStyle(el).borderTopWidth,outline:getComputedStyle(el).outlineStyle,padding:getComputedStyle(el).paddingLeft})),{focused:true,border:'0px',outline:'none',padding:'0px'});await page.getByLabel('客户编号',{exact:true}).fill('SYN-DRAW');await committed(()=>page.getByLabel('客户编号',{exact:true}).press('Enter'));
+ assert.deepEqual(readCounts,{'drawing-data':2,'sop-data':2});
  let state=await api('workspace/drawing-data');assert.equal(state.records.length,1);assert.equal(state.records[0].customerCode,'SYN-DRAW');assert.equal(state.records[0].drawingType,'');assert.equal(state.records[0].requester,'');assert.equal(state.records[0].requestedDate,'');assert.equal(state.records[0].tableEntry,true);pass('只填客户编号即自动保存，未填字段保持空白');
- await board();assert.equal(await page.locator('.etb-total').innerText(),'1 项任务');assert.match(await page.locator('.etb-card').innerText(),/SYN-DRAW/);pass('新行自动保存后切回看板立即显示，不需要刷新共享资料或重载页面');
+ await board();assert.equal(await page.locator('.etb-total').innerText(),'1 项未完成');assert.match(await page.locator('.etb-card').innerText(),/SYN-DRAW/);pass('新行自动保存后切回看板立即显示，不需要刷新共享资料或重载页面');
  await page.reload();await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('button',{name:'编辑客户编号 SYN-DRAW',exact:true}).waitFor();assert.equal(await page.getByRole('combobox',{name:'画图类型 SYN-DRAW',exact:true}).innerText(),'—');assert.equal(await page.getByRole('heading',{name:'补充字段与修改历史',exact:true}).count(),0);
  await committed(()=>choose('画图类型 SYN-DRAW','新款画图'));
  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
@@ -92,9 +108,32 @@ try{
  let confirmedWrites=0;const countWrite=request=>{if(request.url().endsWith('/drawing-save')&&request.method()==='POST')confirmedWrites++;};page.on('request',countWrite);
  const failIndex=route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic index read failure'})});await page.route('**/api/workspace/sop-data',failIndex);
  const saved=page.waitForResponse(r=>r.url().endsWith('/drawing-save')&&r.request().method()==='POST');await choose('状态 SYN-DRAW','❗❗');assert.equal((await saved).status(),200);
- await page.getByRole('alert').filter({hasText:'工程权限读取失败'}).waitFor();assert.equal((await api('workspace/drawing-data')).records.find(r=>r.id===drawingId).sheetStatus,'❗❗');assert.equal(confirmedWrites,1);
+ await page.getByRole('alert').filter({hasText:'工程资料读取失败'}).waitFor();assert.equal((await api('workspace/drawing-data')).records.find(r=>r.id===drawingId).sheetStatus,'❗❗');assert.equal(confirmedWrites,1);
  await page.unroute('**/api/workspace/sop-data',failIndex);await page.getByRole('button',{name:'重新读取工程资料',exact:true}).click();await page.getByRole('combobox',{name:'状态 SYN-DRAW',exact:true}).waitFor();await board();assert.equal(await attention().locator('strong').innerText(),'1');assert.equal(confirmedWrites,1);page.off('request',countWrite);
  pass('保存成功但看板读取失败时隐藏旧缓存，重试只读刷新恢复新统计，不重复写入原记录');
+ const preservedRecords=JSON.stringify((await api('workspace/drawing-data')).records);
+ const withHistory=async route=>{const response=await route.fetch(),payload=await response.json();await route.fulfill({response,json:{...payload,records:[...payload.records,{...payload.records[0],id:'synthetic-completed-view',modelNo:'合成已完成',status:'已完成',approval:'通过'}]}});};
+ await page.route('**/api/workspace/drawing-data',withHistory);await page.reload();await page.getByRole('heading',{name:'工程任务看板',exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).count(),0);
+ await page.getByRole('combobox',{name:'工程任务范围',exact:true}).selectOption('all');await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).waitFor();
+ await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).click();await page.getByRole('button',{name:'编辑款号 SYN-DRAW',exact:true}).filter({hasText:'合成已完成'}).waitFor();
+ await board();await page.getByRole('combobox',{name:'工程任务范围',exact:true}).selectOption('all');
+ await page.getByRole('button',{name:'重置为未完成',exact:true}).click();assert.equal(await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).count(),0);
+ assert.equal(JSON.stringify((await api('workspace/drawing-data')).records),preservedRecords);
+ await page.screenshot({path:path.join(dir,'engineering-open-board.png'),fullPage:false,animations:'disabled'});
+ await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.locator('.ed-table').waitFor();
+ assert.equal(await page.locator('.ed-tabs .selected').innerText(),'未完成');assert.equal(await page.locator('.ed-table tbody').getByText('合成已完成',{exact:true}).count(),0);
+ await page.getByRole('group',{name:'工程画图状态',exact:true}).getByRole('button',{name:'✅已完成',exact:true}).click();await page.locator('.ed-table tbody').getByText('合成已完成',{exact:true}).waitFor();
+ await page.getByRole('group',{name:'工程画图状态',exact:true}).getByRole('button',{name:'未完成',exact:true}).click();
+ await page.screenshot({path:path.join(dir,'engineering-open-table.png'),fullPage:false,animations:'disabled'});
+ await page.unroute('**/api/workspace/drawing-data',withHistory);
+ pass('默认隐藏已完成卡片，全部范围可回看，重置回到未完成且不修改任何原记录');
+ const denyDrawing=route=>route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'Synthetic authorization denied'})});
+ await page.route('**/api/workspace/drawing-data',denyDrawing);await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'工程资料读取失败'}).waitFor();assert.equal(await page.locator('.ed-table').count(),0);
+ await page.unroute('**/api/workspace/drawing-data',denyDrawing);await page.getByRole('button',{name:'重新读取工程资料',exact:true}).click();await page.locator('.ed-table').waitFor();
+ assert.equal(JSON.stringify((await api('workspace/drawing-data')).records),preservedRecords);
+ pass('画图权限读取失败立即隐藏旧表，重新核对后恢复且不写入原数据');
  await fs.writeFile('test-output/engineering-browser-result.json',JSON.stringify({checks,passed:checks.length,screenshotDirectory:dir},null,2));console.log('SCREENSHOTS '+dir);
 
 }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));}

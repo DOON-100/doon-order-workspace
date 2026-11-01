@@ -1,6 +1,7 @@
 'use client';
 import {ExcelTable,useExcelColumnFilters} from './excel-table';
 import {useQueryClient} from '@tanstack/react-query';
+import {engineeringDataQuery} from './engineering-data-query';
 
 import {Children,cloneElement,isValidElement,useCallback,useEffect,useMemo,useRef,useState,type ChangeEvent,type CSSProperties,type KeyboardEvent,type ReactElement,type ReactNode} from 'react';
 import {Check,Download,Plus,RefreshCw} from 'lucide-react';
@@ -17,7 +18,7 @@ import './engineering-drawings.css';
 type Drawing={id:string;version:number;customerId:string;customerCode:string;drawingType:string;requestedDate:string;newCount:number|null;revisionCount:number|null;requester:string;modelNo:string;drawingNotes:string;assigneeId:string;assignee:string;deadline:string;completedDate:string;approval:string;status:string;sheetStatus?:'⌛️'|'❗❗';upstreamDepartment:string;priority:string;requirement:string;downstream:string;deliveredDate:string;deliveryNote:string;updatedAt:string;updatedBy:string;source?:{type:string;filename?:string;sheet?:string;row?:number;rawColumns?:Record<string,string>};canEdit?:boolean;canManage?:boolean;canApprove?:boolean};
 type Draft=Pick<Drawing,'customerId'|'customerCode'|'drawingType'|'requestedDate'|'newCount'|'revisionCount'|'requester'|'modelNo'|'drawingNotes'|'assigneeId'|'assignee'|'deadline'|'completedDate'|'approval'|'status'|'sheetStatus'|'upstreamDepartment'|'priority'|'requirement'|'downstream'|'deliveredDate'|'deliveryNote'>&{id?:string;version?:number;token?:string};
 type DrawingEvent={id:string;recordId:string;subject?:string;messageId?:string;status?:string;receivedAt?:string;createdAt?:string;sender?:string;proposal?:Record<string,unknown>;note?:string;[key:string]:unknown};
-type DrawingData={records:Drawing[];customers:{id:string;customer:string;customerCode:string}[];members:{id:string;name:string;canManage?:boolean}[];requesters:string[];events:DrawingEvent[];canCreate:boolean;canManage:boolean;canApprove:boolean;canToggleApproval:boolean};
+export type DrawingData={records:Drawing[];customers:{id:string;customer:string;customerCode:string}[];members:{id:string;name:string;canManage?:boolean}[];requesters:string[];events:DrawingEvent[];canCreate:boolean;canManage:boolean;canApprove:boolean;canToggleApproval:boolean};
 const originalDrawingTypes=['改图','新款画图','印字资料','配件图','3D图','图纸确认，发图'];
 const originalHeaders=['状态','客户编号','画图类型','需求发出时间','新款数量','改图数量','需求者','款号','画图备注','画图人员','截止日期','完成日期','老郑审批确认'];
 const initialColumnWidths=[130,175,150,160,110,110,150,160,240,170,160,185,150];
@@ -34,6 +35,7 @@ const drawingPeople=['邓凯','杨林峰','黄智翔'];
 const day=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 const blank=(name:string):Draft=>({token:clientId(),customerId:'',customerCode:'',drawingType:'新款画图',requestedDate:day(),newCount:null,revisionCount:null,requester:name,modelNo:'',drawingNotes:'',assigneeId:'',assignee:'',deadline:'',completedDate:'',approval:'待审核',status:'待分配',sheetStatus:'⌛️',upstreamDepartment:'业务部',priority:'普通',requirement:'',downstream:'',deliveredDate:'',deliveryNote:''});
 const sheetStatus=(r:Drawing)=>r.approval==='通过'?'✅已完成':r.sheetStatus||((r.source?.rawColumns?.['状态']==='❗❗')?'❗❗':'⌛️');
+const unfinished=(r:Drawing)=>r.approval!=='通过'&&!['已完成','已交接','已取消'].includes(r.status);
 const originalDate=(value:string)=>value?`${Number(value.slice(0,4))}年${Number(value.slice(5,7))}月${Number(value.slice(8,10))}日`:'';
 function Field({label,children,wide=false}:{label:string;children:ReactNode;wide?:boolean}){return <label className={'ed-field'+(wide?' ed-wide':'')}><span>{label}</span>{isValidElement(children)?cloneElement(children as ReactElement<{'aria-label'?:string}>,{'aria-label':label}):children}</label>;}
 const initial:DrawingData={records:[],customers:[],members:[],requesters:[],events:[],canCreate:false,canManage:false,canApprove:false,canToggleApproval:false};
@@ -67,34 +69,34 @@ function DrawingGridEditor({value,work,drawingTypes,busy,onChange,onCommit,colum
  <td>{date('截止日期','deadline',work.canManage)}</td><td>{date('完成日期','completedDate',work.canManage)}</td><td><input type="checkbox" aria-label="老郑审批确认" disabled title="填写后由 dengkai 或 zhengzw 确认" checked={false} readOnly/></td></DrawingTableRow>;
 }
 
-export function EngineeringDrawingPanel({data,initialRecordId='',onDirtyChange}:{data:Data;initialRecordId?:string;onDirtyChange?:(dirty:boolean)=>void}){
+export function EngineeringDrawingPanel({data,initialRecordId='',initialData,onDirtyChange}:{data:Data;initialRecordId?:string;initialData?:DrawingData;onDirtyChange?:(dirty:boolean)=>void}){
  const cache=useQueryClient();
  const [columnWidths,setColumnWidths]=useState(initialColumnWidths);
  const resizeColumn=(index:number,width:number)=>setColumnWidths(previous=>previous.map((value,i)=>i===index?width:value));
- const [work,setWork]=useState<DrawingData>(initial),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
- const [search,setSearch]=useState(''),[queue,setQueue]=useState('全部'),[type,setType]=useState(''),[owner,setOwner]=useState(''),[page,setPage]=useState(0);
+ const [work,setWork]=useState<DrawingData>(()=>({...initial,...initialData})),[loading,setLoading]=useState(!initialData),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState('');
+ const [search,setSearch]=useState(''),[queue,setQueue]=useState('未完成'),[type,setType]=useState(''),[owner,setOwner]=useState(''),[page,setPage]=useState(0);
  const [eventNote,setEventNote]=useState(''),[eventId,setEventId]=useState('');
  const [inline,setInline]=useState<Draft|null>(null),[inlineBaseline,setInlineBaseline]=useState('');
  const savingNew=useRef(false);
  const [activeCell,setActiveCell]=useState<{id:string;key:keyof Draft;value:string}|null>(null),cancelCell=useRef(false);
  const drawingTypes=useMemo(()=>[...new Set([...originalDrawingTypes,...work.records.map(r=>r.drawingType.trim()).filter(Boolean)])],[work.records]);
- const loadSeq=useRef(0);
+ const loadSeq=useRef(0),seeded=useRef(!!initialData);
  const inlineDirty=!!inline&&JSON.stringify(inline)!==inlineBaseline,cellDirty=!!activeCell&&String((work.records.find(r=>r.id===activeCell.id) as unknown as Record<string,unknown>|undefined)?.[activeCell.key]??'')!==activeCell.value,hasUnsavedInput=inlineDirty||cellDirty||!!eventNote;
  const quickBlocked=busy||cellDirty||!!eventNote;
- const reload=useCallback(async()=>{const seq=++loadSeq.current;setLoading(true);try{const result=await request('drawing-data');if(seq!==loadSeq.current)return;setWork({...initial,...result});}finally{if(seq===loadSeq.current)setLoading(false);}},[]);
+ const reload=useCallback(async()=>{const seq=++loadSeq.current;setLoading(true);try{const result=await cache.fetchQuery({...engineeringDataQuery<DrawingData>(data.me.id,'drawing-data'),staleTime:0});if(seq!==loadSeq.current)return;setWork({...initial,...result});}finally{if(seq===loadSeq.current)setLoading(false);}},[cache,data.me.id]);
  // Refresh the authorized drawing/SOP index after a confirmed write, including
  // SOP obligations created by that write. A read failure must not retry the write.
  const refreshAfterSave=async()=>{
-  const results=await Promise.allSettled([reload(),cache.invalidateQueries({queryKey:['engineering-department-index',data.me.id],exact:true},{throwOnError:true})]);
+  const results=await Promise.allSettled([reload(),cache.invalidateQueries({queryKey:engineeringDataQuery(data.me.id,'sop-data').queryKey,exact:true},{throwOnError:true})]);
   const failed=results.find(result=>result.status==='rejected');
   if(failed)setError('保存成功，但刷新工程资料失败：'+(failed.reason instanceof Error?failed.reason.message:'请刷新后核对。'));
  };
- useEffect(()=>{reload().catch(e=>setError(e.message));return()=>{loadSeq.current++;};},[reload]);
+ useEffect(()=>{if(!seeded.current)void reload().catch(e=>setError(e.message));return()=>{loadSeq.current++;};},[reload]);
  const navigationDirty=hasUnsavedInput||busy;
  useEffect(()=>{onDirtyChange?.(navigationDirty);return()=>onDirtyChange?.(false);},[navigationDirty,onDirtyChange]);
  useEffect(()=>{if(!hasUnsavedInput)return;const leave=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};addEventListener('beforeunload',leave);return()=>removeEventListener('beforeunload',leave);},[hasUnsavedInput]);
  useEffect(()=>setPage(0),[search,queue,type,owner]);
- useEffect(()=>{if(initialRecordId)setSearch(initialRecordId);},[initialRecordId]);
+ useEffect(()=>{if(initialRecordId){setSearch(initialRecordId);setQueue('全部');}},[initialRecordId]);
  const leave=()=>!hasUnsavedInput||confirm('有尚未保存的修改，是否放弃？');
  const add=()=>{if(busy||!leave())return;setActiveCell(null);const row={...blank(''),drawingType:'',requestedDate:'',requester:''};setInline(row);setInlineBaseline(JSON.stringify(row));setError('');setNotice('');};
  const inlineChange=(patch:Partial<Draft>)=>setInline(value=>value?{...value,...patch}:value);
@@ -104,7 +106,7 @@ export function EngineeringDrawingPanel({data,initialRecordId='',onDirtyChange}:
  const toggleApproval=async(r:Drawing,checked:boolean,nextSheetStatus?:'⌛️'|'❗❗')=>{if(busy||!leave())return;setInline(null);setInlineBaseline('');setBusy(true);setError('');setNotice('');try{await request('drawing-approval-toggle',{id:r.id,version:r.version,checked,...(nextSheetStatus?{sheetStatus:nextSheetStatus}:{})});setNotice(checked?'审批已确认。':'审批确认已取消。');await refreshAfterSave();}catch(e){setError((e as Error).message);}finally{setBusy(false);}};
  const mutate=async(action:string,body:unknown,message:string)=>{setBusy(true);setError('');setNotice('');try{await request(action,body);setNotice(message);try{await refreshAfterSave();}catch(e){setError('操作已保存，但刷新失败：'+(e as Error).message);}return true;}catch(e){setError((e as Error).message+'；当前输入已保留。');return false;}finally{setBusy(false);}};
  const pendingEvents=work.events.filter(e=>e.status==='pending'||e.status==='待核对');
- const baseRows=useMemo(()=>work.records.filter(r=>(!search||[r.id,r.customerCode,r.requester,r.modelNo,r.requirement,r.drawingNotes,r.assignee].join(' ').toLowerCase().includes(search.toLowerCase()))&&(!type||r.drawingType===type)&&(!owner||r.assignee===owner)&&(queue==='全部'||sheetStatus(r)===queue)).sort((a,b)=>b.requestedDate.localeCompare(a.requestedDate)||b.updatedAt.localeCompare(a.updatedAt)),[work.records,search,type,owner,queue]);
+ const baseRows=useMemo(()=>work.records.filter(r=>(!search||[r.id,r.customerCode,r.requester,r.modelNo,r.requirement,r.drawingNotes,r.assignee].join(' ').toLowerCase().includes(search.toLowerCase()))&&(!type||r.drawingType===type)&&(!owner||r.assignee===owner)&&(queue==='全部'||queue==='✅已完成'&&sheetStatus(r)===queue||unfinished(r)&&(queue==='未完成'||sheetStatus(r)===queue))).sort((a,b)=>b.requestedDate.localeCompare(a.requestedDate)||b.updatedAt.localeCompare(a.updatedAt)),[work.records,search,type,owner,queue]);
  const columnModel=useExcelColumnFilters(baseRows,r=>[sheetStatus(r),r.customerCode||'',r.drawingType,r.requestedDate||'',r.newCount,r.revisionCount,r.requester||'',r.modelNo||'',r.drawingNotes||'',r.assignee||'',r.deadline||'',r.completedDate||'',r.approval==='通过'?'✅':'□']);
  const rows=columnModel.rows;
  useEffect(()=>setPage(0),[columnModel.filters]);
@@ -124,8 +126,8 @@ export function EngineeringDrawingPanel({data,initialRecordId='',onDirtyChange}:
  return <div className="engineering-drawings">
   <section className="ed-intro"><div><span className="ed-kicker">ENGINEERING</span><h2>工程画图跟进表</h2><p>业务与客服提需求，画图组排期执行，审图后交接。</p></div><div className="ed-actions"><Button variant="outline" onClick={()=>reload().catch(e=>setError(e.message))} disabled={loading||busy}><RefreshCw size={16}/>刷新</Button><Button variant="outline" onClick={exportRows} disabled={!rows.length}><Download size={16}/>导出当前列表</Button></div></section>
   {error&&<div role="alert" className="error notice">{error}</div>}{notice&&<div role="status" className="success notice">{notice}</div>}
-  <div className="ed-metrics">{[['全部需求',work.records.length,'全部'],['⌛️',work.records.filter(r=>sheetStatus(r)==='⌛️').length,'⌛️'],['❗❗',work.records.filter(r=>sheetStatus(r)==='❗❗').length,'❗❗'],['✅已完成',work.records.filter(r=>sheetStatus(r)==='✅已完成').length,'✅已完成']].map(([label,n,q])=><button key={label} onClick={()=>setQueue(String(q))} className={queue===q?'selected':''}><span>{label}</span><strong>{n}</strong></button>)}</div>
-  <section className="panel"><div className="ed-toolbar"><div className="ed-tabs" role="group" aria-label="工程画图状态">{['全部','⌛️','❗❗','✅已完成'].map(q=><button key={q} className={queue===q?'selected':''} onClick={()=>setQueue(q)}>{q}</button>)}</div><div className="ed-filters"><input aria-label="搜索画图需求" value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜索客户、款号、需求者、备注"/><DrawingSelect toolbar label="画图类型筛选" value={type} onChange={setType} options={[{value:'',label:'全部画图类型'},...drawingTypes]}/><DrawingSelect toolbar label="画图人员筛选" value={owner} onChange={setOwner} options={[{value:'',label:'全部画图人员'},...[...new Set(work.records.map(r=>r.assignee).filter(Boolean))].sort()]}/><Button onClick={add} disabled={!work.canCreate||busy}><Plus size={16}/>新增空行</Button></div></div>
+  <div className="ed-metrics">{[['未完成',work.records.filter(unfinished).length,'未完成'],['❗❗ 需处理',work.records.filter(r=>unfinished(r)&&sheetStatus(r)==='❗❗').length,'❗❗']].map(([label,n,q])=><button key={label} onClick={()=>setQueue(String(q))} className={queue===q?'selected':''}><span>{label}</span><strong>{n}</strong></button>)}</div>
+  <section className="panel"><div className="ed-toolbar"><div className="ed-tabs" role="group" aria-label="工程画图状态">{['未完成','⌛️','❗❗','✅已完成','全部'].map(q=><button key={q} className={queue===q?'selected':''} onClick={()=>setQueue(q)}>{q}</button>)}</div><div className="ed-filters"><input aria-label="搜索画图需求" value={search} onChange={e=>setSearch(e.target.value)} placeholder="搜索客户、款号、需求者、备注"/><DrawingSelect toolbar label="画图类型筛选" value={type} onChange={setType} options={[{value:'',label:'全部画图类型'},...drawingTypes]}/><DrawingSelect toolbar label="画图人员筛选" value={owner} onChange={setOwner} options={[{value:'',label:'全部画图人员'},...[...new Set(work.records.map(r=>r.assignee).filter(Boolean))].sort()]}/><Button onClick={add} disabled={!work.canCreate||busy}><Plus size={16}/>新增空行</Button></div></div>
    <div className="ed-table-wrap"><ExcelTable className="ed-table" filterModel={columnModel} style={{width:columnWidths.reduce((sum,width)=>sum+width,0),'--ed-status-column':`${columnWidths[0]}px`} as CSSProperties}><colgroup>{columnWidths.map((width,i)=><col key={originalHeaders[i]} style={{width}}/>)}</colgroup><thead><tr>{originalHeaders.map((h,i)=><th key={h}>{h}{i<originalHeaders.length-1&&<DrawingColumnResize label={h} width={columnWidths[i]} defaultWidth={initialColumnWidths[i]} onResize={width=>resizeColumn(i,width)}/>}</th>)}</tr></thead><tbody onClick={e=>{const cell=e.target as HTMLElement;if(cell.tagName!=='TD')return;const control=cell.querySelector<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)');if(!control)return;if(control instanceof HTMLSelectElement||control instanceof HTMLInputElement&&control.type==='date')control.showPicker?.();else control.click();}}>
     {inline&&<DrawingGridEditor columnWidths={columnWidths} onResizeColumn={resizeColumn} value={inline} work={work} drawingTypes={drawingTypes} busy={busy} onChange={inlineChange} onCommit={patch=>void saveInline(patch)}/>}
     {visible.filter(r=>r.id!==inline?.id).map(r=><DrawingTableRow columnWidths={columnWidths} onResizeColumn={resizeColumn} key={r.id} className={sheetStatus(r)==='❗❗'?'ed-overdue':''}><td>{quickStatus(r)}</td><td>{textCell(r,'customerCode','客户编号',!!r.canManage||!!r.canEdit)}</td><td>{quickType(r)}</td><td>{quickDate(r,'requestedDate','需求发出时间',!!r.canEdit||!!r.canManage)}</td><td>{textCell(r,'newCount','新款数量',!!r.canEdit||!!r.canManage)}</td><td>{textCell(r,'revisionCount','改图数量',!!r.canEdit||!!r.canManage)}</td><td>{r.canEdit||r.canManage?<RequesterPicker value={r.requester} options={work.requesters} disabled={quickBlocked} onSelect={name=>void saveQuick(r,{requester:name})}/>:r.requester||'—'}</td><td className="ed-wrap">{textCell(r,'modelNo','款号',!!r.canManage)}</td><td className="ed-wrap">{textCell(r,'drawingNotes','画图备注',!!r.canManage)}</td><td>{quickPerson(r)}</td><td>{quickDate(r,'deadline','截止日期',!!r.canManage)}</td><td>{quickDate(r,'completedDate','完成日期',!!r.canManage)}</td><td><input type="checkbox" aria-label={`老郑审批确认 ${r.customerCode||r.id}`} checked={r.approval==='通过'} disabled={quickBlocked||!work.canToggleApproval||r.status==='已交接'||r.status==='已取消'} onChange={e=>void toggleApproval(r,e.target.checked)}/></td></DrawingTableRow>)}
