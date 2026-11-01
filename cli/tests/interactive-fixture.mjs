@@ -17,8 +17,8 @@ const server = http.createServer(async (req, res) => {
 });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const state = new StateStore(home); await state.setup(`http://127.0.0.1:${server.address().port}`, true);
-console.log('Synthetic interactive test: enter Synthetic-Only-2026! at the hidden prompt.');
-const child = spawn(process.execPath, [path.join(root, 'cli/dist/index.js'), 'login', '--username', 'synthetic'], {stdio: 'inherit', windowsHide: true, env: {...process.env, DOON_CLI_HOME: home}});
+console.log('Synthetic interactive test: enter synthetic at the account prompt, then Synthetic-Only-2026! at the hidden password prompt.');
+const child = spawn(process.execPath, [path.join(root, 'cli/dist/index.js'), 'login'], {stdio: 'inherit', windowsHide: true, env: {...process.env, DOON_CLI_HOME: home}});
 try {
   const code = await new Promise(resolve => child.once('exit', resolve)); assert.equal(code, 0);
   assert.equal((await state.session(await state.config())).cookie, 'doon_session=' + token);
