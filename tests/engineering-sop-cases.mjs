@@ -7,7 +7,8 @@ export async function testEngineeringSop({ok,call,pass,rawRecords,rawInsert}){
  }
  const customer={id:'sop_customer',kind:'customer_account',customer:'合成SOP客户',customerCode:'SYN-SOP',active:true,salesName:'SOP business',serviceName:'',pmcName:'',salesMemberIds:[members.business.id],serviceMemberIds:[],notes:'',version:1,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),updatedBy:'test'};rawInsert(customer);
  const other={...customer,id:'sop_other_customer',customer:'合成其他SOP客户',customerCode:'SYN-SOP-OTHER',salesMemberIds:[members.outside.id]};rawInsert(other);
- const demand={customerId:customer.id,customerCode:customer.customerCode,drawingType:'新款',requestedDate:today,newCount:1,revisionCount:null,requester:'合成需求者',requirement:'SOP测试需求',token:token()};
+ globalThis.__testEnv.DB.drawingRequesters=()=>['synthetic_sop_business'];
+ const demand={customerId:customer.id,customerCode:customer.customerCode,drawingType:'新款',requestedDate:today,newCount:1,revisionCount:null,requester:'synthetic_sop_business',requirement:'SOP测试需求',token:token()};
  let drawing=(await ok('drawing-save',demand,users.business)).record;
  const otherDrawing=(await ok('drawing-save',{...demand,token:token(),customerId:other.id,customerCode:other.customerCode},users.outside)).record;
  const denied=async(action,body,user,status=403)=>assert.equal((await call(action,body,user)).status,status,action+' should fail '+status);
@@ -82,7 +83,7 @@ export async function testEngineeringSop({ok,call,pass,rawRecords,rawInsert}){
  let targeted=(await ok('sop-target',{id:automatic[0].id,version:automatic[0].version,modelNo:'SYN-AUTO',targetVersion:'V1',note:'业务补充目标版本'},users.business)).record;assert.equal(targeted.targetVersion,'V1');assert.equal(targeted.modelNo,'SYN-AUTO');assert.equal(targeted.targetNote,'业务补充目标版本');
  await ok('drawing-save',{id:auto.id,version:auto.version,modelNo:'SYN-AUTO'},users.upload);
  assert.equal(rawRecords().filter(r=>r.kind==='engineering_sop'&&r.drawingRecordId===auto.id).length,1);assert.equal((await latest(targeted.id)).isCurrent,true);assert.equal((await latest(targeted.id)).targetVersion,'V1');
- const mail={messageId:'<sop-change@test.invalid>',itemKey:'1',threadId:'sop-thread',sender:'source@test.invalid',subject:'合成改图',receivedAt:new Date().toISOString(),recordId:drawing.id,request:{customerId:customer.id,customerCode:customer.customerCode,drawingType:'改图',requestedDate:today,newCount:null,revisionCount:1,requester:'合成业务',upstreamDepartment:'业务部',priority:'普通',requirement:'已存在需求收到改图邮件'}};
+ const mail={messageId:'<sop-change@test.invalid>',itemKey:'1',threadId:'sop-thread',sender:'source@test.invalid',subject:'合成改图',receivedAt:new Date().toISOString(),recordId:drawing.id,request:{customerId:customer.id,customerCode:customer.customerCode,drawingType:'改图',requestedDate:today,newCount:null,revisionCount:1,requester:'synthetic_sop_business',upstreamDepartment:'业务部',priority:'普通',requirement:'已存在需求收到改图邮件'}};
  const beforeEmail=rawRecords().filter(r=>r.kind==='engineering_sop').length,pending=await ok('drawing-email-intake',mail,users.upload);assert.equal(rawRecords().filter(r=>r.kind==='engineering_sop').length,beforeEmail);
  drawing=(await ok('drawing-event-review',{recordId:drawing.id,version:pending.record.version,eventId:pending.event.id,decision:'accepted',note:'核对采纳邮件改图'},users.upload)).record;
  const fromMail=rawRecords().filter(r=>r.kind==='engineering_sop'&&r.sourceEventId===pending.event.id);assert.equal(fromMail.length,1);assert.equal(fromMail[0].targetVersion,'');

@@ -154,10 +154,6 @@ async function handle(req,res){
      if(action!=='enroll'||!current.member.active||!current.member.userId||current.member.userId!==current.identity.userId)fail(reviewMessage,403);
      response=reply({ok:true,readOnly:true});
     }else response=await context.run(current,()=>api[req.method==='POST'?'POST':'GET'](request,{params:Promise.resolve({action})}));
-    if(action==='drawing-data'&&req.method==='GET'&&response.ok){
-     const body=await response.json(),requesters=body.canCreate||body.canApprove?db.prepare("SELECT a.id,a.username,r.data FROM local_accounts a JOIN records r ON r.id=a.member_id AND r.kind='member'").all().filter(row=>{const member=JSON.parse(row.data);return member.active&&member.userId===row.id;}).map(row=>row.username).sort((a,b)=>a.localeCompare(b)):[];
-     response=Response.json({...body,requesters},{status:200,headers:response.headers});
-    }
     if(!reviewMode&&req.method==='POST'&&response.ok&&['admin','pmc'].includes(current.member.role))revokeInactiveSessions();
    }else fail('接口不存在。',404);
   }else{

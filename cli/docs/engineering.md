@@ -104,7 +104,9 @@ doon engineering drawings list --search SYN-001 --json
 
 保存成功会回读新记录并返回 `record.id` 和 `record.version`，网页刷新后即可看到。同一次新增保持相同请求标识和相同内容，重复提交返回同一条记录；下一次独立新增使用新标识。出现结果不明时先查询，不自动重新生成标识重试。
 
-`references.requesters` 是登录账号名，`requestersAvailable=false` 表示旧服务器尚未提供该目录，不能用成员姓名冒充账号名。`drawingTypes` 包含六种原表选项及现有数据类型，`assignees` 是当前三名画图人员；历史人员原值保持不变。
+`references.requesters` 是系统内有效、正确绑定的内部登录账号名，排除停用和外部账号。CLI 填写 `requester` 必须使用该账号名，不能填写姓名、邮箱、成员 ID 或自定义文字。服务端对新增或变更后的非空需求者进行实时校验，无效值返回 HTTP 400（CLI 为 `REQUEST_REJECTED`），不保存本次修改；账号目录不可用时返回 HTTP 503。表格草稿可以暂不填需求者；仅修改其他字段时保留历史需求者原值，历史导入也保留原件中的人员文字。
+
+`requestersAvailable=false` 表示旧服务器尚未提供该目录，不能用成员姓名冒充账号名。`drawingTypes` 包含六种原表选项及现有数据类型，`assignees` 是当前三名画图人员；历史人员原值保持不变。以上校验需要连接已更新的服务器，更新 CLI 本身不会发布服务端。
 
 `schema --type save` 的 `tableColumns` 给出全部13列的字段对应关系。字段为 `customerCode`、`drawingType`、`requestedDate`、`newCount`、`revisionCount`、`requester`、`modelNo`、`drawingNotes`、`assignee`、`deadline`、`completedDate`，状态符号使用 `sheetStatus`，审批使用下述独立动作。日期填 `YYYY-MM-DD`；数量空白为 `null`，零为 `0`；文字和日期可用空字符串表示清空。
 

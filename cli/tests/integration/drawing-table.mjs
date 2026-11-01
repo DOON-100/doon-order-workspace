@@ -27,6 +27,14 @@ for(const [username,name,role,departments] of [
  ['zhengzw','Synthetic Approval User','clerk',['engineering']],['other_engineer','Synthetic Engineer','clerk',['engineering']],
  ['unassigned','Synthetic Other Sales','sales',[]]
 ])await createAccount({username,name,role,departments,password:'Synthetic-Only-2026!'},null);
+for(const username of ['external_requester','disabled_requester','unbound_requester']){
+ await createAccount({username,name:'Synthetic '+username,role:'viewer',personnelType:username==='external_requester'?'external':'internal',password:'Synthetic-Only-2026!'},null);
+ const account=db.prepare('SELECT member_id FROM local_accounts WHERE username=?').get(username);
+ const member=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(account.member_id).data);
+ if(username==='disabled_requester')member.active=false;
+ if(username==='unbound_requester')member.userId='synthetic-wrong-binding';
+ saveRecords([member]);
+}
 db.prepare('UPDATE local_accounts SET must_change=0').run();
 saveRecords([{id:'synthetic-preserved',kind:'synthetic_fixture',value:'UNCHANGED ORIGINAL'}]);
 await fs.mkdir(path.join(process.env.DOON_DATA_DIR,'files'),{recursive:true});
@@ -57,6 +65,19 @@ try{
  await run(['save','--input',await input({tableEntry:true}),'--version','0','--request-id',randomUUID()],'other_engineer','REQUEST_REJECTED');
  await run(['save','--input',await input(partial),'--version','0','--request-id',randomUUID()],'unassigned','FORBIDDEN');
  assert.equal((await webRows()).length,1);pass('CLI只填一格即可新增到网页同表，空行拒绝且重复提交只生成一条');
+
+ const snapshot=()=>{const db=new DatabaseSync(path.join(dataDir,'workspace.sqlite'),{readOnly:true});try{return {records:db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get()};}finally{db.close();}};
+ const untouched=snapshot();
+ for(const requester of ['missing_login','Synthetic Drawing User','DENGKAI','external_requester','disabled_requester','unbound_requester']){
+  const rejected=await run(['save','--input',await input({tableEntry:true,requester}),'--version','0','--request-id',randomUUID()],'other_engineer','REQUEST_REJECTED');
+  assert.equal(rejected.error.status,400);
+  await run(['save','--input',await input({id,requester}),'--version','1'],'other_engineer','REQUEST_REJECTED');
+ }
+ const requesterSession=await services.other_engineer.state.session(await services.other_engineer.state.config());
+ const rejectedHttp=await fetch(origin+'/api/workspace/drawing-save',{method:'POST',headers:{Cookie:requesterSession.cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({tableEntry:true,requester:'missing_login',token:randomUUID()})});
+ assert.equal(rejectedHttp.status,400);assert.match(JSON.stringify(await rejectedHttp.json()),/需求者账号无效/);
+ assert.deepEqual(snapshot(),untouched);
+ pass('真实服务端拒绝未知账号、姓名、大小写冒充、外部/停用/绑定异常账号，新增和修改失败均不产生记录、版本或审计');
 
  const patch={id,drawingType:'新款画图',requestedDate:'2026-11-01',newCount:0,revisionCount:null,requester:'dengkai',modelNo:'SYN-MODEL',drawingNotes:'Synthetic CLI table edit',assignee:'邓凯',deadline:'2026-11-05',completedDate:'2026-11-03',sheetStatus:'❗❗'};
  let updated=await run(['save','--input',await input(patch),'--version','1']);assert.equal(updated.record.version,2);
@@ -106,5 +127,22 @@ try{
  for(const row of ordered)assert.equal(sops.filter(s=>s.drawingRecordId===row.id).length,1);
  assert.equal((await webRows()).filter(row=>ordered.some(o=>o.id===row.id)&&row.customerId===ordered[0].customerId).length,2);
  pass('CLI分步新增的填写顺序不影响客户关联及SOP，重复填写不会重复建立义务');
+ // A candidate fetched earlier must not authorize a later write after disabling.
+ const syntheticDb=new DatabaseSync(path.join(dataDir,'workspace.sqlite'));
+ try{
+  const row=syntheticDb.prepare("SELECT r.id,r.data FROM records r JOIN local_accounts a ON a.member_id=r.id WHERE a.username='dengkai'").get();
+  const member={...JSON.parse(row.data),active:false};
+  syntheticDb.exec('BEGIN IMMEDIATE');
+  syntheticDb.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify(member),row.id);
+  syntheticDb.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();
+  syntheticDb.exec('COMMIT');
+ }finally{syntheticDb.close();}
+ assert(!(await run(['references'])).requesters.includes('dengkai'));
+ const afterDisable=snapshot();
+ await run(['save','--input',await input({tableEntry:true,requester:'dengkai'}),'--version','0','--request-id',randomUUID()],'other_engineer','REQUEST_REJECTED');
+ const emptyRequester=(await webRows()).find(row=>row.id===ordered[0].id);
+ await run(['save','--input',await input({id:emptyRequester.id,requester:'dengkai'}),'--version',String(emptyRequester.version)],'other_engineer','REQUEST_REJECTED');
+ assert.deepEqual(snapshot(),afterDisable);
+ pass('账号停用后候选和写入校验立即生效，不能利用先前读取的名单继续填写');
  console.log(JSON.stringify({passed:checks.length,syntheticOnly:true,productionRequests:0,commandExecution:process.platform==='win32'?'cli-process-and-commander-with-real-native-http':'commander-with-real-native-http'}));
 }finally{if(!exited)child.kill();await done;}

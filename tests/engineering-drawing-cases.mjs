@@ -9,12 +9,18 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  }
  const customer={id:'drawing_customer_a',kind:'customer_account',customer:'合成工程客户',customerCode:'SYN-DRAW-A',salesName:'upstream',serviceName:'',pmcName:'',salesMemberIds:[members.upstream.id],serviceMemberIds:[],active:true,notes:'',version:1,createdAt:'2026-10-13T00:00:00Z',updatedAt:'2026-10-13T00:00:00Z',updatedBy:'test'};
  rawInsert(customer);rawInsert({...customer,id:'drawing_customer_b',customer:'合成其他工程客户',customerCode:'SYN-DRAW-B',salesMemberIds:[members.outsider.id]});
- const payload={token:token(),customerId:customer.id,customerCode:customer.customerCode,drawingType:'新款',requestedDate:'2026-10-13',newCount:2,revisionCount:null,requester:'合成业务',upstreamDepartment:'业务部',priority:'普通',requirement:'两款钛架，合成测试，不含真实业务'};
+ const payload={token:token(),customerId:customer.id,customerCode:customer.customerCode,drawingType:'新款',requestedDate:'2026-10-13',newCount:2,revisionCount:null,requester:'upstream',upstreamDepartment:'业务部',priority:'普通',requirement:'两款钛架，合成测试，不含真实业务'};
  const save=async(fields,user=users.engineer)=>(await ok('drawing-save',fields,user)).record;
  const get=async(id,user=users.engineer)=>(await ok('drawing-data',undefined,user)).records.find(r=>r.id===id);
  assert.deepEqual((await ok('drawing-data',undefined,users.engineer)).requesters,[]);
  assert.deepEqual((await ok('drawing-data',undefined,users.viewer)).requesters,[]);
  const denied=async(action,body,user,status=403)=>assert.equal((await call(action,body,user)).status,status,`${action} should be ${status}`);
+ await denied('drawing-save',payload,users.engineer,503);
+ globalThis.__testEnv.DB.drawingRequesters=()=>Object.values(users).map(user=>user.username).sort();
+ assert.deepEqual((await ok('drawing-data',undefined,users.engineer)).requesters,globalThis.__testEnv.DB.drawingRequesters());
+ const unchanged=structuredClone(rawRecords());
+ for(const requester of ['missing_login','Synthetic Person','DENGKAI'])await denied('drawing-save',{...payload,token:token(),requester},users.engineer,400);
+ assert.deepEqual(rawRecords(),unchanged);
  await denied('drawing-data',undefined,null,401);
  let record=await save(payload,users.upstream);assert.equal(record.status,'待分配');assert.equal(record.revisionCount,null);
  assert.equal((await save(payload,users.upstream)).id,record.id);await denied('drawing-save',{...payload,newCount:3},users.upstream,409);
@@ -23,6 +29,12 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  await denied('drawing-save',{...payload,token:token()},users.outsider);await denied('drawing-save',{...payload,token:token()},users.viewer);
  const tableInput={token:token(),tableEntry:true,revisionCount:0};let partial=await save(tableInput);assert.equal(partial.customerCode,'');assert.equal(partial.revisionCount,0);assert.equal((await save(tableInput)).id,partial.id);
  partial=await save({id:partial.id,version:partial.version,customerCode:'SYN-PARTIAL'});assert.equal(partial.customerCode,'SYN-PARTIAL');assert.equal(partial.drawingType,'');
+ const beforeInvalid=structuredClone(rawRecords());
+ await denied('drawing-save',{id:partial.id,version:partial.version,requester:'missing_login'},users.engineer,400);assert.deepEqual(rawRecords(),beforeInvalid);
+ const legacy={...partial,id:'synthetic_legacy_requester',requester:'历史人员姓名'};rawInsert(legacy);
+ let kept=await save({id:legacy.id,version:legacy.version,requester:legacy.requester,drawingNotes:'只改备注'});assert.equal(kept.requester,legacy.requester);
+ kept=await save({id:kept.id,version:kept.version,requester:'dengkai'});assert.equal(kept.requester,'dengkai');
+ pass('需求者新值强制校验内部账号；无效或目录不可用时不写入，历史姓名可保留并改为有效账号');
  await denied('drawing-save',{token:token(),tableEntry:true},users.engineer,400);await denied('drawing-save',{token:token(),tableEntry:true,revisionCount:0},users.upstream,400);await denied('drawing-save',{id:record.id,version:record.version,tableEntry:true},users.engineer,400);
  pass('表格首项输入自动建行、零值保留和重试幂等，空行不保存且不能扩大客户权限');
  const ordered=[];
@@ -35,7 +47,7 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  }
  assert.equal(ordered[0].drawingType,ordered[1].drawingType);
  pass('逐格录入先类型或先客户均关联同一客户并仅建立一项SOP义务');
- const manual=await save({token:token(),customerCode:'SYN-MANUAL',drawingType:'印字资料',requestedDate:'2026-10-13',requester:'engineer',sheetStatus:'❗❗'},users.engineer);
+ const manual=await save({token:token(),customerCode:'SYN-MANUAL',drawingType:'印字资料',requestedDate:'2026-10-13',requester:'dengkai',sheetStatus:'❗❗'},users.engineer);
  assert.equal(manual.customerId,'');assert.equal(manual.customerCode,'SYN-MANUAL');assert.equal(manual.sheetStatus,'❗❗');
  await denied('drawing-save',{token:token(),customerCode:'SYN-MANUAL',drawingType:'印字资料',requestedDate:'2026-10-13',requester:'upstream'},users.upstream,400);
  await denied('drawing-save',{id:record.id,version:record.version,status:'画图中'},users.upstream);
@@ -73,6 +85,9 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  pass('工程送审、完成与交接有独立校验；已审批内容变更自动重新送审并撤销旧交接日期');
 
  const mail={messageId:'<synthetic-001@test.invalid>',itemKey:'request-1',threadId:'synthetic-thread-a',sender:'sender@test.invalid',subject:'合成新画图需求',receivedAt:'2026-10-13T09:00:00+08:00',request:{...payload}};delete mail.request.token;
+ const beforeInvalidMail=structuredClone(rawRecords());
+ await denied('drawing-email-intake',{...mail,messageId:'<invalid-requester@test.invalid>',request:{...mail.request,requester:'missing_login'}},users.engineer,400);
+ assert.deepEqual(rawRecords(),beforeInvalidMail);
  const mailBefore=rawRecords().filter(r=>r.kind==='engineering_drawing').length;
  const first=await ok('drawing-email-intake',mail,users.engineer),again=await ok('drawing-email-intake',mail,users.engineer);assert.equal(first.record.id,again.record.id);assert(again.idempotent);
  assert.equal(rawRecords().filter(r=>r.kind==='engineering_drawing').length,mailBefore+1);

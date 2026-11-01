@@ -4,6 +4,7 @@ import {all,clean,newId,now,type CustomerAccount,type Entity,type Member,type St
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
 import {isDrawingChangeType,planSopObligation} from './engineering-sop';
+import {drawingRequesters,validateDrawingRequester} from './drawing-requesters';
 import {assignedDrawingCustomer,assertDrawingLifecycle,buildImportedDrawings,canApproveDrawings,canCreateDrawings,canEditDrawingRequest,canManageDrawings,canReadDrawing,createDrawing,drawingCustomers,drawingDefaultFields,drawingExecutionFields,drawingFieldsSchema,drawingRequestFields,drawingRevision,drawingSaveSchema,publicDrawing,type DrawingEvent,type EngineeringDrawing} from './engineering-drawings';
 
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const r=schema.safeParse(value);if(!r.success)throw new AppError(r.error.issues.slice(0,4).map(i=>`${i.path.join('.')||'内容'}：${i.message}`).join('；'));return r.data;}
@@ -40,7 +41,7 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
   const records=(all(s,'engineering_drawing') as EngineeringDrawing[]).filter(r=>canReadDrawing(s,m,r)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),ids=new Set(records.map(r=>r.id));
   return json({records:records.map(r=>publicDrawing(s,m,r)),customers:drawingCustomers(s,m).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),
    members:(all(s,'member') as Member[]).filter(a=>canManageDrawings(a)||canApproveDrawings(a)).map(a=>({id:a.id,name:a.name,active:a.active,canManage:canManageDrawings(a),canApprove:canApproveDrawings(a)})),
-   requesters:[],
+   requesters:canCreateDrawings(s,m)||canApproveDrawings(m)?await drawingRequesters()||[]:[],
    events:all(s,'engineering_drawing_event').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    details:all(s,'engineering_drawing_detail').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canToggleApproval:await canToggleDrawingApproval(m)});
@@ -138,6 +139,9 @@ async function save(s:State,m:Member,body:unknown){
  if(fields.customerId){const c=account(s,m,fields.customerId);if(!fields.customerCode)fields.customerCode=c.customerCode||c.customer;}
  else if(!canManageDrawings(m)||!fields.customerCode&&!tableEntry&&!before?.tableEntry)throw new AppError('请手动填写客户编号；非工程人员仍需关联本人负责的客户。');
  if(!tableEntry&&!before?.tableEntry&&(!fields.drawingType||!fields.requestedDate||!fields.requester))throw new AppError('请填写画图类型、需求日期与需求者。');
+ // Preserve historical requester text when another cell is edited. All new or
+ // changed nonempty values must match the current internal login directory.
+ if(!before||fields.requester!==before.requester)await validateDrawingRequester(fields.requester);
  if(before&&fields.status==='历史待核对'&&before.status!=='历史待核对')throw new AppError('历史待核对仅用于原表迁移。');
  const r:EngineeringDrawing=before?{...advance(before,m),...fields}:createDrawing(fields,m);
  if(!before&&tableEntry)r.tableEntry=true;
@@ -167,6 +171,7 @@ async function emailIntake(s:State,m:Member,body:unknown){
  let before:EngineeringDrawing|null=null,r:EngineeringDrawing;
  if(input.recordId){before=readable(s,m,input.recordId);if(input.request.customerId!==before.customerId)throw new AppError('邮件变更的客户与关联需求不一致。');r=advance(before,m);}
  else{const c=account(s,m,input.request.customerId);if(!input.request.drawingType||!input.request.requestedDate||!input.request.requester)throw new AppError('邮件缺少画图类型、需求日期或需求者，请先人工补充。');
+  await validateDrawingRequester(input.request.requester);
   r=createDrawing(drawingFieldsSchema.parse({...input.request,customerCode:input.request.customerCode||c.customerCode||c.customer}),m,{type:'email',messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId});
  }
  const event:DrawingEvent={id:eventId,kind:'engineering_drawing_event',recordId:r.id,customerId:r.customerId,messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId,sender:input.sender,subject:input.subject,receivedAt:input.receivedAt,request:input.request,fingerprint:digest,status:before?'pending':'created',reviewNote:'',actorId:m.id,createdAt:now()};

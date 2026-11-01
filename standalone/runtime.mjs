@@ -6,6 +6,7 @@ import {mkdirSync,readFileSync} from 'node:fs';
 import path from 'node:path';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {createIeMailAdapter} from './ie-mail.mjs';
+import {personnelTypeOf} from './personnel.mjs';
 
 export const dataDir=path.resolve(process.env.DOON_DATA_DIR||'lan-data');
 mkdirSync(dataDir,{recursive:true});
@@ -68,12 +69,17 @@ async function readSnapshotBatches(kinds){
 }
 export function saveRecords(items){for(const item of items)db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(item.id,item.kind,JSON.stringify(item));db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();}
 export function memberFor(account){const row=account&&db.prepare("SELECT data FROM records WHERE id=? AND kind='member'").get(account.member_id);return row?JSON.parse(row.data):null;}
+function drawingRequesters(){
+ return db.prepare("SELECT a.id,a.username,r.data FROM local_accounts a JOIN records r ON r.id=a.member_id AND r.kind='member'").all()
+  .filter(row=>{const member=JSON.parse(row.data);return member.active&&member.userId===row.id&&personnelTypeOf(member)==='internal';})
+  .map(row=>row.username).sort((a,b)=>a.localeCompare(b));
+}
 export function auditLocal(member,action,target){return {id:'audit_'+randomUUID(),kind:'audit',actorId:member.id,actor:member.name,action,targetId:target,source:'内网账号管理',createdAt:new Date().toISOString()};}
 const objectDir=path.join(dataDir,'files');mkdirSync(objectDir,{recursive:true});
 function objectPath(key){return path.join(objectDir,createHash('sha256').update(String(key)).digest('hex'));}
 // Server-only credentials: never included in the browser build or stored in business records.
 const kingdeeReadonlyEnv=Object.fromEntries(['READONLY_ENABLED','SALES_WRITE_ENABLED','SUPPLIER_SYNC_ENABLED','PENDING_SYNC_ENABLED','CLIENT_ID','CLIENT_SECRET','INSTANCE_ID','ACCOUNT_ID'].map(key=>['DOON_KINGDEE_'+key,process.env['DOON_KINGDEE_'+key]]));
-export const env={...kingdeeReadonlyEnv,IE_MAIL:createIeMailAdapter(),DB:{prepare:sql=>new Statement(sql),readSnapshot,batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
+export const env={...kingdeeReadonlyEnv,IE_MAIL:createIeMailAdapter(),DB:{prepare:sql=>new Statement(sql),drawingRequesters,readSnapshot,batch:async statements=>transaction(()=>statements.map(s=>db.prepare(s.sql).run(...s.args)))},BUCKET:{
  async put(key,value){const target=objectPath(key),temp=target+'.'+randomUUID()+'.tmp';const bytes=typeof value==='string'?Buffer.from(value):Buffer.from(value);await fs.writeFile(temp,bytes);await fs.rename(temp,target);},
  async get(key){try{const body=await fs.readFile(objectPath(key));return {body,json:async()=>JSON.parse(body.toString()),arrayBuffer:async()=>body.buffer.slice(body.byteOffset,body.byteOffset+body.byteLength)};}catch(e){if(e.code==='ENOENT')return null;throw e;}}
 }};
