@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$Archive,[Parameter(Mandatory=$true)][string]$ExpectedHash,[Parameter(Mandatory=$true)][string]$ExpectedVersion,[Parameter(Mandatory=$true)][string]$ExpectedCommit)
 $ErrorActionPreference='Stop'
+# Agent hosts may inherit PowerShell 7 modules that Windows PowerShell cannot load.
+$env:PSModulePath=[IO.Path]::Combine($PSHOME,'Modules')
 if($ExpectedHash -notmatch '^[a-f0-9]{64}$' -or $ExpectedVersion -notmatch '^\d+\.\d+\.\d+$' -or $ExpectedCommit -notmatch '^[a-f0-9]{40}$'){throw 'Invalid release metadata.'}
 $PackageRoot=[IO.Path]::GetFullPath($PSScriptRoot)
 $Programs=Split-Path -Parent $PackageRoot
@@ -23,7 +25,7 @@ try{
  Expand-Archive -LiteralPath $Archive -DestinationPath $Stage
  $Manifest=Get-Content -LiteralPath (Join-Path $Stage 'release.json') -Raw | ConvertFrom-Json
  if($Manifest.version -ne $ExpectedVersion -or $Manifest.commit -ne $ExpectedCommit -or $Manifest.sourceDirty -ne $false -or $Manifest.platform -ne 'win32-x64'){throw 'Release metadata mismatch.'}
- & (Join-Path $Stage 'install.ps1') -InstallRoot $InstallRoot -SkipPathUpdate
+ & (Join-Path $Stage 'install.ps1') -InstallRoot $InstallRoot -SkipPathUpdate -UpdateOnly
 }finally{
  $Resolved=[IO.Path]::GetFullPath($Stage)
  $TempRoot=[IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')

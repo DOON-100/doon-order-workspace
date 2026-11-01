@@ -45,9 +45,26 @@ export class ApiClient {
       else {try { encoded = JSON.stringify(body ?? {}); } catch { throw new CliError('INVALID_INPUT', '输入不能转换为 JSON。', 2); }
       if (spec.write && (!encoded || Buffer.byteLength(encoded, 'utf8') > (spec.maxInputBytes||1024 * 1024))) throw new CliError('INVALID_INPUT', '业务输入超过该接口大小限制或格式无效。', 2);}
     }
-    const signal = AbortSignal.timeout(this.timeout);
+    // Public-cloud packages need a longer transfer budget, but a stalled
+    // connection must still fail promptly. Business requests keep their limit.
+    const download = route === '/api/cli-update/package' ? new AbortController() : null;
+    const signal = download?.signal ?? AbortSignal.timeout(this.timeout);
+    let totalTimer: ReturnType<typeof setTimeout> | undefined;
+    let idleTimer: ReturnType<typeof setTimeout> | undefined;
+    const progress = () => {
+      if (!download) return;
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => download.abort(), 30_000);
+      idleTimer.unref();
+    };
+    if (download) {
+      totalTimer = setTimeout(() => download.abort(), 15 * 60_000);
+      totalTimer.unref();
+      progress();
+    }
     try {
       const response = await this.transport(url.href, {method, headers, body: encoded, redirect: 'manual', signal});
+      progress();
       if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new CliError('REDIRECT_REFUSED', '服务器返回跳转，请核对公司 HTTPS 地址；客户端未跟随跳转。', 5, mutating ? {outcomeUnknown: true} : {}); }
       if (!response.ok) {
         await response.body?.cancel();
@@ -68,6 +85,7 @@ export class ApiClient {
       const responseLimit=route==='/api/cli-update/package'?128*1024*1024:spec.binary==='file'?64*1024*1024:spec.business?32*1024*1024:65536;
       while (true) {
         const {value, done} = await reader.read(); if (done) break;
+        if (value.byteLength) progress();
         size += value.byteLength;
         if (size > responseLimit) { await reader.cancel(); throw new CliError('RESPONSE_TOO_LARGE', '接口响应超过大小限制，本次未输出部分结果。', 5); }
         chunks.push(value);
@@ -87,6 +105,9 @@ export class ApiClient {
         throw error;
       }
       throw new CliError(signal.aborted ? 'REQUEST_TIMEOUT' : 'CONNECTION_FAILED', signal.aborted ? '请求超时，请检查连接；客户端没有自动重试。' : '无法连接公司服务器，请检查网络、地址和 HTTPS 证书。', 5, {retryable: !mutating && method === 'GET', ...(mutating ? {outcomeUnknown: true} : {})});
+    } finally {
+      clearTimeout(totalTimer);
+      clearTimeout(idleTimer);
     }
   }
 }
