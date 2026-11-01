@@ -51,3 +51,26 @@ globalThis.__departmentQuery.data={drawings:[],sops:[]};render(EngineeringDepart
 ep={...ep,initialContext:{recordId:'unknown'}};render(EngineeringDepartmentPanel,ep);assert.ok(text().includes('指定工程资料不存在'));assert.ok(!nodes().some(n=>['sop-panel','drawing-panel'].includes(n.type)));
 globalThis.__departmentQuery.isError=true;render(EngineeringDepartmentPanel,ep);assert.ok(!nodes().some(n=>n.type==='task-board'));assert.ok(text().includes('原列表与选定资料已隐藏'));reset();assert.equal(dirty,false);
 console.log('PASS engineering exact drawing/SOP deep links, dirty context and poll preservation, revoked/failed scope concealment');
+
+const drawingFixtures=[
+ {id:'flagged',status:'待分配',sheetStatus:'❗❗'},
+ {id:'legacy-flagged',status:'画图中',source:{rawColumns:{'状态':'❗❗'}}},
+ {id:'cleared',status:'画图中',sheetStatus:'⌛️',source:{rawColumns:{'状态':'❗❗'}}},
+ {id:'history',status:'历史待核对'},
+ {id:'done',status:'已完成',sheetStatus:'❗❗'},
+ {id:'cancelled',status:'已取消',sheetStatus:'❗❗'},
+].map(row=>({...row,modelNo:row.id,updatedAt:'2026-01-01T00:00:00Z'}));
+const preserved=JSON.stringify(drawingFixtures);
+globalThis.__departmentQuery={data:{drawings:drawingFixtures,sops:[]},isError:false,refetch:async()=>{}};
+render(EngineeringDepartmentPanel,{data:{me:{id:'m1'},revision:1}});
+const tasks=nodes().find(n=>n.type==='task-board').props.tasks;
+assert.deepEqual(tasks.filter(task=>task.attention).map(task=>task.id),['flagged','legacy-flagged','history','done','cancelled']);
+// Exercise the actual board's terminal-state exclusion, not a duplicate predicate.
+await build({entryPoints:['app/engineering-task-board.tsx'],outfile:'test-output/engineering-task-board-ui.mjs',bundle:true,platform:'node',format:'esm',packages:'external',loader:{'.css':'empty'}});
+const {EngineeringTaskBoard}=await import(pathToFileURL(path.resolve('test-output/engineering-task-board-ui.mjs')).href);
+const {renderToStaticMarkup}=await import('react-dom/server'),{createElement}=await import('react');
+const boardMarkup=renderToStaticMarkup(createElement(EngineeringTaskBoard,{tasks,onOpen(){throw Error('Unexpected navigation');}}));
+assert.match(boardMarkup,/<span>需处理<\/span><strong>3<\/strong>/);
+assert.equal((boardMarkup.match(/class="etb-card etb-attention"/g)||[]).length,3);
+assert.equal(JSON.stringify(drawingFixtures),preserved);reset();
+console.log('PASS drawing flags and original-sheet fallback count as attention, explicit clearing wins, completed/cancelled tasks stay excluded, and source records stay unchanged');
