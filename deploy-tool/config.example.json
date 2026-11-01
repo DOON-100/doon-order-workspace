@@ -1,0 +1,12 @@
+{
+  "workbench": "workbench",
+  "instance": "",
+  "region": "",
+  "releasesDir": "/opt/your-app/releases",
+  "dropinDir": "/etc/systemd/system/your-app.service.d",
+  "nodeBin": "/usr/bin/node",
+  "envFile": "/etc/your-app/runtime.env",
+  "service": "your-app.service",
+  "dataDir": "/var/lib/your-app/live",
+  "healthHost": "127.0.0.1:8787"
+}
