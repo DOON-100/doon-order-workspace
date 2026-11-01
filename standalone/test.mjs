@@ -4,9 +4,12 @@ import os from 'node:os';
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
 import * as XLSX from 'xlsx';
 const dist=path.resolve(process.env.DOON_BUILD_DIR||'lan-dist'),dir=await fs.mkdtemp(path.resolve('test-output/lan-test-')),port=18787,origin=`http://127.0.0.1:${port}`;
-const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_DATA_DIR:dir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0'};
+const releaseDir=await fs.mkdtemp(path.resolve('test-output/cli-release-test-')),releaseBytes=Buffer.from('synthetic-cli-archive'),releaseFile='doon-cli-0.43.0-aaaaaaaaaaaa-windows-x64.zip',release={format:'doon-cli-update-v1',version:'0.43.0',commit:'a'.repeat(40),file:releaseFile,bytes:releaseBytes.length,sha256:createHash('sha256').update(releaseBytes).digest('hex'),sourceDirty:false};
+await fs.writeFile(path.join(releaseDir,releaseFile),releaseBytes);await fs.writeFile(path.join(releaseDir,'latest.json'),JSON.stringify(release));
+const env={...Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^DOON_KINGDEE_/i.test(name))),DOON_DATA_DIR:dir,DOON_CLI_RELEASE_DIR:releaseDir,DOON_HOST:'127.0.0.1',DOON_PORT:String(port),DOON_NO_AUTO_BACKUP:'1',DOON_KINGDEE_SUPPLIER_SYNC_ENABLED:'0',DOON_KINGDEE_READONLY_ENABLED:'0'};
 execFileSync(process.execPath,[path.join(dist,'manage.mjs'),'init'],{env,stdio:'pipe'});
 const text=await fs.readFile(path.join(dir,'管理员首次登录.txt'),'utf8'),initial=text.match(/初始密码：([^\n]+)/)[1];
 const server=spawn(process.execPath,[path.join(dist,'server.mjs')],{env,stdio:'pipe',windowsHide:true});const serverDone=new Promise(resolve=>server.once('exit',resolve));let logs='';server.stdout.on('data',b=>logs+=b);server.stderr.on('data',b=>logs+=b);
@@ -22,6 +25,13 @@ try{
  assert.equal((await request('/api/auth/login',{username:'admin',password:initial},'',{Origin:'https://evil.example'})).status,403);pass('匿名、伪造身份头及跨站登录均无法进入');
  const login=await ok('/api/auth/login',{username:'admin',password:initial});adminCookie=login.res.headers.get('set-cookie').split(';')[0];assert(login.data.user.mustChange);assert.match(login.res.headers.get('set-cookie'),/HttpOnly; SameSite=Strict/);assert.equal((await request('/api/workspace/data',undefined,adminCookie)).status,403);
  const changed=await ok('/api/auth/password',{currentPassword:initial,password:'Test-Only-Admin-2026!'},adminCookie);const old=adminCookie;adminCookie=changed.res.headers.get('set-cookie').split(';')[0];assert.equal((await request('/api/workspace/data',undefined,old)).status,401);pass('首次改密后才可操作，旧会话失效');
+ const updateRevision=(await ok('/api/workspace/read-version',undefined,adminCookie)).data.revision;
+ assert.equal((await request('/api/cli-update/latest')).status,401);
+ const latest=await ok('/api/cli-update/latest',undefined,adminCookie);assert.deepEqual(latest.data,release);
+ const archive=await request('/api/cli-update/package',undefined,adminCookie);assert.equal(archive.status,200);assert.deepEqual(Buffer.from(await archive.arrayBuffer()),releaseBytes);
+ const history=await ok('/api/cli-update/history',undefined,adminCookie);assert.equal(history.data.events[0].username,'admin');assert.equal(history.data.events[0].event,'download');assert.equal(history.data.events[1].event,'check');assert(!JSON.stringify(history.data.events).includes('Test-Only-Admin-2026!'));
+ await fs.writeFile(path.join(releaseDir,releaseFile),'tampered');assert.equal((await request('/api/cli-update/package',undefined,adminCookie)).status,503);
+ assert.equal((await ok('/api/cli-update/history',undefined,adminCookie)).data.events.length,2);assert.equal((await ok('/api/workspace/read-version',undefined,adminCookie)).data.revision,updateRevision);pass('CLI更新仅登录员工可下载，账号与版本审计留痕，篡改包拒绝且不记成功下载');
  const version=await ok('/api/workspace/read-version',undefined,adminCookie),read=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(String(version.data.revision),read.res.headers.get('X-Workspace-Revision'));
  const document=await request('/'),html=await document.text(),asset=html.match(/src="([^\"]+\.js)"/)[1];assert.equal(document.headers.get('cache-control'),'no-store');
  const plainAsset=await request(asset,undefined,'',{'Accept-Encoding':'identity'}),plainBytes=Buffer.from(await plainAsset.arrayBuffer());
@@ -107,6 +117,7 @@ try{
  await fs.writeFile(path.join(dir,'results.json'),JSON.stringify({checks,at:new Date().toISOString()},null,2));console.log(`完成 ${checks.length} 项内网 HTTP 测试`);
 }finally{
  server.kill();await serverDone;
+ if(path.dirname(releaseDir)===path.resolve('test-output')&&path.basename(releaseDir).startsWith('cli-release-test-'))await fs.rm(releaseDir,{recursive:true,force:true});
  if(process.env.DOON_TEST_CLEANUP==='1'){
   const base=path.resolve('test-output'),target=path.resolve(dir);
   if(path.dirname(target)!==base||!path.basename(target).startsWith('lan-test-'))throw Error('Unsafe native test cleanup');

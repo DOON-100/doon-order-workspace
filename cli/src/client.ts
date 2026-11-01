@@ -65,7 +65,7 @@ export class ApiClient {
       const reader = response.body?.getReader();
       if (!reader) throw new CliError('INVALID_RESPONSE', '服务器响应为空。', 5);
       let size = 0; const chunks: Uint8Array[] = [];
-      const responseLimit=spec.binary==='file'?64*1024*1024:spec.business?32*1024*1024:65536;
+      const responseLimit=route==='/api/cli-update/package'?128*1024*1024:spec.binary==='file'?64*1024*1024:spec.business?32*1024*1024:65536;
       while (true) {
         const {value, done} = await reader.read(); if (done) break;
         size += value.byteLength;

@@ -41,6 +41,7 @@ jobs:
             cli/artifacts/doon-cli-*.zip
             cli/artifacts/SHA256SUMS
             cli/artifacts/release.json
+            cli/artifacts/latest.json
           if-no-files-found: error
           retention-days: 30
           compression-level: 0

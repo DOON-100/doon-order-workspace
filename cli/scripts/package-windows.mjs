@@ -63,6 +63,9 @@ async function main() {
   await fs.copyFile(path.join(runtime, 'node.exe'), path.join(stage, 'node.exe'));
   await fs.copyFile(path.join(runtime, 'LICENSE'), path.join(stage, 'NODE-LICENSE.txt'));
   const distFiles = ['followup-backup.js','followup-backup-program.js','followup-backup-catalog.js','business-followup-write.js','business-followup-write-program.js','business-followup-write-catalog.js','service-record-write-program.js','service-record-write-catalog.js','project-collaboration-write.js','project-collaboration-write-program.js','project-collaboration-write-catalog.js','admin-schemas.js','admin-write.js','admin-write-program.js','admin-write-catalog.js','communication-schemas.js','communication-write.js','communication-write-program.js','communication-write-catalog.js','workspace-tools-schemas.js','workspace-tools-write.js','workspace-tools-program.js','workspace-tools-catalog.js','complaint-write.js','complaint-write-program.js','complaint-write-catalog.js','project-finance-write.js','project-finance-write-program.js','project-finance-write-catalog.js','project-finance-schemas.js','ar-write.js','ar-write-program.js','ar-write-catalog.js','ar-schemas.js','collection-write.js','collection-write-program.js','collection-write-catalog.js','delivery-write.js', 'delivery-write-program.js', 'delivery-write-catalog.js', 'process-write.js', 'process-write-program.js', 'process-write-catalog.js', 'process-schemas.js', 'production-write.js', 'production-write-program.js', 'production-write-catalog.js', 'supplier-write.js', 'supplier-write-program.js', 'supplier-write-catalog.js', 'supplier-schemas.js', 'planning-write.js', 'planning-write-program.js', 'planning-write-catalog.js', 'planning-schemas.js', 'purchase-write.js', 'purchase-write-catalog.js', 'purchase-write-program.js', 'engineering-write.js', 'engineering-schemas.js', 'project-engineering.js', 'engineering-records.js', 'engineering-write-catalog.js', 'engineering-write-program.js', 'documents-write.js', 'order-schemas.js', 'order-write.js', 'kingdee-sales.js', 'order-write-catalog.js', 'order-write-program.js', 'business.js', 'catalog.js', 'client.js', 'engineering.js', 'finance.js', 'errors.js', 'index.js', 'operations.js', 'orders.js', 'planning.js', 'project-child-write.js', 'project-entries.js', 'followup-actions.js', 'quote-write.js', 'quote-resources.js', 'quote-handoffs.js', 'quote-files.js', 'price-archive.js', 'quote-schemas.js', 'program.js', 'prompt.js', 'routes.js', 'sales.js', 'sales-write.js', 'service.js', 'state.js', 'write-input.js', 'write-operation.js'];
+  distFiles.unshift('update.js');
+  // The drawing module is built only on branches that contain its source.
+  if(await fs.stat(path.join(root,'src/engineering-drawing-table.ts')).then(()=>true,()=>false))distFiles.unshift('engineering-drawing-table.js');
   const actualDist = Object.keys(await inventory(path.join(root, 'dist'))).sort();
   if (JSON.stringify(actualDist) !== JSON.stringify([...distFiles].sort())) throw Error('Unexpected CLI build files; rebuild into a clean dist directory');
   await fs.mkdir(path.join(stage, 'dist'));
@@ -75,7 +78,7 @@ async function main() {
       await fs.writeFile(path.join(stage, filename), readme);
     } else await fs.copyFile(path.join(root, filename), path.join(stage, filename));
   }
-  for (const filename of ['doon.cmd', 'install.cmd', 'install.ps1']) await fs.copyFile(path.join(root, 'windows', filename), path.join(stage, filename));
+  for (const filename of ['doon.cmd', 'install.cmd', 'install.ps1','update.ps1']) await fs.copyFile(path.join(root, 'windows', filename), path.join(stage, filename));
   await fs.writeFile(path.join(stage, 'package.json'), JSON.stringify({name: pkg.name, version: pkg.version, type: 'module', private: true}) + '\n');
   const dependency = path.join(stage, 'node_modules/commander'); await fs.mkdir(dependency, {recursive: true});
   for (const filename of ['index.js', 'package.json', 'LICENSE', 'package-support.json']) await fs.copyFile(path.join(root, 'node_modules/commander', filename), path.join(dependency, filename));
@@ -114,7 +117,9 @@ async function main() {
   await fs.writeFile(entry, original);
   await fs.copyFile(zip, path.join(output, name));
   await fs.copyFile(path.join(extracted, 'release.json'), path.join(output, 'release.json'));
-  await fs.writeFile(path.join(output, 'SHA256SUMS'), `${hash(await fs.readFile(zip))}  ${name}\n`);
+  const archiveBytes=await fs.readFile(zip);
+  await fs.writeFile(path.join(output, 'SHA256SUMS'), `${hash(archiveBytes)}  ${name}\n`);
+  if (!sourceDirty) await fs.writeFile(path.join(output,'latest.json'),JSON.stringify({format:'doon-cli-update-v1',version:pkg.version,commit,file:name,bytes:archiveBytes.length,sha256:hash(archiveBytes),sourceDirty:false},null,2)+'\n');
   console.log('PASS Windows package, extraction, isolated install, command entry and tamper rejection: ' + path.join(output, name));
   } finally {
     const target=path.resolve(work),base=path.resolve(os.tmpdir());

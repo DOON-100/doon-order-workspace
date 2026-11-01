@@ -32,7 +32,7 @@ import {engineeringWriteCommands} from './engineering-write-catalog.js';
 export {engineeringWriteCommands} from './engineering-write-catalog.js';
 import {orderWriteCommands} from './order-write-catalog.js';
 export {orderWriteCommands} from './order-write-catalog.js';
-export const version = '0.42.0';
+export const version = '0.43.0';
 export const outputSchema = 'doon-cli-output-v1';
 export const foundationCommands = [
   {name: 'setup', usage: 'setup --server <origin> [--allow-local-http]', description: '保存公司 HTTPS 地址；HTTP 仅供显式启用的本机测试', effect: 'local-config'},
@@ -42,6 +42,8 @@ export const foundationCommands = [
   {name: 'doctor', usage: 'doctor', description: '检查连接、服务响应、运行模式和当前会话', effect: 'session-last-seen'},
   {name: 'commands', usage: 'commands', description: '列出实际实现的命令及其作用', effect: 'none'},
   {name: 'modules', usage: 'modules', description: '按中台顺序列出栏目及接入进度', effect: 'none'},
+  {name: 'update check', usage: 'update check', description: '使用本人会话检查服务器发布的最新CLI版本', effect: 'session-last-seen-and-audit'},
+  {name: 'update install', usage: 'update install', description: '下载校验并安装新版CLI，本机会话和旧程序保留', effect: 'local-install-and-audit'},
 ] as const;
 
 export const salesCommands = [

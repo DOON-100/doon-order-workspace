@@ -1,6 +1,6 @@
 # CLI 命令目录
 
-由命令登记自动生成，客户端版本 0.42.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
+由命令登记自动生成，客户端版本 0.43.0。所有命令均支持 `--json`；帮助支持 `--help`。本目录只列实际命令，栏目状态不代表员工授权。
 
 | 用法 | 行为 | 副作用 |
 | --- | --- | --- |
@@ -11,6 +11,8 @@
 | `doon doctor` | 检查连接、服务响应、运行模式和当前会话 | session-last-seen |
 | `doon commands` | 列出实际实现的命令及其作用 | none |
 | `doon modules` | 按中台顺序列出栏目及接入进度 | none |
+| `doon update check` | 使用本人会话检查服务器发布的最新CLI版本 | session-last-seen-and-audit |
+| `doon update install` | 下载校验并安装新版CLI，本机会话和旧程序保留 | local-install-and-audit |
 | `doon sales followups backup-schema` | 查询历史原件、可见快照与旧浏览器恢复规则 | local-read |
 | `doon sales followups source-files [--owner <id>] [--limit <number>] [--offset <number>]` | 查询授权来源原件及完整性元数据 | business-read-and-session-last-seen |
 | `doon sales followups source-download <id> --output <file>` | 二次授权并校验摘要下载来源原件 | local-file-and-session-last-seen |

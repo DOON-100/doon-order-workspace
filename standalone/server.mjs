@@ -7,6 +7,7 @@ import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {gzip} from 'node:zlib';
 import {promisify} from 'node:util';
+import {createHash,randomUUID} from 'node:crypto';
 import {supplierGatewayConfig,supplierEndpoint} from './supplier-gateway.mjs';
 import {employeeGatewayConfig,employeeEndpoint} from './employee-gateway.mjs';
 import {scheduleBridgeConfig,createScheduleBridge} from './agent-schedules.mjs';
@@ -74,6 +75,18 @@ const supplierActions=new Set(['data','file','accept','progress','promise','exce
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
 const hosts=new Set((reviewMode?['localhost','127.0.0.1','[::1]']:['localhost','127.0.0.1',os.hostname().toLowerCase(),...addresses]).map(h=>h+':'+port));
 const security={'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"};
+const cliReleaseDir=process.env.DOON_CLI_RELEASE_DIR?path.resolve(process.env.DOON_CLI_RELEASE_DIR):null;
+if(cliReleaseDir&&(!path.isAbsolute(process.env.DOON_CLI_RELEASE_DIR)||cliReleaseDir===path.resolve(dataDir)||cliReleaseDir.startsWith(path.resolve(dataDir)+path.sep)))throw Error('CLI 发布目录必须是业务数据目录外的绝对路径。');
+async function cliRelease(){
+ if(!cliReleaseDir)fail('CLI 更新服务未启用。',404);
+ const folder=await fs.realpath(cliReleaseDir);if(folder!==cliReleaseDir)fail('CLI 发布目录无效。',503);
+ const manifestPath=path.join(folder,'latest.json'),stat=await fs.lstat(manifestPath);if(!stat.isFile()||stat.isSymbolicLink()||stat.size>4096)fail('CLI 发布清单无效。',503);
+ const raw=await fs.readFile(manifestPath,'utf8');
+ let item;try{item=JSON.parse(raw);}catch{fail('CLI 发布清单无效。',503);}
+ if(item?.format!=='doon-cli-update-v1'||!/^\d+\.\d+\.\d+$/.test(item.version)||!(/^[a-f0-9]{40}$/.test(item.commit))||item.file!==`doon-cli-${item.version}-${item.commit.slice(0,12)}-windows-x64.zip`||!Number.isInteger(item.bytes)||item.bytes<1||item.bytes>128*1024*1024||!(/^[a-f0-9]{64}$/.test(item.sha256))||item.sourceDirty!==false)fail('CLI 发布清单无效。',503);
+ return {item,folder};
+}
+function cliAudit(current,event,endpoint,item){const record={id:'cli_update_'+randomUUID(),kind:'cli_update_event',event,action:event==='download'?'下载CLI安装包':'检查CLI版本',username:current.account.username,accountId:current.account.id,actorId:current.member.id,actor:current.member.name,ip:String(endpoint.ip||'').replace(/^::ffff:/,''),version:item.version,commit:item.commit,sha256:item.sha256,createdAt:new Date().toISOString()};db.prepare('INSERT INTO records VALUES(?,?,?)').run(record.id,record.kind,JSON.stringify(record));}
 const rates=new Map();
 function fail(message,status=400){throw Object.assign(new Error(message),{status});}
 const reply=(body,status=200,headers={})=>Response.json(body,{status,headers});
@@ -110,7 +123,24 @@ async function handle(req,res){
   else if(url.pathname==='/api/review-mode'&&req.method==='GET')response=reply({readOnly:reviewMode,asOf:reviewMode?reviewAsOf:null,...(process.env.DOON_SYNTHETIC_ONLY==='1'?{syntheticOnly:true}:{})});
   else if(url.pathname.startsWith('/api/')){
    const current=session(request,authOptions);
-   if(url.pathname.startsWith('/api/agent-schedules/')){
+   if(url.pathname.startsWith('/api/cli-update/')){
+    if(supplierOnly||reviewMode)fail('当前入口不提供CLI更新。',403);
+    if(!current)fail('请先登录。',401);if(current.account.must_change)fail('请先修改初始密码。',403);
+    throttle('cli-update:'+current.digest,30);
+    const action=url.pathname.slice('/api/cli-update/'.length);
+    if(action==='history'&&req.method==='GET'){
+     if(current.member.role!=='admin')fail('需要管理员权限。',403);
+     const limit=Number(url.searchParams.get('limit')||50);if(!Number.isInteger(limit)||limit<1||limit>200)fail('查询数量无效。');
+     response=reply({events:db.prepare("SELECT data FROM records WHERE kind='cli_update_event' ORDER BY rowid DESC LIMIT ?").all(limit).map(row=>JSON.parse(row.data))});
+    }else if((action==='latest'||action==='package')&&req.method==='GET'){
+     const {item,folder}=await cliRelease();if(url.search)fail('更新接口不接受查询参数。');
+     if(action==='latest'){cliAudit(current,'check',endpoint,item);response=reply(item);}
+     else{const target=path.join(folder,item.file),real=await fs.realpath(target);if(path.dirname(real)!==folder)fail('CLI 安装包路径无效。',503);
+      const bytes=await fs.readFile(real);if(bytes.length!==item.bytes||createHash('sha256').update(bytes).digest('hex')!==item.sha256)fail('CLI 安装包校验失败。',503);
+      cliAudit(current,'download',endpoint,item);response=new Response(bytes,{headers:{'Content-Type':'application/octet-stream','Content-Disposition':'attachment; filename="'+item.file+'"'}});
+     }
+    }else fail('接口不存在。',404);
+   }else if(url.pathname.startsWith('/api/agent-schedules/')){
     if(!scheduleBridge)fail('后台只读调度尚未启用。',404);
     response=await scheduleBridge.handle(request,current);
    }else if(url.pathname.startsWith('/api/auth/')){

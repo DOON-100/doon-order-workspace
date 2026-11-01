@@ -18,6 +18,7 @@ import {registerSupplierWrites} from './supplier-write-program.js';
 import {registerEngineeringWrites} from './engineering-write-program.js';
 import {registerOrderWrites} from './order-write-program.js';
 import {Command, CommanderError} from 'commander';
+import {UpdateService} from './update.js';
 import {commands, foundationCommands, salesCommands, salesWriteCommands, orderCommands, engineeringCommands, planningCommands, operationsCommands, financeCommands, modules, outputSchema, version} from './catalog.js';
 import type {Action, Resource} from './sales.js';
 import type {OrderResource, OrderAction} from './orders.js';
@@ -83,6 +84,9 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
   program.command('doctor').description(describe('doctor')).action(async () => result('doctor', await foundation().doctor()));
   program.command('commands').description(describe('commands')).action(() => result('commands', commands));
   program.command('modules').description(describe('modules')).action(() => result('modules', modules));
+  const update=program.command('update').description('检查并安装公司服务器发布的新版 CLI');
+  update.command('check').description('使用员工会话检查最新 CLI 版本').action(async()=>result('update check',await new UpdateService().check()));
+  update.command('install').description('下载并校验最新安装包，升级当前 Windows 用户的 CLI').action(async()=>result('update install',await new UpdateService().install()));
   const sales = program.command('sales').description('业务部：客户、项目、询价、报价、订单与原单查询');
   function registerQuoteWrites(group:Command,kind:'ie'|'customer',prefix:string){
     group.command('schema').description('查询报价表单与业务动作字段').action(()=>result(prefix+' schema',foundation().quoteWrite().schema(kind)));
