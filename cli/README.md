@@ -142,6 +142,8 @@ CLI 不自动重试写入、不跟随重定向、不关闭证书校验。只有�
 
 本机隔离验收、源码提交及限制见[执行记录](../docs/cli-execution-log.md)和[实施计划](../docs/cli-write-implementation-plan.md)。Actions 附件有保留期限，正式分发以管理员提供的包和摘要为准。
 
+0.42 没有 `doon update` 命令。管理员可单独发布 `windows/upgrade-legacy.ps1`，通过可信渠道给出 HTTPS 下载地址与独立 SHA-256；员工核对脚本摘要后，在 Windows PowerShell 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File <已核验脚本> -ExpectedOrigin <原公司HTTPS地址>`。脚本只访问升级查询与下载接口，使用旧客户端的凭据存储读取当前员工加密会话，不要求提供密码或复制会话文件；校验安装包与内部文件后原位更新，保留原配置、会话及旧版本。`-InstallRoot` 用于指定现有安装位置；`-DownloadOnly` 仅验证鉴权下载和摘要，不安装。登录失效时由员工本人先运行 `doon login`。首次升级后使用上面的原生升级命令。
+
 ## 7. 仅供开发者：隔离验证
 
 源码要求 Node >=22.13，Windows 发行构建固定使用 24.14.0。安装锁定依赖后在 `cli` 执行 `npm test`、`npm run docs:check`；发行包使用 `npm run package:windows`。完整验证还依赖根目录依赖，使用已有合成验收脚本并跳过金蝶。
