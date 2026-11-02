@@ -75,6 +75,8 @@ const supplierActions=new Set(['data','file','accept','progress','promise','exce
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
 const hosts=new Set((reviewMode?['localhost','127.0.0.1','[::1]']:['localhost','127.0.0.1',os.hostname().toLowerCase(),...addresses]).map(h=>h+':'+port));
 const security={'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"};
+// Fingerprinted build assets never change in place. Share their gzip result across requests.
+const immutableGzip=new Map();
 const cliReleaseDir=process.env.DOON_CLI_RELEASE_DIR?path.resolve(process.env.DOON_CLI_RELEASE_DIR):null;
 if(cliReleaseDir&&(!path.isAbsolute(process.env.DOON_CLI_RELEASE_DIR)||cliReleaseDir===path.resolve(dataDir)||cliReleaseDir.startsWith(path.resolve(dataDir)+path.sep)))throw Error('CLI 发布目录必须是业务数据目录外的绝对路径。');
 async function cliRelease(){
@@ -94,6 +96,7 @@ function localIP(ip){return /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/
 function throttle(key,limit=60){const now=Date.now();for(const [entry,r] of rates)if(r.until<now)rates.delete(entry);const r=rates.get(key)||{until:now+60000,count:0};r.count++;rates.set(key,r);if(r.count>limit)fail('操作过于频繁，请稍后再试。',429);}
 async function handle(req,res){
  try{
+  let immutableAsset='';
   let endpoint;
   if(supplierOnly)endpoint=supplierEndpoint(gateway,req.socket.remoteAddress,req.headers);
   else if(employeeGateway)endpoint=employeeEndpoint(employeeGateway,req.socket.remoteAddress,req.headers);
@@ -192,14 +195,23 @@ async function handle(req,res){
    const target=path.resolve(root,relative);if(!target.startsWith(root+path.sep)||relative.split(/[\\/]/).some(p=>p.startsWith('.')))fail('文件不存在。',404);
    const mime={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.woff2':'font/woff2'}[path.extname(target)];if(!mime)fail('文件不存在。',404);
    const versioned=/^assets\/[\w-]+-[\w-]{8,}\.(?:js|css)$/.test(relative);
-   try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime,...(versioned?{'Cache-Control':'public, max-age=31536000, immutable'}:{})}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
+   if(versioned)immutableAsset=target;
+   const brandImage=relative.startsWith('brand/')&&['.svg','.png','.jpg','.jpeg'].includes(path.extname(target));
+   try{response=new Response(req.method==='HEAD'?null:await fs.readFile(target),{headers:{'Content-Type':mime,...(versioned?{'Cache-Control':'public, max-age=31536000, immutable'}:brandImage?{'Cache-Control':'private, max-age=3600'}:{})}});}catch(e){if(e.code==='ENOENT')fail('文件不存在。',404);throw e;}
   }
   const outgoing=new Headers(security);for(const [name,value] of response.headers)outgoing.set(name,value);
   let payload=Buffer.from(await response.arrayBuffer());
   const acceptsGzip=String(req.headers['accept-encoding']||'').split(',').some(value=>/^\s*gzip\s*(?:;\s*q=(0(?:\.\d+)?|1(?:\.0+)?))?\s*$/.test(value)&&!/[;]\s*q=0(?:\.0*)?\s*$/.test(value));
   if(payload.length>=1024&&response.status===200&&!outgoing.has('Content-Encoding')&&/^(?:text\/|application\/json|image\/svg)/.test(outgoing.get('Content-Type')||'')){
    const vary=outgoing.get('Vary')||'';if(vary!=='*'&&!vary.toLowerCase().split(',').some(value=>value.trim()==='accept-encoding'))outgoing.set('Vary',[vary,'Accept-Encoding'].filter(Boolean).join(', '));
-   if(acceptsGzip){try{payload=await compress(payload,{level:4});outgoing.set('Content-Encoding','gzip');outgoing.set('Content-Length',String(payload.length));}catch{/* Compression is optional; keep the complete original response. */}}
+   if(acceptsGzip){try{
+    if(immutableAsset){
+     let zipped=immutableGzip.get(immutableAsset);
+     if(!zipped){if(immutableGzip.size>=64)immutableGzip.clear();zipped=compress(payload,{level:4});immutableGzip.set(immutableAsset,zipped);}
+     try{payload=await zipped;}catch(error){immutableGzip.delete(immutableAsset);throw error;}
+    }else payload=await compress(payload,{level:4});
+    outgoing.set('Content-Encoding','gzip');outgoing.set('Content-Length',String(payload.length));
+   }catch{/* Compression is optional; keep the complete original response. */}}
   }
   res.writeHead(response.status,Object.fromEntries(outgoing));res.end(payload);
  }catch(e){const status=e.status||500;if(status===500)console.error('请求失败',e.message);res.writeHead(status,{...security,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify({error:status===500?'服务暂不可用，请稍后重试。':e.message}));}

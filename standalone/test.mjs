@@ -34,6 +34,7 @@ try{
  assert.equal((await ok('/api/cli-update/history',undefined,adminCookie)).data.events.length,2);assert.equal((await ok('/api/workspace/read-version',undefined,adminCookie)).data.revision,updateRevision);pass('CLI更新仅登录员工可下载，账号与版本审计留痕，篡改包拒绝且不记成功下载');
  const version=await ok('/api/workspace/read-version',undefined,adminCookie),read=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(String(version.data.revision),read.res.headers.get('X-Workspace-Revision'));
  const document=await request('/'),html=await document.text(),asset=html.match(/src="([^\"]+\.js)"/)[1];assert.equal(document.headers.get('cache-control'),'no-store');
+ const brand=await request('/brand/doon-eyewear-manufacturing.jpg');assert.match(brand.headers.get('cache-control'),/private.*max-age=3600/);await brand.arrayBuffer();
  const plainAsset=await request(asset,undefined,'',{'Accept-Encoding':'identity'}),plainBytes=Buffer.from(await plainAsset.arrayBuffer());
  const zippedAsset=await request(asset,undefined,'',{'Accept-Encoding':'gzip'}),zippedBytes=Buffer.from(await zippedAsset.arrayBuffer());
  assert.equal(zippedAsset.headers.get('content-encoding'),'gzip');assert.deepEqual(zippedBytes,plainBytes);assert(Number(zippedAsset.headers.get('content-length'))<plainBytes.length*.5);
