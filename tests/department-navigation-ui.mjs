@@ -57,6 +57,7 @@ const drawingFixtures=[
  {id:'legacy-flagged',status:'画图中',source:{rawColumns:{'状态':'❗❗'}}},
  {id:'cleared',status:'画图中',sheetStatus:'⌛️',source:{rawColumns:{'状态':'❗❗'}}},
  {id:'history',status:'历史待核对'},
+ {id:'import-approved',status:'历史待核对',approval:'通过',source:{rawColumns:{'状态':'❗❗'}}},
  {id:'done',status:'已完成',sheetStatus:'❗❗'},
  {id:'cancelled',status:'已取消',sheetStatus:'❗❗'},
 ].map(row=>({...row,modelNo:row.id,updatedAt:'2026-01-01T00:00:00Z'}));
@@ -64,14 +65,17 @@ const preserved=JSON.stringify(drawingFixtures);
 globalThis.__departmentQuery={data:{drawings:drawingFixtures,sops:[]},isError:false,refetch:async()=>{}};
 render(EngineeringDepartmentPanel,{data:{me:{id:'m1'},revision:1}});
 const tasks=nodes().find(n=>n.type==='task-board').props.tasks;
-assert.deepEqual(tasks.filter(task=>task.attention).map(task=>task.id),['flagged','legacy-flagged','history','done','cancelled']);
+assert.deepEqual(tasks.filter(task=>task.attention).map(task=>task.id),['flagged','legacy-flagged','import-approved','done','cancelled']);
+assert.equal(tasks.find(task=>task.id==='history').status,'未完成');
+assert.equal(tasks.find(task=>task.id==='import-approved').status,'已完成');
 // Exercise the actual board's terminal-state exclusion, not a duplicate predicate.
 await build({entryPoints:['app/engineering-task-board.tsx'],outfile:'test-output/engineering-task-board-ui.mjs',bundle:true,platform:'node',format:'esm',packages:'external',loader:{'.css':'empty'}});
 const {EngineeringTaskBoard}=await import(pathToFileURL(path.resolve('test-output/engineering-task-board-ui.mjs')).href);
 const {renderToStaticMarkup}=await import('react-dom/server'),{createElement}=await import('react');
 const boardMarkup=renderToStaticMarkup(createElement(EngineeringTaskBoard,{tasks,onOpen(){throw Error('Unexpected navigation');}}));
-assert.match(boardMarkup,/<span>需处理<\/span><strong>3<\/strong>/);
-assert.equal((boardMarkup.match(/class="etb-card etb-attention"/g)||[]).length,3);
+assert.match(boardMarkup,/<span>需处理<\/span><strong>2<\/strong>/);
+assert.equal((boardMarkup.match(/class="etb-card etb-attention"/g)||[]).length,2);
+assert.doesNotMatch(boardMarkup,/历史待核对|查看import-approved详情/);
 assert.doesNotMatch(boardMarkup,/<span>任务总数<\/span>/);
 assert.equal((boardMarkup.match(/aria-label="查看[^"]+详情"/g)||[]).length,4);
 assert.equal((boardMarkup.match(/class="etb-card[\s\S]*?aria-label="查看done详情"/g)||[]).length,0);

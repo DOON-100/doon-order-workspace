@@ -44,6 +44,8 @@ try{
  await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.getByRole('button',{name:'新增空行',exact:true}).waitFor();
  assert.deepEqual(readCounts,{'drawing-data':1,'sop-data':1});
  assert.equal(await page.locator('.ed-metrics button').count(),2);assert.equal(await page.locator('.ed-metrics').getByText('全部需求',{exact:true}).count(),0);assert.equal(await page.locator('.ed-tabs .selected').innerText(),'未完成');
+ assert.equal(await page.locator('.ed-empty').innerText(),'暂无画图需求。');
+ assert.equal(await page.getByRole('button',{name:/导入/}).count(),0);
  pass('首次画图表不等待 SOP，切换三个页签复用授权数据；看板默认未完成且只有两张统计卡');
  const add=()=>page.getByRole('button',{name:'新增空行',exact:true}).click();
  const choose=async(label,value)=>{await page.getByRole('combobox',{name:label,exact:true}).click();await page.getByRole('option',{name:value,exact:true}).click();};
@@ -112,8 +114,18 @@ try{
  await page.unroute('**/api/workspace/sop-data',failIndex);await page.getByRole('button',{name:'重新读取工程资料',exact:true}).click();await page.getByRole('combobox',{name:'状态 SYN-DRAW',exact:true}).waitFor();await board();assert.equal(await attention().locator('strong').innerText(),'1');assert.equal(confirmedWrites,1);page.off('request',countWrite);
  pass('保存成功但看板读取失败时隐藏旧缓存，重试只读刷新恢复新统计，不重复写入原记录');
  const preservedRecords=JSON.stringify((await api('workspace/drawing-data')).records);
- const withHistory=async route=>{const response=await route.fetch(),payload=await response.json();await route.fulfill({response,json:{...payload,records:[...payload.records,{...payload.records[0],id:'synthetic-completed-view',modelNo:'合成已完成',status:'已完成',approval:'通过'}]}});};
+ const withHistory=async route=>{const response=await route.fetch(),payload=await response.json(),imported={...payload.records[0],status:'历史待核对',approval:'待审核',sheetStatus:'⌛️',deadline:'2099-01-01',source:{type:'excel',rawColumns:{'状态':'❗❗'}}};await route.fulfill({response,json:{...payload,records:[...payload.records,{...imported,id:'synthetic-imported-current',modelNo:'合成导入未完成',customerCode:'SYN-IMPORT'},{...imported,id:'synthetic-imported-flagged',modelNo:'合成导入需处理',customerCode:'SYN-FLAG',sheetStatus:'❗❗'},{...imported,id:'synthetic-completed-view',modelNo:'合成已完成',approval:'通过'}]}});};
  await page.route('**/api/workspace/drawing-data',withHistory);await page.reload();await page.getByRole('heading',{name:'工程任务看板',exact:true}).waitFor();
+ const importedCard=page.getByRole('button',{name:'查看合成导入未完成详情',exact:true});
+ assert.equal(await importedCard.locator('.etb-status').innerText(),'未完成');
+ assert.equal(await importedCard.locator('.etb-card-footer').getByText('跟进中',{exact:true}).count(),1);
+ assert(!((await importedCard.getAttribute('class'))||'').includes('etb-attention'));
+ assert(((await page.getByRole('button',{name:'查看合成导入需处理详情',exact:true}).getAttribute('class'))||'').includes('etb-attention'));
+ assert.equal(await page.getByText('历史待核对',{exact:true}).count(),0);
+ await page.getByRole('combobox',{name:'工程任务分组方式',exact:true}).selectOption('status');
+ assert.equal(await page.getByRole('region',{name:'历史待核对',exact:true}).count(),0);
+ await page.getByRole('combobox',{name:'工程任务分组方式',exact:true}).selectOption('category');
+ pass('导入记录按当前完成和标记状态展示，卡片及分组无历史待核对，原表旧标记不覆盖当前值');
  assert.equal(await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).count(),0);
  await page.getByRole('combobox',{name:'工程任务范围',exact:true}).selectOption('all');await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).waitFor();
  await page.getByRole('button',{name:'查看合成已完成详情',exact:true}).click();await page.getByRole('button',{name:'编辑款号 SYN-DRAW',exact:true}).filter({hasText:'合成已完成'}).waitFor();
