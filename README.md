@@ -10,8 +10,6 @@ Agent 的目标能力、Mastra 前期验证、架构、触发、上下文、Memo
 
 日常本地测试统一使用 [8797](http://127.0.0.1:8797/engineering-drawings)，维护约定见 [固定本地测试环境](docs/local-test-environment.md)：复用持久数据和账号，按用户授权刷新服务器数据副本，测试修改不回写服务器，不再另开临时预览。
 
-本机主仓库使用 `E:\DOON\doon-order-workspace-main`。后续代码、文档、数据、构建和测试操作统一在 E 盘，相关工作树、项目专属 Codex 文件及旧路径兼容规则见 [本机存储与迁移约定](docs/local-storage.md)。
-
 T01 已完成 [19 项脚本操作登记及首批封装范围](docs/data-tools-operation-register.md)。首批三个固定功能已实现：业务工具页中的 XLSX 检查/提取、指定客户归属导出、单张草稿费用预览与人工确认；访问范围、任务回执及阿里云迁移注意事项见 [首批固定程序工具](docs/fixed-data-tools.md)。代码交付不代表正式服务已部署。
 
 本轮整理的可复用 Excel 与数据维护工具统一放在 [scripts/data-tools](scripts/data-tools/README.md)，按需运行，不接入网站启动流程。客户原表、图片、任务配置与结果保存在私有目录，和代码分开管理。

@@ -4,7 +4,6 @@
 
 ## 固定入口与数据
 
-- 本机主仓库的物理位置为 `E:\DOON\doon-order-workspace-main`，下述私有目录均位于此处。启动和维护命令显式以该目录为工作目录；项目临时文件和缓存也使用 E 盘，详见 [本机存储与迁移约定](local-storage.md)。
 - 日常测试入口：[工程画图部门](http://127.0.0.1:8797/engineering-drawings)（包含工程管理看板、画图跟进表、MES 待上传 SOP）、[客户项目](http://127.0.0.1:8797/customer-projects)。只监听本机回环地址。
 - 本机 `.workbuddy/local-test-environment.json` 记录当前进程、程序目录、数据目录、服务器快照时间及校验摘要；实际数据和账号均在被 Git 忽略的私有目录。维护时先读取这份状态并核对进程和目录，不能另找一个空库启动。
 - 当前机器保留私有启动器 `.workbuddy/local-test-8797/start.mjs`。服务停止后，可在仓库根目录运行 `node .workbuddy/local-test-8797/start.mjs`，继续使用现有数据和登录状态；端口已运行时不再启动第二份。该启动器不导入数据、不创建账号、不重置密码。
