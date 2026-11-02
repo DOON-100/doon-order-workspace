@@ -1,7 +1,19 @@
 param([Parameter(Mandatory=$true)][string]$ExpectedOrigin,[string]$InstallRoot='',[switch]$DownloadOnly)
 $ErrorActionPreference='Stop'
 $env:PSModulePath=[IO.Path]::Combine($PSHOME,'Modules')
-if(-not $InstallRoot){$InstallRoot=Join-Path $env:LOCALAPPDATA 'Doon\CLI'}
+# Locate the installed command without executing any PATH entry. An explicit
+# root still works when the installation has not been added to PATH.
+if(-not $InstallRoot){
+ $Command=Get-Command doon.cmd -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+ if($Command){
+  $Bin=Split-Path -Parent $Command.Path
+  if((Split-Path -Leaf $Bin) -ine 'bin'){throw 'The doon command is not an installed bin entry. Pass -InstallRoot with the existing installation directory.'}
+  $InstallRoot=Split-Path -Parent $Bin
+ }elseif($env:LOCALAPPDATA){
+  $InstallRoot=Join-Path $env:LOCALAPPDATA 'Doon\CLI'
+  if(-not (Test-Path -LiteralPath (Join-Path $InstallRoot 'bin\doon.cmd') -PathType Leaf)){throw 'Installed Doon CLI not found. Reopen the terminal or pass -InstallRoot with the existing installation directory.'}
+ }else{throw 'Installed Doon CLI not found. Pass -InstallRoot with the existing installation directory.'}
+}
 if(-not [IO.Path]::IsPathRooted($InstallRoot)){throw 'InstallRoot must be absolute.'}
 $InstallRoot=[IO.Path]::GetFullPath($InstallRoot)
 function Assert-Physical([string]$Path){if((Get-Item -LiteralPath $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint){throw 'CLI paths must not be links.'}}
@@ -15,7 +27,7 @@ $ProgramRoot=Join-Path $Programs $Match.Groups[1].Value;Assert-Physical $Program
 Assert-Physical (Join-Path $ProgramRoot 'dist')
 Assert-Physical (Join-Path $ProgramRoot 'release.json')
 $Installed=Get-Content -LiteralPath (Join-Path $ProgramRoot 'release.json') -Raw | ConvertFrom-Json
-if($Installed.platform -ne 'win32-x64' -or $Installed.sourceDirty -ne $false -or $Match.Groups[1].Value -ne ($Installed.version+'-'+$Installed.commit.Substring(0,12))){throw 'Installed release metadata is invalid.'}
+if($Installed.format -ne 'doon-cli-windows-v1' -or $Installed.platform -ne 'win32-x64' -or $Installed.sourceDirty -ne $false -or $Installed.version -notmatch '^\d+\.\d+\.\d+$' -or $Installed.commit -notmatch '^[a-f0-9]{40}$' -or $Match.Groups[1].Value -ne ($Installed.version+'-'+$Installed.commit.Substring(0,12))){throw 'Installed release metadata is invalid.'}
 foreach($Name in @('node.exe','package.json','dist/state.js','dist/errors.js')){
  $File=Join-Path $ProgramRoot $Name;Assert-Physical $File
  if(-not $Installed.files.PSObject.Properties[$Name] -or (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Installed.files.$Name.sha256){throw 'Installed credential helper integrity check failed.'}
@@ -25,10 +37,12 @@ New-Item -ItemType Directory -Path $Stage | Out-Null
 try{
  $Downloader=@'
 const fs=require('node:fs/promises'),path=require('node:path'),{pathToFileURL}=require('node:url'),{createHash}=require('node:crypto');
-const [program,home,stage,expectedOrigin,currentVersion]=process.argv.slice(2);
+const [program,stage,expectedOrigin,currentVersion]=process.argv.slice(2);
 async function run(){
  const {StateStore}=await import(pathToFileURL(path.join(program,'dist/state.js')).href);
- const store=new StateStore(home),config=await store.config();
+ // Use exactly the same per-user location (including DOON_CLI_HOME) as doon.
+ // The installation directory and encrypted account directory are independent.
+ const store=new StateStore(),config=await store.config();
  if(config.origin!==expectedOrigin)throw Error('The configured company server differs from the requested upgrade server.');
  const session=await store.session(config);if(!session)throw Error('Run doon login with your own account, then retry this command.');
  async function read(endpoint,limit){
@@ -56,7 +70,7 @@ async function run(){
 run().catch(error=>{console.error(error?.code==='AUTH_REQUIRED'?'Run doon login, then retry.':error?.message||'Upgrade failed.');process.exitCode=1;});
 '@
  $DownloaderPath=Join-Path $Stage 'download.cjs';[IO.File]::WriteAllText($DownloaderPath,$Downloader,[Text.Encoding]::UTF8)
- & (Join-Path $ProgramRoot 'node.exe') $DownloaderPath $ProgramRoot $InstallRoot $Stage $ExpectedOrigin ([string]$Installed.version)
+ & (Join-Path $ProgramRoot 'node.exe') $DownloaderPath $ProgramRoot $Stage $ExpectedOrigin ([string]$Installed.version)
  if($LASTEXITCODE -ne 0){throw 'Authenticated upgrade download did not complete; the installed program was not changed.'}
  $Release=Get-Content -LiteralPath (Join-Path $Stage 'download.json') -Raw | ConvertFrom-Json
  if(-not $Release.updateAvailable){[Console]::WriteLine('Already current: '+$Release.version);return}

@@ -142,7 +142,9 @@ CLI 不自动重试写入、不跟随重定向、不关闭证书校验。只有�
 
 本机隔离验收、源码提交及限制见[执行记录](../docs/cli-execution-log.md)和[实施计划](../docs/cli-write-implementation-plan.md)。Actions 附件有保留期限，正式分发以管理员提供的包和摘要为准。
 
-0.42 没有 `doon update` 命令。管理员可单独发布 `windows/upgrade-legacy.ps1`，通过可信渠道给出 HTTPS 下载地址与独立 SHA-256；员工核对脚本摘要后，在 Windows PowerShell 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File <已核验脚本> -ExpectedOrigin <原公司HTTPS地址>`。脚本只访问升级查询与下载接口，使用旧客户端的凭据存储读取当前员工加密会话，不要求提供密码或复制会话文件；校验安装包与内部文件后原位更新，保留原配置、会话及旧版本。`-InstallRoot` 用于指定现有安装位置；`-DownloadOnly` 仅验证鉴权下载和摘要，不安装。登录失效时由员工本人先运行 `doon login`。首次升级后使用上面的原生升级命令。
+0.42 没有 `doon update` 命令。管理员可单独发布 `windows/upgrade-legacy.ps1`，通过可信渠道给出 HTTPS 下载地址与独立 SHA-256；员工将脚本下载到本机临时目录并核对摘要后，在 Windows PowerShell 执行 `powershell -NoProfile -ExecutionPolicy Bypass -File <已核验脚本> -ExpectedOrigin <原公司HTTPS地址>`。脚本只访问升级查询与下载接口，使用旧客户端的凭据存储读取当前员工加密会话，不要求提供密码或复制会话文件；校验安装包与内部文件后原位更新，保留原配置、会话及旧版本。登录失效时由员工本人先运行 `doon login`。首次升级后使用上面的原生升级命令。
+
+首次升级脚本优先定位当前 PATH 中的 `doon.cmd` 安装入口，支持不同盘符以及含空格、中文的安装目录；PATH 中没有入口时检查默认的 `%LOCALAPPDATA%\Doon\CLI`。配置和凭证按 CLI 自身规则独立定位（默认位于当前用户目录，已有 `DOON_CLI_HOME` 时使用该目录），不会把安装目录当成凭证目录。`-InstallRoot` 可明确指定未注册 PATH 的现有安装目录；`-DownloadOnly` 仅验证鉴权下载和摘要，不安装。只支持 Windows x64 正式安装器生成的 `bin` / `programs` 布局及当前用户可写的安装目录；遇到不符合布局的 PATH 入口会停止，不执行该入口或静默改装另一份。临时文件使用各电脑的系统临时目录，不要求固定盘符。
 
 ## 7. 仅供开发者：隔离验证
 
