@@ -25,7 +25,7 @@ export async function pmcPost(action:string,req:Request,s:State,m:Member){
   const updates=new Map<string,Order>(),originals=new Map<string,Order>(),seen=new Set<string>();
   for(const change of changes){
    const key=change.id+':'+change.col;if(seen.has(key))throw new AppError('同一单元格不能在一批中重复提交。');seen.add(key);
-   const o=order(s,m,change.id);originals.set(o.id,o);if(isFinishedOutsource(o)&&!['U','AB'].includes(change.col))throw new AppError('成品外发订单只在此表维护排期和状态备注，内部工序不报工。',403);if(!o.ledger&&!['U','AB'].includes(change.col))throw new AppError('此明细没有原表工序字段。');
+   const o=order(s,m,change.id);originals.set(o.id,o);if(isFinishedOutsource(o)&&!['T','U','AB'].includes(change.col))throw new AppError('成品外发订单只在此表维护排期和状态备注，内部工序不报工。',403);if(!o.ledger&&!['T','U','AB'].includes(change.col))throw new AppError('此明细没有原表工序字段。');
    let value=change.value.trim();if(change.col!=='AB'&&value&&value!=='-')try{value=processDate(value,`${change.col} · ${colLabels[change.col]}`);}catch(e){throw new AppError((e as Error).message);}
    const base=o.version===change.version?o:all(s,'audit').filter(r=>r.lineId===o.id).flatMap(r=>[r.before,r.after]).find(r=>r?.kind==='order'&&r.version===change.version);
    if(!base)throw new AppError('原版本已失效，请刷新并重新核对；本批未保存。',409);
@@ -33,7 +33,7 @@ export async function pmcPost(action:string,req:Request,s:State,m:Member){
    if(pmcValue(o,change.col)===value)continue;
    let next=updates.get(o.id)||{...o,extra:{...o.extra},version:o.version+1,updatedAt:now(),updatedBy:m.name};
    if(next.ledger){const columns={...next.ledger.columns,U:pmcValue(next,'U'),AB:pmcValue(next,'AB'),[change.col]:value};if(!isFinishedOutsource(next))Object.assign(columns,automaticDates(columns));next={...next,ledger:{...next.ledger,columns},extra:{...next.extra,[`${change.col} · ${colLabels[change.col]}`]:value}};}
-   if(change.col==='U')next.plannedDate=value==='-'?'':value;if(change.col==='AB')next.notes=value;
+   if(change.col==='T')next.requestedDate=value==='-'?'':value;if(change.col==='U')next.plannedDate=value==='-'?'':value;if(change.col==='AB')next.notes=value;
    if(next.ledger){next.extra['U · '+colLabels.U]=pmcValue(next,'U');next.extra['AB · '+colLabels.AB]=next.notes;}
    updates.set(o.id,next);
   }

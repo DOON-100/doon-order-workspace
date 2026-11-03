@@ -40,6 +40,12 @@ export async function testPmc({ok,call,state,original,admin,clerk,sales,pass}){
  const save=(o,col,value)=>({changes:[{id:o.id,version:o.version,col,value}]});
  assert.equal((await call('pmc-save',save(a,'U','2026-09-22'),clerk)).status,403);assert.equal((await call('pmc-data',undefined,sales)).status,403);assert.equal((await call('pmc-save',{changes:[{id:a.id,version:a.version,col:'BF',value:'999'}]})).status,400);
  assert.equal((await call('pmc-save',save(a,'U','2026-02-30'))).status,400);pass('PMC总表服务端拦截越权、非PMC工序与非法日期');
+ assert.equal((await call('pmc-save',save(a,'T','2027-01-20'),clerk)).status,403);
+ assert.equal((await call('pmc-save',save(a,'T','2027-02-30'))).status,400);
+ const beforeDate=a;await ok('pmc-save',save(a,'T','2027-01-20'));[a]=await getRows();assert.equal(a.requestedDate,'2027-01-20');assert.equal(a.ledger.columns.T,a.requestedDate);assert.equal(a.plannedDate,beforeDate.plannedDate);
+ assert.equal((await call('pmc-save',save(beforeDate,'T','2027-01-21'))).status,409);
+ await ok('pmc-save',save(a,'T',beforeDate.requestedDate));[a]=await getRows();
+ pass('PMC可更正客原交期，原表T同步，排期不变；文员越权、非法日期和旧版本覆盖被拦截');
  await ok('pmc-save',save(a,'U','2026-09-22'));await ok('pmc-save',save(a,'AB','先排期再记录状态'));
  [a,b,c]=await getRows();assert.equal(a.plannedDate,'2026-09-22');assert.equal(a.ledger.columns.U,a.plannedDate);assert.equal(a.notes,'先排期再记录状态');assert.equal(a.ledger.columns.AB,a.notes);assert.equal(b.notes,'原备注');
  assert.equal((await call('pmc-save',save(initialA,'AB','旧输入覆盖'))).status,409);pass('同键多行按稳定编号编辑，不同字段合并，同一字段过期修改被拦截');

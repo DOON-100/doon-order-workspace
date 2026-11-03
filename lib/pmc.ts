@@ -2,11 +2,11 @@ import {type Entity,type Order} from './domain';
 import {active,dateValue} from './ledger';
 import {inProductionScope,productionScope,type ProductionScope} from './manufacturing';
 
-export const pmcColumns=['U','AB','AC','AD','AE','AF'] as const;
+export const pmcColumns=['T','U','AB','AC','AD','AE','AF'] as const;
 export type PmcColumn=typeof pmcColumns[number];
 export type PmcRound=Entity&{kind:'pmc_round';actorId:string;actor:string;lineIds:string[];createdAt:string;lastLineId:string;scope:string;productionScope?:ProductionScope};
 export type PmcReview=Entity&{kind:'pmc_review';roundId:string;lineId:string;orderVersion:number;status:'done'|'pending';note:string;actor:string;updatedAt:string};
-export function pmcValue(o:Order,col:string){if(col==='U')return o.plannedDate|| (o.ledger?.columns.U==='-'?'-':'');if(col==='AB')return o.notes||'';const value=o.ledger?.columns[col]||'';return value==='-'?'-':dateValue(value)||value;}
+export function pmcValue(o:Order,col:string){if(col==='T')return o.requestedDate||'';if(col==='U')return o.plannedDate|| (o.ledger?.columns.U==='-'?'-':'');if(col==='AB')return o.notes||'';const value=o.ledger?.columns[col]||'';return value==='-'?'-':dateValue(value)||value;}
 // Keep each imported workbook in its original position; edits never affect row order.
 export function pmcOrder(orders:Order[]){
  const groups=new Map<string,number>();for(const o of orders){const key=o.ledger?.sourceHash||o.id;if(!groups.has(key))groups.set(key,groups.size);}

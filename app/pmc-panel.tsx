@@ -25,7 +25,7 @@ type MovableColumn=typeof defaultMovableColumns[number];
 const movableLabels:Record<MovableColumn,string>={productType:'产品类型',owner:'跟单员',U:'PMC排期',AB:'状态备注',color:'色号',lens:'镜片',quantity:'订单数',balance:'欠数',requestedDate:'客原交期',AC:'配件齐日期',AD:'板料齐期',AE:'配套齐料期',AF:'投产日',stage:'当前工序',close:'结单'};
 const movableWidths:Record<MovableColumn,number>={productType:125,owner:95,U:130,AB:290,color:110,lens:95,quantity:90,balance:90,requestedDate:120,AC:130,AD:130,AE:130,AF:130,stage:160,close:110};
 export function PmcPanel({data,openOrder,onDirtyChange,productionScope='internal'}:{productionScope?:ProductionScope;data:Data;openOrder:(o:Order)=>void;onDirtyChange:(dirty:boolean)=>void}){
- const external=productionScope==='external',editColumns:readonly PmcColumn[]=external?pmcColumns.filter(c=>c==='U'||c==='AB'):pmcColumns;
+ const external=productionScope==='external',editColumns:readonly PmcColumn[]=external?pmcColumns.filter(c=>c==='T'||c==='U'||c==='AB'):pmcColumns;
  const [factory,setFactory]=useState(''),[stage,setStage]=useState('');
  const [columnFilters,setColumnFilters]=useState<PmcColumnFilters>({});
  const cache=useQueryClient(),editable=broad(data.me),scroller=useRef<HTMLDivElement>(null),queue=useRef(Promise.resolve()),draftRef=useRef<Record<string,Draft>>({});
@@ -64,7 +64,7 @@ export function PmcPanel({data,openOrder,onDirtyChange,productionScope='internal
  }
  function nextUnreviewed(after?:string){const scope=round?.lineIds||[],at=after?scope.indexOf(after):-1,ordered=[...scope.slice(at+1),...scope.slice(0,at+1)],id=ordered.find(id=>['unreviewed','changed','pending'].includes(states.get(id)||''));if(id)jump(id,true);else setMessage('本轮已没有待核对、需复核或待处理明细。');}
  function begin(o:Order,col:PmcColumn){
-  if(!editable||busy||!editColumns.includes(col)||(!o.ledger&&!['U','AB'].includes(col)))return;const key=cellKey(o.id,col);
+  if(!editable||busy||!editColumns.includes(col)||(!o.ledger&&!['T','U','AB'].includes(col)))return;const key=cellKey(o.id,col);
   if(!draftRef.current[key])updateDrafts(old=>({...old,[key]:{id:o.id,col,version:o.version,value:pmcValue(o,col),original:pmcValue(o,col)}}));setEditing(key);setFocusRow(o.id);
  }
  async function refresh(){await Promise.all([cache.invalidateQueries({queryKey:['workspace']}),cache.invalidateQueries({queryKey:['pmc-progress']})]);}
@@ -99,12 +99,13 @@ export function PmcPanel({data,openOrder,onDirtyChange,productionScope='internal
   await run(async()=>{await request('pmc-review',{roundId:round.id,lineId:o.id,version:o.version,status,note});await reviews.refetch();setPending(null);setMessage(`原表第 ${o.ledger?.sourceRow||'—'} 行：${status==='done'?'已核对':'已登记待处理'}`);const next=round.lineIds.slice(round.lineIds.indexOf(o.id)+1).find(id=>['unreviewed','changed'].includes(states.get(id)||''));if(next)jump(next,true);});
  }
  function openBatch(ids:string[]){if(dirty){setError('请先处理未保存单元格，再批量修改。');return;}const selected=ids.map(id=>orderMap.get(id)).filter((o):o is Order=>!!o&&active(o));if(!selected.length||selected.length>100){setError('每批请选择 1 至 100 条明细。');return;}setBatch(selected);setBatchValue('');setBatchCol('U');setAppend(true);setError('');}
- function cell(o:Order,col:PmcColumn){const key=cellKey(o.id,col),draft=drafts[key],canEdit=editable&&editColumns.includes(col)&&(!!o.ledger||['U','AB'].includes(col)),value=draft?.value??pmcValue(o,col);
+ function cell(o:Order,col:PmcColumn){const key=cellKey(o.id,col),draft=drafts[key],canEdit=editable&&editColumns.includes(col)&&(!!o.ledger||['T','U','AB'].includes(col)),value=draft?.value??pmcValue(o,col);
   return <td key={col} className={'pmc-edit-cell '+(draft?.error?'cell-error':draft?.saving?'cell-saving':'')}>
    {editing===key&&draft?<textarea autoFocus rows={col==='AB'?3:1} aria-label={`编辑 ${o.ledger?.sourceRow||o.id} ${colLabels[col]}`} placeholder={col==='AB'?'输入状态备注':'YYYY-MM-DD / -'} value={draft.value} maxLength={3000} onFocus={e=>e.target.select()} onChange={e=>updateDrafts(old=>({...old,[key]:{...old[key],value:e.target.value,error:undefined}}))} onBlur={()=>{void save(key);}} onKeyDown={e=>{if(e.nativeEvent.isComposing)return;if(e.key==='Escape'){e.preventDefault();updateDrafts(old=>{const next={...old};delete next[key];return next;});setEditing('');}else if(e.key==='Tab'||(e.key==='Enter'&&!e.shiftKey)){e.preventDefault();const direction=e.key==='Enter'?'down':e.shiftKey?'prev':'next';void save(key).then(ok=>{if(ok)moveCell(o,col,direction);});}}}/>:<button type="button" className="pmc-cell-button" disabled={!canEdit||busy||draft?.saving} aria-label={`原表${o.ledger?.sourceRow||'新增'}行 ${colLabels[col]}：${value||'空白'}`} title={value||'点击填写'} onClick={()=>begin(o,col)}><span className={!value?'pmc-placeholder':''}>{value|| (canEdit?'点击填写':'—')}</span>{draft?.saving&&<small>保存中…</small>}{draft?.error&&<small>未保存 · 请核对</small>}</button>}
   </td>;
  }
  function movableHeader(key:MovableColumn){
+  if(key==='requestedDate')return <th className="pmc-owned" key={key} aria-label="客原交期">{filterHeading(key)}</th>;
   if((pmcColumns as readonly string[]).includes(key))return <th className="pmc-owned" key={key} aria-label={key+' '+colLabels[key]}>{filterHeading(key,<><small>{key}</small>{colLabels[key]}</>)}</th>;
   return <th key={key} aria-label={movableLabels[key]}>{filterHeading(key)}</th>;
  }
@@ -116,7 +117,7 @@ export function PmcPanel({data,openOrder,onDirtyChange,productionScope='internal
   if(key==='lens')return <td key={key}>{o.lens||'—'}</td>;
   if(key==='quantity')return <td key={key} className="pmc-number">{o.quantity}</td>;
   if(key==='balance')return <td key={key} className="pmc-number pmc-amber">{balance(o,data.reports)??'待核'}</td>;
-  if(key==='requestedDate')return <td key={key}>{o.requestedDate||'—'}</td>;
+  if(key==='requestedDate')return cell(o,'T');
   if(key==='close')return <td key={key} className="pmc-close-cell"><Button size="sm" variant="outline" disabled={!editable||busy} title={dirty?'将先自动保存待填单元格，再办理结单':'办理结单'} onClick={()=>void prepareClose(o)}><Archive size={14}/>{dirty?'保存后结单':'办理结单'}</Button></td>;
   return <td key={key}><span className="pmc-stage">{currentStage(o)}</span><small>入仓 {warehouse(o)??'待核'}</small></td>;
  }
