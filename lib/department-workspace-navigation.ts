@@ -30,7 +30,7 @@ export type WorkspaceDepartmentId=typeof departmentWorkspaceGroups[number]['id']
 const departmentRouteOrder:Record<WorkspaceDepartmentId,readonly string[]>={
  overview:['workbench','business-process','personal-tasks','dashboard','reports'],
  sales:['customers','customer-projects','process-rfq','sales','customer-quotes','customer-price-archive','mail','whatsapp','communications'],
- service:['service','service-workspace','service-followups','order-confirmations','factory-orders','kingdee-sales','production-orders','documents','process-complaint','completed'],
+ service:['service','order-confirmations','factory-orders','kingdee-sales','process-complaint','completed'],
  engineering:['ie-quotes','engineering-materials','engineering-drawings','process-sample','process-engineering-change'],
  planning:['production-planning','pmc-handoff','process-material-kit','pmc','planning-control','orders','mine'],
  purchasing:['supplier-workspace','supplier-pending','supplier-directory','supplier-followup','supplier-samples','supplier-kit','supplier-risk'],
@@ -88,6 +88,8 @@ export function departmentWorkspaceNavigation(items:readonly PlanningNavigationI
   if(visible.has('workbench'))visible.set('business-process',{id:'business-process',label:'端到端业务总览',icon:'project',view:'business-process',source:'process'});
   for(const item of departmentProcessEntries)if(item.parents.some(id=>visible.has(id)))visible.set('process-'+item.tab,{id:'process-'+item.tab,label:item.label,icon:item.icon,view:'process-workspace',context:{tab:item.tab},source:'process'});
  }
+ // Retired menu entries retain their existing routes and records for historical links.
+ for(const id of ['service-workspace','service-followups','production-orders','documents'])visible.delete(id);
  const claimed=new Set<string>();
  const groups=departmentWorkspaceGroups.map(group=>({...group,children:departmentRouteOrder[group.id].flatMap(id=>{const item=visible.get(id);if(!item||claimed.has(id))return [];claimed.add(id);return [item];})}));
  // Preserve newly supplied legacy entries even before a department placement is configured.

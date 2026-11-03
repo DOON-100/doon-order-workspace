@@ -23,12 +23,12 @@ assert.deepEqual(nav.departmentWorkspaceGroups.map(group=>group.label),['工作�
 for(const role of roles){
  const user=member(role,{departments:role==='clerk'?['finished','outsourcing']:[]}),items=nav.memberWorkspaceNavigation(user),before=JSON.stringify(items),groups=nav.departmentWorkspaceNavigation(items,user),result=leaves(groups);
  const legacy=flatten(nav.supplierWorkspaceNavigation(nav.productionPlanningNavigation(items,user),user));
- for(const item of legacy){const retained=result.filter(entry=>entry.view===item.id);assert.equal(retained.length,1,`${role}: ${item.id} stays reachable exactly once`);assert.equal(retained[0].label,item.label);}
+ for(const item of legacy.filter(item=>!['service-workspace','service-followups','production-orders','documents'].includes(item.id))){const retained=result.filter(entry=>entry.view===item.id);assert.equal(retained.length,1,`${role}: ${item.id} stays reachable exactly once`);assert.equal(retained[0].label,item.label);}
  assert.equal(new Set(result.map(item=>item.id)).size,result.length,'Each child has one unique UI ID');
  assert.equal(new Set(result.map(destination)).size,result.length,'Each destination has one department owner');
  assert(groups.every(group=>group.children.length&&group.children.every(item=>!item.children)),'Only two navigation levels');
  assert.equal(JSON.stringify(items),before,'Caller navigation remains unchanged');
- for(const id of ['documents','service-followups','shipment-followups','service-receivables','project-finance','payment-terms'])assert(result.some(item=>item.view===id),`Existing page ${id} is now direct`);
+ for(const id of ['shipment-followups','service-receivables','project-finance','payment-terms'])assert(result.some(item=>item.view===id),`Existing page ${id} is now direct`);
  for(const space of nav.productionPlanningSpaces)assert(result.some(item=>item.view===space.id));
  for(const space of nav.supplierWorkspaceSpaces)assert(result.some(item=>item.view===space.id));
  assert.equal(result.filter(item=>item.view==='process-workspace').length,14);
@@ -67,7 +67,9 @@ assert.equal(nav.matchDepartmentWorkspaceNavigation(groups,'process-workspace',{
 assert.equal(nav.matchDepartmentWorkspaceNavigation(groups,'process-workspace',{},'service').item.id,'process-rfq');
 assert.equal(nav.departmentWorkspaceBreadcrumb(groups,'process-workspace',{}).label,'需求与询价评估');
 assert.equal(nav.matchDepartmentWorkspaceNavigation(groups,'accounts',{}).item.view,'customers');
-assert.equal(nav.matchDepartmentWorkspaceNavigation(groups,'service',{tab:'service-followups'}).item.view,'service-followups');
+assert.equal(nav.matchDepartmentWorkspaceNavigation(groups,'service',{tab:'service-followups'}).item.view,'service');
+for(const id of ['service-workspace','service-followups','production-orders','documents'])assert(!leaves(groups).some(item=>item.id===id));
+assert.deepEqual(groups.find(g=>g.id==='service').children.map(x=>x.label),['客户订单','客户发票','生产订单','金蝶销售订单','客诉与整改闭环','已完成订单档案']);
 const sourceContext={recordId:'source-record',tab:'source-tab',customerId:'customer-a',projectId:'project-a',orderId:'order-a'},contextBefore=JSON.stringify(sourceContext);
 assert.deepEqual(nav.departmentWorkspaceNavigationContext(result.find(item=>item.id==='process-iqc'),sourceContext),{customerId:'customer-a',projectId:'project-a',orderId:'order-a',tab:'iqc'});
 assert.deepEqual(nav.departmentWorkspaceNavigationContext(result.find(item=>item.id==='pmc'),sourceContext),{customerId:'customer-a',projectId:'project-a',orderId:'order-a'});
@@ -83,7 +85,7 @@ pass('Unknown supplied routes remain available, and legacy grouped navigation gi
 
 const Icon=()=>createElement('svg',{'aria-hidden':true}),icons=Object.fromEntries([...groups.map(group=>group.icon),...result.map(item=>item.icon)].map(key=>[key,Icon]));
 const markup=(view,context={})=>renderToStaticMarkup(createElement(nav.SidebarProvider,null,createElement(nav.DepartmentWorkspaceNavigation,{items:all,member:user,view,activeView:nav.workspacePrimaryView(view),context,icons,onNavigate:()=>{}})));
-for(const item of result.filter(item=>!['sales','process-rfq'].includes(item.id))){
+for(const item of result.filter(item=>!['sales','process-rfq','service-workspace','service-followups','production-orders','documents'].includes(item.id))){
  const html=markup(item.view,item.context),match=nav.matchDepartmentWorkspaceNavigation(groups,item.view,item.context),domIds=[...html.matchAll(/\sid="([^"]+)"/g)].map(entry=>entry[1]);
  assert.equal(new Set(domIds).size,domIds.length,'No duplicate DOM IDs');
  const toggles=[...html.matchAll(/<button\b[^>]*class="department-navigation-toggle"[^>]*>/g)].map(entry=>entry[0]);
@@ -92,7 +94,7 @@ for(const item of result.filter(item=>!['sales','process-rfq'].includes(item.id)
  assert(toggles.find(toggle=>toggle.includes(`aria-label="收起${match.department.label}"`))?.includes('aria-expanded="true"'),'Current department opens on direct entry');
  assert.equal((html.match(/aria-current="page"/g)||[]).length,1,'Exactly one page is active');
  assert(html.includes(`aria-current="page" data-nav-id="${item.id}"`));
- for(const original of flatten(grouped).filter(item=>!['sales','process-rfq'].includes(item.id)))assert.equal((html.match(new RegExp(`data-nav-id="${original.id}"`,'g'))||[]).length,1);
+ for(const original of flatten(grouped).filter(item=>!['sales','process-rfq','service-workspace','service-followups','production-orders','documents'].includes(item.id)))assert.equal((html.match(new RegExp(`data-nav-id="${original.id}"`,'g'))||[]).length,1);
 }
 const blank=markup('process-workspace',{tab:'unknown'});assert(!blank.includes('aria-current="page"'),'Unknown process tabs do not mark a false current page');
 const defaultProcess=markup('process-workspace');assert(!defaultProcess.includes('data-nav-id="process-rfq"'));assert(!defaultProcess.includes('data-nav-id="sales"'));assert(defaultProcess.includes('微信'));
