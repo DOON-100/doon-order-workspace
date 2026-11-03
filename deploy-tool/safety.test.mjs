@@ -69,3 +69,9 @@ subprocess.check_output=lambda args,**kw: '123' if '--property=MainPID' in args 
  assert.equal((await python(program,config)).code,0);
  for(const patch of [{actual:other},{entry:'wrong-entry'},{commit:'b'.repeat(40)}])assert.notEqual((await python(program,{...config,...patch})).code,0);
 });
+
+test('HTTPS gateway health probes preserve trusted loopback proxy headers',async t=>{
+ const server=createServer((req,res)=>{const ok=req.headers.host==='gateway.test.invalid'&&req.headers['x-forwarded-host']==='gateway.test.invalid'&&req.headers['x-forwarded-proto']==='https'&&req.headers['x-forwarded-for']==='127.0.0.1';res.statusCode=ok?200:403;res.end(JSON.stringify({ok}));});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+ const config={origin:'http://127.0.0.1:'+server.address().port,host:'gateway.test.invalid',attempts:1};const program='import urllib.request,time\n'+verifyReleaseProgram.slice(verifyReleaseProgram.indexOf('opener='));
+ assert.notEqual((await python(program,config)).code,0);assert.equal((await python(program,{...config,proxyHttps:true})).code,0);
+});

@@ -38,3 +38,6 @@ node --test deploy-tool/safety.test.mjs
 ```
 
 测试只使用临时目录、合成数据库和本机随机端口，覆盖配置校验、WAL 备份、重复目录保护、配置排序、HTTP 错误及运行版本校验，不连接或部署真实服务器。
+
+员工 HTTPS 反向代理入口可在私有 local-config.json 中设置 proxyHttps: true，并将 healthHost 设为实际公开主机名。健康检查仍直连服务器回环地址，附带网关要求的 HTTPS 代理头；不会关闭网关校验。
+

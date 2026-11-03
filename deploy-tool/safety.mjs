@@ -85,7 +85,11 @@ opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
 def probe():
  for endpoint in ['/health','/']:
   url=cfg['origin']+endpoint
-  request=urllib.request.Request(url,headers={'Host':cfg['host']})
+  headers={'Host':cfg['host']}
+  if cfg.get('proxyHttps'):
+   assert cfg['origin'].startswith('http://127.0.0.1:'), 'Proxy health probe must use loopback'
+   headers.update({'X-Forwarded-Host':cfg['host'],'X-Forwarded-Proto':'https','X-Forwarded-For':'127.0.0.1'})
+  request=urllib.request.Request(url,headers=headers)
   with opener.open(request,timeout=5) as response:
    assert response.status==200 and response.geturl()==url, 'HTTP verification failed'
    if endpoint=='/health': assert json.load(response).get('ok') is True, 'Unhealthy response'

@@ -333,7 +333,7 @@ async function deploy(v, instance, region) {
 
   head('8. 验证上线');
   let verifiedDeployment=false;
-  await wbExec(instance,region,pythonCommand(verifyReleaseProgram,{service:SERVICE,releaseDir,commit:v.commit,origin:'http://127.0.0.1:8787',host:deploymentConfig.healthHost}),{onLine:line=>{echo(line);if(line==='DEPLOYMENT_VERIFIED')verifiedDeployment=true;},timeoutMs:120000});
+  await wbExec(instance,region,pythonCommand(verifyReleaseProgram,{service:SERVICE,releaseDir,commit:v.commit,origin:'http://127.0.0.1:8787',host:deploymentConfig.healthHost,proxyHttps:deploymentConfig.proxyHttps===true}),{onLine:line=>{echo(line);if(line==='DEPLOYMENT_VERIFIED')verifiedDeployment=true;},timeoutMs:120000});
   if(!verifiedDeployment)throw Error('未确认运行版本和HTTP健康状态，不能报告部署成功');
   ok('验证完成');
 
