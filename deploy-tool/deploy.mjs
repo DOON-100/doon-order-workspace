@@ -28,6 +28,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ============ 配置 ============
 const deploymentConfig=loadConfig();
 const WB=deploymentConfig.workbench;
+const PYTHON=process.env.DOON_DEPLOY_PYTHON||(process.platform==='win32'?'python':'python3');
 const DEFAULT_INSTANCE=deploymentConfig.instance||'';
 const DEFAULT_REGION=deploymentConfig.region||'';
 const RELEASES_DIR=deploymentConfig.releasesDir;
@@ -94,13 +95,13 @@ function sha256Buf(buf) {
 
 // 用 python3 解 zip（Node 无内置 unzip，python 有 zipfile 模块）
 function pyUnzip(zipPath, outDir) {
-  return runCmd('python3', ['-c',
+  return runCmd(PYTHON, ['-c',
     `import zipfile,sys;zipfile.ZipFile(${JSON.stringify(zipPath)}).extractall(${JSON.stringify(outDir)})`],
     { silent: true });
 }
 function pyListZip(zipPath) {
   return new Promise((res, rej) => {
-    const p = spawn('python3', ['-c',
+    const p = spawn(PYTHON, ['-c',
       `import zipfile,json;z=zipfile.ZipFile(${JSON.stringify(zipPath)});print(json.dumps([{"n":i.filename,"s":i.file_size} for i in z.infolist()]))`]);
     let out = '', err = '';
     p.stdout.on('data', (d) => out += d);

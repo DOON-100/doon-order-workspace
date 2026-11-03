@@ -41,3 +41,4 @@ node --test deploy-tool/safety.test.mjs
 
 员工 HTTPS 反向代理入口可在私有 local-config.json 中设置 proxyHttps: true，并将 healthHost 设为实际公开主机名。健康检查仍直连服务器回环地址，附带网关要求的 HTTPS 代理头；不会关闭网关校验。
 
+Windows 本地解包默认使用 python，其他系统使用 python3；可用 DOON_DEPLOY_PYTHON 指定已安装的 Python 解释器，避免命中 Windows 商店占位程序。
