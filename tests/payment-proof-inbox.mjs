@@ -1,0 +1,24 @@
+import {build} from 'esbuild';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+await fs.mkdir('test-output',{recursive:true});
+const files=new Map();let written=[];
+globalThis.proofTest={files,commit:async(revision,rows)=>{if(revision!==7)throw Error('version conflict');written=rows;}};
+await build({entryPoints:['lib/payment-proof-inbox.ts'],outfile:'test-output/payment-proof-test.mjs',bundle:true,platform:'node',format:'esm',packages:'external',plugins:[{name:'isolated-store',setup(b){b.onResolve({filter:/^\.\/store$/},()=>({path:'store',namespace:'fake'}));b.onLoad({filter:/.*/,namespace:'fake'},()=>({contents:`export class AppError extends Error{constructor(m,status=400){super(m);this.status=status}};export const audit=(m,t,b,a,s,after)=>({id:'audit',kind:'audit',after});export const json=v=>Response.json(v);export const commit=(...a)=>globalThis.proofTest.commit(...a);export const bucket=()=>({put:async(k,v)=>globalThis.proofTest.files.set(k,v),get:async k=>globalThis.proofTest.files.has(k)?{body:globalThis.proofTest.files.get(k)}:null});`}));}}]});
+const api=await import('../test-output/payment-proof-test.mjs');
+const admin={id:'admin',role:'admin',active:true},s={revision:7,records:[]};
+const metadata={group:'Synthetic group',sender:'Synthetic sender',messageTime:'2026-11-03T09:48:05+08:00',caption:'customer conflict'};
+function request(meta=metadata,bytes=[255,216,255,0]){const f=new FormData();f.set('metadata',typeof meta==='string'?meta:JSON.stringify(meta));f.set('file',new File([new Uint8Array(bytes)],'proof.jpg'));return new Request('https://test.invalid',{method:'POST',body:f});}
+await assert.rejects(()=>api.proofInboxPost('payment-proof-upload',request(),s,{...admin,role:'sales'}),/管理员/);
+await assert.rejects(()=>api.proofInboxPost('payment-proof-upload',request(),{...s,records:[{id:'grant',kind:'ar_access_grant',active:true,memberId:admin.id,readOnly:true}]},admin),/只读/);
+await assert.rejects(()=>api.proofInboxGet('payment-proof-inbox',new Request('https://test.invalid'),s,{...admin,active:false}),/管理员/);
+await assert.rejects(()=>api.proofInboxPost('payment-proof-upload',request('{'),s,admin),/格式/);
+await assert.rejects(()=>api.proofInboxPost('payment-proof-upload',request(metadata,[1,2,3]),s,admin),/JPEG/);
+const result=await(await api.proofInboxPost('payment-proof-upload',request(),s,admin)).json();
+assert.equal(result.item.status,'待核对');assert.equal(result.item.customerId,'');assert.equal(result.item.receivableId,'');assert.equal(result.item.fileKey,undefined);
+assert.deepEqual(written.map(r=>r.kind),['payment_proof_inbox','audit']);assert.equal(written[1].after.caption,undefined);
+const saved=written[0];s.records=[saved];const prior=written;
+assert.equal((await(await api.proofInboxPost('payment-proof-upload',request(),s,admin)).json()).duplicate,true);assert.equal(written,prior);
+const download=await api.proofInboxGet('payment-proof-file',new Request('https://test.invalid?id='+saved.id),s,admin);assert.deepEqual(new Uint8Array(await download.arrayBuffer()),new Uint8Array([255,216,255,0]));
+assert.equal(s.records.length,1);assert.equal(s.records[0],saved);
+console.log('PASS 凭证权限、未知客户归档、原图回读、去重、审计脱敏、坏文件和坏元数据拒绝');

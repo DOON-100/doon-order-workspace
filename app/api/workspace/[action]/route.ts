@@ -39,6 +39,7 @@ import {projectCollaborationGet,projectCollaborationPost} from '@/lib/project-co
 import {customerProjectFollowupGet,customerProjectFollowupPost} from '@/lib/customer-project-followup-api';
 import {unifiedCommunicationGet,unifiedCommunicationPost} from '@/lib/unified-communication-api';
 import {handoffBusinessGet,handoffBusinessPost} from '@/lib/handoff-business-api';
+import {proofInboxGet,proofInboxPost} from '@/lib/payment-proof-inbox';
 import {frameworkGet,frameworkPost} from '@/lib/handoff-framework-api';
 import {planningControlGet,planningControlPost} from '@/lib/planning-control-api';
 import {customerWorkflowGet,customerWorkflowPost} from '@/lib/customer-workflow-api';
@@ -140,6 +141,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const kingdeeSync=await kingdeeSyncGet(action,req,s,m);if(kingdeeSync)return kingdeeSync;
  const kingdeeQuery=await kingdeeReadonlyGet(action,req,m);if(kingdeeQuery)return kingdeeQuery;
  const pendingPurchase=await kingdeePendingGet(action,req,s,m);if(pendingPurchase)return pendingPurchase;
+ const proofInbox=await proofInboxGet(action,req,s,m);if(proofInbox)return proofInbox;
  const handoffBusiness=await handoffBusinessGet(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkGet(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowGet(action,req,s,m);if(customerWorkflow)return customerWorkflow;
@@ -250,6 +252,7 @@ export async function POST(req:Request,ctx:Context){try{
  if(m.role==='supplier')throw new AppError('供应商只能提交自己的成品外发进度。',403);
  const kingdeeSync=await kingdeeSyncPost(action,req,s,m);if(kingdeeSync)return kingdeeSync;
  const pendingPurchase=await kingdeePendingPost(action,req,s,m);if(pendingPurchase)return pendingPurchase;
+ const proofInbox=await proofInboxPost(action,req,s,m);if(proofInbox)return proofInbox;
  const handoffBusiness=await handoffBusinessPost(action,req,s,m);if(handoffBusiness)return handoffBusiness;
  const framework=await frameworkPost(action,req,s,m);if(framework)return framework;
  const customerWorkflow=await customerWorkflowPost(action,req,s,m);if(customerWorkflow)return customerWorkflow;
