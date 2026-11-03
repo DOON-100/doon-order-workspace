@@ -41,7 +41,15 @@ export function drawingCustomers(s:State,m:Member){return (all(s,'customer_accou
 export function canReadDrawing(s:State,m:Member,r:EngineeringDrawing){if(!m.active||r.kind!=='engineering_drawing')return false;if(canManageDrawings(m))return true;const c=all(s,'customer_account').find(c=>c.id===r.customerId) as CustomerAccount|undefined;return !!c&&(canApproveDrawings(m)||assignedDrawingCustomer(m,c));}
 export function canEditDrawingRequest(s:State,m:Member,r:EngineeringDrawing){if(canManageDrawings(m))return true;if(['已完成','已交接','已取消','历史待核对'].includes(r.status))return false;const c=all(s,'customer_account').find(c=>c.id===r.customerId) as CustomerAccount|undefined;return !!c&&assignedDrawingCustomer(m,c);}
 export function canCreateDrawings(s:State,m:Member){return canManageDrawings(m)||drawingCustomers(s,m).some(c=>assignedDrawingCustomer(m,c));}
-export function publicDrawing(s:State,m:Member,r:EngineeringDrawing){return {...r,canEdit:canEditDrawingRequest(s,m,r),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m)};}
+export function canDeleteDrawing(s:State,m:Member,r:EngineeringDrawing){return canReadDrawing(s,m,r)&&(canManageDrawings(m)||r.createdBy===m.id&&canEditDrawingRequest(s,m,r));}
+const deletionDependencies=new WeakMap<State,Map<string,string>>();
+export function drawingDeleteBlockedReason(s:State,r:EngineeringDrawing){
+ if(r.approval==='通过'||['已完成','已交接'].includes(r.status))return '已审批完成或交接的记录不能直接删除。';
+ let dependencies=deletionDependencies.get(s);
+ if(!dependencies){dependencies=new Map();for(const row of s.records){if(row.kind==='engineering_sop')dependencies.set(row.drawingRecordId,'已关联 SOP，不能删除画图需求。');else if(['engineering_drawing_event','engineering_drawing_detail'].includes(row.kind)&&!dependencies.has(row.recordId))dependencies.set(row.recordId,'已有邮件事件或需求明细，不能直接删除。');}deletionDependencies.set(s,dependencies);}
+ return dependencies.get(r.id)||'';
+}
+export function publicDrawing(s:State,m:Member,r:EngineeringDrawing){const allowed=canDeleteDrawing(s,m,r),reason=allowed?drawingDeleteBlockedReason(s,r):'';return {...r,canEdit:canEditDrawingRequest(s,m,r),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canDelete:allowed&&!reason,...(reason?{deleteBlockedReason:reason}:{})};}
 export function drawingRevision(record:EngineeringDrawing,actor:{id:string;name:string},action:string):DrawingRevision{return {id:newId('drawing_revision'),kind:'engineering_drawing_revision',recordId:record.id,customerId:record.customerId,version:record.version,action,actorId:actor.id,actor:actor.name,createdAt:record.updatedAt,snapshot:structuredClone(record)};}
 export function createDrawing(fields:DrawingFields,actor:{id:string;name:string},source:DrawingSource={type:'manual'},at=now()):EngineeringDrawing{return {...fields,id:newId('drawing'),kind:'engineering_drawing',version:1,source,legacyNeedsReview:false,approvalNote:'',approvalBy:'',approvalAt:'',createdAt:at,updatedAt:at,updatedBy:actor.name,createdBy:actor.id};}
 

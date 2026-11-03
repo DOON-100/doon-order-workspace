@@ -5,6 +5,7 @@ import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
 import {isDrawingChangeType,planSopObligation} from './engineering-sop';
 import {drawingRequesters,validateDrawingRequester} from './drawing-requesters';
+import {canDeleteDrawing,drawingDeleteBlockedReason} from './engineering-drawings';
 import {assignedDrawingCustomer,assertDrawingLifecycle,buildImportedDrawings,canApproveDrawings,canCreateDrawings,canEditDrawingRequest,canManageDrawings,canReadDrawing,createDrawing,drawingCustomers,drawingDefaultFields,drawingExecutionFields,drawingFieldsSchema,drawingRequestFields,drawingRevision,drawingSaveSchema,publicDrawing,type DrawingEvent,type EngineeringDrawing} from './engineering-drawings';
 
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const r=schema.safeParse(value);if(!r.success)throw new AppError(r.error.issues.slice(0,4).map(i=>`${i.path.join('.')||'内容'}：${i.message}`).join('；'));return r.data;}
@@ -12,7 +13,7 @@ const id=z.string().trim().min(1).max(800),version=z.number().int().positive();
 const text=(max=3000)=>z.string().trim().max(max).default('');
 function stable(value:unknown):unknown{if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,stable(v)]));return value;}
 async function fingerprint(value:unknown){return sha(JSON.stringify(stable(value)));}
-function readable(s:State,m:Member,id:string):EngineeringDrawing{const r=all(s,'engineering_drawing').find(r=>r.id===id) as EngineeringDrawing|undefined;if(!r||!canReadDrawing(s,m,r))throw new AppError('画图需求不存在或不在你的客户权限范围内。',403);return r;}
+function readable(s:State,m:Member,id:string,includeDeleted=false):EngineeringDrawing{const item=s.records.find(r=>r.id===id&&(r.kind==='engineering_drawing'||includeDeleted&&r.kind==='engineering_drawing_deleted')),r=item?{...item,kind:'engineering_drawing'} as EngineeringDrawing:undefined;if(!r||!canReadDrawing(s,m,r))throw new AppError('画图需求不存在或不在你的客户权限范围内。',403);return r;}
 function current(r:EngineeringDrawing,v:number|undefined){if(r.version!==v)throw new AppError('这条画图需求已被更新，请刷新核对后再保存；本次没有覆盖。',409);}
 function lifecycle(r:EngineeringDrawing){try{assertDrawingLifecycle(r);}catch(e){throw new AppError((e as Error).message);}}
 function account(s:State,m:Member,customerId:string){const c=all(s,'customer_account').find(c=>c.id===customerId) as CustomerAccount|undefined;if(!c?.active)throw new AppError('请选择有效客户责任档案。');if(!canManageDrawings(m)&&!assignedDrawingCustomer(m,c))throw new AppError('只能提交明确绑定给本人的客户需求。',403);return c;}
@@ -46,19 +47,31 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
    details:all(s,'engineering_drawing_detail').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canToggleApproval:await canToggleDrawingApproval(m)});
  }
- const record=readable(s,m,new URL(req.url).searchParams.get('id')||'');
+ const record=readable(s,m,new URL(req.url).searchParams.get('id')||'',true);
  return json({history:all(s,'engineering_drawing_revision').filter(r=>r.recordId===record.id&&r.snapshot&&canReadDrawing(s,m,r.snapshot)).sort((a,b)=>b.version-a.version),
   events:all(s,'engineering_drawing_event').filter(e=>e.recordId===record.id&&e.customerId===record.customerId),details:all(s,'engineering_drawing_detail').filter(e=>e.recordId===record.id&&e.customerId===record.customerId)});
 }
 
 export async function engineeringDrawingPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['drawing-save','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
+ if(!['drawing-save','drawing-delete','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
+ if(action==='drawing-delete'){
+  const input=parse(z.object({id,version,reason:z.string().trim().min(1).max(1000)}).strict(),await req.json());
+  const before=readable(s,m,input.id,true);
+  if(!canDeleteDrawing(s,m,before))throw new AppError('只有工程维护人员或有当前客户编辑权限的创建者可以删除。',403);
+  const archived=s.records.find(r=>r.id===input.id&&r.kind==='engineering_drawing_deleted');
+  if(archived){if(archived.deletedBy!==m.id||archived.version!==input.version+1||archived.deleteReason!==input.reason)throw new AppError('这条记录已删除，请刷新核对。',409);return json({ok:true,id:input.id,deleted:true,idempotent:true,version:archived.version});}
+  current(before,input.version);
+  const blocked=drawingDeleteBlockedReason(s,before);if(blocked)throw new AppError(blocked,409);
+  const next=advance(before,m),deleted={...next,kind:'engineering_drawing_deleted',deletedAt:now(),deletedBy:m.id,deleteReason:input.reason};
+  await commit(s.revision,[deleted,drawingRevision(next,m,'删除画图跟进记录：'+input.reason),audit(m,deleted,before,'删除画图跟进记录：'+input.reason,'工程画图工作台')]);
+  return json({ok:true,id:input.id,deleted:true,version:deleted.version});
+ }
  if(action==='drawing-email-intake')return emailIntake(s,m,await req.json());
  if(action==='drawing-import'){
   if(m.role!=='admin')throw new AppError('只有管理员可导入历史工程表。',403);
   let built:ReturnType<typeof buildImportedDrawings>;try{built=buildImportedDrawings(await req.json(),m);}catch(e){throw new AppError(e instanceof z.ZodError?e.issues.slice(0,3).map(i=>i.message).join('；'):(e as Error).message);}
   const fresh:EngineeringDrawing[]=[];
-  for(const r of built.records){if(r.customerId)account(s,m,r.customerId);const existing=s.records.find(e=>e.id===r.id);if(existing){if(existing.kind!=='engineering_drawing'||existing.source?.hash!==r.source.hash||existing.source?.sheet!==r.source.sheet||existing.source?.row!==r.source.row||JSON.stringify(stable(existing.source?.rawColumns))!==JSON.stringify(stable(r.source.rawColumns)))throw new AppError('历史来源标识或原始单元格内容冲突。',409);}else fresh.push(r);}
+  for(const r of built.records){if(r.customerId)account(s,m,r.customerId);const existing=s.records.find(e=>e.id===r.id);if(existing){if(!['engineering_drawing','engineering_drawing_deleted'].includes(existing.kind)||existing.source?.hash!==r.source.hash||existing.source?.sheet!==r.source.sheet||existing.source?.row!==r.source.row||JSON.stringify(stable(existing.source?.rawColumns))!==JSON.stringify(stable(r.source.rawColumns)))throw new AppError('历史来源标识或原始单元格内容冲突。',409);}else fresh.push(r);}
   if(fresh.length){const ids=new Set(fresh.map(r=>r.id));await commit(s.revision,[...fresh,...built.revisions.filter(r=>ids.has(r.recordId)),...fresh.map(r=>audit(m,r,null,'导入工程画图原表','历史迁移'))]);}
   return json({ok:true,imported:fresh.length,skipped:built.records.length-fresh.length});
  }

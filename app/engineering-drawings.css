@@ -70,3 +70,14 @@
 .ed-calendar-footer button{padding:5px 9px;border:0;border-radius:6px;background:transparent;font-size:12px;color:#287452;cursor:pointer}
 .ed-calendar-footer button:hover{background:#edf6f0}
 .ed-calendar-footer button:disabled{opacity:.35;cursor:default}
+.ed-customer-cell{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0}
+.ed-customer-cell>.ed-cell-text,.ed-customer-cell>.ed-cell-editor{flex:1;min-width:0}
+.ed-delete-row{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:28px;padding:0;border:0;border-radius:5px;background:transparent;color:#8c9b94;cursor:pointer}
+.ed-delete-row:hover:not(:disabled){background:#fff0ed;color:#b34032}
+.ed-delete-row:focus-visible{outline:2px solid #b34032;outline-offset:2px}
+.ed-delete-row:disabled{opacity:.4;cursor:not-allowed}
+.ed-delete-summary{display:grid;gap:8px;padding:12px;background:#f6f8f7;border-radius:8px;font-size:13px;max-height:260px;overflow:auto}
+.ed-delete-summary>div{display:grid;grid-template-columns:90px minmax(0,1fr);gap:10px}
+.ed-delete-summary dt{color:#687d72}.ed-delete-summary dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+.ed-delete-reason{display:grid;gap:6px;font-size:13px}
+.ed-delete-reason input{width:100%;border:1px solid #ccd9d5;border-radius:6px;padding:9px 11px}
