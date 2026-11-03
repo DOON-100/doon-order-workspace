@@ -9,7 +9,7 @@ import type {WorkspaceNavigationContext,WorkspaceNavigate} from '@/lib/handoff-n
 import type {Data} from './workspace';
 import './project-collaboration-panel.css';
 
-const steps={directory:'项目资料目录',overview:'需求与款色',communication:'沟通与待办',drawings:'图纸与客批',quotes:'报价版本',samples:'样办与寄样',finance:'费用与收款',documents:'PI / CI 单据',orders:'大货交接','after-sales':'售后与额外费用'};
+const steps={directory:'项目清单',overview:'需求与款色',communication:'沟通与待办',drawings:'图纸与客批',quotes:'报价版本',samples:'样办与寄样',finance:'费用与收款',documents:'PI / CI 单据',orders:'大货交接','after-sales':'售后与额外费用'};
 const departments={sales:'业务',service:'客服',pmc:'PMC',purchasing:'采购',engineering:'工程',factory:'工厂 / 文员',finance:'财务',other:'其他部门'};
 const statuses={open:'待处理',in_progress:'进行中',blocked:'受阻',done:'已完成',cancelled:'已取消'};
 const historyActions={create:'建立待办',save:'修改待办',assign:'调整负责人',followup:'跟进回复',complete:'确认完成',cancel:'取消待办',acknowledge:'已阅反馈',transfer:'移交负责人'};
@@ -45,7 +45,7 @@ export function ProjectStepCollaboration({projectId,roundId,stepKey,onDirtyChang
 }
 function TaskWorkspace({data,projectId='',roundId='',stepKey='directory',onDirtyChange,onChanged,onNavigate,initialContext}:Props){
  const cache=useQueryClient(),personal=!projectId,actor=data?.me.id||'project',revision=data?.revision||0,scope=[actor,projectId,roundId,stepKey].join('|');
- const [queue,setQueue]=useState('pending'),[search,setSearch]=useState(''),[allSteps,setAllSteps]=useState(false),[selectedId,setSelectedId]=useState('');
+ const [queue,setQueue]=useState('pending'),[search,setSearch]=useState(''),[allSteps,setAllSteps]=useState(true),[selectedId,setSelectedId]=useState('');
  const [draft,setDraft]=useState<Draft|null>(null),[reply,setReply]=useState<Reply|null>(null),[pending,setPending]=useState<Submission|null>(null),[busy,setBusy]=useState(false);
  const [navigationRequest,setNavigationRequest]=useState<{scope:string;taskId:string;context:WorkspaceNavigationContext}|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[refreshWarning,setRefreshWarning]=useState(''),[discardPrompt,setDiscardPrompt]=useState('');
