@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {all,canRead,clean,newId,now,strictDate,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
+import {personnelTypeOf,all,canRead,clean,newId,now,strictDate,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
 import {AppError,audit,bucket,commit,json} from './store';
 import {sha} from './workbooks';
 import {serviceOrderCustomerKeys} from './service-workspace';
@@ -17,6 +17,7 @@ const qty=z.number().int().positive().max(10_000_000),scope=z.array(z.object({it
 const mutation={id:id.optional(),version:z.number().int().positive().optional(),token:token.optional()};
 const append={token,projectId:id,roundId:text(160)};
 export const customerProjectSchemas={
+ 'prospect-create':z.object({token,customerName:id,title:id,teamId:id,description:text(10000)}).strict(),
  trash:z.object({id,version:z.number().int().positive(),token,reason:z.string().trim().min(1).max(2000)}).strict(),
  restore:z.object({id,version:z.number().int().positive(),token}).strict(),
  'assignment-roster-save':z.object({...mutation,token,serviceFollowerIds:ids.removeDefault(),salesReviewerIds:ids.removeDefault()}).strict(),
@@ -174,6 +175,21 @@ export async function customerProjectPost(action:string,req:Request,s:State,m:Me
   const before=rows[0]||null;if(before)fresh(before,input.version);else if(input.version!==undefined)throw new AppError('项目人员名单尚未建立，请刷新后重试。',409);
   const item={...before,id:customerProjectAssignmentRosterId,kind:'customer_project_assignment_roster',serviceFollowerIds:input.serviceFollowerIds,salesReviewerIds:input.salesReviewerIds,...meta(m,before||undefined)};
   return persist(s,m,action,input,item,before);
+ }
+ if(name==='prospect-create'){
+  if(!['admin','sales','clerk','pmc'].includes(m.role)||personnelTypeOf(m)!=='internal')throw new AppError('仅内部业务人员可建立潜在客户项目。',403);
+  const team=all(s,'customer_project_team').find(t=>t.id===input.teamId&&t.active);
+  if(!team||m.role!=='admin'&&![...(team.leaderIds||[]),...(team.salesMemberIds||[]),...(team.serviceMemberIds||[])].includes(m.id))throw new AppError('只能在本人所属的启用工作组建立潜在客户。',403);
+  const prior=input.token&&all(s,'customer_project_request').find(r=>r.id==='customer_project_request_'+input.token);if(prior)requireProject(s,m,prior.resultId);
+  const repeated=await replay(s,m,action,input);if(repeated)return repeated;
+  if(all(s,'customer_account').some(c=>projectKey(c.customer)===projectKey(input.customerName)))throw new AppError('同名客户已建档，请从已有客户中选择，或联系管理员核对归属。',409);
+  const valid=(ids:string[])=>ids.filter(id=>{const row=all(s,'member').find(x=>x.id===id) as Member|undefined;return !!row&&row.active&&personnelTypeOf(row)==='internal';});
+  const sales=valid([...new Set<string>([...(team.salesMemberIds||[]),...(team.leaderIds||[])])]),services=valid(team.serviceMemberIds||[]);
+  if(!sales.length&&!services.length)throw new AppError('工作组尚无有效内部负责人，请先配置工作组。');
+  const customer={id:newId('customer_account'),kind:'customer_account',customer:input.customerName,customerCode:'',salesName:'',serviceName:'',pmcName:'',salesMemberIds:sales,serviceMemberIds:services,quoteMemberIds:[],active:true,notes:'潜在客户 · 客户开发工作台新建',version:1,createdAt:now(),updatedAt:now(),updatedBy:m.name};
+  const item={id:newId('customer_project'),kind:'customer_project',customerId:customer.id,code:'',title:input.title,description:input.description,teamId:team.id,salesMemberId:sales.includes(m.id)?m.id:sales[0]||'',serviceMemberIds:services,serviceMemberId:services[0]||'',serviceReviewerId:'',salesReviewerId:'',dueDate:'',status:'active',...meta(m)};
+  const updatedTeam={...team,customerIds:[...team.customerIds,customer.id],...meta(m,team)};
+  return persist(s,m,action,input,item,null,[customer,updatedTeam,audit(m,customer,null,'建立无编号潜在客户','客户项目'),audit(m,updatedTeam,team,'潜在客户归入本组','客户项目')]);
  }
  if(name==='team-save'){
   if(m.role!=='admin')throw new AppError('仅管理员可维护客户业务小组。',403);const repeated=await replay(s,m,action,input);if(repeated)return repeated;const before=existingOrNew(s,m,'customer_project_team',input);

@@ -1,4 +1,4 @@
-import {all,type Entity,type Member,type State} from './domain';
+import {personnelTypeOf,all,type Entity,type Member,type State} from './domain';
 import {projectAccess,projectServiceMemberIds,type CustomerProject} from './customer-projects';
 
 // Confirmed collaboration policy: assignment grants access to this task only.
@@ -22,7 +22,7 @@ export type ProjectCollaborationTaskDto=ProjectCollaborationTask&ProjectCollabor
 export type ProjectCollaborationFeed={tasks:ProjectCollaborationTaskDto[];members:Pick<Member,'id'|'name'|'role'>[];canAssign:boolean};
 
 export function collaborationTaskOpen(task:{status?:unknown}):boolean{return ['open','in_progress','blocked'].includes(String(task.status));}
-export function eligibleCollaborationOwner(member:Member|undefined|null):member is Member{return !!member&&member.active&&member.role!=='supplier';}
+export function eligibleCollaborationOwner(member:Member|undefined|null):member is Member{return !!member&&member.active&&member.role!=='supplier'&&personnelTypeOf(member)==='internal';}
 export function collaborationTaskProject(s:State,task:Pick<ProjectCollaborationTask,'projectId'|'customerId'>):CustomerProject|undefined{
  return all(s,'customer_project').find(p=>p.id===task.projectId&&p.customerId===task.customerId) as CustomerProject|undefined;
 }
