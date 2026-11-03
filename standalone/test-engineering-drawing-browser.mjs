@@ -146,6 +146,30 @@ try{
  await page.unroute('**/api/workspace/drawing-data',denyDrawing);await page.getByRole('button',{name:'重新读取工程资料',exact:true}).click();await page.locator('.ed-table').waitFor();
  assert.equal(JSON.stringify((await api('workspace/drawing-data')).records),preservedRecords);
  pass('画图权限读取失败立即隐藏旧表，重新核对后恢复且不写入原数据');
+ const deleteFixture=(await api('workspace/drawing-save',{token:crypto.randomUUID(),tableEntry:true,customerCode:'SYN-DELETE',requestedDate:today,drawingNotes:'合成待删除需求'})).record;
+ await page.getByRole('button',{name:'刷新',exact:true}).click();await wrap.evaluate(el=>{el.scrollLeft=0;});
+ const deleteButton=page.getByRole('button',{name:`删除画图记录 SYN-DELETE ${today}`,exact:true});await deleteButton.waitFor();
+ await board();await page.locator('.etb-card').filter({hasText:'SYN-DELETE'}).waitFor();await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await deleteButton.waitFor();
+ assert.equal(await page.locator('.ed-table thead th').count(),13);
+ await deleteButton.click();const deletion=page.getByRole('alertdialog',{name:'删除这条画图记录？',exact:true});
+ await deletion.waitFor();assert.match(await deletion.innerText(),/合成待删除需求/);assert.match(await deletion.innerText(),/SYN-DELETE/);
+ await page.screenshot({path:path.join(dir,'engineering-delete-confirmation.png'),fullPage:false,animations:'disabled'});
+ await deletion.getByRole('button',{name:'取消',exact:true}).click();assert((await api('workspace/drawing-data')).records.some(r=>r.id===deleteFixture.id));
+ const failDelete=route=>route.fulfill({status:503,contentType:'application/json',body:JSON.stringify({error:'Synthetic delete failure'})});await page.route('**/api/workspace/drawing-delete',failDelete);
+ await deleteButton.click();await deletion.getByRole('button',{name:'确认删除',exact:true}).click();await deletion.getByRole('alert').filter({hasText:'Synthetic delete failure'}).waitFor();
+ assert((await api('workspace/drawing-data')).records.some(r=>r.id===deleteFixture.id));await page.unroute('**/api/workspace/drawing-delete',failDelete);
+ await api('workspace/drawing-save',{id:deleteFixture.id,version:deleteFixture.version,drawingNotes:'合成其他成员刚补充的内容'});
+ await deletion.getByRole('button',{name:'确认删除',exact:true}).click();await deletion.getByRole('alert').filter({hasText:'刷新核对'}).waitFor();
+ assert.equal((await api('workspace/drawing-data')).records.find(r=>r.id===deleteFixture.id).drawingNotes,'合成其他成员刚补充的内容');
+ await deletion.getByRole('button',{name:'取消',exact:true}).click();await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await page.getByRole('button',{name:'编辑画图备注 SYN-DELETE',exact:true}).filter({hasText:'合成其他成员刚补充的内容'}).waitFor();await deleteButton.click();
+ const deletedResponse=page.waitForResponse(r=>r.url().endsWith('/drawing-delete')&&r.request().method()==='POST');await deletion.getByRole('button',{name:'确认删除',exact:true}).click();assert.equal((await deletedResponse).status(),200);
+ await deleteButton.waitFor({state:'hidden'});assert(!(await api('workspace/drawing-data')).records.some(r=>r.id===deleteFixture.id));
+ assert((await api('workspace/drawing-history?id='+deleteFixture.id)).history.some(r=>r.action.startsWith('删除画图')));
+ await board();assert.equal(await page.locator('.etb-card').filter({hasText:'SYN-DELETE'}).count(),0);
+ await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.locator('.ed-table').waitFor();await wrap.evaluate(el=>{el.scrollLeft=0;});
+ await page.screenshot({path:path.join(dir,'engineering-delete-table.png'),fullPage:false,animations:'disabled'});
+ pass('原13列内提供删除入口；确认可辨认记录，取消和失败不丢行，旧版本拒绝，成功后表格与看板移除并保留历史');
  await fs.writeFile('test-output/engineering-browser-result.json',JSON.stringify({checks,passed:checks.length,screenshotDirectory:dir},null,2));console.log('SCREENSHOTS '+dir);
 
 }finally{await browser?.close();server.kill();await new Promise(resolve=>server.once('exit',resolve));}
