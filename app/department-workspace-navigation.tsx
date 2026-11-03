@@ -18,7 +18,7 @@ const HOVER_OPEN_DELAY=120,HOVER_CLOSE_DELAY=360;
 // floating panel with that department's pages, so switching pages never requires expanding
 // the full sidebar first. This mirrors the inline-collapsed menu of mature admin shells.
 export function DepartmentWorkspaceNavigation({items,member,view,activeView,icons,onNavigate,context={},collapsed=false,agentStudioUrl}:Props){
- const groups=departmentWorkspaceNavigation(items,member);
+ const groups=departmentWorkspaceNavigation(items,member).map(group=>({...group,children:group.children.filter(item=>!['process-rfq','sales'].includes(item.id)).map(item=>item.id==='communications'?{...item,label:'微信'}:item)})).filter(group=>group.children.length>0);
  const active=matchDepartmentWorkspaceNavigation(groups,view,context,activeView),activeDepartment=active?.department.id,activeItem=active?.item.id;
  const [expanded,setExpanded]=useState<Record<string,boolean>>(()=>({overview:true,...(activeDepartment?{[activeDepartment]:true}:{})}));
  const [openDepartment,setOpenDepartment]=useState<string|null>(null);

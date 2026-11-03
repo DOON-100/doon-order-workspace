@@ -83,7 +83,7 @@ pass('Unknown supplied routes remain available, and legacy grouped navigation gi
 
 const Icon=()=>createElement('svg',{'aria-hidden':true}),icons=Object.fromEntries([...groups.map(group=>group.icon),...result.map(item=>item.icon)].map(key=>[key,Icon]));
 const markup=(view,context={})=>renderToStaticMarkup(createElement(nav.SidebarProvider,null,createElement(nav.DepartmentWorkspaceNavigation,{items:all,member:user,view,activeView:nav.workspacePrimaryView(view),context,icons,onNavigate:()=>{}})));
-for(const item of result){
+for(const item of result.filter(item=>!['sales','process-rfq'].includes(item.id))){
  const html=markup(item.view,item.context),match=nav.matchDepartmentWorkspaceNavigation(groups,item.view,item.context),domIds=[...html.matchAll(/\sid="([^"]+)"/g)].map(entry=>entry[1]);
  assert.equal(new Set(domIds).size,domIds.length,'No duplicate DOM IDs');
  const toggles=[...html.matchAll(/<button\b[^>]*class="department-navigation-toggle"[^>]*>/g)].map(entry=>entry[0]);
@@ -92,10 +92,10 @@ for(const item of result){
  assert(toggles.find(toggle=>toggle.includes(`aria-label="收起${match.department.label}"`))?.includes('aria-expanded="true"'),'Current department opens on direct entry');
  assert.equal((html.match(/aria-current="page"/g)||[]).length,1,'Exactly one page is active');
  assert(html.includes(`aria-current="page" data-nav-id="${item.id}"`));
- for(const original of flatten(grouped))assert.equal((html.match(new RegExp(`data-nav-id="${original.id}"`,'g'))||[]).length,1);
+ for(const original of flatten(grouped).filter(item=>!['sales','process-rfq'].includes(item.id)))assert.equal((html.match(new RegExp(`data-nav-id="${original.id}"`,'g'))||[]).length,1);
 }
 const blank=markup('process-workspace',{tab:'unknown'});assert(!blank.includes('aria-current="page"'),'Unknown process tabs do not mark a false current page');
-const defaultProcess=markup('process-workspace');assert.equal((defaultProcess.match(/aria-current="page"/g)||[]).length,1);assert(defaultProcess.includes('aria-current="page" data-nav-id="process-rfq"'),'A direct process route matches the inquiry page actually rendered');
+const defaultProcess=markup('process-workspace');assert(!defaultProcess.includes('data-nav-id="process-rfq"'));assert(!defaultProcess.includes('data-nav-id="sales"'));assert(defaultProcess.includes('微信'));
 pass('All direct entries render unique accessible expand controls, one active leaf and an expanded current department.');
 
 await fs.writeFile(path.join(output,'result.json'),JSON.stringify({passed:checks.length,checks,scope:'synthetic members, pure route metadata and SSR navigation'},null,2));
