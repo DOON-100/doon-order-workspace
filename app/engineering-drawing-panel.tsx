@@ -32,7 +32,7 @@ type DrawingColumnLayout={columnWidths:number[];onResizeColumn:(index:number,wid
 function DrawingTableRow({children,className,columnWidths,onResizeColumn}:DrawingColumnLayout&{children:ReactNode;className?:string}){
  return <tr className={className}>{Children.map(children,(child,index)=>isValidElement<{children?:ReactNode}>(child)?cloneElement(child,{},child.props.children,index<originalHeaders.length-1&&<DrawingColumnResize body label={originalHeaders[index]} width={columnWidths[index]} defaultWidth={initialColumnWidths[index]} onResize={width=>onResizeColumn(index,width)}/>):child)}</tr>;
 }
-const drawingPeople=['邓凯','杨林峰','黄智翔'];
+const drawingPeople=['邓铠','杨林峰','黄智翔'];
 const day=()=>new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Shanghai'});
 const blank=(name:string):Draft=>({token:clientId(),customerId:'',customerCode:'',drawingType:'新款画图',requestedDate:day(),newCount:null,revisionCount:null,requester:name,modelNo:'',drawingNotes:'',assigneeId:'',assignee:'',deadline:'',completedDate:'',approval:'待审核',status:'待分配',sheetStatus:'⌛️',upstreamDepartment:'业务部',priority:'普通',requirement:'',downstream:'',deliveredDate:'',deliveryNote:''});
 const sheetStatus=(r:Drawing)=>r.approval==='通过'?'✅已完成':r.sheetStatus||((r.source?.rawColumns?.['状态']==='❗❗')?'❗❗':'⌛️');

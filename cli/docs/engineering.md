@@ -115,7 +115,7 @@ doon engineering drawings list --search SYN-001 --json
 修改时先 `form <id>` 取得当前版本，然后提交只包含 `id` 和待改字段的 JSON，例如：
 
 ```json
-{"id":"<记录ID>","modelNo":"SYN-MODEL","assignee":"邓凯","deadline":"2026-11-05","sheetStatus":"❗❗"}
+{"id":"<记录ID>","modelNo":"SYN-MODEL","assignee":"邓铠","deadline":"2026-11-05","sheetStatus":"❗❗"}
 ```
 
 ```powershell

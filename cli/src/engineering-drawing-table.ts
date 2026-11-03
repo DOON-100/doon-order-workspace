@@ -1,6 +1,6 @@
 // Table values are projected without rewriting legacy records or exposing source columns.
 export const drawingTypes=['改图','新款画图','印字资料','配件图','3D图','图纸确认，发图'];
-export const drawingPeople=['邓凯','杨林峰','黄智翔'];
+export const drawingPeople=['邓铠','杨林峰','黄智翔'];
 export const drawingTableColumns=[
  {header:'状态',field:'sheetStatus',values:['⌛️','❗❗'],completionAction:'approval-toggle'},
  {header:'客户编号',field:'customerCode'},

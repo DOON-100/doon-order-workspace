@@ -53,7 +53,7 @@ try{
  let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,100));}assert(ready);
  for(const username of ['admin_test','dengkai','zhengzw','other_engineer','unassigned']){const state=new StateStore(path.join(dir,username),testCodec());await state.setup(origin,true);const foundation=new FoundationService(state);await foundation.login(async()=>({username,password:'Synthetic-Only-2026!'}));services[username]={state,foundation};}
  const schema=await run(['schema']);assert.equal(schema.fields.tableEntry.type,'boolean');assert.equal(schema.tableColumns.length,13);
- const refs=await run(['references']);assert.deepEqual(refs.requesters,['admin_test','dengkai','other_engineer','unassigned','zhengzw']);assert(refs.requestersAvailable);assert.deepEqual(refs.assignees,['邓凯','杨林峰','黄智翔']);assert.equal(refs.canToggleApproval,false);
+ const refs=await run(['references']);assert.deepEqual(refs.requesters,['admin_test','dengkai','other_engineer','unassigned','zhengzw']);assert(refs.requestersAvailable);assert.deepEqual(refs.assignees,['邓铠','杨林峰','黄智翔']);assert.equal(refs.canToggleApproval,false);
  assert.equal((await run(['references'],'dengkai')).canToggleApproval,true);pass('CLI表格字段、登录账号候选及审批能力与网页一致');
 
  const token=randomUUID(),partial={tableEntry:true,customerCode:'SYN-CLI-001'};
@@ -79,7 +79,7 @@ try{
  assert.deepEqual(snapshot(),untouched);
  pass('真实服务端拒绝未知账号、姓名、大小写冒充、外部/停用/绑定异常账号，新增和修改失败均不产生记录、版本或审计');
 
- const patch={id,drawingType:'新款画图',requestedDate:'2026-11-01',newCount:0,revisionCount:null,requester:'dengkai',modelNo:'SYN-MODEL',drawingNotes:'Synthetic CLI table edit',assignee:'邓凯',deadline:'2026-11-05',completedDate:'2026-11-03',sheetStatus:'❗❗'};
+ const patch={id,drawingType:'新款画图',requestedDate:'2026-11-01',newCount:0,revisionCount:null,requester:'dengkai',modelNo:'SYN-MODEL',drawingNotes:'Synthetic CLI table edit',assignee:'邓铠',deadline:'2026-11-05',completedDate:'2026-11-03',sheetStatus:'❗❗'};
  let updated=await run(['save','--input',await input(patch),'--version','1']);assert.equal(updated.record.version,2);
  for(const [key,value] of Object.entries(patch))assert.deepEqual(updated.record[key],value);
  assert.equal(updated.record.customerCode,'SYN-CLI-001');assert.equal(updated.record.displayStatus,'❗❗');
