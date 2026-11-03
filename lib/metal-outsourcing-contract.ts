@@ -1,6 +1,6 @@
 /** Metal component outsourcing v1. Sources are references, never legacy ledger writes. */
 export type MetalBase = {id:string;kind:string;version:number;createdAt:string;updatedAt:string;createdBy:string;updatedBy:string;voided?:boolean;voidReason?:string};
-export type MetalSourceLine = {lineId:string;version:number;quantity:number;color:string;batch:string};
+export type MetalSourceLine = {lineId:string;version:number;quantity:number;color:string;batch:string;pmcPlannedDate?:string;pmcRequestedDate?:string};
 export type MetalSourceGroup = {key:string;customer:string;orderNo:string;style:string;quantity:number;plannedQuantity:number;availableQuantity:number;lines:MetalSourceLine[];productionReady:boolean;productionBlockers:string[];legacyOutsourceCount:number;historyNote:string};
 export type MetalPart = MetalBase & {kind:'metal_part';code:string;name:string;specification:string;material:string;side:string;unit:string;revision:string;active:boolean;note:string};
 export type MetalProcess = {id:string;version:number;name:string;code:string;actions:string[];active:boolean;statProcess:string;includeCost:string};

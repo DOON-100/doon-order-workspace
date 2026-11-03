@@ -4,7 +4,7 @@ import {AppError} from './store';
 
 export const fixedWorkbookLimits = Object.freeze({
  inputBytes: 10 * 1024 * 1024, zipEntries: 256, entryBytes: 8 * 1024 * 1024,
- expandedBytes: 32 * 1024 * 1024, sheets: 64, storedCells: 100000,
+ expandedBytes: 32 * 1024 * 1024, sheets: 64, storedCells: 300000,
  rows: 1000, columns: 100, cells: 10000, resultText: 2 * 1024 * 1024, parseBudgetMs: 10000,
 });
 export type FixedWorkbookInput = {
@@ -172,7 +172,7 @@ function sheetSources(texts: Map<string, string>, checkTime: () => void) {
    checkTime();
    const attrs = attributes(match[1]), address = attrs.r;
    if (!address || cells.has(address)) fail('工作表含缺失或重复单元格坐标，不能可靠提取。');
-   const pos = cellPosition(address); if (++stored > fixedWorkbookLimits.storedCells) fail('工作簿存储单元格超过 100000 格，请拆分文件。');
+   const pos = cellPosition(address); if (++stored > fixedWorkbookLimits.storedCells) fail(`工作簿存储单元格超过 ${fixedWorkbookLimits.storedCells} 格，请拆分文件。`);
    if (!box) box = {s: {...pos}, e: {...pos}};
    else { box.s.r = Math.min(box.s.r, pos.r); box.s.c = Math.min(box.s.c, pos.c); box.e.r = Math.max(box.e.r, pos.r); box.e.c = Math.max(box.e.c, pos.c); }
    const body = match[2] || '', formula = body.match(/<(?:\w+:)?f(?=\s|\/?>)[^>]*(?:\/>|>([\s\S]*?)<\/(?:\w+:)?f\s*>)/);

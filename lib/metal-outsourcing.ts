@@ -61,7 +61,7 @@ export function metalSourceGroups(s:State,m:Member,teamId=''):MetalSourceGroup[]
   rows.sort((a,b)=>a.id.localeCompare(b.id));const first=rows[0],quantity=sum(rows,o=>o.quantity),plannedQuantity=planned.get(k)||0;
   const productionBlockers=unique(rows.flatMap(o=>hasRecordedProduction(o)?[]:handoffProductionGate(s,m,o).missing));
   const legacyOutsourceCount=rows.reduce((n,o)=>n+(legacy.get(o.id)||0),0);
-  return {key:k,customer:first.customer,orderNo:first.orderNo,style:first.drawing,quantity,plannedQuantity,availableQuantity:Math.max(0,roundQuantity(quantity-plannedQuantity)),lines:rows.map(o=>({lineId:o.id,version:o.version,quantity:o.quantity,color:o.color,batch:o.batch})),productionReady:productionBlockers.length===0,productionBlockers,legacyOutsourceCount,historyNote:legacyOutsourceCount?'已有旧外发凭证；新增计划前须核对历史占用，不能将旧成品数量直接换算为本次配件需求。':''};
+  return {key:k,customer:first.customer,orderNo:first.orderNo,style:first.drawing,quantity,plannedQuantity,availableQuantity:Math.max(0,roundQuantity(quantity-plannedQuantity)),lines:rows.map(o=>({lineId:o.id,version:o.version,quantity:o.quantity,color:o.color,batch:o.batch,pmcPlannedDate:o.plannedDate,pmcRequestedDate:o.requestedDate})),productionReady:productionBlockers.length===0,productionBlockers,legacyOutsourceCount,historyNote:legacyOutsourceCount?'已有旧外发凭证；新增计划前须核对历史占用，不能将旧成品数量直接换算为本次配件需求。':''};
  });
 }
 function sourceGroup(s:State,m:Member,teamId:string,k:string){const g=metalSourceGroups(s,m,teamId).find(g=>g.key===k);ensure(g,'款式全部有效SKU不在当前授权范围或已退出在制。',409);return g;}

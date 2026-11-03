@@ -134,9 +134,18 @@ test('CRC mismatch, duplicate package paths and directory corruption fail closed
  rejected(ab(two));
  const corrupted = new Uint8Array(fixture()); corrupted[corrupted.length - 6] = 255; rejected(ab(corrupted));
 });
+test('large formatting footprints remain readable without dropping distant real values', () => {
+ const blanks=Array.from({length:100001},(_,i)=>`<c r="A${i+1}"/>`).join('');
+ const bytes=fixture({'xl/worksheets/sheet1.xml':worksheet(`<row r="1">${blanks}<c r="B100001"><v>7</v></c></row>`)});
+ const result=inspect(bytes,{operation:'inspect'});
+ assert.equal(result.sheets[0].storedCellCount,100002);
+ assert.equal(result.sheets[0].contentDimension,'B100001');
+ const detail=inspect(bytes,{operation:'rows',sheet:'Data',range:'B100001',headerRow:0});
+ assert.equal(detail.rows[0].cells[0].value,7);
+});
 test('stored-cell and result-text limits reject whole requests without partial results', () => {
- const rows = Array.from({length: limits.storedCells + 1}, (_, i) => `<row r="${i + 1}"><c r="A${i + 1}"><v>1</v></c></row>`).join('');
- rejected(fixture({'xl/worksheets/sheet1.xml': worksheet(rows)}), {operation: 'inspect'}, /100000/);
+ const rows = Array.from({length: limits.storedCells + 1}, (_, i) => `<c r="A${i + 1}"/>`).join('');
+ rejected(fixture({'xl/worksheets/sheet1.xml': worksheet(`<row r="1">${rows}</row>`)}), {operation: 'inspect'}, /300000/);
  const large = Array.from({length: 80}, (_, i) => `<c r="${XLSX.utils.encode_col(i)}2" t="inlineStr"><is><t>${'x'.repeat(32767)}</t></is></c>`).join('');
  rejected(fixture({'xl/worksheets/sheet1.xml': worksheet(`<row r="2">${large}</row>`)}), {operation: 'rows', sheet: 'Data', range: 'A2:CB2', headerRow: 0}, /文本总量/);
 });
