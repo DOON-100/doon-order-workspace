@@ -1,6 +1,6 @@
 # 财务、应收与结算
 
-当前 CLI 0.42.0 登记425条唯一命令，其中413条属于本期范围，12条金蝶暂缓。财务入口涵盖项目财务、应收、付款条件、客服应收、供应商对账、投诉与售后；具体命令以 `doon commands --json` 为准。安装与错误处理见 [README](../README.md)，各版本验证结果见[执行记录](https://github.com/DOON-100/doon-order-workspace/blob/main/docs/cli-execution-log.md)。
+当前 CLI 0.43.1 登记427条唯一命令，其中413条业务命令属于本期范围，12条金蝶暂缓，另有2条客户端升级命令。财务入口涵盖项目财务、应收、付款条件、客服应收、供应商对账、投诉与售后；具体命令以 `doon commands --json` 为准。安装与错误处理见 [README](../README.md)，各版本验证结果见[执行记录](https://github.com/DOON-100/doon-order-workspace/blob/main/docs/cli-execution-log.md)。
 
 ## 项目财务
 
