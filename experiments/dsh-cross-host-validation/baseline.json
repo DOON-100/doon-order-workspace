@@ -1,0 +1,16 @@
+{
+  "repository": "https://github.com/deepseek-ai/deepseek-harness",
+  "commit": "fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159",
+  "version": "0.2.2-rc.1",
+  "suites": [
+    "packages/subagent/subagent/tests/sibling-messages.spec.ts",
+    "packages/subagent/subagent/tests/control.spec.ts",
+    "packages/subagent/subagent-dsh-sdk/tests/subagent-dsh-sdk.spec.ts",
+    "packages/team/agent-team/tests/team.spec.ts",
+    "packages/team/agent-team/tests/persistence.spec.ts",
+    "packages/api/remote-access/tests/remote-access.host.spec.ts"
+  ],
+  "compositionSuites": [
+    "packages/subagent/subagent-dsh-sdk/tests/loader-composition.e2e.ts"
+  ]
+}
