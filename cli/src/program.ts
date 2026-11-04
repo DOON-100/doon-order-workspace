@@ -54,7 +54,7 @@ export async function main(argv = process.argv.slice(2), service?: FoundationSer
         } else process.stdout.write(JSON.stringify(value, null, 2) + '\n');
       }
       else {
-        const labels: Record<string, string> = {origin: '服务器', localTest: '本机测试', username: '账号', role: '角色', mustChange: '需在网页改初始密码', personnelType: '人员类型', id: '成员编号', name: '姓名', email: '登录身份邮箱', reused: '复用已有登录', reachable: '连接成功', readOnly: '只读验收环境', syntheticOnly: '合成环境', authenticated: '已登录', credentialStorage: '凭据存储', serverBuild: '服务器版本', compatibility: '接口探测', businessCommandsAvailable: '业务接口可用性', installedBusinessCommands: '本机业务命令数', localCleared: '本机会话已清除', serverRevoked: '服务器会话已撤销', alreadySignedOut: '此前已退出'};
+        const labels: Record<string, string> = {origin: '服务器', localTest: '本机测试', username: '账号', role: '角色', mustChange: '需在网页改初始密码', personnelType: '人员类型', id: '成员编号', name: '姓名', email: '登录身份邮箱', reused: '复用已有登录', reachable: '连接成功', readOnly: '只读验收环境', syntheticOnly: '合成环境', authenticated: '已登录', credentialStorage: '凭据存储', loginPersistence: '登录保存方式', sessionExpiresAt: '登录到期时间', loginNotice: '登录提示', serverBuild: '服务器版本', compatibility: '接口探测', businessCommandsAvailable: '业务接口可用性', installedBusinessCommands: '本机业务命令数', localCleared: '本机会话已清除', serverRevoked: '服务器会话已撤销', alreadySignedOut: '此前已退出'};
         function rows(value: any) {
           for (const [key, item] of Object.entries(value || {})) {
             if (item && typeof item === 'object' && !Array.isArray(item)) rows(item);

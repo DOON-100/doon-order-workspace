@@ -22,3 +22,11 @@ CLI 0.43 增加 `doon update check --json`、`doon update install --json`。两�
 4. 使用少量真实员工电脑核对身份、下载审计、升级后会话复用、命令目录及旧程序回退，再开放给其他员工。旧版本保留在每台电脑的 `programs` 目录中；服务器只保留最新版不影响本机旧版回退。
 
 `latest.json` 格式：`format: doon-cli-update-v1`、`version`、`commit`、`file`、`bytes`、`sha256`、`sourceDirty: false`。Windows 打包流程在干净源码上自动生成。更新包及清单只通过原公司 HTTPS 地址提供；服务器必须使用受信任的 TLS 证书和原员工入口。发布权限由服务器管理员控制，员工会话仅获得读取权限。此版本采用 HTTPS 与服务端文件摘要校验，尚未加入离线数字签名；若将发布目录交由第三方托管，应先增加签名验证。
+
+## 0.43.2 登录保存修复
+
+CLI 与原生服务器共同支持独立的 90 天登录。客户端先通过现有身份接口探测 `cliSessionSupported`，只在支持时调用 `/api/auth/cli-login`；旧服务器保留原登录流程并提示短会话。旧有效会话在升级后继续复用，不自动延长；服务器更新后，员工本人退出再登录可切换。
+
+安装和推送均不等于服务器发布。未更新服务器时，仅更新 CLI 无法修复闲置 2 小时或总计 12 小时过期。用 `doon doctor --json` 核对 `loginPersistence: cli-90-days` 和 `sessionExpiresAt`。90 天为固定到期时间，无自动续期；到期由本人交互登录。新凭据仍绑定原 Windows 用户和 HTTPS Origin，不保存员工密码；改密、重置、停用、CLI 退出仍撤销。网页会话期限不变。
+
+若主动回退至 0.43.1 或更早客户端，旧客户端无法识别新 CLI 会话。优先重新安装新版；确需回退时，先用新版正常 `doon logout` 撤销长期凭据，再安装旧版并重新登录。

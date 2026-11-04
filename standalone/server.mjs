@@ -43,7 +43,7 @@ if(reviewMode){
  }
  runtime.env.BUCKET.put=async()=>{throw Object.assign(new Error(reviewMessage),{status:403});};
 }
-const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory}=await import('./auth.mjs');
+const {session,publicSession,login,logout,changePassword,createAccount,resetPassword,revokeInactiveSessions,supplierSessionName,authHistory,cliSessionOptions,cliSessionPolicy}=await import('./auth.mjs');
 const api=await import('./workspace-api.mjs');
 let supplierCatalogScheduler=null;
 if(process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED==='1'){
@@ -154,8 +154,9 @@ async function handle(req,res){
     const sessionRead=action==='session'&&req.method==='GET'&&current;
     throttle(sessionRead?'session:'+current.digest:endpoint.ip,sessionRead?600:60);
     if(current?.member.role==='supplier'&&!supplierAuth.has(action))fail('供应商账号不提供此功能。',403);
-    if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current)});
+    if(action==='session'&&req.method==='GET')response=reply({user:publicSession(current),cliSessionSupported:!supplierOnly&&!reviewMode});
     else if(action==='login'&&req.method==='POST'){const result=await login(await request.json(),endpoint.ip,secure,authOptions);response=reply({user:result.user},200,{'Set-Cookie':result.cookie});}
+    else if(action==='cli-login'&&req.method==='POST'){const result=await login(await request.json(),endpoint.ip,secure,cliSessionOptions(authOptions));response=reply({user:result.user,sessionPolicy:cliSessionPolicy},200,{'Set-Cookie':result.cookie});}
     else if(action==='logout'&&req.method==='POST')response=reply({ok:true},200,{'Set-Cookie':logout(current,secure,{...authOptions,ip:endpoint.ip})});
     else {
      if(!current)fail('请先登录。',401);

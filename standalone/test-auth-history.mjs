@@ -67,6 +67,8 @@ try{
  const rejected=await request(origin,'/api/auth/login',{username:'alice',password});assert.equal(rejected.status,500);assert.equal(rejected.headers.get('set-cookie'),null);assert.equal(db.prepare('SELECT count(*) n FROM local_sessions').get().n,sessionCount);assert.equal(stored().length,eventCount);db.exec('DROP TRIGGER synthetic_auth_failure');
  console.log('PASS Session issuance rolls back if the matching successful-login history cannot be saved.');
  const beforeReview=db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),reviewOrigin=await launch(true);
+ assert.equal((await (await request(reviewOrigin,'/api/auth/session')).json()).cliSessionSupported,false);
+ assert.equal((await request(reviewOrigin,'/api/auth/cli-login',{username:'admin',password})).status,403);
  signed=await request(reviewOrigin,'/api/auth/login',{username:'admin',password});assert.equal(signed.status,200);const reviewCookie=cookieOf(signed);
  assert.equal((await request(reviewOrigin,'/api/auth/history',undefined,reviewCookie)).status,200);
  assert.equal((await request(reviewOrigin,'/api/auth/login',{username:'alice',password:'Synthetic-Wrong-Password!'})).status,401);

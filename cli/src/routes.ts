@@ -373,7 +373,7 @@ export const routes = {
   '/api/workspace/customer-project-attachment': {method:'POST',business:true,write:true,multipart:true},
   '/api/workspace/customer-project-file': {method:'GET',business:true,binary:'file',query:['id']},
   '/health': {method: 'GET'}, '/api/review-mode': {method: 'GET'},
-  '/api/auth/login': {method: 'POST'}, '/api/auth/session': {method: 'GET'}, '/api/auth/logout': {method: 'POST'},
+  '/api/auth/login': {method: 'POST'}, '/api/auth/cli-login': {method: 'POST'}, '/api/auth/session': {method: 'GET'}, '/api/auth/logout': {method: 'POST'},
   '/api/workspace/business-team-data': {method: 'GET', business: true},
   '/api/workspace/customer-workflow-profile-save': {method: 'POST', business: true, write: true},
   '/api/workspace/customer-save': {method: 'POST', business: true, write: true},

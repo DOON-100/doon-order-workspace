@@ -4,22 +4,25 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import net from 'node:net';
 import {spawn, execFileSync} from 'node:child_process';
+import {createHash} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {StateStore} from '../dist/state.js';
 import {FoundationService} from '../dist/service.js';
 import {temporary, root, testCodec} from './helpers.mjs';
 
-test('existing native auth: login reuse, initial-password state, logout and disabled-account revocation', async t => {
+test('native CLI auth persists across idle days and preserves browser expiry and account revocation', async t => {
   const dir = await temporary(), build = path.join(dir, 'runtime'); await fs.mkdir(path.join(build, 'client'), {recursive: true});
   for (const name of ['runtime.mjs', 'ie-mail.mjs', 'auth.mjs', 'personnel.mjs', 'server.mjs', 'supplier-gateway.mjs', 'employee-gateway.mjs', 'agent-schedules.mjs','supplier-catalog-job.mjs','fixed-scheduler.mjs','fixed-schedule.mjs']) await fs.copyFile(path.join(root, 'standalone', name), path.join(build, name));
   await fs.cp(path.join(root, 'standalone/schedule-engine'), path.join(build, 'schedule-engine'), {recursive: true});
   await fs.writeFile(path.join(build, 'client/index.html'), 'Synthetic CLI auth test');
   await fs.writeFile(path.join(build, 'workspace-api.mjs'), "export async function GET(){throw Error('Business API must not be called');} export const POST=GET;\n");
-  await fs.writeFile(path.join(build, 'seed.mjs'), `import {db,saveRecords} from './runtime.mjs';import {createAccount} from './auth.mjs';const allowed=new Set(['DOON_KINGDEE_READONLY_ENABLED','DOON_KINGDEE_SUPPLIER_SYNC_ENABLED']);if(Object.keys(process.env).some(k=>/^DOON_KINGDEE_/i.test(k)&&!allowed.has(k))||process.env.DOON_KINGDEE_READONLY_ENABLED!=='0'||process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED!=='0')throw Error('Synthetic runtime inherited Kingdee configuration');await createAccount({username:'synthetic',name:'Synthetic CLI Employee',role:'viewer',password:'Synthetic-Only-2026!'},null,{owner:true});db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'viewer',password:'Synthetic-Only-2026!'},null);saveRecords([{id:'synthetic_business',kind:'synthetic_fixture',value:'unchanged'}]);db.close();`);
+  await fs.writeFile(path.join(build, 'seed.mjs'), `import {db,saveRecords} from './runtime.mjs';import {createAccount} from './auth.mjs';const allowed=new Set(['DOON_KINGDEE_READONLY_ENABLED','DOON_KINGDEE_SUPPLIER_SYNC_ENABLED']);if(Object.keys(process.env).some(k=>/^DOON_KINGDEE_/i.test(k)&&!allowed.has(k))||process.env.DOON_KINGDEE_READONLY_ENABLED!=='0'||process.env.DOON_KINGDEE_SUPPLIER_SYNC_ENABLED!=='0')throw Error('Synthetic runtime inherited Kingdee configuration');await createAccount({username:'synthetic',name:'Synthetic CLI Employee',role:'viewer',password:'Synthetic-Only-2026!'},null,{owner:true});await createAccount({username:'admin',name:'Synthetic Admin',role:'admin',password:'Synthetic-Only-2026!'},null);db.prepare('UPDATE local_accounts SET must_change=0').run();await createAccount({username:'initial',name:'Synthetic Initial',role:'viewer',password:'Synthetic-Only-2026!'},null);saveRecords([{id:'synthetic_business',kind:'synthetic_fixture',value:'unchanged'}]);db.close();`);
   const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !/^DOON_/i.test(key)));
   Object.assign(env, {DOON_DATA_DIR: path.join(dir, 'data'), DOON_HOST: '127.0.0.1', DOON_NO_AUTO_BACKUP: '1', DOON_SYNTHETIC_ONLY: '1', DOON_KINGDEE_READONLY_ENABLED: '0', DOON_KINGDEE_SUPPLIER_SYNC_ENABLED: '0'});
   execFileSync(process.execPath, [path.join(build, 'seed.mjs')], {env, windowsHide: true, stdio: 'pipe'});
   const port = await new Promise(resolve => { const s = net.createServer(); s.listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => resolve(p)); }); });
   assert.notEqual(port, 8787, 'Protected production port');
+  assert.notEqual(port, 8797, 'Protected persistent local test port');
   const origin = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, [path.join(build, 'server.mjs')], {env: {...env, DOON_PORT: String(port)}, windowsHide: true, stdio: 'pipe'});
   let exited = false; const done = new Promise(resolve => child.once('exit', () => { exited = true; resolve(); }));
@@ -27,15 +30,54 @@ test('existing native auth: login reuse, initial-password state, logout and disa
   let ready = false;
   for (let i = 0; i < 80; i++) { try { if ((await fetch(origin + '/health')).ok) { ready = true; break; } } catch {} await new Promise(r => setTimeout(r, 100)); }
   assert(ready, 'Synthetic native server starts on its own port');
-  const state = new StateStore(path.join(dir, 'client'), testCodec()); await state.setup(origin, true);
+  const codec = testCodec(), state = new StateStore(path.join(dir, 'client'), codec); await state.setup(origin, true);
+  const withDatabase = work => { const db = new DatabaseSync(path.join(dir, 'data/workspace.sqlite')); try { return work(db); } finally { db.close(); } };
+  const digest = cookie => {
+    const [name, value] = cookie.split('=');
+    return createHash('sha256').update(name === 'doon_session' ? value : name + '|' + value).digest('hex');
+  };
+  const ageSession = (cookie, idleHours, remainingHours) => withDatabase(db => {
+    const changed = db.prepare('UPDATE local_sessions SET last_seen=?, expires_at=? WHERE token_hash=?').run(Date.now() - idleHours * 3600000, Date.now() + remainingHours * 3600000, digest(cookie));
+    assert.equal(changed.changes, 1, 'Only the selected synthetic session is aged');
+  });
+  const request = (route, body, cookie) => fetch(origin + route, {method: body === undefined ? 'GET' : 'POST', headers: {'Content-Type': 'application/json', Origin: origin, ...(cookie ? {Cookie: cookie} : {})}, ...(body === undefined ? {} : {body: JSON.stringify(body)})});
+  const webLogin = async username => {
+    const response = await request('/api/auth/login', {username, password: 'Synthetic-Only-2026!'});
+    assert.equal(response.status, 200); assert.match(response.headers.get('set-cookie'), /Max-Age=43200(?:;|$)/);
+    return response.headers.get('set-cookie').split(';')[0];
+  };
+  const sessionUser = async cookie => (await (await request('/api/auth/session', undefined, cookie)).json()).user;
   const service = new FoundationService(state);
   const login = await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only-2026!'})); assert.equal(login.user.role, 'viewer');
+  assert.equal(login.loginPersistence, 'cli-90-days');
+  assert(Date.parse(login.sessionExpiresAt) > Date.now() + 89 * 86400000);
   assert.equal((await service.login(async () => { throw Error('Must reuse'); })).reused, true);
   const doctor = await service.doctor(); assert(doctor.authenticated); assert(doctor.syntheticOnly); assert.equal(doctor.serverBuild, null);
+  assert.equal(doctor.loginPersistence, 'cli-90-days');
+  const saved = await state.session(await state.config()); assert.match(saved.cookie, /^doon_cli_session=/);
+  ageSession(saved.cookie, 72, 90 * 24 - 72);
+  const restored = new FoundationService(new StateStore(state.directory, codec));
+  // Reuse the same synthetic codec, as DPAPI in the real client is tied to the Windows account.
+  assert.equal((await restored.whoami()).username, 'synthetic');
+  const browserIdle = await webLogin('synthetic'); ageSession(browserIdle, 3, 9);
+  assert.equal(await sessionUser(browserIdle), null, 'Browser still expires after two hours idle');
+  const browserExpired = await webLogin('synthetic'); ageSession(browserExpired, 0, -1);
+  assert.equal(await sessionUser(browserExpired), null, 'Browser still has an absolute expiry');
+  assert.equal((await service.whoami()).username, 'synthetic', 'Browser expiry does not revoke independent CLI login');
+  ageSession(saved.cookie, 0, -1);
+  await assert.rejects(service.whoami(), {code: 'AUTH_REQUIRED'}); assert.equal(await state.hasSession(), false);
+  await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only-2026!'}));
+  const beforeLogout = await state.session(await state.config());
   assert.equal((await service.logout()).serverRevoked, true);
+  assert.equal(await sessionUser(beforeLogout.cookie), null, 'Logout revokes the server credential');
   await assert.rejects(service.whoami(), {code: 'AUTH_REQUIRED'});
   const initial = await service.login(async () => ({username: 'initial', password: 'Synthetic-Only-2026!'})); assert(initial.user.mustChange);
-  assert((await service.doctor()).mustChange); await service.logout();
+  assert((await service.doctor()).mustChange);
+  const initialBrowser = await webLogin('initial'), admin = await webLogin('admin');
+  const initialId = withDatabase(db => db.prepare("SELECT id FROM local_accounts WHERE username='initial'").get().id);
+  const reset = await request('/api/auth/reset', {id: initialId, password: 'Synthetic-Reset-2026!'}, admin); assert.equal(reset.status, 200);
+  await assert.rejects(service.whoami(), {code: 'AUTH_REQUIRED'}); assert.equal(await state.hasSession(), false);
+  assert.equal(await sessionUser(initialBrowser), null, 'Password reset revokes both credential families');
   await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only-2026!'}));
   await fs.writeFile(path.join(build, 'disable.mjs'), `import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='synthetic'").get();const r=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...r,active:false}),a.member_id);db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();if(JSON.parse(db.prepare("SELECT data FROM records WHERE id='synthetic_business'").get().data).value!=='unchanged')throw Error('Business fixture changed');db.close();`);
   execFileSync(process.execPath, [path.join(build, 'disable.mjs')], {env, windowsHide: true, stdio: 'pipe'});

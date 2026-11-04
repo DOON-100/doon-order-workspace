@@ -28,4 +28,5 @@ export async function store() { return new StateStore(await temporary(), testCod
 export const user = {username: 'synthetic', role: 'viewer', personnelType: 'internal', mustChange: false, identity: {id: 'synthetic_member', name: 'Synthetic Employee', email: 'synthetic@example.test'}};
 export const token = 'X'.repeat(43);
 export const signed = (value = user, secure = true) => Response.json({user: value}, {headers: {'Set-Cookie': `${secure ? 'doon_employee_session' : 'doon_session'}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200${secure ? '; Secure' : ''}`}});
+export const cliSigned = (value = user, secure = true) => Response.json({user: value, sessionPolicy: {kind: 'cli', maxAgeSeconds: 7776000, idleTimeoutSeconds: null}}, {headers: {'Set-Cookie': `${secure ? 'doon_employee_cli_session' : 'doon_cli_session'}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=7776000${secure ? '; Secure' : ''}`}});
 export const session = origin => ({origin, cookie: `${origin.startsWith('https:') ? 'doon_employee_session' : 'doon_session'}=${token}`, expiresAt: Date.now() + 3600000});

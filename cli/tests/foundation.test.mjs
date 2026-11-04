@@ -5,9 +5,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
 import {serverConfig, StateStore, windowsCodec} from '../dist/state.js';
-import {ApiClient} from '../dist/client.js';
+import {ApiClient, cookieSession} from '../dist/client.js';
 import {FoundationService} from '../dist/service.js';
-import {temporary, store, user, token, signed, session} from './helpers.mjs';
+import {temporary, store, user, token, signed, cliSigned, session} from './helpers.mjs';
 
 test('an export GET that archives output is not marked retryable after a lost response',async()=>{
  const config=serverConfig('https://employee.test',false);let calls=0;
@@ -39,16 +39,83 @@ test('login reuses verified session, respects Origin, never returns or stores pl
   const calls = [];
   const client = new FoundationService(state, async (url, init) => {
     calls.push({url, init});
-    if (url.endsWith('/login')) { assert.equal(init.headers.Origin, 'https://employee.test'); assert.equal(init.redirect, 'manual'); return signed(); }
-    assert.equal(init.headers.Cookie, 'doon_employee_session=' + token); return Response.json({user});
+    if (url.endsWith('/session') && !init.headers.Cookie) return Response.json({user: null, cliSessionSupported: true});
+    if (url.endsWith('/cli-login')) { assert.equal(init.headers.Origin, 'https://employee.test'); assert.equal(init.redirect, 'manual'); return cliSigned(); }
+    assert.equal(init.headers.Cookie, 'doon_employee_cli_session=' + token); return Response.json({user});
   });
   const input = {username: 'synthetic', password: 'Synthetic-Only-Password!'};
   const result = await client.login(async origin => { assert.equal(origin, 'https://employee.test'); return input; });
   assert.equal(result.user.username, user.username); assert.equal(result.reused, false); assert.equal(input.password, '');
+  assert.equal(result.loginPersistence, 'cli-90-days');
+  assert(Date.parse(result.sessionExpiresAt) > Date.now() + 89 * 86400000);
   assert(!JSON.stringify(result).includes(token)); assert(!JSON.stringify(result).includes('Password'));
   assert.equal((await client.login(async () => { throw Error('Must not reprompt'); })).reused, true);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert(!String(await fs.readFile(path.join(state.directory, 'session.dpapi'))).includes(token));
+});
+
+test('legacy server capability probe avoids unsupported credential POST and reports the short session', async () => {
+  const state = await store(); await state.setup('https://employee.test', false);
+  const paths = [];
+  const service = new FoundationService(state, async (url, init) => {
+    paths.push(new URL(url).pathname);
+    assert(!url.endsWith('/cli-login'), 'Old native servers return 401 for unknown auth routes');
+    if (url.endsWith('/session') && !init.headers.Cookie) return Response.json({user: null});
+    if (url.endsWith('/login')) return signed();
+    return Response.json(url.endsWith('/health') ? {ok: true, service: 'Synthetic'} : url.endsWith('/review-mode') ? {readOnly: false} : {user});
+  });
+  const result = await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only!'}));
+  assert.deepEqual(paths, ['/api/auth/session', '/api/auth/login']);
+  assert.equal(result.loginPersistence, 'legacy-web-session');
+  assert.match(result.loginNotice, /2.*12|12.*2/);
+  const reused = await service.login(async () => { throw Error('Must preserve existing valid login'); });
+  assert(reused.reused); assert.equal(reused.loginPersistence, 'legacy-web-session');
+  assert.equal((await service.doctor()).loginPersistence, 'legacy-web-session');
+});
+
+test('server rollback between probe and login falls back on 404 only', async () => {
+  const state = await store(); await state.setup('https://employee.test', false); const paths = [];
+  const service = new FoundationService(state, async url => {
+    paths.push(new URL(url).pathname);
+    if (url.endsWith('/session')) return Response.json({user: null, cliSessionSupported: true});
+    if (url.endsWith('/cli-login')) return new Response(null, {status: 404});
+    return signed();
+  });
+  const result = await service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only!'}));
+  assert.deepEqual(paths, ['/api/auth/session', '/api/auth/cli-login', '/api/auth/login']);
+  assert.equal(result.loginPersistence, 'legacy-web-session');
+});
+
+test('denied or ambiguous CLI login is never retried against the web login', async () => {
+  for (const status of [401, 403, 429, 500]) {
+    const state = await store(); await state.setup('https://employee.test', false); let calls = 0;
+    const service = new FoundationService(state, async url => { if (url.endsWith('/session')) return Response.json({user: null, cliSessionSupported: true}); calls++; assert(url.endsWith('/cli-login')); return new Response(null, {status}); });
+    await assert.rejects(service.login(async () => ({username: 'synthetic', password: 'Synthetic-Only!'})));
+    assert.equal(calls, 1); assert.equal(await state.hasSession(), false);
+  }
+});
+
+test('CLI credential validation enforces origin, cookie family, transport and absolute expiry', async () => {
+  for (const origin of ['https://employee.test', 'http://127.0.0.1:12345']) {
+    const secure = origin.startsWith('https:'), config = serverConfig(origin, !secure);
+    const saved = cookieSession(cliSigned(user, secure).headers, config, 'cli');
+    assert(saved.expiresAt > Date.now() + 89 * 86400000);
+    const state = await store(); await state.setup(origin, !secure); await state.saveSession(saved);
+    assert.equal((await state.session(config)).cookie, saved.cookie);
+    let sent;
+    await new ApiClient(config, async (_url, init) => { sent = init.headers.Cookie; return Response.json({user}); }).request('/api/auth/session', saved);
+    assert.equal(sent, saved.cookie);
+    await state.saveSession({...saved, expiresAt: Date.now() - 1});
+    assert.equal(await state.session(config), null); assert.equal(await state.hasSession(), false);
+    assert.throws(() => cookieSession(cliSigned(user, !secure).headers, config, 'cli'), {code: 'INVALID_RESPONSE'});
+    assert.throws(() => cookieSession(signed(user, secure).headers, config, 'cli'), {code: 'INVALID_RESPONSE'});
+  }
+  const config = serverConfig('https://employee.test');
+  for (const age of ['0', '-1', '7776001', 'Infinity']) {
+    const headers = new Headers({'Set-Cookie': `doon_employee_cli_session=${token}; HttpOnly; Secure; Max-Age=${age}`});
+    assert.throws(() => cookieSession(headers, config, 'cli'), {code: 'INVALID_RESPONSE'});
+  }
+  assert.throws(() => cookieSession(cliSigned().headers, config), {code: 'INVALID_RESPONSE'});
 });
 
 test('server revocation clears local session; forbidden does not silently destroy it; initial password state remains visible', async () => {
@@ -128,8 +195,8 @@ test('malformed/unsafe login cookie is not persisted', async () => {
 
 test('actual Windows DPAPI roundtrip hides cookie on disk', {skip: process.platform !== 'win32'}, async () => {
   const state = new StateStore(await temporary(), windowsCodec); await state.setup('https://employee.test', false);
-  await state.checkCredentialStore(); await state.saveSession(session('https://employee.test'));
+  await state.checkCredentialStore(); await state.saveSession(cookieSession(cliSigned().headers, await state.config(), 'cli'));
   const raw = await fs.readFile(path.join(state.directory, 'session.dpapi'), 'utf8'); assert(!raw.includes(token)); assert(!raw.includes('employee.test'));
-  assert.equal((await state.session(await state.config())).cookie, 'doon_employee_session=' + token);
+  assert.equal((await state.session(await state.config())).cookie, 'doon_employee_cli_session=' + token);
   await state.clearSession();
 });

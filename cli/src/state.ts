@@ -9,6 +9,24 @@ export type Config = {format: 'doon-cli-config-v1'; origin: string; localHttp: b
 export type SavedSession = {origin: string; cookie: string; expiresAt: number};
 export type Codec = {protect: (text: string) => Promise<string>; unprotect: (text: string) => Promise<string>};
 
+export const cliSessionMaxAge = 90 * 24 * 60 * 60;
+export function sessionCookieName(config: Config, cli = false) {
+  return config.localHttp ? (cli ? 'doon_cli_session' : 'doon_session') : (cli ? 'doon_employee_cli_session' : 'doon_employee_session');
+}
+export function validSessionCookie(cookie: string, config: Config) {
+  return [false, true].some(cli => new RegExp('^' + sessionCookieName(config, cli) + '=[\\w-]{43}$').test(cookie));
+}
+export function sessionStatus(saved: SavedSession | null, config: Config) {
+  const durable = saved?.cookie.startsWith(sessionCookieName(config, true) + '=');
+  return {
+    loginPersistence: !saved ? 'none' : durable ? 'cli-90-days' : 'legacy-web-session',
+    sessionExpiresAt: saved ? new Date(saved.expiresAt).toISOString() : null,
+    loginNotice: !saved ? '请由员工本人运行 doon login。' : durable
+      ? 'CLI 登录最长保留 90 天，闲置不提前失效；退出、改密、重置密码或停用账号后撤销。'
+      : '当前仍是网页短会话：闲置 2 小时或登录满 12 小时失效。服务器和 CLI 更新后，运行 doon logout，再运行 doon login 获取长期登录。',
+  };
+}
+
 export function serverConfig(raw: string, localHttp = false): Config {
   let url: URL;
   try { url = new URL(raw); } catch { throw new CliError('INVALID_SERVER', '请提供完整的公司 HTTPS 地址。', 2); }
@@ -104,9 +122,8 @@ export class StateStore {
     let saved: SavedSession;
     try { saved = JSON.parse(await this.codec.unprotect(text)); }
     catch (error) { if (error instanceof CliError) throw error; throw new CliError('INVALID_SESSION', '本机会话损坏，请清除后重新登录。', 3); }
-    const name = config.localHttp ? 'doon_session' : 'doon_employee_session';
     if (!saved || typeof saved !== 'object' || saved.origin !== config.origin || typeof saved.cookie !== 'string' ||
-      !new RegExp('^' + name + '=[\\w-]{43}$').test(saved.cookie) || !Number.isFinite(saved.expiresAt)) throw new CliError('INVALID_SESSION', '本机会话与服务器不匹配，请清除后重新登录。', 3);
+      !validSessionCookie(saved.cookie, config) || !Number.isSafeInteger(saved.expiresAt) || Math.abs(saved.expiresAt) > 8.64e15) throw new CliError('INVALID_SESSION', '本机会话与服务器不匹配，请清除后重新登录。', 3);
     if (saved.expiresAt <= Date.now()) { await this.clearSession(); return null; }
     return saved;
   }
