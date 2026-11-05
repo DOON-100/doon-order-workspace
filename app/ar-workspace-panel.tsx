@@ -12,11 +12,12 @@ import {ArInvoiceLedgerPanel} from './ar-invoice-ledger-panel';
 import {ArCustomerProfilePanel} from './ar-customer-profile-panel';
 import {ArProcessPanel} from './ar-process-panel';
 import {ArMasterLedgerPanel} from './ar-master-ledger-panel';
+import {CollectionWorkspacePanel} from './collection-workspace-panel';
 
 type Row=Record<string,any>;
 const money=(cents:unknown,currency='')=>typeof cents==='number'&&Number.isFinite(cents)?`${currency} ${(cents/100).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2})}`:'待核实';
 const statuses:Record<string,string>={draft:'草稿',open:'未收款',partial:'部分收款',settled:'已结清',pending:'待核对',cancelled:'已取消',reviewed:'业务已审核',issued:'已签发',confirmed:'待业务审核',unsupported:'原订单 PI 待接入'};
-const tabs=[['master','应收总表'],['overview','回款总览'],['invoices','发票与对账单'],['profiles','客户模板与追踪'],['process','流程说明'],['receivables','应收明细'],['documents','PI 审核与签发'],['history','收款与历史'],['contribution','业绩与客户贡献'],['pending','待核对']] as const;
+const tabs=[['collections','应收实收对账中心'],['master','应收总表'],['overview','回款总览'],['invoices','发票与对账单'],['profiles','客户模板与追踪'],['process','流程说明'],['receivables','应收明细'],['documents','PI 审核与签发'],['history','收款与历史'],['contribution','业绩与客户贡献'],['pending','待核对']] as const;
 function Table({headers,rows,empty='当前范围暂无记录'}:{headers:string[];rows:React.ReactNode[][];empty?:string}){return <div className="ar-table-wrap"><ExcelTable><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows.map((r,i)=><tr key={i}>{r.map((cell,j)=><td key={j}>{cell??'—'}</td>)}</tr>):<tr><td colSpan={headers.length}><div className="ar-empty">{empty}</div></td></tr>}</tbody></ExcelTable></div>;}
 function Customer({row}:{row:Row}){return <span className="ar-customer"><b>{row.customerCode||row.customer||'待匹配客户'}</b>{row.customerCode&&<small>{row.customer}</small>}</span>;}
 function Badge({children,tone=''}:{children:React.ReactNode;tone?:string}){return <span className={'ar-badge '+tone}>{children}</span>;}
@@ -26,7 +27,7 @@ export function ArWorkspacePanel({data,onNavigate,onDirtyChange}:{data:any;onNav
  const [binding,setBinding]=useState<Row|null>(null),[selectedTeam,setSelectedTeam]=useState(''),[reason,setReason]=useState('');
  const [documentAction,setDocumentAction]=useState<{row:Row;action:string}|null>(null),[documentTeam,setDocumentTeam]=useState(''),[documentTerm,setDocumentTerm]=useState(''),[documentCategory,setDocumentCategory]=useState('bulk');
  const [milestone,setMilestone]=useState<Row|null>(null),[plannedShipDate,setPlannedShipDate]=useState(''),[actualShipDate,setActualShipDate]=useState('');
- const [profileDirty,setProfileDirty]=useState(false),independentTab=['master','invoices','profiles','process'].includes(tab);
+ const [profileDirty,setProfileDirty]=useState(false),independentTab=['collections','master','invoices','profiles','process'].includes(tab);
  const [invoiceTarget,setInvoiceTarget]=useState(()=>{const p=typeof window==='undefined'?new URLSearchParams():new URLSearchParams(window.location.search);return {customerId:p.get('customerId')||'',invoiceId:p.get('recordId')||''};});
  const profileDirtyChanged=useCallback((dirty:boolean)=>{setProfileDirty(dirty);onDirtyChange?.(dirty);if(!dirty)setError('');},[onDirtyChange]);
  useEffect(()=>()=>onDirtyChange?.(false),[onDirtyChange]);
@@ -51,6 +52,7 @@ export function ArWorkspacePanel({data,onNavigate,onDirtyChange}:{data:any;onNav
   <div className="ar-tabs" role="tablist" aria-label="应收工作空间栏目">{tabs.map(([id,label])=><button role="tab" aria-selected={tab===id} className={tab===id?'active':''} key={id} onClick={()=>changeTab(id)}>{label}{id==='pending'&&feed?.pending?.length>0&&<span>{feed.pending.length}</span>}</button>)}</div>
   {!independentTab&&<div className="ar-filters"><label>币种<select value={currency} onChange={e=>setCurrency(e.target.value)}><option value="">全部币种（分列）</option>{['CNY','USD','EUR','GBP','HKD'].map(c=><option key={c}>{c}</option>)}</select></label><label>客户<select value={customerId} onChange={e=>setCustomerId(e.target.value)}><option value="">全部授权客户</option>{feed?.customers?.map((c:Row)=><option key={c.id} value={c.id}>{c.customerCode} {c.customer}</option>)}</select></label>{['overview','contribution','history'].includes(tab)&&<><label>贡献期间<select value={periodType} onChange={e=>periodChange(e.target.value)}><option value="month">月</option><option value="quarter">季</option><option value="year">年</option></select></label><label>期间<input aria-label="贡献期间值" value={period} type={periodType==='month'?'month':'text'} placeholder={periodType==='quarter'?'2026-Q4':'2026'} onChange={e=>setPeriod(e.target.value)}/></label></>}<label className="ar-search">搜索<input placeholder="客户、事项或组名" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>}
   {error&&<p role="alert" className="ar-alert">{error}</p>}{message&&<p role="status" className="ar-success">{message}</p>}
+  {tab==='collections'&&<CollectionWorkspacePanel/>}
   {tab==='master'&&<ArMasterLedgerPanel data={data} onNavigate={masterNavigate} onDirtyChange={profileDirtyChanged}/>}
   {tab==='invoices'&&<ArInvoiceLedgerPanel data={data} onNavigate={onNavigate} initialCustomerId={invoiceTarget.customerId} initialInvoiceId={invoiceTarget.invoiceId}/>}
   {tab==='profiles'&&<ArCustomerProfilePanel data={data} onNavigate={onNavigate} onDirtyChange={profileDirtyChanged}/>}
