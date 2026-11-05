@@ -26,7 +26,7 @@ export async function matchingPost(action:string,req:Request,s:State,m:Member){
   const v=z.object({id:z.string(),version:z.number().int(),decision:z.enum(['accept_link','reject_link','needs_evidence']),reason:z.string().trim().min(4).max(6000)}).strict().parse(await req.json()),old=matchingRows(s).find(r=>r.id===v.id);
   if(!old||old.version!==v.version||!live(s,old)||old.reviewStatus==='reviewed')throw new AppError('匹配依据已变化或已处理，请重新核对。',409);
   if(v.decision==='accept_link'&&!old.targets.length)throw new AppError('尚无对应原表行，须先补充依据。');
-  const next={...old,id:newId('collection_match'),previousId:old.id,version:old.version+1,reviewStatus:'reviewed',decision:v.decision,reviewReason:v.reason,reviewedBy:m.id,reviewedAt:now()};await commit(s.revision,[next,audit(m,{id:next.id,kind:next.kind},null,'朱了青确认匹配资料','逐笔核对')]);return json({item:next});
+  const next={...old,id:newId('collection_match'),previousId:old.id,version:old.version+1,reviewStatus:v.decision==='needs_evidence'?'pending':'reviewed',decision:v.decision,reviewReason:v.reason,reviewedBy:m.id,reviewedAt:now()};await commit(s.revision,[next,audit(m,{id:next.id,kind:next.kind},null,'朱了青确认匹配资料','逐笔核对')]);return json({item:next});
  }
  writer(s,m);const v=z.object({workbookId:z.string(),workbookHash:z.string(),proofIds:z.array(z.string()).min(1).max(1000),items:z.array(item).min(1).max(3000),note:z.string().trim().min(8).max(6000)}).strict().parse(await req.json());
  const b=rows(s,'collection_workbook').find(b=>b.id===v.workbookId&&b.hash===v.workbookHash);if(!b)throw new AppError('原工作簿已变化或不存在。',409);
