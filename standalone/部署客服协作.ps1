@@ -1,5 +1,7 @@
-# Code-only release. Ivy data is imported separately by the reviewed additive CLI.
+﻿# Code-only release. Ivy data is imported separately by the reviewed additive CLI.
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $projectRoot=(Resolve-Path -LiteralPath (Split-Path $PSScriptRoot -Parent)).Path
 Set-Location -LiteralPath $projectRoot
 $env:DOON_DATA_DIR=Join-Path $projectRoot 'lan-data'
@@ -69,7 +71,7 @@ try {
  if ($LASTEXITCODE -ne 0) { throw 'Historical data changed during release; investigate.' }
  Start-VerifiedService
  if (-not (Test-ReleaseHealth)) { throw 'New service health check failed.' }
- $page=Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.176:8787/service' -TimeoutSec 10
+ $page=Invoke-WebRequest -UseBasicParsing -Uri ($lanOrigin + '/service') -TimeoutSec 10
  if ($page.StatusCode -ne 200) { throw 'Service workspace page is not reachable.' }
  $expectedHtml=[System.IO.File]::ReadAllText((Join-Path $stage 'client\index.html'))
  if ($page.Content -ne $expectedHtml) { throw 'Served page is not the tested build.' }

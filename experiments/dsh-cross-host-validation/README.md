@@ -37,8 +37,10 @@ pnpm install --frozen-lockfile --ignore-scripts
 npm --prefix cli ci --ignore-scripts --no-audit --no-fund
 npm --prefix cli run build
 node experiments/dsh-cross-host-validation/probe-local.mjs
-node experiments/dsh-cross-host-validation/run-upstream.mjs E:/DOON/deepseek-harness
-node experiments/dsh-cross-host-validation/run-upstream.mjs E:/DOON/deepseek-harness composition
+# 输入本机已核对的 DSH 源码目录；不要提交实际路径。
+$dshSource = Read-Host 'DSH 源码目录'
+node experiments/dsh-cross-host-validation/run-upstream.mjs "$dshSource"
+node experiments/dsh-cross-host-validation/run-upstream.mjs "$dshSource" composition
 ```
 
 `probe-local.mjs` 固定只访问 `http://127.0.0.1:8797` 的公开健康入口及客户项目页面；CLI `whoami` 使用无登录凭据的临时目录，必须返回 `AUTH_REQUIRED`。不调用登录、业务查询、写入、导入或任何部署入口。没有启动或重建 8797 的逻辑。

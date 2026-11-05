@@ -10,7 +10,7 @@
 
 ## 固定源码与环境
 
-- 来源：[DeepSeek 官方仓库](https://github.com/deepseek-ai/deepseek-harness)。本地克隆路径为 `E:\DOON\deepseek-harness`。
+- 来源：[DeepSeek 官方仓库](https://github.com/deepseek-ai/deepseek-harness)。本地克隆位置由操作者在私有环境配置，公开报告不记录实际绝对路径。
 - 提交：`fcc0ad462172522aaf5c93a7b2e01f6b9f0b0159`，包版本 `0.2.2-rc.1`；浅克隆包含该提交全部源码，不包含完整历史。
 - Windows，Node `24.14.0`，上游锁定的 pnpm `11.28.5`。
 - 使用 `pnpm install --frozen-lockfile --ignore-scripts`；未修改上游受版本管理的文件，未额外执行原生依赖构建。

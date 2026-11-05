@@ -10,7 +10,7 @@ import {isOutsourcingScope,matchesOutsourcingScope} from './outsourcing-workspac
 import {supplierImportGet,supplierImportPost} from './supplier-import-api';
 const key=(s:string)=>clean(s).toUpperCase();
 const stable=(v:any):string=>v===null||typeof v!=='object'?JSON.stringify(v):Array.isArray(v)?'['+v.map(stable).join(',')+']':'{'+Object.keys(v).sort().map(k=>JSON.stringify(k)+':'+stable(v[k])).join(',')+'}';
-const pmc=(m:Member)=>{if(!managesSuppliers(m))throw new AppError('权限受限：供应商资料、外发单和复期由 PMC / 采购（Candy、Tina）或管理员维护。',403);};
+const pmc=(m:Member)=>{if(!managesSuppliers(m))throw new AppError('权限受限：供应商资料、外发单和复期由获授权的 PMC / 采购人员或管理员维护。',403);};
 const date=(v:string)=>{try{strictDate(v);return v;}catch(e){throw new AppError((e as Error).message);}};
 export async function supplierGet(action:string,req:Request,s:State,m:Member){
  const supplierImport=await supplierImportGet(action,req,s,m);if(supplierImport)return supplierImport;
