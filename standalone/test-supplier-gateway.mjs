@@ -47,6 +47,8 @@ try{
  for(const method of ['GET','HEAD'])for(const route of ['/','/login','/index.html']){const response=await request(true,route,undefined,'',{},method);assert.equal(response.status,302);assert.equal(response.headers.get('location'),'/supplier-portal');assert.equal(await response.text(),'');}
  assert.equal((await request(true,'/',undefined,'',{Host:'attacker.test'})).status,403);
  assert.equal((await request(true,'/health')).status,200);assert.equal((await request(true,'/api/auth/session')).status,200);assert.equal((await request(false,'/login')).status,200);
+ assert.equal((await ok(true,'/api/auth/session')).value.cliSessionSupported,false);
+ assert.equal((await request(true,'/api/auth/cli-login',{username:'admin',password:'Synthetic-Admin-2026!'})).status,403);
  pass('Public GET/HEAD entry aliases redirect to the supplier portal only after gateway validation; health/API and internal login remain unchanged');
  assert.equal((await request(true,'/health',undefined,'',{Host:'attacker.test'})).status,403);
  assert.equal((await request(true,'/health',undefined,'',{'X-Forwarded-Host':'attacker.test'})).status,403);

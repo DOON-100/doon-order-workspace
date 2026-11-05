@@ -7,6 +7,15 @@ const scrypt=promisify(scryptCallback);
 const hashToken=token=>createHash('sha256').update(token).digest('hex');
 export const sessionName='doon_session';
 export const supplierSessionName='doon_supplier_session';
+export const cliSessionPolicy=Object.freeze({kind:'cli',maxAgeSeconds:90*24*3600,idleTimeoutSeconds:null});
+// Long-lived credentials have their own cookie/digest namespace. Browser and
+// supplier sessions keep their existing lifetime and cannot be promoted by headers.
+export function cliSessionOptions(options={}){
+ const name=cookieName(options);
+ if(options.supplierOnly||![sessionName,'doon_employee_session'].includes(name))fail('当前入口不提供 CLI 登录。',403);
+ return {...options,cookieName:name===sessionName?'doon_cli_session':'doon_employee_cli_session',employeeOnly:true};
+}
+function isCliSession(options){return ['doon_cli_session','doon_employee_cli_session'].includes(cookieName(options));}
 const departments=new Set(['pmc','titanium','outsourcing','plating','semifinished','plastic','finished','engineering','engineering_review']);
 let hashing=0;
 function fail(message,status=400){throw Object.assign(new Error(message),{status});}
@@ -22,21 +31,29 @@ export function revokeInactiveSessions(){
  for(const row of rows){let member;try{member=row.data?JSON.parse(row.data):null;}catch{member=null;}if(!member?.active||!activeSupplier(member))db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(row.id);}
 }
 export function session(request,options={}){
- const name=cookieName(options),match=(request.headers.get('cookie')||'').split(';').map(x=>x.trim()).find(x=>x.startsWith(name+'='));if(!match)return null;
+ const cookies=(request.headers.get('cookie')||'').split(';').map(x=>x.trim());
+ let name=cookieName(options),match=cookies.find(x=>x.startsWith(name+'='));
+ if(!match&&!options.supplierOnly&&[sessionName,'doon_employee_session'].includes(name)){
+  const cliOptions=cliSessionOptions(options),cliMatch=cookies.find(x=>x.startsWith(cliOptions.cookieName+'='));
+  if(cliMatch){options=cliOptions;name=options.cookieName;match=cliMatch;}
+ }
+ if(!match)return null;
  const token=match.slice(name.length+1);if(!/^[\w-]{43}$/.test(token))return null;const digest=sessionDigest(token,options),now=Date.now(),row=db.prepare('SELECT * FROM local_sessions WHERE token_hash=?').get(digest);if(!row)return null;
- if(row.expires_at<now||row.last_seen<now-2*3600000){db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(digest);return null;}
+ if(row.expires_at<=now||!isCliSession(options)&&row.last_seen<now-2*3600000){db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(digest);return null;}
  const account=db.prepare('SELECT * FROM local_accounts WHERE id=?').get(row.account_id),member=memberFor(account);
  if(!member?.active||!activeSupplier(member)){db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(row.account_id);return null;}
  if(options.supplierOnly&&member.role!=='supplier'||options.employeeOnly&&member.role==='supplier')return null;
- db.prepare('UPDATE local_sessions SET last_seen=? WHERE token_hash=?').run(now,digest);return {account,member,digest,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name,username:account.username}};
+ db.prepare('UPDATE local_sessions SET last_seen=? WHERE token_hash=?').run(now,digest);return {account,member,digest,sessionCookieName:name,identity:{userId:member.userId,email:member.email,displayName:member.name,fullName:member.name,username:account.username}};
 }
 export function publicSession(s){return s?{username:s.account.username,mustChange:!!s.account.must_change,role:s.member.role,personnelType:personnelTypeOf(s.member),...(s.member.role==='supplier'?{supplierId:s.member.supplierId}:{}),identity:{id:s.member.userId,name:s.member.name,email:s.member.email}}:null;}
-function cookie(token,secure,clear=false,options={}){return `${cookieName(options)}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear?0:43200}${secure?'; Secure':''}`;}
-function issue(account,secure,options={}){const token=randomBytes(32).toString('base64url'),now=Date.now();db.prepare('DELETE FROM local_sessions WHERE expires_at<?').run(now);db.prepare('INSERT INTO local_sessions VALUES(?,?,?,?)').run(sessionDigest(token,options),account.id,now+12*3600000,now);return cookie(token,secure,false,options);}
+function maxAge(options){return isCliSession(options)?cliSessionPolicy.maxAgeSeconds:43200;}
+function cookie(token,secure,clear=false,options={}){return `${cookieName(options)}=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${clear?0:maxAge(options)}${secure?'; Secure':''}`;}
+function issue(account,secure,options={}){const token=randomBytes(32).toString('base64url'),now=Date.now();db.prepare('DELETE FROM local_sessions WHERE expires_at<?').run(now);db.prepare('INSERT INTO local_sessions VALUES(?,?,?,?)').run(sessionDigest(token,options),account.id,now+maxAge(options)*1000,now);return cookie(token,secure,false,options);}
 function recordAuthEvent(username,account,member,event,ip,options={},reason=''){
  if(options.recordHistory===false)return;
  const authenticated=event!=='login_failure',address=String(ip||'').replace(/^::ffff:/,'');
- saveRecords([{id:'auth_event_'+randomUUID(),kind:'auth_event',event,action:{login_success:'登录成功',login_failure:'登录失败',logout:'退出登录'}[event],username:/^[a-z][a-z0-9._-]{2,31}$/.test(username)?username:'',accountId:account?.id||'',targetId:member?.id||'',actorId:authenticated?member?.id||'':'',actor:authenticated?member?.name||'':'未认证访问者',ip:isIP(address)?address:'',source:options.supplierOnly?'供应商入口':options.employeeOnly?'员工 HTTPS 入口':'内网入口',reason,createdAt:new Date().toISOString()}]);
+ const source=isCliSession(options)?cookieName(options)==='doon_employee_cli_session'?'CLI 员工 HTTPS 入口':'CLI 内网入口':options.supplierOnly?'供应商入口':options.employeeOnly?'员工 HTTPS 入口':'内网入口';
+ saveRecords([{id:'auth_event_'+randomUUID(),kind:'auth_event',event,action:{login_success:'登录成功',login_failure:'登录失败',logout:'退出登录'}[event],username:/^[a-z][a-z0-9._-]{2,31}$/.test(username)?username:'',accountId:account?.id||'',targetId:member?.id||'',actorId:authenticated?member?.id||'':'',actor:authenticated?member?.name||'':'未认证访问者',ip:isIP(address)?address:'',source,reason,createdAt:new Date().toISOString()}]);
 }
 export function authHistory(query){
  const username=String(query.get('username')||'').trim().toLowerCase(),limit=Number(query.get('limit')||50),before=query.get('before');
@@ -57,8 +74,8 @@ export async function login(body,ip,secure,options={}){const username=String(bod
  if(!valid||!current||current.password_hash!==account?.password_hash||!currentMember?.active||!activeSupplier(currentMember)||(options.supplierOnly&&currentMember.role!=='supplier')||(options.employeeOnly&&currentMember.role==='supplier')){transaction(()=>{for(const k of [key,globalKey])db.prepare('INSERT INTO login_attempts VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET failures=failures+1').run(k,now+15*60000);recordAuthEvent(username,current,currentMember,'login_failure',ip,options,'invalid_credentials');});fail('账号或密码不正确，或账号已停用。',401);}
  let signedCookie;transaction(()=>{db.prepare('DELETE FROM login_attempts WHERE key=?').run(key);signedCookie=issue(current,secure,options);recordAuthEvent(username,current,currentMember,'login_success',ip,options);});return {cookie:signedCookie,user:publicSession({account:current,member:currentMember})};
 }
-export function logout(s,secure,options={}){if(s)transaction(()=>{db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(s.digest);recordAuthEvent(s.account.username,s.account,s.member,'logout',options.ip,options);});return cookie('',secure,true,options);}
-export async function changePassword(s,body,secure,options={}){validatePassword(body.password);if(body.password===body.currentPassword)fail('新密码不能与原密码相同。');if(typeof body.currentPassword!=='string'||body.currentPassword.length>128||!await verify(body.currentPassword,s.account.password_hash))fail('原密码不正确。',401);const hash=await passwordHash(body.password);transaction(()=>{const current=db.prepare('SELECT password_hash FROM local_accounts WHERE id=?').get(s.account.id);if(current.password_hash!==s.account.password_hash)fail('密码刚被重置，请重新登录。',409);db.prepare('UPDATE local_accounts SET password_hash=?,must_change=0 WHERE id=?').run(hash,s.account.id);db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(s.account.id);saveRecords([auditLocal(s.member,'修改本人密码',s.member.id)]);});return issue(s.account,secure,options);}
+export function logout(s,secure,options={}){options={...options,...(s?.sessionCookieName?{cookieName:s.sessionCookieName}:{})};if(s)transaction(()=>{db.prepare('DELETE FROM local_sessions WHERE token_hash=?').run(s.digest);recordAuthEvent(s.account.username,s.account,s.member,'logout',options.ip,options);});return cookie('',secure,true,options);}
+export async function changePassword(s,body,secure,options={}){options={...options,...(s.sessionCookieName?{cookieName:s.sessionCookieName}:{})};validatePassword(body.password);if(body.password===body.currentPassword)fail('新密码不能与原密码相同。');if(typeof body.currentPassword!=='string'||body.currentPassword.length>128||!await verify(body.currentPassword,s.account.password_hash))fail('原密码不正确。',401);const hash=await passwordHash(body.password);transaction(()=>{const current=db.prepare('SELECT password_hash FROM local_accounts WHERE id=?').get(s.account.id);if(current.password_hash!==s.account.password_hash)fail('密码刚被重置，请重新登录。',409);db.prepare('UPDATE local_accounts SET password_hash=?,must_change=0 WHERE id=?').run(hash,s.account.id);db.prepare('DELETE FROM local_sessions WHERE account_id=?').run(s.account.id);saveRecords([auditLocal(s.member,'修改本人密码',s.member.id)]);});return issue(s.account,secure,options);}
 export async function createAccount(input,actor,{owner=false,existingMember}={}){
  const username=String(input.username||'').trim().toLowerCase(),name=String(input.name||'').trim();if(!/^[a-z][a-z0-9._-]{2,31}$/.test(username))fail('账号需为 3 至 32 位字母、数字、点、短横线或下划线，以字母开头。');if(!name||name.length>100)fail('请填写姓名。');
  const role=existingMember?.role||input.role||'clerk';if(!['admin','pmc','production','clerk','sales','finance','programmer','viewer','supplier'].includes(role))fail('角色无效。');const supplierId=role==='supplier'?String(existingMember?.supplierId||input.supplierId||'').trim():undefined;

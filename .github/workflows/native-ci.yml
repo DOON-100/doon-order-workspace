@@ -45,6 +45,8 @@ jobs:
       - name: Native HTTP and gateway tests
         run: |
           node standalone/test.mjs
+          node standalone/test-cli-auth.mjs
+          node standalone/test-auth-history.mjs
           node standalone/test-employee-gateway.mjs
           node standalone/test-supplier-gateway.mjs
           node standalone/test-code-update.mjs

@@ -21,7 +21,7 @@ import {BusinessDocumentWriteService} from './documents-write.js';
 import {OrderWriteService} from './order-write.js';
 import {KingdeeSalesService} from './kingdee-sales.js';
 import {ApiClient, cookieSession} from './client.js';
-import {StateStore} from './state.js';
+import {StateStore, sessionStatus} from './state.js';
 import {CliError} from './errors.js';
 import {ProjectChildWriteService,ProjectTaskWriteService,ProjectRecycleService,ProjectDevelopmentService,CustomerAttachmentService,CustomerTransferService,CustomerTaskService} from './project-child-write.js';
 import {SalesWriteService} from './sales-write.js';
@@ -112,25 +112,38 @@ export class FoundationService {
 
   async login(credentials: (origin: string) => Promise<{username: string; password: string}>) {
     const config = await this.store.config();
-    if (await this.store.session(config)) {
-      try { return {user: await this.whoami(), reused: true}; }
+    const existing = await this.store.session(config);
+    if (existing) {
+      try { return {user: await this.whoami(), reused: true, ...sessionStatus(existing, config)}; }
       catch (error) { if (!(error instanceof CliError) || error.code !== 'AUTH_REQUIRED') throw error; }
     }
     await this.store.checkCredentialStore();
+    const api = new ApiClient(config, this.transport);
     const input = await credentials(config.origin);
-    if (!/^[a-z][a-z0-9._-]{2,31}$/.test(input.username) || !input.password || input.password.length > 128) throw new CliError('INVALID_CREDENTIAL_INPUT', '请核对员工账号及密码格式。', 2);
     try {
-      const response = await new ApiClient(config, this.transport).request('/api/auth/login', null, input);
+      if (!/^[a-z][a-z0-9._-]{2,31}$/.test(input.username) || !input.password || input.password.length > 128) throw new CliError('INVALID_CREDENTIAL_INPUT', '请核对员工账号及密码格式。', 2);
+      const capability = (await api.request('/api/auth/session')).data;
+      userFrom(capability); // Probe before sending credentials; old servers reject unknown auth routes with 401.
+      let kind: 'cli' | 'web' = capability.cliSessionSupported === true ? 'cli' : 'web';
+      let response;
+      try { response = await api.request(kind === 'cli' ? '/api/auth/cli-login' : '/api/auth/login', null, input); }
+      catch (error) {
+        // Only a missing endpoint permits legacy fallback. Never retry a rejected
+        // password, throttled login or ambiguous network/server failure.
+        if (kind !== 'cli' || !(error instanceof CliError) || error.code !== 'NOT_FOUND') throw error;
+        kind = 'web';
+        response = await api.request('/api/auth/login', null, input);
+      }
       const user = userFrom(response.data);
       if (!user) throw new CliError('INVALID_RESPONSE', '登录后未返回员工身份。', 5);
-      const saved = cookieSession(response.headers, config);
+      const saved = cookieSession(response.headers, config, kind);
       try { await this.store.saveSession(saved); }
       catch {
         // Avoid orphaning a known session when local credential persistence fails.
         try { await new ApiClient(config, this.transport).request('/api/auth/logout', saved, {}); } catch {}
         throw new CliError('CREDENTIAL_STORE_FAILED', '登录后未能保存加密会话，请检查本机配置目录后重试。', 3);
       }
-      return {user, reused: false};
+      return {user, reused: false, ...sessionStatus(saved, config)};
     } finally { input.password = ''; }
   }
 
@@ -158,6 +171,7 @@ export class FoundationService {
     return {origin: config.origin, reachable: true, localTest: config.localHttp, readOnly: mode.readOnly,
       syntheticOnly: mode.syntheticOnly === true, authenticated: !!user, mustChange: user?.mustChange ?? false,
       credentialStorage: process.platform === 'win32' ? 'windows-dpapi-current-user' : 'unsupported',
+      ...sessionStatus(user ? await this.store.session(config) : null, config),
       serverBuild: null, compatibility: 'foundation-endpoints-probed',
       installedBusinessCommands: commands.length - foundationCommands.length, businessCommandsAvailable: null};
   }

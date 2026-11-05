@@ -32,6 +32,16 @@ try{
  assert.equal((await request('/api/workspace/data')).status,401);
  assert.equal((await request('/api/auth/login',{username:'admin',password:'Synthetic-Employee-2026!'},{Origin:'https://attacker.test'})).status,403);
  assert.equal((await request('/api/auth/login',{username:'supplier',password:'Synthetic-Supplier-2026!'})).status,401);
+ assert.equal(JSON.parse((await request('/api/auth/session')).body).cliSessionSupported,true);
+ assert.equal((await request('/api/auth/cli-login',{username:'admin',password:'Synthetic-Employee-2026!'},{Origin:'https://attacker.test'})).status,403);
+ assert.equal((await request('/api/auth/cli-login',{username:'supplier',password:'Synthetic-Supplier-2026!'})).status,401);
+ const cliSigned=await request('/api/auth/cli-login',{username:'admin',password:'Synthetic-Employee-2026!'});assert.equal(cliSigned.status,200);
+ assert.deepEqual(JSON.parse(cliSigned.body).sessionPolicy,{kind:'cli',maxAgeSeconds:7776000,idleTimeoutSeconds:null});
+ const cliCookie=cliSigned.headers['set-cookie'][0];assert.match(cliCookie,/^doon_employee_cli_session=.*HttpOnly; SameSite=Strict.*Max-Age=7776000; Secure$/);
+ const cliToken=cliCookie.split(';')[0];assert.equal((await request('/api/workspace/data',undefined,{Cookie:cliToken})).status,200);
+ assert.equal(JSON.parse((await request('/api/auth/session',undefined,{Cookie:cliToken.replace('doon_employee_cli_session','doon_employee_session')})).body).user,null);
+ const cliLogout=await request('/api/auth/logout',{}, {Cookie:cliToken});assert.equal(cliLogout.status,200);assert.match(cliLogout.headers['set-cookie'][0],/^doon_employee_cli_session=;.*Max-Age=0; Secure$/);
+ assert.equal((await request('/api/workspace/data',undefined,{Cookie:cliToken})).status,401);
  const signed=await request('/api/auth/login',{username:'admin',password:'Synthetic-Employee-2026!'});assert.equal(signed.status,200);const cookie=signed.headers['set-cookie'][0];assert.match(cookie,/^doon_employee_session=.*HttpOnly; SameSite=Strict.*Secure/);const token=cookie.split(';')[0];
  assert.equal((await request('/api/workspace/data',undefined,{Cookie:token})).status,200);
  const loginHistory=await request('/api/auth/history',undefined,{Cookie:token});assert.equal(loginHistory.status,200);

@@ -1,6 +1,7 @@
 import {CliError} from './errors.js';
 import {version} from './catalog.js';
 import type {Config, SavedSession} from './state.js';
+import {cliSessionMaxAge, sessionCookieName, validSessionCookie} from './state.js';
 import {routes, type Route, type RequestOptions} from './routes.js';
 
 export class ApiClient {
@@ -33,8 +34,7 @@ export class ApiClient {
     }
     if (route === '/api/workspace/process-data' && !url.searchParams.has('type')) throw new CliError('INVALID_QUERY', '流程查询必须限定类型。', 2);
     if (session) {
-      const name = this.config.localHttp ? 'doon_session' : 'doon_employee_session';
-      if (session.origin !== this.config.origin || !new RegExp('^' + name + '=[\\w-]{43}$').test(session.cookie)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);
+      if (session.origin !== this.config.origin || !validSessionCookie(session.cookie, this.config)) throw new CliError('INVALID_SESSION', '会话地址不匹配。', 4);
       headers.Cookie = session.cookie;
     }
     if(mutating)headers.Origin=this.config.origin;
@@ -112,12 +112,13 @@ export class ApiClient {
   }
 }
 
-export function cookieSession(headers: Headers, config: Config): SavedSession {
-  const name = config.localHttp ? 'doon_session' : 'doon_employee_session';
+export function cookieSession(headers: Headers, config: Config, kind: 'web' | 'cli' = 'web'): SavedSession {
+  const name = sessionCookieName(config, kind === 'cli');
   const matches = headers.getSetCookie().filter(cookie => cookie.startsWith(name + '='));
   if (matches.length !== 1) throw new CliError('INVALID_RESPONSE', '登录响应缺少有效员工会话，请核对员工入口。', 5);
   const cookie = matches[0], value = cookie.split(';')[0], age = cookie.match(/;\s*Max-Age=(\d+)(?:;|$)/i);
   if (!new RegExp('^' + name + '=[\\w-]{43}$').test(value) || !/;\s*HttpOnly(?:;|$)/i.test(cookie) ||
-    (!config.localHttp && !/;\s*Secure(?:;|$)/i.test(cookie)) || !age || Number(age[1]) < 1 || Number(age[1]) > 43200) throw new CliError('INVALID_RESPONSE', '服务器会话格式不符合当前员工入口协议。', 5);
+    (!config.localHttp && !/;\s*Secure(?:;|$)/i.test(cookie)) || !age || Number(age[1]) < 1 ||
+    (kind === 'cli' ? Number(age[1]) !== cliSessionMaxAge || !/;\s*SameSite=Strict(?:;|$)/i.test(cookie) || !/;\s*Path=\/(?:;|$)/i.test(cookie) : Number(age[1]) > 43200)) throw new CliError('INVALID_RESPONSE', '服务器会话格式不符合当前员工入口协议。', 5);
   return {origin: config.origin, cookie: value, expiresAt: Date.now() + Number(age[1]) * 1000};
 }
