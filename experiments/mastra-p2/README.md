@@ -13,7 +13,7 @@ npm ci --no-audit --no-fund
 npm test
 ```
 
-将 `.env.example` 复制为 `.env.local`，在本机文件中填写 `DEEPSEEK_API_KEY`。不要把密钥放在命令参数、聊天、Git 或日志中。本目录忽略 `.env*`，只有空模板允许提交。账号需有官方 API 可用余额。
+将 `environment.example` 复制为 `.env.local`，在本机文件中填写 `DEEPSEEK_API_KEY`。不要把密钥放在命令参数、聊天、Git 或日志中。本目录忽略 `.env*`，只有空模板允许提交。账号需有官方 API 可用余额。
 
 Base URL 固定为 `https://api.deepseek.com`，模型固定为 `deepseek-v4-pro`。使用原生 `createDeepSeek` 对象传给 Mastra，避免在 Mastra router 中配置 `url` 后转成另一种兼容适配器。没有网关、自动回退模型或供应商切换。
 

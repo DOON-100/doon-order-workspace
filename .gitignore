@@ -64,9 +64,23 @@ __pycache__/
 *.pfx
 *.log
 
-# Encrypted backup archives may be published; plaintext archives and keys may not.
-/encrypted-backups/**/*.tar
-/encrypted-backups/**/*.tar.gz
+# Production backups stay private, including ciphertext and backup manifests.
+/encrypted-backups/*
+!/encrypted-backups/README.md
+*.enc
+
+# Original business documents and archives are never public test fixtures.
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+*.pdf
+*.zip
+*.tar
+*.gz
+*.bak
+*.dump
 /backup-keys/
 
 # Private import jobs, customer configuration, source files, and generated reports.
@@ -74,3 +88,10 @@ __pycache__/
 
 # Retired one-off task script retained locally; do not publish it again.
 /scripts/setup-jinbo-pilot.mjs
+
+# Private local work notes and deployment target settings.
+/.workbuddy/
+/deploy-tool/local-config.json
+
+# Retired production maintenance report, retained privately on this machine.
+/协作修复说明-20260917.md

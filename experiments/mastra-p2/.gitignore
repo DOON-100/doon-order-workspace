@@ -1,6 +1,6 @@
 node_modules/
 .env*
-!.env.example
+!environment.example
 test-output/
 *.log
 *.sqlite*

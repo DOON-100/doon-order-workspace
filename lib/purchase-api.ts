@@ -6,7 +6,7 @@ import {all,broad,newId,now,strictDate,type State,type Member,type Entity} from 
 import {AppError,audit,bucket,commit,json} from './store';
 import {parsePurchases} from './purchase-import';
 import {purchaseHeaders,purchaseKey,visiblePurchases,filterPurchases,followFields,remaining,full,sourceClosed,purchaseStatus,roundQty,type Purchase} from './purchases';
-const manage=(m:Member)=>{if(!broad(m))throw new AppError('权限受限：仅 PMC / 采购 Candy、Tina 和管理员可维护采购跟单。',403);};
+const manage=(m:Member)=>{if(!broad(m))throw new AppError('权限受限：仅获授权的 PMC / 采购人员和管理员可维护采购跟单。',403);};
 function validDate(v:string){try{return strictDate(v);}catch(e){throw new AppError((e as Error).message);}}
 function download(bytes:BodyInit,name:string){return new Response(bytes,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(name)}`,'Cache-Control':'no-store'}});}
 function excel(rows:Record<string,unknown>[],name:string,columns?:string[]){const book=XLSX.utils.book_new(),sheet=XLSX.utils.json_to_sheet(rows,{header:columns});sheet['!cols']=(columns||Object.keys(rows[0]||{})).map(k=>({wch:k.includes('备注')||k==='供应商'?36:20}));if(sheet['!ref'])sheet['!autofilter']={ref:sheet['!ref']};XLSX.utils.book_append_sheet(book,sheet,name);return XLSX.write(book,{type:'array',bookType:'xlsx'}) as ArrayBuffer;}

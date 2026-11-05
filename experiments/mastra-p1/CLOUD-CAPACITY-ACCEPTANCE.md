@@ -1,62 +1,16 @@
-# 云服务器容量验收准备
+# 云服务器容量验收方法与历史结论
 
-状态：**已取得用户提供的空闲时段手动采样；该窗口内的资源初筛通过，生产容量仍未验收。** 采样起始时间为北京时间 2026-10-16 23:28:49，用户明确当时比较空闲。助手没有直接连接 ECS、部署 Mastra 或执行压力测试；`cloud-capacity-probe.sh` 尚未在 ECS 上执行。
+公开版仅保留采样方法、合成验收结果和证据边界。实际实例配置、地域、系统与资源指纹、采样时刻、服务属性和监听对应记录已转为私有材料；本文不提供实际部署目标或连接配置。
 
-已知目标是深圳 `cn-shenzhen` 的共享型经济型 e 实例 `ecs.e-c1m2.large`：2 vCPU、标称 4 GiB 内存，系统可见约 3.5 GiB，Ubuntu 24.04.5 LTS、x86_64/KVM，80 GiB 系统盘和 4 GiB swap。以上是既有记录，不代替当前实测。共享实例的 CPU steal、现有服务、备份和业务高峰都会影响余量；swap 不能作为等量可用内存。模型暂定外部 DeepSeek V4 Pro，本机不加载模型权重；API 等待也不能消除应用、认证 worker 和数据库的资源占用。
+## 历史结论及限制
 
-## 2026-10-16 空闲基线
+历史上已收到用户提供的空闲时段手动采样、服务资源快照与监听归属摘要，记录支持当时空闲资源的初步筛查；这些是用户提供的证据，未经该轮助手远程独立复核。该轮助手没有连接 ECS、部署 Agent 或执行压力测试，`cloud-capacity-probe.sh` 尚未在目标实例执行。
 
-证据来自用户在对话中粘贴的 `date/uptime/free/df/node/vmstat/PSI/ps` 原始输出，未经助手远程独立复核。`date` 给出查询起始时间，后续命令依次执行，不把所有指标当作同一瞬间的原子快照。这里仅记录非敏感汇总，不提交实例 ID、IP、账号、实际服务配置或进程参数。
+单次空闲采样、服务处于运行状态和监听归属匹配，不证明业务高峰、持续稳定、真实容量、TLS、数据库完整性或同机 Agent 的影响。不同时间的服务和监听查询不能当作同一原子快照，服务级配置也不能代替父级有效限制。
 
-| 项目 | 用户提供的结果 | 本窗口判断 |
-| --- | --- | --- |
-| 运行状态 | 已运行约 2 天 23 小时；load average 0.00 / 0.00 / 0.00 | 当时负载低；不能推断历史没有重启或故障 |
-| 内存 | total 3.5 GiB，used 638 MiB，available 2.9 GiB；free 261 MiB，buff/cache 2.9 GiB | 可用内存快照超过初筛门槛；不能把单次 2.9 GiB 称为整个窗口最小值 |
-| Swap | 4 GiB 中已用约 1 MiB；采样 si/so 均 0 | 该短窗口未观察到换入换出，不把 swap 算作额外运行内存 |
-| CPU | 剔除首行后 10 个一秒区间，idle 98–100%，均值约 98.8%；r 为 0–1，b 为 0，wa/st 均为 0 | 此时 CPU 余量充足；不证明共享 CPU 在高峰仍无争抢 |
-| 压力 | CPU some avg10/60/300 为 2.67 / 1.00 / 0.23；memory 和 IO 的 some/full 平均值均 0.00 | 有短时 CPU 等待，未显示近期持续内存／IO 压力；不把 CPU some 当作 CPU 使用率 |
-| 磁盘 | 根分区 79G，总已用 16G、可用 60G，Use% 21% | 当前空间超过初筛门槛；没有磁盘延迟证据 |
-| inode | 总 5,224,464，空闲 5,051,175，IUse% 4% | 约 96.7% inode 空闲 |
-| Node | v24.14.0 | 满足 P1/P2 package.json 的 >=22.13.0；不替代 Linux 上安装依赖和运行 SDK 的验证 |
-| 进程摘要 | 所列最大单进程 RSS 105,768 KiB，约 103.3 MiB | 不能仅凭 comm 名称确认它是 Node、正式应用或 8787，也不能由前 11 个进程判定没有数据库 |
+项目源码使用 `node:sqlite`，见 [standalone/runtime.mjs](../../standalone/runtime.mjs)；源码类型不证明云端实际运行配置。Agent 的状态、会话和建议必须使用独立存储，不能复用业务数据库目录。后续仍须取得父级有效资源限制、代表性高峰、备份窗口、异常退出及隔离负载证据，不能将空闲初筛扩大为生产容量验收。
 
-计算使用 `vmstat` 的后 10 行 idle 值 `[98,99,98,99,99,99,100,99,99,98]`。第一行 CPU/交换等速率反映自启动以来的平均，不计入这次区间均值；进程和内存列本身为瞬时值。字段语义见 [vmstat 上游手册](https://man7.org/linux/man-pages/man8/vmstat.8.html)。`free` 的 available 是对无需交换即可供新应用使用内存的估计，不能只看 free 列；见 [free 上游手册](https://man7.org/linux/man-pages/man1/free.1.html)。
-
-PSI `some` 是至少部分任务因该资源等待的时间比例，和 CPU idle 不是同一指标，两者可以同时出现。`total` 是累计等待微秒；用户提供的非零 memory/IO total 不证明当前存在故障，也不足以求本窗口增量。系统级 CPU `full` 没有定义，兼容性输出的零值不作为“无 CPU 压力”的证据。以上依据 [Linux 内核 PSI 文档](https://docs.kernel.org/accounting/psi.html)。
-
-**结论：当前没有证据支持仅因空闲资源不足就升级实例；可以继续准备并发 1 的隔离合成试点，但不能据此宣布同机部署不会影响正式服务。** 后续已收到下述服务资源快照并核对 8787 监听进程归属，仍缺业务高峰／备份窗口、云端实际数据库确认、OOM／重启增量、父级有效资源限制及 Agent 自身 Linux 资源峰值。与本文件后述“代表性窗口”门槛相比，本次仅通过已采到的空闲资源子集，没有通过完整容量验收。
-
-后续在真实业务较忙时重复相同只读采样；无需为补证据而读取业务库或开放认证给助手。若尚无业务高峰，记录该限制，保持隔离测试阶段。并发 1 是试点起点，不是实测最大并发；本轮不启动同机负载、不新增数据库或修改任何正式服务。
-
-## 后续补充：运行服务与 SQLite 判断
-
-用户已提供运行中的 systemd 服务清单，其中包含项目服务和 Nginx。具体项目部署服务名、完整清单及私有配置不入公开仓库。该列表只反映查询时处于 running 状态的服务，不能证明 Nginx 的上游、项目服务的监听端口或部署用途；服务名称带有 test 也不构成允许修改它的授权。当前列出的服务没有常见独立 PostgreSQL／MySQL／MariaDB 服务条目，但不能排除其他命名、容器、远端数据库或未运行的安装。
-
-用户随后说明数据库“应该是 SQLite”。源码证据与此一致：[standalone/runtime.mjs](../../standalone/runtime.mjs) 导入 `node:sqlite`，并通过 `DatabaseSync` 打开 `dataDir` 下的 `workspace.sqlite`。因此记录为 **当前项目源码使用 SQLite；云端实际运行版本与配置待确认**。本轮没有打开数据库文件，也不需要通过查询业务记录来确认。
-
-初期合成试点可沿用已验证的独立 SQLite/libSQL 存储方式：Agent 状态、会话和建议账本只能写入新建实验目录，不能指向现有业务数据库、复用其目录或执行迁移。当前阶段没有新增 PostgreSQL 服务的必要前提；未来若选择 PostgreSQL，再独立验收其部署、迁移、事务和容量。源码采用 SQLite 并不证明云端 SQLite/libSQL 原生依赖、锁竞争、持久化及备份恢复已通过。
-
-### 服务资源快照
-
-用户进一步提供了两项服务的单次 `systemctl show` 结果，未附该次查询时间，不与前述 23:28:49 起始采样视为同一瞬间。原始服务名及 PID 不入公开记录。
-
-| 属性 | 项目服务 | Nginx |
-| --- | --- | --- |
-| LoadState / ActiveState / SubState | loaded / active / running | loaded / active / running |
-| MemoryCurrent | 59,424,768 bytes，约 56.7 MiB | 7,008,256 bytes，约 6.7 MiB |
-| MemoryPeak | 69,742,592 bytes，约 66.5 MiB | 10,670,080 bytes，约 10.2 MiB |
-| TasksCurrent | 11 | 3 |
-| NRestarts | 0 | 0 |
-| CPUQuotaPerSecUSec / MemoryHigh / MemoryMax | 均为 infinity | 均为 infinity |
-| EffectiveMemoryMax | 未提供，按未知处理 | 未提供，按未知处理 |
-
-换算使用 1 MiB = 1,048,576 bytes。当前服务内存占用较低；`MemoryCurrent/MemoryPeak` 是服务 cgroup 的核算值，不能与前述单进程 RSS 直接比较或据此推断内存下降。峰值的统计周期未确认，不作为代表性业务高峰证据，也不把两服务各自峰值相加当作同时峰值。`TasksCurrent` 包含线程，不代表业务并发数。`NRestarts=0` 仅记录本次采样的自动重启计数，不能证明从未手动重启、没有历史故障，或代替窗口内计数增量。
-
-三项 `infinity` 表示这些服务级属性没有显式配额／内存阈值，不能证明整机资源无限或父级 cgroup 没有限制。有效限制仍待确认，见 [systemd 资源控制文档](https://github.com/systemd/systemd/blob/main/man/systemd.resource-control.xml)。本轮不修改现有服务限制；未来如执行获准的隔离实验，只为新实验进程制定资源预算。
-
-用户随后提供了 8787 的 `ss` 脱敏监听摘要：`matching_listener_rows=1`、`process_metadata_rows=1`，所报监听 PID 与前述项目服务 `MainPID` 一致。**这组用户提供的快照已核对 8787 由项目服务主进程监听。** 公开记录不保留具体 PID、文件描述符、地址或项目服务名。两次查询未附同步时间，单次对应关系不证明持续监听、业务响应正常、Nginx 转发关系、TLS 正确或数据库完整性，也不能作为新增负载下的容量验收。无需为确认该对应关系而请求 8787 接口。
-
-上述补证据仅涉及服务白名单属性和内核监听摘要，不输出 IP、`ExecStart`、`Environment`、完整 unit 或应用日志。`systemctl show --property` 用于选择属性，见 [systemctl 手册](https://man7.org/linux/man-pages/man1/systemctl.1.html)；`ss -lntp` 读取监听信息，不发起到该端口的连接，见 [ss 手册](https://man7.org/linux/man-pages/man8/ss.8.html)。后续采样若遇到缺失属性、`[not set]`、权限不足或未显示的进程归属，均按未知处理，不能当作零占用。`MainPID` 也可能是包装进程，监听子进程 PID 不相同本身不能否定归属。监听摘要仅提取 `users:(...)` 和匹配行数，不取可能包含地址的末列；命令报错必须保留，不能把失败解释为零监听。
+原始记录和本次撤下前副本保留在访问受限的私有位置。公开副本的脱敏不改变历史验收结论，也不表示重新运行过测试。
 
 ## 采样范围与使用
 
@@ -76,9 +30,9 @@ bash cloud-capacity-probe.sh --service example-app.service --service nginx.servi
 
 输出是带 `BEGIN/END`、`STATUS` 和 `RESULT` 的固定标记文本。退出码 `0` 只表示本次命令执行完成；`2` 表示有指标不可用；`64` 表示参数无效；`69` 表示不是 Linux。缺失工具、无权限、空值、`[not set]` 或 `LoadState=not-found` 都不能当作零占用。脚本不会为补齐指标安装工具或改变服务的 accounting 设置。systemd 只读 `Id/LoadState/ActiveState/SubState/MainPID/NRestarts/TasksCurrent/MemoryCurrent/MemoryPeak/MemorySwapCurrent/CPUUsageNSec/MemoryHigh/MemoryMax/MemorySwapMax`，不读取 `ExecStart`、`Environment`、日志或完整 unit 配置。
 
-服务 CPU 是累计纳秒，需用两个观察点的差值除以实际时间间隔；以整机 2 vCPU 容量为分母时再除以 2。`MemoryPeak` 是服务统计周期内峰值，不能直接等同本次窗口峰值。PSI 的 `total` 是累计值，应按前后差值判读；平均值、swap 已用量和 OOM 累计次数必须结合时间窗口，不能把过去的事件当作本次发生。
+服务 CPU 是累计纳秒，需用两个观察点的差值除以实际时间间隔；换算为整机比例时，再按当时实际可用 CPU 数归一化。`MemoryPeak` 是服务统计周期内峰值，不能直接等同本次窗口峰值。PSI 的 `total` 是累计值，应按前后差值判读；平均值、swap 已用量和 OOM 累计次数必须结合时间窗口，不能把过去的事件当作本次发生。
 
-连接资料参考 `../../docs/alibabacloud-workbench-cli.md`。用户已提供深圳目标实例 ID 和 `default` profile；实例 ID 不入公开仓库。原文档安装位置未找到程序，本轮从用户提供的 [官方安装来源](https://workbench-cli.oss-cn-hangzhou.aliyuncs.com/install.ps1) 获取同源 Windows amd64 包，强制匹配官方 SHA-256 后在 worktree 外独立解出 Workbench v1.0.4（commit `693d621`），没有执行安装脚本或修改 PATH。官方压缩包 SHA-256 为 `8637da8ed8133ffdb4cfba88e60e809003ea6c39f0cc601d325c871c726d3e41`。实际 CLI `config list --output json` 返回配置文件不存在，需要用户在本机交互配置认证后才能连接。
+连接方法参考 [Workbench 通用说明](../../docs/alibabacloud-workbench-cli.md)。实例、地域、认证 profile 和本机工具位置由运维从私有配置核对；公开文档不记录已连接目标或认证状态。历史验证曾独立校验官方工具下载包，并在本机认证配置缺失时停止连接，没有读取凭据或修改 PATH。具体机器记录不作为可公开复用的配置。
 
 不读取或复制配置文件来获取凭据，不能执行现有账号历史查询或部署脚本代替 OS 采样。Workbench 本身可能保存命令执行审计；“只读”指本脚本不写业务数据或改变服务，不承诺云平台没有审计事件。
 
@@ -92,8 +46,8 @@ bash cloud-capacity-probe.sh --service example-app.service --service nginx.servi
 
 | 观察项 | 建议初筛门槛 |
 | --- | --- |
-| 内存 | 代表性窗口 `MemAvailable` 不低于 1 GiB，且不低于可见内存的 25%；没有 OOM 增量、持续 swap-in/out 或持续 memory PSI full 压力。4 GiB swap 不计作预算余量。 |
-| CPU | 代表性窗口至少保留约 30% idle 余量；运行队列不持续超过 2；反复出现 steal ≥5% 或 iowait ≥10% 时暂停结论并延长观察。阈值不能只套在启动平均行上。 |
+| 内存 | 代表性窗口 `MemAvailable` 不低于 1 GiB，且不低于可见内存的 25%；没有 OOM 增量、持续 swap-in/out 或持续 memory PSI full 压力。swap 不计作预算余量。 |
+| CPU | 代表性窗口至少保留约 30% idle 余量；运行队列不持续超过实际可用 CPU 数；反复出现 steal ≥5% 或 iowait ≥10% 时暂停结论并延长观察。阈值不能只套在启动平均行上。 |
 | 磁盘 | 根文件系统可用空间至少 15 GiB 且至少 20%，inode 至少 20%；还需单独计入未来独立测试目录、日志和保留周期的空间预算。 |
 | 服务稳定 | 观察窗口没有新增异常重启、OOM 或持续资源压力；8787 的监听状态保持原状。监听正常本身不证明业务响应或数据完整性。 |
 
@@ -111,6 +65,6 @@ bash cloud-capacity-probe.sh --service example-app.service --service nginx.servi
 
 ## 本轮可交付与验收状态
 
-本轮交付采样脚本、使用说明、本机连接工具，以及 Bash 语法／帮助入口和 12 项离线模拟场景验证。离线场景包括参数拒绝、IPv4／IPv6 脱敏、默认不查询服务、显式服务白名单、缺少 vmstat 和非 Linux 拒绝；它们不计作 Linux 实机或 ECS 性能证据。另已取得并分析用户提供的短时空闲 ECS 采样、运行服务清单、两项服务资源快照及 8787 监听摘要；真实并发容量、与正式服务同机的影响、数据库运行开销、实际网络延迟和模型吞吐仍未实测。容量状态为 **空闲资源初筛通过，服务资源快照与监听归属已记录；等待父级有效限制、代表性高峰及隔离负载证据**。用户继续提供手动采样即可推进判断，不以助手取得云凭据为前提。本次补录仅修改验收文档并核对差异，没有重跑离线测试或新增模型调用。
+历史交付包含参数化采样脚本、使用说明和 Bash 语法／帮助入口，以及 12 项离线模拟场景验证。离线场景包括参数拒绝、IPv4／IPv6 脱敏、默认不查询服务、显式服务白名单、缺少 vmstat 和非 Linux 拒绝；它们不计作 Linux 实机或 ECS 性能证据。实际目标和资源采样保留在私有记录中，历史容量状态仍为：空闲资源初筛与监听归属已有记录，父级有效限制、代表性高峰及隔离负载尚待验收。本次仅脱敏文档，没有重跑离线测试或新增模型调用。
 
 本地检查使用 Windows 上的 Git Bash：`bash -n` 和 `--help` 通过；12 项离线场景通过，包含合成 OS 指标、IPv4/IPv6 地址隐藏与端口范围、默认不查询服务、显式服务属性白名单、8 类无效参数拒绝、缺失 `vmstat` 返回不完整、非 Linux 提前拒绝。离线场景用 shell 函数替换系统命令，不读取真实业务数据，也没有真实运行 Linux 的 10 秒采样；这不能替代 Ubuntu 上的执行验证。

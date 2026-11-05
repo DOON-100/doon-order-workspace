@@ -203,15 +203,13 @@ v0.5 明确当前阶段一的优先约束：固定程序可以完成的任务直
 | 云采样脚本 | 语法／帮助通过，12/12 离线模拟 | 未在 ECS 执行脚本，不能代替实机容量 |
 | 原生网关 | 登录、改密、会话、退出、CSRF、角色与 Cookie 属性等 | HTTP 模拟代理头、手动回传 Cookie；真实 TLS 和浏览器策略未验收 |
 
-最新结果见 [登录、模型复测与网关验收](https://github.com/DOON-100/doon-order-workspace/blob/c8ee1a93924bd0808b67227532801160c226fc42/experiments/mastra-p1/LOGIN-LIVE-ACCEPTANCE.md)。历史费用账本应保留累计记录，不换目录清零；本次整理文档没有调用收费模型。
+最新结果见 [登录、模型复测与网关验收](../experiments/mastra-p1/LOGIN-LIVE-ACCEPTANCE.md)。历史费用账本应保留累计记录，不换目录清零；本次整理文档没有调用收费模型。
 
 ### 3.7 云端空闲基线
 
-实验分支最新报告记录用户在 2026-10-16 北京时间 23:28:49 起提供的短时手动采样：可用内存快照约 2.9 GiB，剔除 vmstat 首行后的 10 个一秒区间 CPU idle 平均约 98.8%，根分区可用约 60G，短窗口未观察到交换活动，并提供了运行服务清单。
+实验历史记录包含用户提供的空闲采样、服务资源与监听归属摘要，支持当时的空闲资源初筛。实际配置、资源指纹、采样时刻和服务细节保留在私有材料；公开版不复制这些内容。
 
-这些是用户提供的非敏感摘要，未由本轮助手远程复核；不能推导业务高峰、最小可用内存、Agent 吞吐或同机影响。项目源码采用 SQLite，云端实际运行版本和配置仍待确认。详见 [云容量记录](https://github.com/DOON-100/doon-order-workspace/blob/c8ee1a93924bd0808b67227532801160c226fc42/experiments/mastra-p1/CLOUD-CAPACITY-ACCEPTANCE.md)。
-
-后续用户提供的单次服务属性显示项目服务和 Nginx 均在运行，当前内存分别约 56.7 MiB、6.7 MiB，所报统计峰值分别约 66.5 MiB、10.2 MiB，自动重启计数均为 0。相邻监听摘要中，8787 的监听 PID 与项目服务 MainPID 一致。两次查询未附同步时间，不据此推断持续稳定或业务健康；服务级限制为 infinity 也不能排除父级限制。补充记录见 [服务资源与监听归属](https://github.com/DOON-100/doon-order-workspace/blob/768392e37a7fea08e381a278209dc28daf9dea7a/experiments/mastra-p1/CLOUD-CAPACITY-ACCEPTANCE.md)。公开文档不记录实际 PID、实例标识或私有服务配置。
+这些历史证据未经该轮助手远程独立复核，不能推导业务高峰、Agent 吞吐、持续稳定或同机影响。项目源码采用 SQLite，不等于云端运行配置已核实；不同时间的服务与监听查询也不构成原子快照。具体方法和限制见 [容量验收说明](../experiments/mastra-p1/CLOUD-CAPACITY-ACCEPTANCE.md)。本次文档脱敏未重新执行容量测试。
 
 ### 3.8 仍未验证的能力
 
@@ -1136,7 +1134,7 @@ Mastra 复用 `suspend()`／`resume()` 与持久化快照；等待人工期间�
 
 仅提交源码、方案、合成测试和允许公开的说明。数据库、原表、附件、会话、密钥、生产任务载荷、备份明文与私有配置不提交。
 
-需要同步生产备份时沿用项目已授权的加密流程：SQLite 在线快照、附件校验、完整解密还原验证后，仅将 AES-256-GCM 密文及无业务内容公开清单放入 `encrypted-backups/`；密钥只留在本机被忽略的私有目录。源码和文档编辑不自动触发数据同步。
+生产备份继续使用 SQLite 在线快照、附件校验和完整解密还原验证；自 2026-11-05 起，密文及清单仅保存在本机被忽略的私有目录或受控私有存储，不提交公开仓库。密钥与备份分开保管。源码和文档编辑不自动触发数据同步。
 
 Git 提交和推送不等于部署。本设计文档的提交不启动、停止或重启正式服务。
 
@@ -1437,7 +1435,7 @@ C1/C2 均先只写独立合成 Agent 账本。B2 的真实影子试点与后续�
 - 用户提供的《阿里云服务器连接说明.md》：环境说明，本文不复制连接标识和凭据。
 - 用户提供的 P1《README.md》《ACCEPTANCE.md》：历史验证范围与结果；本轮未重跑。
 - 本机实验分支 `codex/mastra-local-validation` 的 `examples/mastra-local/README.md`、`validation.test.mjs`、`lab.mjs`、`runtime-worker.mjs`：本轮读取了部分实现核对边界；不表示这些文件已合入主分支。
-- 远端实验快照 `c8ee1a93924bd0808b67227532801160c226fc42` 下 P1 的 `AUTH-MODEL-ACCEPTANCE.md`、`PROJECT-AUTH-ACCEPTANCE.md`、`LOGIN-LIVE-ACCEPTANCE.md`、`CLOUD-CAPACITY-ACCEPTANCE.md` 与 P2 的 `ACCEPTANCE.md`、README：本轮读取最新记录，具体证据链接见第 3 节。
+- 历史实验快照中的 P1 `AUTH-MODEL-ACCEPTANCE.md`、`PROJECT-AUTH-ACCEPTANCE.md` 及 P2 验收材料按第 3 节保留对应版本证据。登录联调与云容量材料使用当前公开脱敏版：[登录验收](../experiments/mastra-p1/LOGIN-LIVE-ACCEPTANCE.md)、[容量方法](../experiments/mastra-p1/CLOUD-CAPACITY-ACCEPTANCE.md)；实际运维原文另存私有位置，不通过历史直链重新公开。
 
 ### 24.3 当前代码
 

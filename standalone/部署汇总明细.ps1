@@ -1,4 +1,6 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $projectRoot
 $nodePath = 'C:\Program Files\nodejs\node.exe'
@@ -41,12 +43,12 @@ try {
         } catch {}
     }
     if (-not $ready) { throw '更新后服务没有恢复。' }
-    $page = Invoke-WebRequest -UseBasicParsing 'http://192.168.1.176:8787/' -TimeoutSec 5
+    $page = Invoke-WebRequest -UseBasicParsing ($lanOrigin + '/') -TimeoutSec 5
     $expectedHtml = Get-Content -LiteralPath (Join-Path $stage 'client\index.html') -Raw
     if ($page.Content.Trim() -ne $expectedHtml.Trim()) { throw '内网页面未加载本次构建。' }
     & $nodePath 'scripts/verify-metric-live.mjs' after
     if ($LASTEXITCODE -ne 0) { throw '部署前后业务数据检查未通过。' }
-    [pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$true;oldPid=$child.ProcessId;newPid=$fresh.pid;rollback=$rollback;checks=$checks.passed;businessChecks=$business.passed;url='http://192.168.1.176:8787';businessDataPreserved=$true} | ConvertTo-Json | Set-Content -LiteralPath 'test-output\metric-deployment.json' -Encoding utf8
+    [pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$true;oldPid=$child.ProcessId;newPid=$fresh.pid;rollback=$rollback;checks=$checks.passed;businessChecks=$business.passed;url=$lanOrigin;businessDataPreserved=$true} | ConvertTo-Json | Set-Content -LiteralPath 'test-output\metric-deployment.json' -Encoding utf8
     Get-Content -LiteralPath 'test-output\metric-deployment.json' -Raw
 } catch {
     Copy-Item -LiteralPath (Join-Path $rollback 'workspace-api.mjs') -Destination (Join-Path $live 'workspace-api.mjs') -Force
