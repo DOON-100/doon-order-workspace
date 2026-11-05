@@ -1,63 +1,27 @@
-# 阿里云服务器日常连接
+# 云服务器维护入口
 
-## 当前环境
+本文件只记录通用连接方法。实际实例 ID、地域、机器规格、资源采样、连接状态与运维记录保存在受控私有位置，不提交公开仓库。连接、部署、重启或业务数据操作均须遵循对应任务的授权范围。
 
-| 项目 | 已确认情况 |
-| --- | --- |
-| 本机 | Windows 10 家庭中文版，64 位，使用 PowerShell |
-| 服务器地域 | 深圳，`cn-shenzhen` |
-| ECS 实例型号 | `ecs.e-c1m2.large` |
-| 实例系列 | 经济型 e，共享型实例 |
-| CPU 型号（系统显示） | Intel Xeon Platinum；未显示具体型号编号 |
-| CPU / 内存 | 2 vCPU、4GiB 内存；系统识别内存约 3.5GiB |
-| 架构 / 虚拟化 | x86_64 / KVM |
-| 服务器系统 | Ubuntu 24.04.5 LTS，64 位 |
-| 系统盘 | 80GiB；根分区约 79G |
-| 交换空间 | 4GiB |
+## 本机配置
 
-核实日期：2026-10-14。实例型号来自阿里云实例查询，CPU 信息来自服务器 `lscpu`，磁盘容量来自 `lsblk`；系列名称及标称 CPU / 内存对应[阿里云官方规格表](https://help.aliyun.com/zh/ecs/user-guide/shared-instance-families)。
+使用本机已安装的 Workbench CLI，通过其交互配置保存认证；不要把密钥放进命令、URL、截图或日志。凭据配置位于本机用户配置目录，不提交 Git。权限不足时核对已授权的 RAM 资源范围，不自动扩大授权。
 
-认证与 RAM 权限已配置，已成功连接。本机配置使用 `default`，日常直接连接即可。以下示例中的实例 ID 需要替换；带实际实例 ID 的个人版保存在本机，不提交到公开仓库。
+## PowerShell 示例
 
-## 在 Codex 中用中文操作
-
-将示例 ID 替换为实际 ID，再发送：
-
-> 使用 alibabacloud-workbench-cli，连接实例 i-xxxxxxxxxxxxxxxxxxxx，地域 cn-shenzhen，检查系统、磁盘和内存。
-
-同一对话后续可以直接说：
-
-> 检查这台服务器的磁盘剩余空间和内存使用情况。
-
-> 查看这台服务器当前运行的服务和监听端口。
-
-## 自己用 PowerShell 连接
-
-打开 PowerShell，设置本机实际使用的程序路径，并替换示例实例 ID：
+由管理员在本机提供目标信息，环境变量不写入公开脚本：
 
 ```powershell
 $wb = Join-Path $env:LOCALAPPDATA 'Programs\workbench\workbench.exe'
-$instanceId = 'i-xxxxxxxxxxxxxxxxxxxx'
+$instanceId = $env:DOON_ECS_INSTANCE_ID
+$region = $env:DOON_ECS_REGION
+if (-not $instanceId -or -not $region) { throw '请先在本机配置已授权的实例和地域。' }
+& $wb connect --instance-id $instanceId --region $region --profile default
 ```
 
-进入服务器终端：
+用 `Ctrl+D` 退出。只读检查示例：
 
 ```powershell
-& $wb connect --instance-id $instanceId --region cn-shenzhen --profile default
+& $wb exec --instance-id $instanceId --region $region --profile default --command 'uname -srmo; uptime; df -hT; free -h' --timeout 30
 ```
 
-按 `Ctrl+D` 退出。只需要检查系统、磁盘和内存时：
-
-```powershell
-& $wb exec --instance-id $instanceId --region cn-shenzhen --profile default --command 'hostname; uname -srmo; cat /etc/os-release; uptime; df -hT; free -h' --timeout 30
-```
-
-在同一个 PowerShell 窗口中使用以上命令；新窗口重新设置 `$wb` 和 `$instanceId`。
-
-## 连接出错时
-
-- 找不到 `workbench`：直接使用以上 `$wb` 路径，无需依赖 PATH。
-- 密钥已更换，或返回 `InvalidAccessKeyId`、`SignatureDoesNotMatch`：执行 `& $wb config --profile default`，在本机输入对应的新凭证。
-- 返回 `Forbidden.RAM` 或 `Forbidden.Unauthorized`：检查当前 RAM 用户的授权和实例资源范围；按[官方权限说明](https://help.aliyun.com/zh/ecs/user-guide/install-and-configure-workbench-cli-credentials)核对。
-
-凭证保存在本机 `%USERPROFILE%\.workbench\config.json`。不要把密码、Secret 或配置文件写进文档、聊天和公开仓库。
+诊断输出可能包含真实主机信息，应保存到被忽略的私有运维目录，只向公开文档提交脱敏结论。此说明不是实际服务器已连接、已部署或已验收的证据。

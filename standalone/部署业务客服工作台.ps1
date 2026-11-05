@@ -1,4 +1,6 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $projectRoot
 $nodePath = 'C:\Program Files\nodejs\node.exe'
@@ -45,7 +47,7 @@ for ($i=0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 500
 }
 if (-not $healthy) { throw '部署后健康检查未通过。' }
-$pages = foreach ($route in @('sales','service','customers','pmc-handoff','pmc','department')) { $page=Invoke-WebRequest -UseBasicParsing -Uri ('http://192.168.1.176:8787/' + $route) -TimeoutSec 10; [pscustomobject]@{route=$route;status=[int]$page.StatusCode} }
+$pages = foreach ($route in @('sales','service','customers','pmc-handoff','pmc','department')) { $page=Invoke-WebRequest -UseBasicParsing -Uri (($lanOrigin + '/') + $route) -TimeoutSec 10; [pscustomobject]@{route=$route;status=[int]$page.StatusCode} }
 & $nodePath 'scripts/verify-collaboration-live.mjs'
 if ($LASTEXITCODE -ne 0) { throw '部署后业务数据只读校验失败。' }
 $result=[pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$healthy;pages=$pages;backup=($backup|ConvertFrom-Json);rollback=$rollback}

@@ -1,5 +1,7 @@
-param([string]$DraftPath='',[string]$SourcePath='',[string]$AccessConfigPath='',[switch]$CodeOnly)
+﻿param([string]$DraftPath='',[string]$SourcePath='',[string]$AccessConfigPath='',[switch]$CodeOnly)
 $ErrorActionPreference='Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 if ($CodeOnly -and ($DraftPath -or $SourcePath -or $AccessConfigPath)) { throw 'CodeOnly cannot import drafts or change access configuration.' }
 if (-not $CodeOnly -and (-not $DraftPath -or -not $SourcePath)) { throw 'DraftPath and SourcePath are required unless CodeOnly is selected.' }
 $projectRoot=(Resolve-Path -LiteralPath (Split-Path $PSScriptRoot -Parent)).Path
@@ -88,7 +90,7 @@ try {
 $healthy=$false
 for ($i=0;$i -lt 30;$i++) { try { $health=Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 2; if ($health.ok) { $healthy=$true;break } } catch {}; Start-Sleep -Milliseconds 500 }
 if (-not $healthy) { throw 'Post-deployment health check failed; code rollback is retained. Do not restore old data.' }
-$page=Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.176:8787/customer-quotes' -TimeoutSec 10
+$page=Invoke-WebRequest -UseBasicParsing -Uri ($lanOrigin + '/customer-quotes') -TimeoutSec 10
 $result=[pscustomobject]@{deployedAt=[DateTime]::UtcNow.ToString('o');healthy=$healthy;pageStatus=[int]$page.StatusCode;codeOnly=[bool]$CodeOnly;dataPreserved=$true;checkpoint=$checkpoint;rollback=$rollback;backup=($backup|ConvertFrom-Json);stoppedBackup=($stoppedBackup|ConvertFrom-Json);access=if($accessResult){$accessResult|ConvertFrom-Json}else{$null}}
 $result|ConvertTo-Json -Depth 4|Set-Content -LiteralPath 'test-output\customer-quote-deployment.json' -Encoding utf8
 $result|ConvertTo-Json -Depth 4

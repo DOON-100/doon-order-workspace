@@ -117,7 +117,7 @@ node scripts/run-framework.mjs build
 
 口径：欠数按订单数量减包装入仓 BF 重算，正欠数和超量分开；MES 包装报工另列，不与 BF 重复相加。阶段 WIP 为可确认上道量减本工序量，非法/负值/非整数数量不加入有效 WIP。并行路径不相加作为全厂库存。日期按上海时区；PMC 排期优先，缺失用原客户交期。原表错误缓存保留为异常提示，不继续执行 Excel 公式。参考日产能 400 仅用于页面情景计算。
 
-部门职责：PMC AC–AF、AQ、BC；钛架 AG–AJ；外发 AK；电镀 AL–AN、AO；半成品仓 AO；胶架 AR–BA（去除自动列 BB）、BD–BE；成品 BF–BI。AP / BB 自动计算。成员部门由管理员配置；生产文员可读总表，但服务端只允许所属部门字段写入。客服/销售仍按授权客户读取。原表 CANDY/TINA 可通过成员页绑定到真实登录账号，不自动创建虚构邮箱。
+部门职责：PMC AC–AF、AQ、BC；钛架 AG–AJ；外发 AK；电镀 AL–AN、AO；半成品仓 AO；胶架 AR–BA（去除自动列 BB）、BD–BE；成品 BF–BI。AP / BB 自动计算。成员部门由管理员配置；生产文员可读总表，但服务端只允许所属部门字段写入。客服/销售仍按授权客户读取。原表跟单员名称可通过成员页绑定到真实登录账号，不自动创建虚构邮箱。
 
 供应商收货：先登记外发明细，再上传照片/PDF，人工核对供应商、送货单号、订单工序、合格/不良数量，确认后在同一事务内更新外发余欠及对应工序累计量。当前未接 OCR，照片不会自行识别；未连接 MES，不声称回写。重复照片、供应商单号、幂等请求、超外发合格余欠及跨工序部门写入均由后台检查。收货错误需 PMC 核对，当前版本没有送货单撤销界面，不应重复录单纠错。
 
@@ -127,7 +127,7 @@ node scripts/run-framework.mjs build
 
 ## GitHub 与公开源码
 
-仓库：https://github.com/DOON-100/doon-order-workspace 。此仓库保存源码、合成测试数据及用户授权的生产数据加密备份；未加密的生产订单、采购原表、账号、附件、备份及构建输出均留在各自运行环境。加密备份和还原说明见 `encrypted-backups/README.md`，解密密钥只留在本机。
+仓库：https://github.com/DOON-100/doon-order-workspace 。此公开仓库只保存源码、合成测试及脱敏说明。生产订单、采购原表、账号、附件、备份（包括密文与清单）、私有运维材料及构建输出均留在受控私有位置。备份和还原说明见 `encrypted-backups/README.md`，解密密钥只留在本机。提交前运行 `node scripts/check-public-repository.mjs` 检查暂存文件；此路径检查不能替代内容审查或秘密扫描。
 
 `.openai/hosting.json` 中的 `project_id` 是示例值，使用 Sites 托管前需配置自己的项目；内网版不使用该项目编号。内网版需要 Node.js 22.18+，推荐 Node.js 24 LTS。
 
@@ -143,3 +143,5 @@ node standalone/test-service-host.mjs
 在独立测试环境运行上述命令，业务测试使用合成采购表及内存数据库，HTTP 测试使用临时数据库和 18787 端口。正式启动参见 `standalone/内网版使用说明.md`。真实原表验收需设置 `DOON_TEST_ORIGINALS=1` 和 `DOON_TEST_ORIGINALS_MANIFEST`，后者指向不提交的 JSON 清单，每项为 `[文件路径, active或archived, 预期行数, 预期数量]`。
 
 后续改动按 `AGENTS.md` 完成检查后提交并推送到 `origin/main`；GitHub 同步不自动部署或重启正式服务。
+
+本机提交前保护：执行 `git config --local core.hooksPath .githooks` 后，Git 提交会先检查暂存路径；已有自定义钩子时先整合，不覆盖原检查。GitHub 上的轻量检查作为补充，不能撤回已经上传的内容，也不能替代内容审查。

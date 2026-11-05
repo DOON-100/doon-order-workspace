@@ -1,10 +1,10 @@
-# 中台自动检查与打包
+# 中台手动检查与打包
 
-`.github/workflows/native-ci.yml` 在 `main` 推送、目标为 `main` 的 PR 和手动运行时执行。使用 GitHub 托管的 Ubuntu 22.04 x64 和 Node 24.14.0，仅授予仓库读取权限，不使用服务器凭据或生产数据，也不执行部署。第三方 Actions 固定到提交 SHA。
+`.github/workflows/native-ci.yml` 仅通过 `workflow_dispatch` 手动运行，推送 `main` 或提交 PR 不会自动触发此流程。需在 GitHub 仓库的 Actions → Native middle-platform CI → Run workflow 中选择待检查分支并启动；提交或推送成功不代表本流程已运行或检查通过。使用 GitHub 托管的 Ubuntu 22.04 x64 和 Node 24.14.0，仅授予仓库读取权限，不使用服务器凭据或生产数据，也不执行部署。第三方 Actions 固定到提交 SHA。
 
 流程：锁文件安装依赖 → 合成业务测试 → TypeScript → 打包完整性测试 → 在 `test-output/native-ci-build` 构建 → 原生 HTTP、员工/供应商入口及发布校验工具测试 → 在仓库外安装运行依赖 → 打包、重新解压、校验并执行合成 HTTP 测试。任一环节失败均不上传版本包。现有数据工具 CI 保持独立；本流程不代表所有业务场景或服务器兼容性已完成验收。
 
-只有 `main` 的成功运行上传 `doon-native-linux-x64-<完整提交号>-<运行次数>` Artifact。PR 也验证打包，但不发布下载产物。Artifact 包含：
+只有手动选择 `main` 且成功完成的运行上传 `doon-native-linux-x64-<完整提交号>-<运行次数>` Artifact。手动选择其他分支时执行相同检查，但不上传下载产物；PR 本身不会触发验证。Artifact 包含：
 
 - `doon-native-<完整提交号>-linux-x64-node24.tar.gz`：`lan-dist/`、依照锁文件安装的生产 `node_modules/`、包描述及锁文件、`release.json`。
 - `release.json`：提交号、运行平台和 Node 版本、CI 运行标识、源码构建证据摘要、逐文件 SHA-256/长度及内部符号链接目标。

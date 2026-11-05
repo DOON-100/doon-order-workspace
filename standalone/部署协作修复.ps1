@@ -1,4 +1,6 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $projectRoot
 $nodePath = 'C:\Program Files\nodejs\node.exe'
@@ -53,7 +55,7 @@ for ($i=0; $i -lt 20; $i++) {
 if (-not $healthy) { throw '部署后健康检查未通过。' }
 $pages = @()
 foreach ($route in @('department','finished-outsourcing','imports','receiving','pmc','login')) {
-    $page = Invoke-WebRequest -UseBasicParsing -Uri ('http://192.168.1.176:8787/' + $route) -TimeoutSec 10
+    $page = Invoke-WebRequest -UseBasicParsing -Uri (($lanOrigin + '/') + $route) -TimeoutSec 10
     $pages += [pscustomobject]@{route=$route;status=[int]$page.StatusCode}
 }
 & $nodePath 'scripts/verify-collaboration-live.mjs'
