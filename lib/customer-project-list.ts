@@ -1,4 +1,13 @@
 import {matchesExcelColumn,normalizeExcelValue,type ExcelColumnFilter,type ExcelFilters} from './excel-filters';
+import {personnelTypeOf,type Member} from './domain';
+
+/** Deployment-local additions only; never expand an empty configuration to all members. */
+export function projectListExtraFollowers<T extends Pick<Member,'id'|'active'|'role'|'personnelType'>>(members:T[],configuration:string):T[]{
+ let ids:unknown;try{ids=JSON.parse(configuration);}catch{return [];}
+ if(!Array.isArray(ids)||ids.length>300||!ids.every(id=>typeof id==='string'&&/^[A-Za-z0-9_-]{1,160}$/.test(id)))return [];
+ const allowed=new Set(ids);
+ return members.filter(member=>allowed.has(member.id)&&member.active&&member.role!=='supplier'&&personnelTypeOf(member)==='internal');
+}
 
 export const projectListOwnerColumn=5;
 export type ProjectListFilterRow={values:unknown[];ownerNames:string[]};

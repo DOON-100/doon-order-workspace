@@ -2,7 +2,18 @@ import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 
 const bundle=await build({entryPoints:['lib/customer-project-list.ts'],bundle:true,platform:'node',format:'esm',write:false});
-const {projectListPendingTasks,projectListOwnerNames,matchesProjectListFilters,projectListFilterValues}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const {projectListPendingTasks,projectListOwnerNames,matchesProjectListFilters,projectListFilterValues,projectListExtraFollowers}=await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const people=[
+ {id:'selected',active:true,role:'admin',personnelType:'internal'},
+ {id:'unselected',active:true,role:'clerk',personnelType:'internal'},
+ {id:'inactive',active:false,role:'clerk'},
+ {id:'external',active:true,role:'viewer',personnelType:'external'},
+ {id:'supplier',active:true,role:'supplier'}
+];
+for(const invalid of ['', 'null','{}','"selected"','[1]','["selected","bad id"]'])assert.deepEqual(projectListExtraFollowers(people,invalid),[]);
+assert.deepEqual(projectListExtraFollowers(people,'[]'),[],'No configuration must not expand to all employees');
+assert.deepEqual(projectListExtraFollowers(people,'["selected","selected","missing","inactive","external","supplier"]'),[people[0]],'Only the explicitly named valid internal member is added');
+assert.deepEqual(projectListExtraFollowers(people.filter(person=>person.id!=='selected'),'["selected"]'),[],'Configuration cannot expose a member absent from the authorized response');
 const names={first:'Synthetic first follower',later:'Synthetic later follower',former:'Synthetic former follower'};
 const tasks=[
  {id:'later',projectId:'project-a',ownerId:'later',dueDate:'2026-11-09',status:'open'},

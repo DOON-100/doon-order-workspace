@@ -55,8 +55,37 @@ try{
  const context=await browser.newContext({viewport:{width:1536,height:1050}}),split=cookie.indexOf('=');
  await context.addCookies([{name:cookie.slice(0,split),value:cookie.slice(split+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
  page=await context.newPage();page.setDefaultTimeout(15000);page.on('pageerror',error=>errors.push(error.message));
+ // Test-only injection of one explicitly configured extra follower, with synthetic IDs only.
+ const escapedIds=JSON.stringify([members.b.id]).replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+ await page.route(origin+'/customer-projects',async route=>{
+  const response=await route.fetch(),html=await response.text();assert(html.includes('<head>'));
+  await route.fulfill({response,body:html.replace('<head>','<head><meta name="customer-project-extra-follower-ids" content="'+escapedIds+'">')});
+ });
  await page.goto(origin+'/customer-projects');
  const board=page.locator('.scp-board'),rowA=board.getByRole('row').filter({hasText:projects[0].title});
+ const visibleCodes=()=>board.locator('.scp-project-link small').allTextContents();
+ async function selectFilter(label,names){
+  await board.getByRole('button',{name:'筛选'+label,exact:true}).click();
+  const popup=page.locator('.excel-filter-popover').filter({visible:true});
+  await popup.getByRole('button',{name:'全不选',exact:true}).click();
+  for(const name of names)await popup.getByRole('checkbox',{name,exact:true}).check();
+  await popup.getByRole('button',{name:'确定',exact:true}).click();
+ }
+ async function expectCodes(codes){await eventually(async()=>assert.deepEqual((await visibleCodes()).sort(),[...codes].sort()));}
+ await expectCodes(['SYN-A','SYN-B']);
+ const beforeEmptyFilter=records();
+ await board.getByRole('button',{name:'筛选指定跟进人',exact:true}).click();
+ const initialPopup=page.locator('.excel-filter-popover').filter({visible:true});
+ assert.equal(await initialPopup.getByRole('checkbox',{name:members.a.name,exact:true}).count(),1);
+ assert.equal(await initialPopup.getByRole('checkbox',{name:members.b.name,exact:true}).count(),1);
+ for(const name of [members.c.name,admin.name,members.external.name])assert.equal(await initialPopup.getByRole('checkbox',{name,exact:true}).count(),0,'Unassigned/unconfigured person must not become a filter choice: '+name);
+ assert.equal(await initialPopup.getByRole('checkbox').count(),2);
+ await initialPopup.getByRole('button',{name:'取消',exact:true}).click();
+ await selectFilter('指定跟进人',[members.b.name]);await expectCodes([]);
+ assert.match(await board.locator('.excel-filter-status').innerText(),/没有匹配记录.*已筛选 0 \/ 2 条/s);
+ await board.getByRole('button',{name:'清除全部筛选',exact:true}).click();await expectCodes(['SYN-A','SYN-B']);
+ assert.deepEqual(records(),beforeEmptyFilter,'Selecting the configured extra follower without tasks must remain read-only');
+ pass('筛选仅含已有任务人员和单独配置的额外跟进人；指定人暂无待办显示零条，未把全体成员加入');
  await rowA.getByRole('button',{name:'记录 / 指派',exact:true}).click();
  await page.getByRole('button',{name:'新增待办',exact:true}).click();
  const editor=page.getByRole('region',{name:'待办编辑'}),owner=editor.getByLabel('负责人',{exact:true});
@@ -78,25 +107,13 @@ try{
  assert.match(await rowA.locator('td').nth(5).innerText(),new RegExp(members.a.name));
  assert.match(await rowA.locator('td').nth(5).innerText(),new RegExp(members.b.name));
  const beforeFilters=records();
- const visibleCodes=()=>board.locator('.scp-project-link small').allTextContents();
- async function selectFilter(label,names){
-  await board.getByRole('button',{name:'筛选'+label,exact:true}).click();
-  const popup=page.locator('.excel-filter-popover').filter({visible:true});
-  await popup.getByRole('button',{name:'全不选',exact:true}).click();
-  for(const name of names)await popup.getByRole('checkbox',{name,exact:true}).check();
-  await popup.getByRole('button',{name:'确定',exact:true}).click();
- }
- async function expectCodes(codes){await eventually(async()=>assert.deepEqual((await visibleCodes()).sort(),[...codes].sort()));}
  await selectFilter('指定跟进人',[members.b.name]);await expectCodes(['SYN-A']);
  assert.match(await board.locator('.excel-filter-status').innerText(),/已筛选 1 \/ 2 条/);
  pass('非最早到期事项的跟进人仍可逐人筛到，清单显示全部未完成跟进人');
- await selectFilter('指定跟进人',[members.c.name]);await expectCodes([]);
- assert.match(await board.locator('.excel-filter-status').innerText(),/没有匹配记录.*已筛选 0 \/ 2 条/s);
  await board.getByRole('button',{name:'筛选指定跟进人',exact:true}).click();
  const popup=page.locator('.excel-filter-popover').filter({visible:true});
- assert.equal(await popup.getByRole('checkbox',{name:members.external.name,exact:true}).count(),0);
+ for(const name of [members.c.name,admin.name,members.external.name])assert.equal(await popup.getByRole('checkbox',{name,exact:true}).count(),0);
  await popup.getByRole('button',{name:'取消',exact:true}).click();
- pass('暂无待办的内部成员仍可选择并明确显示零条结果，外部人员不进入筛选候选');
  await selectFilter('指定跟进人',[members.b.name,members.a.name]);await expectCodes(['SYN-A','SYN-B']);
  await selectFilter('项目',[projects[1].title+' '+projects[1].code]);await expectCodes(['SYN-B']);
  assert.match(await board.locator('.excel-filter-status').innerText(),/已筛选 1 \/ 2 条/);
