@@ -1,6 +1,7 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {ExcelTable,useExcelColumnFilters} from './excel-table';
+import {CollectionMatchingPanel} from './collection-matching-panel';
 type Row=Record<string,any>;
 const entities:Record<string,string>={doon_hk:'度昂香港',moni_cn:'魔你大陆',doon_cn:'度昂大陆'};
 const channels:Record<string,string>={unknown:'渠道待核对',hk_hsbc:'香港HSBC',paypal:'PayPal',moni_mainland:'魔你大陆代收'};
@@ -25,8 +26,9 @@ export function CollectionWorkspacePanel(){
  const batch=feed?.workbooks.find((b:Row)=>b.id===batchId)||feed?.workbooks.at(-1),source=batch?.sheets.find((s:Row)=>s.name===sheet),customers=Object.fromEntries((feed?.customers||[]).map((c:Row)=>[c.id,`${c.code||''} ${c.name||''}`]));
  const receipts=(feed?.receipts||[]).flatMap((r:Row)=>r.lines.map((l:Row,i:number)=>({...r,line:l,lineIndex:i})));
  return <section className="panel" aria-label="应收实收对账中心"><h3>应收 · 实收 · 对账中心</h3><p>客户发票登记应收 → 多渠道收款 → 业务与客服审核 → 财务取资料核对 → 朱了青最终确认 → 分配与对账。</p><p>销售链：度昂大陆 → 魔你大陆 → 度昂香港 → 海外客户。资金反向逐级支付。海外客户直接付魔你大陆先记代香港收款，逐笔确认归属。内部转款不重复算客户实收。</p>
- {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}<nav aria-label="收款中心栏目">{[['sources','原表三个工作表'],['invoices','新增发票应收'],['receipts','多渠道实收'],['summary','全客户汇总与对账'],['internal','公司往来与退税资料']].map(([v,l])=><button key={v} aria-pressed={tab===v} onClick={()=>setTab(v)}>{l}</button>)}<button onClick={()=>void load()}>刷新收款中心</button></nav>
+ {error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}<nav aria-label="收款中心栏目">{[['matching','逐笔匹配与异常确认'],['sources','原表三个工作表'],['invoices','新增发票应收'],['receipts','多渠道实收'],['summary','全客户汇总与对账'],['internal','公司往来与退税资料']].map(([v,l])=><button key={v} aria-pressed={tab===v} onClick={()=>setTab(v)}>{l}</button>)}<button onClick={()=>void load()}>刷新收款中心</button></nav>
  {!feed?<p>正在读取…</p>:<>
+ {tab==='matching'&&<CollectionMatchingPanel onOpenSource={(workbookId,sheet)=>{setBatchId(workbookId);setSheet(sheet);setTab('sources');}}/>}
  {tab==='sources'&&<><h4>最新账表原件与三个工作表</h4><p>保留全部原字段、公式文本与保存值；嵌图及原版格式、打印设置随完整原件保留，下载后用原生Excel操作。网页不重算公式。小计、贷扣与明细分别保留，不把原表与群凭证相加。历史版本不覆盖。</p>{feed.canWrite&&<form onSubmit={e=>{e.preventDefault();void act('collection-import',new FormData(e.currentTarget));}}><fieldset disabled={busy}><Input name="asOf" label="账表截至日" type="date"/><Input name="basis" label="截至日依据"/><label>最新三表原工作簿<input aria-label="最新三表原工作簿" name="file" type="file" accept=".xlsx" required/></label><button>完整归档并读取三个表</button></fieldset></form>}
  <label>账表版本<select aria-label="账表版本" value={batch?.id||''} onChange={e=>setBatchId(e.target.value)}>{feed.workbooks.map((b:Row)=><option key={b.id} value={b.id}>{b.asOf} · {b.filename}</option>)}</select></label>{batch&&<><p>截至 {batch.asOf} · 依据：{batch.basis} · SHA256：{batch.hash} · <a href={'/api/workspace/collection-file?id='+batch.id}>下载完整三表原件</a></p><label>原工作表<select aria-label="原工作表" value={sheet} onChange={e=>setSheet(e.target.value)}>{batch.sheets.map((s:Row)=><option key={s.name}>{s.name}</option>)}</select></label><label><input type="checkbox" checked={showFormula} onChange={e=>setShowFormula(e.target.checked)}/>显示公式及保存值</label>{source&&<><p>共 {source.rows.length} 个非空来源行；小计行不重复计入应收。</p><Grid headers={['原行','行类型',...source.columns.map((c:string)=>`${c} ${source.headers[c]?.value||''}`)]} rows={source.rows.map((r:Row)=>[r.sourceRow,r.rowType==='subtotal'?'原表小计':'来源明细',...source.columns.map((c:string)=>{const x=r.cells[c];return !x?'':x.formula?(showFormula?`=${x.formula}；保存值：${x.value??'未知'}`:x.value??'公式无保存值'):x.datePreview||x.formatted||x.value;})])}/></>}</>}
  </>}

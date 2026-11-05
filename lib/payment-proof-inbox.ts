@@ -4,11 +4,13 @@ import {AppError,audit,bucket,commit,json} from './store';
 import {arReadOnly} from './ar-workspace';
 import {canReadReceiptLedger,newReceiptEntry,receiptConfirmer,receiptLedgerGet,receiptLedgerPost} from './receipt-ledger';
 import {collectionGet,collectionPost} from './collection-workspace';
+import {matchingGet,matchingPost} from './collection-matching';
 
 const kind='payment_proof_inbox';
 export const proofMetadata=z.object({group:z.string().trim().min(1).max(240),sender:z.string().trim().min(1).max(240),messageTime:z.string().datetime({offset:true}),caption:z.string().max(6000),note:z.string().max(6000).default('')}).strict();
 function allowed(m:Member){if(!m.active||m.role!=='admin')throw new AppError('待核对凭证仅当前在职管理员可访问。',403);}
 export async function proofInboxGet(action:string,req:Request,s:State,m:Member){
+ const matching=await matchingGet(action,s,m);if(matching)return matching;
  const collection=await collectionGet(action,req,s,m);if(collection)return collection;
  const ledger=await receiptLedgerGet(action,s,m);if(ledger)return ledger;
  if(!['payment-proof-inbox','payment-proof-file'].includes(action))return null;
@@ -21,6 +23,7 @@ export async function proofInboxGet(action:string,req:Request,s:State,m:Member){
  return new Response(file.body,{headers:{'Content-Type':row.mime,'Content-Disposition':`${row.mime==='application/pdf'?'attachment':'inline'}; filename*=UTF-8''${encodeURIComponent(row.filename)}`,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'}});
 }
 export async function proofInboxPost(action:string,req:Request,s:State,m:Member){
+ const matching=await matchingPost(action,req,s,m);if(matching)return matching;
  const collection=await collectionPost(action,req,s,m);if(collection)return collection;
  const ledger=await receiptLedgerPost(action,req,s,m);if(ledger)return ledger;
  if(action!=='payment-proof-upload')return null;
