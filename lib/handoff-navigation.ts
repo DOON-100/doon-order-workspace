@@ -84,7 +84,7 @@ export const departmentTabs:Record<string,{view:string;label:string;phase:string
 export function workspaceDepartment(view:string){return Object.entries(departmentTabs).find(([,tabs])=>tabs.some(tab=>tab.view===view))?.[0]||view;}
 export function workspacePrimaryView(view:string){const department=workspaceDepartment(view);return department==='documents'?'communications':department;}
 export function resolveWorkspaceView(requested:string,context:WorkspaceNavigationContext={}){let view=({rules:'business-rules',knowledge:'business-rules',home:'workbench',inbox:'communications',mailbox:'mail',accounts:'customers',projects:'customer-projects'} as Record<string,string>)[requested]||requested;const department=workspaceDepartment(view);if(view===department&&context.tab&&departmentTabs[department]?.some(t=>t.view===context.tab))view=context.tab;return view;}
-export function readWorkspaceContext(search:string):WorkspaceNavigationContext{const params=new URLSearchParams(search),result:WorkspaceNavigationContext={};for(const key of ['recordId','customerId','projectId','orderId','tab'] as const){const value=params.get(key);if(value&&value.length<=160)result[key]=value;}return result;}
+export function readWorkspaceContext(search:string):WorkspaceNavigationContext{const params=new URLSearchParams(search),result:WorkspaceNavigationContext={};for(const key of ['recordId','customerId','projectId','orderId','tab'] as const){const value=params.get(key);if(value&&value.length<=160)result[key]=value;}if(result.tab==='assign-task'){result.tab='directory';delete result.recordId;}return result;}
 
 /** Existing production capabilities retained as secondary tools; no legacy route or record is removed. */
 export const existingBusinessTools = [

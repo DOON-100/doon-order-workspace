@@ -86,7 +86,7 @@ try{
  await board.getByRole('button',{name:'清除全部筛选',exact:true}).click();await expectCodes(['SYN-A','SYN-B']);
  assert.deepEqual(records(),beforeEmptyFilter,'Selecting the configured extra follower without tasks must remain read-only');
  pass('筛选仅含已有任务人员和单独配置的额外跟进人；指定人暂无待办显示零条，未把全体成员加入');
- await rowA.getByRole('button',{name:'查看项目',exact:true}).click();
+ await rowA.getByRole('button',{name:'查看待办',exact:true}).click();
  await page.getByRole('button',{name:'新增待办',exact:true}).click();
  const editor=page.getByRole('region',{name:'待办编辑'}),owner=editor.getByLabel('负责人',{exact:true});
  await eventually(async()=>assert((await owner.locator('option').allTextContents()).includes(members.b.name)));
@@ -101,7 +101,7 @@ try{
  const saved=(await workspace('project-collaboration-data?projectId='+projects[0].id)).tasks.find(task=>task.title==='合成较晚管理员待办');
  assert.equal(saved?.ownerId,members.b.id);
  pass('新增待办可以选择并保存内部管理员型跟进人，外部人员不在候选中');
- await page.getByRole('button',{name:'返回项目清单',exact:true}).click();
+ await page.getByRole('button',{name:'关闭项目窗口',exact:true}).click();
  await eventually(async()=>assert.match(await rowA.innerText(),new RegExp(members.b.name)));
  assert.match(await rowA.locator('td').nth(3).innerText(),/合成较早待办/);
  assert.match(await rowA.locator('td').nth(5).innerText(),new RegExp(members.a.name));

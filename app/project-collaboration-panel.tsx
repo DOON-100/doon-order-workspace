@@ -22,7 +22,9 @@ type Feed={tasks:Task[];members:{id:string;name:string;role?:string}[];canAssign
 type Draft={id?:string;version:number;projectId:string;roundId:string;stepKey:Step;department:Department|'';ownerId:string;title:string;description:string;dueDate:string;reason:string;scope:string};
 type Reply={id:string;version:number;comment:string;status:''|'in_progress'|'blocked';scope:string};
 type Submission={action:string;body:Record<string,unknown>;scope:string};
-type Props={simple?:boolean;data?:Data;projectId?:string;roundId?:string;stepKey?:string;createRequestKey?:string|number;onDirtyChange?:(dirty:boolean)=>void;onChanged?:()=>void|Promise<void>;onNavigate?:WorkspaceNavigate;initialContext?:WorkspaceNavigationContext};
+type CreateRequestOutcome='opened'|'cancelled'|'blocked'|'failed';
+type CreateRequestConsumed=(key:string|number,outcome:CreateRequestOutcome)=>void;
+type Props={simple?:boolean;data?:Data;projectId?:string;roundId?:string;stepKey?:string;createRequestKey?:string|number;onCreateRequestConsumed?:CreateRequestConsumed;onDirtyChange?:(dirty:boolean)=>void;onChanged?:()=>void|Promise<void>;onNavigate?:WorkspaceNavigate;initialContext?:WorkspaceNavigationContext};
 class TaskRequestError extends Error{constructor(message:string,public status:number){super(message);}}
 async function taskRequest(action:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<Feed>{
  // Personal assignments span business groups. Server authorization, not a UI team filter, determines access.
@@ -41,18 +43,20 @@ const draftOf=(task:Task,scope:string):Draft=>({id:task.id,version:task.version,
 export function PersonalTasksPanel({data,onNavigate,onDirtyChange,initialContext}:{data:Data;onNavigate:WorkspaceNavigate;onDirtyChange?:(dirty:boolean)=>void;initialContext?:WorkspaceNavigationContext}){
  return <TaskWorkspace data={data} onNavigate={onNavigate} onDirtyChange={onDirtyChange} initialContext={initialContext}/>;
 }
-export function ProjectStepCollaboration({projectId,roundId,stepKey,createRequestKey,onDirtyChange,onChanged,simple=false}:{simple?:boolean;projectId:string;roundId:string;stepKey:string;createRequestKey?:string|number;onDirtyChange?:(dirty:boolean)=>void;onChanged?:()=>void|Promise<void>}){
- return <TaskWorkspace simple={simple} projectId={projectId} roundId={roundId} stepKey={stepKey} createRequestKey={createRequestKey} onDirtyChange={onDirtyChange} onChanged={onChanged}/>;
+export function ProjectStepCollaboration({projectId,roundId,stepKey,createRequestKey,onCreateRequestConsumed,onDirtyChange,onChanged,simple=false}:{simple?:boolean;projectId:string;roundId:string;stepKey:string;createRequestKey?:string|number;onCreateRequestConsumed?:CreateRequestConsumed;onDirtyChange?:(dirty:boolean)=>void;onChanged?:()=>void|Promise<void>}){
+ return <TaskWorkspace simple={simple} projectId={projectId} roundId={roundId} stepKey={stepKey} createRequestKey={createRequestKey} onCreateRequestConsumed={onCreateRequestConsumed} onDirtyChange={onDirtyChange} onChanged={onChanged}/>;
 }
-function TaskWorkspace({simple=false,data,projectId='',roundId='',stepKey='directory',createRequestKey,onDirtyChange,onChanged,onNavigate,initialContext}:Props){
+function TaskWorkspace({simple=false,data,projectId='',roundId='',stepKey='directory',createRequestKey,onCreateRequestConsumed,onDirtyChange,onChanged,onNavigate,initialContext}:Props){
  const cache=useQueryClient(),personal=!projectId,actor=data?.me.id||'project',revision=data?.revision||0,scope=[actor,projectId,roundId,stepKey].join('|');
  const [queue,setQueue]=useState('pending'),[search,setSearch]=useState(''),[allSteps,setAllSteps]=useState(true),[selectedId,setSelectedId]=useState('');
  const [draft,setDraft]=useState<Draft|null>(null),[reply,setReply]=useState<Reply|null>(null),[pending,setPending]=useState<Submission|null>(null),[busy,setBusy]=useState(false);
- const [createReadback,setCreateReadback]=useState<{key:string;scope:string;feed?:Feed;error?:string}|null>(null);
+ const [createReadback,setCreateReadback]=useState<{key:string;requestKey:string|number;scope:string;feed?:Feed;error?:string}|null>(null);
+ const [openedCreateRequest,setOpenedCreateRequest]=useState<{key:string|number;scope:string}|null>(null);
  const [navigationRequest,setNavigationRequest]=useState<{scope:string;taskId:string;context:WorkspaceNavigationContext}|null>(null);
  const [error,setError]=useState(''),[notice,setNotice]=useState(''),[refreshWarning,setRefreshWarning]=useState(''),[discardPrompt,setDiscardPrompt]=useState('');
  const mounted=useRef(true),busyRef=useRef(false),pendingRef=useRef<Submission|null>(null),scopeRef=useRef(scope),switchAction=useRef<(()=>void)|null>(null),applied=useRef(''),controller=useRef<AbortController|null>(null),heading=useRef<HTMLHeadingElement|null>(null),returnFocus=useRef<HTMLElement|null>(null);
  const appliedCreateRequest=useRef('');
+ const consumedCreateRequests=useRef(new Set<string>()),switchCancelled=useRef<(()=>void)|null>(null);
  scopeRef.current=scope;
  const feedQuery=useQuery<Feed>({queryKey:['project-collaboration',actor,revision,projectId],queryFn:({signal})=>taskRequest('project-collaboration-data'+(projectId?'?projectId='+encodeURIComponent(projectId):''),undefined,signal),enabled:!data||data.me.active,retry:false,refetchOnMount:personal?'always':false});
  const feed=!feedQuery.isError&&!feedQuery.isPending&&(!data||data.me.active)?feedQuery.data:undefined;
@@ -77,31 +81,39 @@ function TaskWorkspace({simple=false,data,projectId='',roundId='',stepKey='direc
  useEffect(()=>{const key=JSON.stringify(initialContext||{});if(!personal||!feed||!initialContext?.recordId||applied.current===key||dirty)return;applied.current=key;setSelectedId(initialContext.recordId);setReply(null);setDraft(null);setError('');},[initialContext,personal,feed,dirty]);
  useEffect(()=>{
   if(personal||createRequestKey===undefined||feedQuery.isPending||locked)return;
-  const key=JSON.stringify([scope,createRequestKey]);if(appliedCreateRequest.current===key)return;
+  const requestKey=createRequestKey,key=JSON.stringify([projectId,requestKey]);if(appliedCreateRequest.current===key||consumedCreateRequests.current.has(key))return;
   appliedCreateRequest.current=key;
   // Responsibility may have just changed in the maintenance dialog. Re-read before choosing a default.
   void feedQuery.refetch().then(result=>{
-   if(!mounted.current||scopeRef.current!==scope||appliedCreateRequest.current!==key)return;
-   setCreateReadback(result.isError||!result.data?{key,scope,error:'无法核对最新指派权限和项目负责人，请重新点击“指派待办”重试。'}:{key,scope,feed:result.data});
+   if(!mounted.current||appliedCreateRequest.current!==key)return;
+   if(scopeRef.current!==scope){consumeCreateRequest(requestKey,'cancelled');return;}
+   setCreateReadback(result.isError||!result.data?{key,requestKey,scope,error:'无法核对最新指派权限和项目负责人，请重新点击“指派待办”重试。'}:{key,requestKey,scope,feed:result.data});
   });
  },[createRequestKey,scope,personal,feed,feedQuery.isPending,locked]);
  useEffect(()=>{
   if(!createReadback||locked)return;
   setCreateReadback(null);
-  if(createRequestKey===undefined||createReadback.scope!==scope||createReadback.key!==JSON.stringify([scope,createRequestKey]))return;
-  if(createReadback.error){setError(createReadback.error);return;}
-  if(!createReadback.feed?.canAssign){setError(createReadback.feed?.assignment?.unavailableReason||'当前账号无权指派此项目待办。');return;}
-  create(createReadback.feed);
+  if(createRequestKey===undefined||createReadback.scope!==scope||createReadback.key!==JSON.stringify([projectId,createRequestKey]))return;
+  if(createReadback.error){setError(createReadback.error);consumeCreateRequest(createReadback.requestKey,'failed');return;}
+  if(!createReadback.feed?.canAssign){setError(createReadback.feed?.assignment?.unavailableReason||'当前账号无权指派此项目待办。');consumeCreateRequest(createReadback.requestKey,'blocked');return;}
+  create(createReadback.feed,createReadback.requestKey);
  },[createReadback,createRequestKey,scope,locked]);
+ useEffect(()=>{
+  if(!openedCreateRequest||!draft||draft.id||draft.scope!==openedCreateRequest.scope)return;
+  setOpenedCreateRequest(null);
+  consumeCreateRequest(openedCreateRequest.key,draftAllowed?'opened':'blocked');
+ },[openedCreateRequest,draft,draftAllowed,onCreateRequestConsumed]);
  useEffect(()=>{if(selected)setError(value=>value==='指定任务不存在或当前无权读取，未打开其他任务。'?'':value);else if(selectedId&&feed&&!detailQuery.isPending&&!detailQuery.isFetching)setError('指定任务不存在或当前无权读取，未打开其他任务。');},[selectedId,feed,detailQuery.isPending,detailQuery.isFetching,selected]);
- function switchTo(next:()=>void,message='切换任务'){
+ function consumeCreateRequest(key:string|number,outcome:CreateRequestOutcome){const identity=JSON.stringify([projectId,key]);if(consumedCreateRequests.current.has(identity))return;consumedCreateRequests.current.add(identity);onCreateRequestConsumed?.(key,outcome);}
+ function cancelSwitch(){const cancel=switchCancelled.current;switchCancelled.current=null;switchAction.current=null;cancel?.();}
+ function switchTo(next:()=>void,message='切换任务',onCancel?:()=>void){
   if(busyRef.current||pendingRef.current)return;
-  if(dirty){switchAction.current=next;setDiscardPrompt(message);return;}
+  if(dirty){cancelSwitch();switchAction.current=next;switchCancelled.current=onCancel||null;setDiscardPrompt(message);return;}
   setError('');setDiscardPrompt('');next();
  }
- function clearEditor(){setDraft(null);setReply(null);setDiscardPrompt('');switchAction.current=null;}
+ function clearEditor(){setDraft(null);setReply(null);setOpenedCreateRequest(null);setDiscardPrompt('');cancelSwitch();}
  function select(task:Task,event:React.MouseEvent<HTMLButtonElement>){returnFocus.current=event.currentTarget;switchTo(()=>{clearEditor();setSelectedId(task.id);},'打开另一条任务');}
- function create(source=feed){if(!source?.canAssign||!projectId||locked)return;switchTo(()=>{const preferred=source.assignment?.defaultOwnerId||'',ownerId=source.members.some(member=>member.id===preferred)?preferred:'';setSelectedId('');setReply(null);setNotice('');setDraft({version:0,projectId,roundId,stepKey:(stepKey in steps?stepKey:'directory') as Step,department:source.assignment?.defaultDepartment||'service',ownerId,title:'',description:'',dueDate:'',reason:'',scope});},'新建下一步待办');}
+ function create(source=feed,requestKey?:string|number){if(!source?.canAssign||!projectId||locked)return;switchTo(()=>{const preferred=source.assignment?.defaultOwnerId||'',ownerId=source.members.some(member=>member.id===preferred)?preferred:'';setSelectedId('');setReply(null);setNotice('');setDraft({version:0,projectId,roundId,stepKey:(stepKey in steps?stepKey:'directory') as Step,department:source.assignment?.defaultDepartment||'service',ownerId,title:'',description:'',dueDate:'',reason:'',scope});if(requestKey!==undefined)setOpenedCreateRequest({key:requestKey,scope});},'新建下一步待办',requestKey===undefined?undefined:()=>consumeCreateRequest(requestKey,'cancelled'));}
  function setDraftField<K extends keyof Draft>(key:K,value:Draft[K]){if(locked||!draftAllowed)return;setDraft(before=>before?{...before,[key]:value}:before);}
  function setReplyField(key:'comment'|'status',value:string){if(locked||!selected)return;setReply(before=>({...before||{id:selected.id,version:selected.version,comment:'',status:'',scope},[key]:value} as Reply));}
  async function refresh(){setRefreshWarning('');const results=await Promise.all([feedQuery.refetch(),...(selectedId?[detailQuery.refetch()]:[]),...(personal&&draft?.id?[candidatesQuery.refetch()]:[])]);if(mounted.current&&results.some(r=>r.isError))setRefreshWarning('清单读取失败，已暂停显示旧资料；本地未保存输入仍保留。');}
@@ -152,13 +164,13 @@ function TaskWorkspace({simple=false,data,projectId='',roundId='',stepKey='direc
  const visibleTasks=scopedTasks.filter(task=>personal?inQueue(task,queue):(allSteps||task.stepKey===stepKey)).filter(task=>!search.trim()||[task.title,task.description,task.projectCode,task.projectTitle,task.customerLabel,task.ownerName,label(departments,task.department),task.result].join(' ').toLowerCase().includes(search.trim().toLowerCase())).sort((a,b)=>(a.dueDate||'9999').localeCompare(b.dueDate||'9999')||a.id.localeCompare(b.id));
  const preferredOwnerIds=new Set(candidates?.assignment?.preferredOwnerIds||[]),ownerCandidates=[...(candidates?.members||[])].sort((a,b)=>Number(preferredOwnerIds.has(b.id))-Number(preferredOwnerIds.has(a.id)));
  return <section className="project-collaboration panel" aria-label={personal?'我的待办':'项目环节协作'}>
-  <header className="pc-heading"><div><h2>{personal?'我的待办':'负责人和下一步待办'}</h2><p>{personal?'显示本人跨组任务与待推进的完成反馈。':'当前环节：'+label(steps,stepKey)+'。'+(allSteps?'展示全部环节、各轮次待办；':'展示该环节各轮次待办；')+'新建待办跟随顶部所选轮次。回复与完成记录保存到同一项目。'}</p></div><div className="pc-actions"><Button variant="outline" disabled={busy} onClick={()=>void refresh()}>重新读取</Button>{!personal&&<Button disabled={!feed?.canAssign||locked} onClick={()=>create()}>新增待办</Button>}</div></header>
+  <header className="pc-heading"><div><h2>{personal?'我的待办':'负责人和下一步待办'}</h2><p>{personal?'显示本人跨组任务与待推进的完成反馈。':simple?'查看项目全部待办；新建事项按所选归属保存，回复和完成结果留在原事项中。':'当前环节：'+label(steps,stepKey)+'。'+(allSteps?'展示全部环节、各轮次待办；':'展示该环节各轮次待办；')+'新建待办跟随顶部所选轮次。回复与完成记录保存到同一项目。'}</p></div><div className="pc-actions"><Button variant="outline" disabled={busy} onClick={()=>void refresh()}>重新读取</Button>{!personal&&<Button disabled={!feed?.canAssign||locked} onClick={()=>create()}>新增待办</Button>}</div></header>
   {personal&&(initialContext?.projectId||initialContext?.customerId)&&<div className="pc-notice" role="status">当前仅显示所选{initialContext.projectId?'项目':'客户'}的待办。<Button variant="outline" disabled={dirty} onClick={()=>onNavigate?.('personal-tasks',{})}>查看全部我的待办</Button></div>}
   {error&&<p className="pc-error" role="alert">{error}</p>}{notice&&<p className="pc-notice" role="status">{notice}</p>}{refreshWarning&&<p className="pc-warning" role="alert">{refreshWarning}</p>}
   {feedQuery.isPending&&<p role="status">正在读取当前授权任务…</p>}{feedQuery.isError&&<p className="pc-error" role="alert">读取任务失败，已隐藏上次资料。{feedQuery.error.message}</p>}
   {!personal&&feed&&!feed.canAssign&&<p className="pc-warning" role="status">{feed.assignment?.unavailableReason||'仅有客户维护权限的项目业务主负责人、项目客服负责人或管理员可指派待办。'}</p>}
   {pending&&<div className="pc-warning" role="alert"><p>{busy?'正在提交，请勿离开。':'上次提交结果尚未确认，原文和唯一请求编号已保留。'}</p><Button disabled={busy||pending.scope!==scope} variant="outline" onClick={()=>void submit(pending.action,pending.body,true)}>核实并重试同一请求</Button></div>}
-  {discardPrompt&&<div className="pc-warning" role="alert"><p>当前有未保存输入。是否放弃后{discardPrompt}？</p><div className="pc-actions"><Button variant="outline" onClick={()=>{setDiscardPrompt('');switchAction.current=null;}}>继续编辑</Button><Button variant="outline" onClick={()=>{if(locked)return;const next=switchAction.current;clearEditor();next?.();}}>放弃未保存输入并继续</Button></div></div>}
+  {discardPrompt&&<div className="pc-warning" role="alert"><p>当前有未保存输入。是否放弃后{discardPrompt}？</p><div className="pc-actions"><Button variant="outline" onClick={()=>{setDiscardPrompt('');cancelSwitch();}}>继续编辑</Button><Button variant="outline" onClick={()=>{if(locked)return;const next=switchAction.current;switchAction.current=null;switchCancelled.current=null;clearEditor();next?.();}}>放弃未保存输入并继续</Button></div></div>}
   {feed&&<><div className="pc-filters">{personal?<nav aria-label="个人任务筛选">{[['pending','待处理'],['done','已完成'],['feedback','待我推进反馈'],['all','全部']].map(([value,title])=><button key={value} type="button" aria-pressed={queue===value} disabled={locked} onClick={()=>switchTo(()=>setQueue(value),'切换任务分类')}>{title} · {scopedTasks.filter(task=>inQueue(task,value)).length}</button>)}</nav>:<label className="pc-check"><input type="checkbox" checked={allSteps} disabled={locked} onChange={e=>switchTo(()=>setAllSteps(e.target.checked),'切换环节范围')}/>显示全部环节</label>}<label>搜索待办<input type="search" aria-label="搜索待办" value={search} disabled={locked} onChange={e=>setSearch(e.target.value)} placeholder="任务、项目、负责人"/></label></div>
   <div className="pc-task-list">{visibleTasks.map(task=><article key={task.id} className={'pc-task '+(selectedId===task.id?'pc-selected':'')}><div className="pc-task-head"><strong>{task.title}</strong><span className={'pc-status pc-status-'+task.status}>{label(statuses,task.status)}</span></div><p>{task.customerLabel} · {task.projectCode} {task.projectTitle}</p><p>轮次：{roundLabel(task)}</p><p>{label(steps,task.stepKey)} · {label(departments,task.department)} · {task.ownerName||'待分配'} · 截止 {task.dueDate||'未安排'}</p>{task.status==='done'&&<p>{task.acknowledgedAt?'项目负责人已阅反馈':'完成反馈待项目负责人推进'}</p>}<Button variant="outline" disabled={locked} onClick={event=>select(task,event)}>查看任务 · {task.title}</Button><BusinessFollowupSlot module="personal-tasks" collection="tasks" recordId={task.id} sectionKey="record" title="本条待办的附件与沟通"/></article>)}{!visibleTasks.length&&<p className="pc-empty">当前筛选没有可见任务。</p>}</div></>}
   {selectedId&&feed&&<section className="pc-detail" aria-label="任务详情"><div className="pc-heading"><h3 tabIndex={-1} ref={heading}>任务详情</h3><Button variant="outline" disabled={locked} onClick={()=>switchTo(()=>{clearEditor();setSelectedId('');returnFocus.current?.focus();},'关闭任务详情')}>关闭详情</Button></div>{detailQuery.isPending&&<p role="status">正在核对任务读取权限…</p>}{detailQuery.isError&&<p role="alert" className="pc-error">任务读取失败，已隐藏原详情。{detailQuery.error.message}</p>}{selected&&<><h4>{selected.title}</h4><dl className="pc-summary"><div><dt>项目与环节</dt><dd>{selected.customerLabel} · {selected.projectCode} {selected.projectTitle}<br/>{label(steps,selected.stepKey)}<br/>轮次：{roundLabel(selected)}</dd></div><div><dt>负责人</dt><dd>{label(departments,selected.department)} · {selected.ownerName}</dd></div><div><dt>截止 / 状态</dt><dd>{selected.dueDate||'未安排'} · {label(statuses,selected.status)} · V{selected.version}</dd></div></dl><p className="pc-text">{selected.description||'未填写任务说明'}</p>{selected.result&&<div className="pc-result"><b>完成备注</b><p className="pc-text">{selected.result}</p></div>}

@@ -42,6 +42,31 @@ async function contextPage(actorCookie){
  const tab=await context.newPage();tab.setDefaultTimeout(20000);tab.on('pageerror',error=>errors.push(error.message));tab.on('dialog',dialog=>dialog.accept());return tab;
 }
 async function cell(row,header){const headers=await row.locator('xpath=ancestor::table').getByRole('columnheader').allTextContents();const index=headers.findIndex(text=>text.trim()===header);assert(index>=0,'Missing column '+header);return row.locator('td').nth(index).innerText();}
+async function filterProjects(page,board,values){
+ await board.getByRole('button',{name:'筛选项目',exact:true}).click();
+ const popup=page.locator('.excel-filter-popover').filter({visible:true});
+ await popup.getByRole('button',{name:'全不选',exact:true}).click();
+ for(const value of values)await popup.getByRole('checkbox',{name:value,exact:true}).check();
+ await popup.getByRole('button',{name:'确定',exact:true}).click();
+}
+async function assertBoardRemains(board){assert.equal(await board.count(),1,'The project list must remain mounted behind every project dialog');}
+async function columnHandle(wrapper,header){
+ const headers=await wrapper.locator('thead tr').first().getByRole('columnheader').allTextContents();
+ const index=headers.findIndex(text=>text.trim()===header);assert(index>=0,'Missing resizable column '+header);
+ return wrapper.getByRole('separator').nth(index);
+}
+async function columnWidth(wrapper,header){return Number(await (await columnHandle(wrapper,header)).getAttribute('aria-valuenow'));}
+async function dragColumn(page,wrapper,header,distance=90){
+ const handle=await columnHandle(wrapper,header);await handle.scrollIntoViewIfNeeded();
+ const before=Number(await handle.getAttribute('aria-valuenow')),box=await handle.boundingBox();assert(box);
+ await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+distance,box.y+box.height/2,{steps:8});await page.mouse.up();
+ await eventually(async()=>assert((await columnWidth(wrapper,header))>=before+distance-3,'Dragging must increase the actual saved column width'));
+ return {before,after:await columnWidth(wrapper,header)};
+}
+async function restoreColumn(wrapper,header,expected){
+ const handle=await columnHandle(wrapper,header);await handle.scrollIntoViewIfNeeded();await handle.dblclick();
+ await eventually(async()=>assert(Math.abs(await columnWidth(wrapper,header)-expected)<3,'Double-click must restore the default column width'));
+}
 
 try{
  await eventually(async()=>assert((await fetch(origin+'/health')).ok));
@@ -58,6 +83,7 @@ try{
  await workspace('customer-save',{customer:'合成项目责任客户',customerCode:'SYN-RESP',salesName:admin.name,serviceName:'',pmcName:'',salesMemberIds:[admin.id],serviceMemberIds:[serviceA.id,serviceB.id],quoteMemberIds:[],notes:'Synthetic responsibility browser acceptance',active:true});
  const customer=(await workspace('data')).customerAccounts.find(row=>row.customerCode==='SYN-RESP');
  const team=(await workspace('customer-project-team-save',{token:token(),name:'合成项目责任组',leaderIds:[admin.id],salesMemberIds:[admin.id],serviceMemberIds:[serviceA.id,serviceB.id],customerIds:[customer.id],active:true})).item;
+ const secondTeam=(await workspace('customer-project-team-save',{token:token(),name:'合成目标业务组',leaderIds:[admin.id],salesMemberIds:[admin.id],serviceMemberIds:[serviceB.id],customerIds:[customer.id],active:true})).item;
  const createProject=(code,title,serviceMemberIds)=>workspace('customer-project-save',{token:token(),customerId:customer.id,code,title,description:'Synthetic only',teamId:team.id,salesMemberId:admin.id,serviceMemberIds,dueDate:'',status:'active'});
  const single=(await createProject('SYN-RESP-ONE','合成单客服项目',[])).item;
  const multiple=(await createProject('SYN-RESP-MULTI','合成多客服项目',[serviceA.id,serviceB.id])).item;
@@ -69,20 +95,54 @@ try{
  page=await contextPage(adminCookie);
  await page.goto(origin+'/customer-projects');
  const board=page.locator('.scp-board'),singleRow=board.getByRole('row').filter({hasText:single.title}),multipleRow=board.getByRole('row').filter({hasText:multiple.title});
- await singleRow.getByRole('button',{name:'查看项目',exact:true}).click();
- await page.getByRole('button',{name:'修改项目',exact:true}).click();
+ await singleRow.getByRole('button',{name:'修改项目 · '+single.title,exact:true}).click();
  const dialog=page.getByRole('dialog');
+ await assertBoardRemains(board);
  await dialog.getByRole('group',{name:'客服负责人（可多选）',exact:true}).getByRole('checkbox',{name:serviceA.name,exact:true}).check();
  await dialog.getByRole('button',{name:'保存记录',exact:true}).click();await dialog.waitFor({state:'hidden'});
  assert.deepEqual((await workspace('customer-project-data')).projects.find(row=>row.id===single.id).serviceMemberIds,[serviceA.id]);
  assert.equal((await workspace('project-collaboration-data?projectId='+single.id)).tasks.length,0);
- await page.getByRole('button',{name:'返回项目清单',exact:true}).click();
  await eventually(async()=>assert.equal(await cell(singleRow,'客服负责人'),serviceA.name));
+ assert.equal(await page.locator('.cp-project-dialog').count(),0,'Maintenance save must return to the same list without opening a full project page');
  assert.equal(await cell(singleRow,'事项跟进人'),'尚未安排下一步');
  assert.equal(await cell(singleRow,'下一步事项'),'尚未安排下一步');
  assert.equal(await cell(singleRow,'项目状态'),'进行中');
  assert.equal(await cell(singleRow,'开发阶段'),'待建立开发轮次');
  pass('维护项目选择客服后清单显示项目责任人；没有任务准确显示尚未安排下一步，项目状态与开发阶段分开');
+
+ const originalScope=await capturePreservation(dir);
+ const listWidths=board.locator('.customer-project-table-scroll');
+ let listColumn=await dragColumn(page,listWidths,'项目');
+ await filterProjects(page,board,[single.title+' '+single.code]);
+ await eventually(async()=>assert.equal(await multipleRow.count(),0));
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'Filtering must not reset the resized project column');
+ const right=board.getByRole('button',{name:'项目清单向右移动',exact:true});
+ for(let move=0;move<30;move++){
+  const remaining=await listWidths.locator(':scope > .cp-table-scroll').evaluate(node=>node.scrollWidth-node.clientWidth-node.scrollLeft);
+  if(remaining<=1)break;
+  // The prior click may disable this button between observing and dispatching the next click.
+  await right.evaluate(button=>{if(!button.disabled)button.click();});
+ }
+ await eventually(async()=>assert.equal(await right.isEnabled(),false,'Horizontal controls must reach the final columns'));
+ const actionBox=await singleRow.getByRole('button',{name:'指派待办',exact:true}).boundingBox(),listBox=await listWidths.boundingBox();
+ assert(actionBox&&listBox&&actionBox.x>=listBox.x&&actionBox.x+actionBox.width<=listBox.x+listBox.width+1,'The top horizontal controls must reveal the rightmost assignment action');
+ const rail=listWidths.locator('.cp-project-scroll-rail'),viewport=listWidths.locator(':scope > .cp-table-scroll');
+ assert(Math.abs(await rail.evaluate(node=>node.scrollLeft)-await viewport.evaluate(node=>node.scrollLeft))<2,'Top and table horizontal offsets must remain synchronized');
+ await singleRow.getByRole('button',{name:'记录进展',exact:true}).click();
+ const progressForm=page.getByRole('dialog',{name:'记录项目进展',exact:true});
+ await assertBoardRemains(board);
+ await progressForm.getByRole('button',{name:'取消',exact:true}).click();await progressForm.waitFor({state:'hidden'});
+ assert.equal(await multipleRow.count(),0,'Cancelling the progress dialog must retain the column filter');
+ const cancelledScope=await capturePreservation(dir);assert.deepEqual(cancelledScope.records,originalScope.records);assert.deepEqual(cancelledScope.files,originalScope.files);
+ await singleRow.getByRole('button',{name:'记录进展',exact:true}).click();
+ await progressForm.getByLabel('项目进展记录',{exact:false}).fill('合成进展：客户样板资料已经收到，等待核对。');
+ await progressForm.getByRole('button',{name:'保存进展',exact:true}).click();await progressForm.waitFor({state:'hidden'});
+ await eventually(async()=>assert.match(await cell(singleRow,'最新记录 / 日期与进展'),/合成进展/));
+ assert.equal(await multipleRow.count(),0,'Saving progress must retain the same list and column filter');
+ assert.equal(await page.locator('.cp-project-dialog').count(),0);
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'Opening and closing forms must retain the project column width');
+ await board.getByRole('button',{name:'清除全部筛选',exact:true}).click();await multipleRow.waitFor();
+ pass('进展直接在弹窗登记；取消不写记录，保存只更新当前行，关闭和保存均保留列表筛选');
 
  recipientPage=await contextPage(sessions[0].cookie);
  await recipientPage.goto(origin+'/personal-tasks');
@@ -94,6 +154,8 @@ try{
  // Every preexisting record/file is protected from the assignment/completion workflow below.
  const before=await capturePreservation(dir);
  await multipleRow.getByRole('button',{name:'指派待办',exact:true}).click();
+ const multipleTaskDialog=page.getByRole('dialog',{name:'项目待办 · '+multiple.title,exact:true});
+ await multipleTaskDialog.waitFor();await assertBoardRemains(board);
  const editor=page.getByRole('region',{name:'待办编辑',exact:true});
  await editor.waitFor();
  assert.equal(await editor.getByLabel('负责人',{exact:true}).inputValue(),'','Multiple project service owners require an explicit selection');
@@ -102,8 +164,15 @@ try{
  await editor.getByRole('button',{name:'放弃本次编辑',exact:true}).click();
  const discard=page.getByRole('button',{name:'放弃未保存输入并继续',exact:true});if(await discard.isVisible())await discard.click();
  await editor.waitFor({state:'hidden'});
- await page.getByRole('button',{name:'返回项目清单',exact:true}).click();
+ await multipleTaskDialog.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await multipleTaskDialog.waitFor({state:'hidden'});
+ await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await eventually(async()=>assert.equal(await singleRow.getByRole('button',{name:'指派待办',exact:true}).isEnabled(),true));
+ assert.equal(await page.locator('.cp-project-dialog').count(),0,'Cancelling assignment must not reopen it on a data refresh');
+ assert.equal((await workspace('project-collaboration-data?projectId='+multiple.id)).tasks.length,0,'Cancelling assignment must not create a task');
+ await filterProjects(page,board,[single.title+' '+single.code]);
  await singleRow.getByRole('button',{name:'指派待办',exact:true}).click();
+ const singleTaskDialog=page.getByRole('dialog',{name:'项目待办 · '+single.title,exact:true});
+ await singleTaskDialog.waitFor();await assertBoardRemains(board);
  await editor.waitFor();
  assert.equal(await editor.getByLabel('负责人',{exact:true}).inputValue(),serviceA.id);
  assert.equal(await editor.getByLabel('负责部门',{exact:true}).inputValue(),'service');
@@ -115,10 +184,18 @@ try{
  await editor.getByRole('button',{name:'保存待办',exact:true}).click();await editor.waitFor({state:'hidden'});
  const assigned=(await workspace('project-collaboration-data?projectId='+single.id)).tasks.find(row=>row.title===taskTitle);
  assert.equal(assigned?.ownerId,serviceA.id);assert.equal(assigned?.department,'service');
- await page.getByRole('button',{name:'返回项目清单',exact:true}).click();
+ assert.equal(await singleTaskDialog.isVisible(),true,'Successful assignment stays in the task list dialog');
+ await singleTaskDialog.getByRole('button',{name:'查看任务 · '+taskTitle,exact:true}).waitFor();
+ await singleTaskDialog.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await singleTaskDialog.waitFor({state:'hidden'});
+ assert.equal(await multipleRow.count(),0,'Closing the task dialog must retain the original project filter');
  await eventually(async()=>assert.equal(await cell(singleRow,'事项跟进人'),serviceA.name));
  assert.equal(await cell(singleRow,'客服负责人'),serviceA.name);
  assert.equal(await cell(singleRow,'下一步事项'),taskTitle);
+ await singleRow.getByRole('button',{name:'查看待办',exact:true}).click();await singleTaskDialog.waitFor();
+ assert.equal(await editor.count(),0,'View tasks must not reopen the cancelled or saved assignment editor');
+ await singleTaskDialog.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await singleTaskDialog.waitFor({state:'hidden'});
+ await page.reload();await singleRow.waitFor();
+ assert.equal(await page.locator('.cp-project-dialog').count(),0,'A browser reload must not replay the assignment intent');
  await recipientPage.reload();
  const personalTasks=recipientPage.getByRole('region',{name:'我的待办',exact:true});
  await personalTasks.getByRole('button',{name:'查看任务 · '+taskTitle,exact:true}).click();
@@ -131,6 +208,11 @@ try{
  assert.equal(await cell(singleRow,'客服负责人'),serviceA.name);
  assert.equal(await cell(singleRow,'下一步事项'),'尚未安排下一步');
  assert(!/待指定/.test(await singleRow.innerText()));
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'A browser reload must retain the saved project-column width');
+ // A reload may calculate a new natural default after progress text changes. Restore and
+ // record that default on this mount before checking later cross-table isolation/reset.
+ const reloadedListHandle=await columnHandle(listWidths,'项目');await reloadedListHandle.scrollIntoViewIfNeeded();await reloadedListHandle.dblclick();
+ listColumn=await dragColumn(page,listWidths,'项目');
  const completed=(await workspace('project-collaboration-data?projectId='+single.id)).tasks.find(row=>row.id===assigned.id);
  assert.equal(completed.result,'合成验收：资料已核对完成。');assert.equal(completed.history.at(-1).action,'complete');
  const after=await capturePreservation(dir);
@@ -138,6 +220,66 @@ try{
  assert.deepEqual(after.files,before.files);assert.equal(after.accountsHash,before.accountsHash);assert.equal(after.accountCount,before.accountCount);
  const download=await fetch(origin+'/api/workspace/customer-project-file?id='+encodeURIComponent(attachment.id),{headers:{Cookie:adminCookie}});
  assert.equal(download.status,200);assert.deepEqual(Buffer.from(await download.arrayBuffer()),originalBytes);
+ await singleRow.getByRole('button',{name:'历史记录',exact:true}).click();
+ const history=page.locator('.cp-project-dialog');
+ await history.waitFor();assert.equal(await history.getAttribute('aria-label'),'进展记录 · '+single.title);await assertBoardRemains(board);
+ await history.getByRole('row').filter({hasText:'合成进展：客户样板资料已经收到'}).waitFor();
+ assert.equal(await history.getByRole('region',{name:'项目环节协作',exact:true}).count(),0,'Progress history must not embed a second task workspace');
+ const progressSection=history.getByRole('heading',{name:'项目进展记录',exact:true}).locator('xpath=ancestor::section[1]');
+ const progressWidths=progressSection.locator('.customer-project-table-scroll');
+ const sectionBox=await progressSection.boundingBox(),tableBox=await progressWidths.boundingBox();
+ assert(sectionBox&&tableBox&&tableBox.x-sectionBox.x>=12&&sectionBox.x+sectionBox.width-tableBox.x-tableBox.width>=12,'Progress table must retain visible left and right space inside its section');
+ const progressColumn=await dragColumn(page,progressWidths,'项目进展记录');
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'Progress resizing must not alter the project list preference');
+ await page.screenshot({path:path.join(dir,'project-progress-dialog.png'),fullPage:true});
+ await history.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await history.waitFor({state:'hidden'});
+ await singleRow.getByRole('button',{name:'历史记录',exact:true}).click();await history.waitFor();
+ assert.equal(await columnWidth(progressWidths,'项目进展记录'),progressColumn.after,'Progress column width must survive closing and reopening its dialog');
+ await restoreColumn(progressWidths,'项目进展记录',progressColumn.before);
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after);
+ await history.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await history.waitFor({state:'hidden'});
+ const legacyTitle='合成历史双审事项';
+ await workspace('customer-project-entry-save',{token:token(),entryType:'task',projectId:single.id,roundId:'',title:legacyTitle,ownerId:serviceA.id,serviceReviewerId:serviceB.id,salesReviewerId:admin.id,dueDate:'2099-12-01',status:'open'});
+ await workspace('customer-project-followup-save',{token:token(),ownerId:serviceA.id,customerId:customer.id,projectId:single.id,title:'合成关联客户跟进',category:'other',stars:0,status:'pending',followUpDate:'2099-12-02',notes:'Synthetic table-width check',nextAction:'合成关联待核查',checklist:[]});
+ await page.getByRole('button',{name:'刷新',exact:true}).click();
+ await eventually(async()=>assert.match(await singleRow.innerText(),new RegExp(legacyTitle)));
+ await singleRow.getByRole('button',{name:'历史记录',exact:true}).click();await history.waitFor();
+ await history.getByLabel('更多项目资料',{exact:true}).selectOption('communication');
+ await history.getByRole('row').filter({hasText:legacyTitle}).waitFor();
+ assert.equal(await history.getByRole('row').filter({hasText:legacyTitle}).count(),1,'Legacy communication view must display each original task exactly once');
+ assert.equal(await history.getByRole('region',{name:'项目环节协作',exact:true}).count(),0);
+ const related=history.getByRole('heading',{name:'关联客户跟进',exact:true}).locator('xpath=ancestor::section[1]').locator('.customer-project-table-scroll');
+ const relatedColumn=await dragColumn(page,related,'跟进事项 / 下一步');
+ assert.equal(await columnWidth(listWidths,'项目'),listColumn.after);
+ await history.getByLabel('更多项目资料',{exact:true}).selectOption('progress');
+ assert.equal(await columnWidth(progressWidths,'项目进展记录'),progressColumn.before,'Related-followup resizing must not change progress column widths');
+ await history.getByLabel('更多项目资料',{exact:true}).selectOption('communication');
+ assert.equal(await columnWidth(related,'跟进事项 / 下一步'),relatedColumn.after);
+ await restoreColumn(related,'跟进事项 / 下一步',relatedColumn.before);
+ await history.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await history.waitFor({state:'hidden'});
+ await restoreColumn(listWidths,'项目',listColumn.before);
+ pass('项目清单、进展和关联客户跟进三表可独立拖宽、记忆和恢复；顶部横滚与表格同步，筛选后宽度保持');
+ pass('项目历史仅在弹窗展示；进展表左右留白，历史沟通入口保留原双审事项且无重复待办');
+
+ await page.goto(origin+'/customer-projects?projectId='+single.id+'&customerId='+customer.id+'&tab=progress');await history.waitFor();
+ await history.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await history.waitFor({state:'hidden'});
+ assert(!/projectId|customerId|recordId|tab=/.test(new URL(page.url()).search),'Closing a linked record must not reapply an old customer scope on the next list selection');
+ await singleRow.waitFor();await multipleRow.waitFor();
+ await page.getByRole('combobox',{name:'统一工作组',exact:true}).selectOption(team.id);
+ await singleRow.getByRole('button',{name:'修改项目 · '+single.title,exact:true}).click();
+ await dialog.getByLabel('业务客服组',{exact:true}).selectOption(secondTeam.id);
+ await dialog.getByRole('group',{name:'客服负责人（可多选）',exact:true}).getByRole('checkbox',{name:serviceB.name,exact:true}).check();
+ await dialog.getByRole('checkbox',{name:/保存后安排下一步/}).check();
+ await dialog.getByRole('button',{name:'保存记录',exact:true}).click();
+ await singleTaskDialog.waitFor();await editor.waitFor();
+ assert.equal(await page.getByRole('combobox',{name:'统一工作组',exact:true}).inputValue(),secondTeam.id);
+ assert.equal(await editor.getByLabel('负责人',{exact:true}).inputValue(),serviceB.id,'Cross-team save must carry the intent and use the new service owner');
+ assert(!/assign-task|recordId|assignRequest|assignmentRequest/.test(new URL(page.url()).search),'One-time assignment intent must not be persisted in the address');
+ await editor.getByRole('button',{name:'放弃本次编辑',exact:true}).click();if(await discard.isVisible())await discard.click();await editor.waitFor({state:'hidden'});
+ await singleTaskDialog.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await singleTaskDialog.waitFor({state:'hidden'});
+ await page.reload();await singleRow.waitFor();
+ assert.equal(await page.locator('.cp-project-dialog').count(),0,'Reload after cancelling a cross-team assignment must not reopen the one-time editor');
+ pass('跨组维护后仅打开一次新组指派弹窗，默认新客服；地址不含临时意图，取消再刷新不重开');
  assert.deepEqual(errors,[]);
  pass('任务完成后项目客服仍保留，清单不误报待指定；原业务记录、账号元数据和附件原件保持完整');
  await page.screenshot({path:path.join(dir,'project-responsibility.png'),fullPage:true});

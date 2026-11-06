@@ -1,0 +1,26 @@
+.customer-project-table-scroll{box-sizing:border-box;min-width:0;max-width:100%;margin:0 18px 18px;border:1px solid #dbe3dd;border-radius:8px;overflow:hidden;background:#fff}
+.customer-project-table-scroll .cp-project-scroll-tools{background:#f5f8f5;border-bottom:1px solid #dbe3dd;min-width:0}
+.customer-project-table-scroll .cp-project-scroll-tools[hidden]{display:none}
+.customer-project-table-scroll .cp-project-scroll-buttons{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;padding:8px 12px;font-size:12px;color:#4c6860}
+.customer-project-table-scroll .cp-project-scroll-buttons>div{display:flex;gap:8px}
+.customer-project-table-scroll .cp-project-scroll-buttons button{padding:5px 12px;border:1px solid #cbd9d0;border-radius:5px;background:#fff;color:#244f3d;white-space:nowrap;cursor:pointer}
+.customer-project-table-scroll .cp-project-scroll-buttons button:disabled{opacity:.45;cursor:not-allowed}
+.customer-project-table-scroll .cp-project-scroll-buttons button:focus-visible,.customer-project-table-scroll .cp-project-scroll-rail:focus-visible{outline:2px solid #43876a;outline-offset:-2px}
+.customer-project-table-scroll .cp-project-scroll-rail{height:20px;width:100%;overflow-x:scroll;overflow-y:hidden;scrollbar-width:auto;scrollbar-color:#7c9d8b #e8eee9;overscroll-behavior-x:contain}
+.customer-project-table-scroll .cp-project-scroll-rail>div{height:1px}
+.customer-project-table-scroll>.cp-table-scroll,.scp-board .customer-project-table-scroll>.cp-table-scroll{box-sizing:border-box;width:100%;min-width:0;max-width:100%;max-height:min(60vh,680px);margin:0;border:0;border-radius:0;overflow:auto;overscroll-behavior-x:contain}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table{width:100%;border-collapse:separate;border-spacing:0}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead{position:sticky;top:0;z-index:3;background:#edf3ef}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>th{background:#edf3ef}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table :is(th,td){min-width:0;max-width:none;white-space:normal;overflow-wrap:anywhere}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>th{position:relative;padding-right:14px}
+.customer-project-table-scroll .cp-project-column-resize{position:absolute;right:0;top:0;bottom:0;width:8px;z-index:6;cursor:col-resize;touch-action:none;user-select:none}
+.customer-project-table-scroll .cp-project-column-resize:hover{background:#43876a33}
+.customer-project-table-scroll .cp-project-column-resize:focus-visible{outline:2px solid #43876a;outline-offset:-2px}
+.customer-project-table-scroll>.cp-table-scroll :is(.scp-project-cell,.scp-progress,.scp-project-link,.cp-row-actions){min-width:0;max-width:100%}
+.scp-board .customer-project-table-scroll .cp-table td:last-child .cp-row-actions{min-width:0}
+.customer-project-table-scroll :is(input,select,textarea,button){max-width:100%;box-sizing:border-box}
+.customer-project-table-scroll .cp-row-actions button{height:auto;white-space:normal}
+.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child,.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table td:last-child{position:static;right:auto;box-shadow:none;z-index:auto;min-width:0;max-width:none}
+.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child{position:relative}
+@media(max-width:550px){.customer-project-table-scroll{margin:0 12px 12px}.customer-project-table-scroll .cp-project-scroll-buttons{padding:7px 8px}}

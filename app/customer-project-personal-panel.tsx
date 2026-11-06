@@ -30,6 +30,7 @@ export function CustomerProjectPersonalPanel({data,onNavigate,initialContext}:{d
  const projects=feed?.projects.filter(row=>matches(row,[row.title,row.code,row.customerLabel,statuses[row.status]||row.status]))||[];
  return <section className="project-collaboration panel" aria-label="我的项目跟进与负责项目">
   <header className="pc-heading"><div><h2>我的项目跟进与审核</h2><p>显示当前轮到我处理的项目行动和客户跟进，打开原记录继续办理。</p></div><Button variant="outline" disabled={query.isFetching} onClick={()=>void query.refetch()}>刷新项目待办</Button></header>
+  {(initialContext?.projectId||initialContext?.customerId)&&<div className="pc-notice" role="status">当前仅显示所选{initialContext.projectId?'项目':'客户'}的待办与负责项目。<Button variant="outline" onClick={()=>onNavigate('personal-tasks',{})}>查看全部我的待办</Button></div>}
   {query.isPending&&data.me.active&&<p role="status">正在读取我的项目待办…</p>}
   {query.isError&&<p className="pc-error" role="alert">项目待办读取失败，已隐藏上次资料。{query.error.message}</p>}
   {feed&&<><div className="pc-filters"><label>搜索项目与跟进<input type="search" aria-label="搜索我的项目与跟进" value={search} onChange={event=>setSearch(event.target.value)} placeholder="客户、项目、事项"/></label><span>{actions.length} 条待办 · {projects.length} 个负责项目</span></div>

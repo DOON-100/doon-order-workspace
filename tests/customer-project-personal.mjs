@@ -69,4 +69,14 @@ nodes(tree).find(node=>node.type==='button'&&text(node)==='打开处理 · Synth
 globalThis.__personalQuery={...globalThis.__personalQuery,isError:true,error:new Error('Synthetic revoked')};tree=CustomerProjectPersonalPanel(props);assert(!text(tree).includes('Synthetic responsible project'));assert(text(tree).includes('已隐藏上次资料'));
 globalThis.__personalQuery={...globalThis.__personalQuery,isError:false};globalThis.__personalSearch='nothing matches';tree=CustomerProjectPersonalPanel(props);assert(text(tree).includes('0 条待办 · 0 个负责项目'));
 globalThis.__personalSearch='';tree=CustomerProjectPersonalPanel({...props,initialContext:{projectId:'other-project'}});assert(text(tree).includes('0 条待办 · 0 个负责项目'));
+assert(text(tree).includes('当前仅显示所选项目的待办与负责项目。'));
+nodes(tree).find(node=>node.type==='button'&&text(node)==='查看全部我的待办').props.onClick();
+assert.deepEqual(navigation.at(-1),['personal-tasks',{}],'Clear scope uses the parent navigation guard rather than changing local filtering');
+tree=CustomerProjectPersonalPanel({...props,initialContext:{customerId:customer.id}});
+assert(text(tree).includes('当前仅显示所选客户的待办与负责项目。'));
+let guardedAttempts=0;
+const guardedProps={...props,initialContext:{projectId:'other-project'},onNavigate:()=>{guardedAttempts++;}};
+tree=CustomerProjectPersonalPanel(guardedProps);nodes(tree).find(node=>node.type==='button'&&text(node)==='查看全部我的待办').props.onClick();
+tree=CustomerProjectPersonalPanel(guardedProps);assert.equal(guardedAttempts,1);assert(text(tree).includes('0 条待办 · 0 个负责项目'),'A parent-blocked navigation must not silently clear the active scope');
+tree=CustomerProjectPersonalPanel(props);assert(!text(tree).includes('当前仅显示所选'));assert(!nodes(tree).some(node=>node.type==='button'&&text(node)==='查看全部我的待办'));assert(text(tree).includes('Synthetic responsible project'),'All authorized personal work returns after the parent clears the navigation context');
 console.log('PASS personal panel exact-ID navigation, cross-team reads, scoped filtering and stale-data hiding');
