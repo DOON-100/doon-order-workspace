@@ -9,8 +9,8 @@ export function projectListExtraFollowers<T extends Pick<Member,'id'|'active'|'r
  return members.filter(member=>allowed.has(member.id)&&member.active&&member.role!=='supplier'&&personnelTypeOf(member)==='internal');
 }
 
-export const projectListOwnerColumn=5;
-export const projectListServiceColumn=11;
+export const projectListOwnerColumn=4;
+export const projectListServiceColumn=9;
 export type ProjectListFilterRow={values:unknown[];ownerNames:string[];serviceNames?:string[]};
 type FollowupTask={id?:string;projectId?:string;ownerId?:string;dueDate?:string;status?:string};
 const unique=(values:string[])=>[...new Set(values.map(normalizeExcelValue))].sort((a,b)=>a.localeCompare(b,'zh-CN',{numeric:true}));

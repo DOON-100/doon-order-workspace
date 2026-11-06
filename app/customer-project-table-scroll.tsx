@@ -40,8 +40,33 @@ function bindColumnWidths(table:HTMLTableElement,storageKey:string,label:string,
  apply();return ()=>{stops.forEach(stop=>stop());colgroup.remove();table.style.width=originalWidth;table.style.tableLayout=originalLayout;};
 }
 
+function bindFrozenColumns(table:HTMLTableElement,requestedCount:number){
+ const marked=new Set<HTMLTableCellElement>();
+ const clear=(cell:HTMLTableCellElement)=>{cell.removeAttribute('data-cp-frozen');cell.removeAttribute('data-cp-frozen-edge');cell.style.removeProperty('--cp-frozen-left');};
+ const update=()=>{
+  const headers=Array.from(table.tHead?.rows[0]?.cells||[]),count=Math.min(headers.length,Math.max(0,Number.isFinite(requestedCount)?Math.floor(requestedCount):0));
+  const offsets:number[]=[];let offset=0;
+  // Use actual border-box widths; browser rounding and border widths are shared by header and body.
+  for(let index=0;index<count;index++){offsets.push(offset);offset+=headers[index].getBoundingClientRect().width;}
+  const next=new Set<HTMLTableCellElement>();
+  for(const row of Array.from(table.rows)){
+   // Empty-state, evidence and filter-summary rows span columns and must remain ordinary rows.
+   if(row.closest('[data-excel-ui]')||row.cells.length!==headers.length||Array.from(row.cells).some(cell=>cell.colSpan!==1||cell.rowSpan!==1))continue;
+   for(let index=0;index<count;index++){
+    const cell=row.cells[index];next.add(cell);cell.setAttribute('data-cp-frozen',String(index));cell.style.setProperty('--cp-frozen-left',offsets[index]+'px');
+    if(index===count-1)cell.setAttribute('data-cp-frozen-edge','');else cell.removeAttribute('data-cp-frozen-edge');
+   }
+  }
+  for(const cell of marked)if(!next.has(cell))clear(cell);
+  marked.clear();next.forEach(cell=>marked.add(cell));
+ };
+ const observer=typeof MutationObserver==='undefined'?null:new MutationObserver(update);
+ observer?.observe(table,{childList:true,subtree:true});update();
+ return {update,cleanup:()=>{observer?.disconnect();marked.forEach(clear);marked.clear();}};
+}
+
 /** A second native scrollbar keeps wide project columns reachable above long lists. */
-export function CustomerProjectTableScroll({children,storageKey='',label='项目清单',defaultWidths}:{children:ReactNode;storageKey?:string;label?:string;defaultWidths?:number[]}){
+export function CustomerProjectTableScroll({children,storageKey='',label='项目清单',defaultWidths,frozenColumns=0}:{children:ReactNode;storageKey?:string;label?:string;defaultWidths?:number[];frozenColumns?:number}){
  const root=useRef<HTMLDivElement>(null),rail=useRef<HTMLDivElement>(null),spacer=useRef<HTMLDivElement>(null),viewport=useRef<HTMLElement|null>(null);
  const columnLayout=useRef<ColumnLayout|null>(null);
  const [position,setPosition]=useState({overflow:false,left:false,right:false});
@@ -49,6 +74,7 @@ export function CustomerProjectTableScroll({children,storageKey='',label='项目
   const tableViewport=root.current?.querySelector<HTMLElement>(':scope > .cp-table-scroll'),track=rail.current,fill=spacer.current;
   if(!tableViewport||!track||!fill)return;
   viewport.current=tableViewport;
+  let frozen:{update:()=>void;cleanup:()=>void}|undefined;
   const updatePosition=()=>{
    const maximum=Math.max(0,tableViewport.scrollWidth-tableViewport.clientWidth),offset=tableViewport.scrollLeft;
    const next={overflow:maximum>1,left:offset>1,right:offset<maximum-1};
@@ -60,6 +86,7 @@ export function CustomerProjectTableScroll({children,storageKey='',label='项目
    // Compensate for the table's vertical scrollbar so both horizontal ranges match.
    const trackWidth=track.clientWidth||tableViewport.clientWidth;
    fill.style.width=Math.max(0,tableViewport.scrollWidth+trackWidth-tableViewport.clientWidth)+'px';
+   frozen?.update();
    fromTable();
   };
   tableViewport.addEventListener('scroll',fromTable,{passive:true});track.addEventListener('scroll',fromTrack,{passive:true});
@@ -67,9 +94,10 @@ export function CustomerProjectTableScroll({children,storageKey='',label='项目
   resize?.observe(tableViewport);resize?.observe(track);
   const table=tableViewport.querySelector('table');if(table)resize?.observe(table);
   const unbindColumns=table?bindColumnWidths(table,storageKey,label,columnLayout,measure,defaultWidths):()=>{};
+  if(table)frozen=bindFrozenColumns(table,frozenColumns);
   window.addEventListener('resize',measure);measure();
-  return ()=>{resize?.disconnect();window.removeEventListener('resize',measure);tableViewport.removeEventListener('scroll',fromTable);track.removeEventListener('scroll',fromTrack);unbindColumns();viewport.current=null;};
- },[children,storageKey,label,defaultWidths]);
+  return ()=>{resize?.disconnect();frozen?.cleanup();window.removeEventListener('resize',measure);tableViewport.removeEventListener('scroll',fromTable);track.removeEventListener('scroll',fromTrack);unbindColumns();viewport.current=null;};
+ },[children,storageKey,label,defaultWidths,frozenColumns]);
  const move=(direction:number)=>{const table=viewport.current;if(!table)return;table.scrollLeft+=direction*Math.max(160,Math.round(table.clientWidth*.75));};
  return <div className="customer-project-table-scroll" ref={root} aria-label={label+'滚动与列宽'}>
   <div className="cp-project-scroll-tools" hidden={!position.overflow}>

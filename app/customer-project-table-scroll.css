@@ -13,6 +13,7 @@
 .customer-project-table-scroll>.cp-table-scroll>.cp-table>thead{position:sticky;top:0;z-index:3;background:#edf3ef}
 .customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>th{background:#edf3ef}
 .customer-project-table-scroll>.cp-table-scroll>.cp-table :is(th,td){min-width:0;max-width:none;white-space:normal;overflow-wrap:anywhere}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>th,.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>td,.customer-project-table-scroll>.cp-table-scroll>.cp-table>tbody>tr>td{box-sizing:border-box;border-top:0;border-left:0;border-right:1px solid #d1ddd4;border-bottom:1px solid #d1ddd4}
 .customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>th{position:relative;padding-right:14px}
 .customer-project-table-scroll .cp-project-column-resize{position:absolute;right:0;top:0;bottom:0;width:8px;z-index:6;cursor:col-resize;touch-action:none;user-select:none}
 .customer-project-table-scroll .cp-project-column-resize:hover{background:#43876a33}
@@ -21,6 +22,10 @@
 .scp-board .customer-project-table-scroll .cp-table td:last-child .cp-row-actions{min-width:0}
 .customer-project-table-scroll :is(input,select,textarea,button){max-width:100%;box-sizing:border-box}
 .customer-project-table-scroll .cp-row-actions button{height:auto;white-space:normal}
-.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child,.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table td:last-child{position:static;right:auto;box-shadow:none;z-index:auto;min-width:0;max-width:none}
-.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child{position:relative}
+.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child:not([data-cp-frozen]),.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table td:last-child:not([data-cp-frozen]){position:static;right:auto;box-shadow:none;z-index:auto;min-width:0;max-width:none}
+.scp-board .customer-project-table-scroll>.cp-table-scroll>.cp-table th:last-child:not([data-cp-frozen]){position:relative}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table :is(th,td)[data-cp-frozen]{position:sticky;left:var(--cp-frozen-left,0px);right:auto;z-index:2;background:#fff;background-clip:border-box;box-shadow:none}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>thead>tr>[data-cp-frozen]{z-index:4;background:#edf3ef}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table>tbody>tr:hover>[data-cp-frozen],.customer-project-table-scroll>.cp-table-scroll>.cp-table>tbody>tr:focus-within>[data-cp-frozen]{background:#f4f8f4}
+.customer-project-table-scroll>.cp-table-scroll>.cp-table :is(th,td)[data-cp-frozen-edge]{box-shadow:2px 0 0 #d1ddd4}
 @media(max-width:550px){.customer-project-table-scroll{margin:0 12px 12px}.customer-project-table-scroll .cp-project-scroll-buttons{padding:7px 8px}}

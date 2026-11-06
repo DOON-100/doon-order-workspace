@@ -32,25 +32,25 @@ assert.deepEqual(ownerNames,[names.first,names.later],'All unfinished task owner
 assert.deepEqual(projectListOwnerNames([],id=>names[id]),['尚未安排下一步']);
 assert.deepEqual(projectListOwnerNames([{ownerId:'first'},{}],id=>names[id]),[names.first,'待指派']);
 
-const row=(id,owners,customer='Synthetic customer',dueDate='2026-11-06')=>({id,ownerNames:owners,values:[customer,id,'Original progress','Earliest task','客服',owners.join('、'),dueDate,'进行中','Synthetic team','记录 / 指派']});
+const row=(id,owners,customer='Synthetic customer',dueDate='2026-11-06')=>({id,ownerNames:owners,values:[customer,id,'Original progress','Earliest task',owners.join('、'),dueDate,'Synthetic team','开发中','Synthetic sales','Synthetic service','记录 / 指派']});
 const rows=[row('project-a',ownerNames),row('project-b',[names.former]),row('empty',['待指定'])];
 const match=filters=>rows.filter(item=>matchesProjectListFilters(item,filters)).map(item=>item.id);
-assert.deepEqual(match({5:[names.later]}),['project-a'],'An owner on a non-earliest task is independently selectable');
-assert.deepEqual(match({5:[names.first,names.former]}),['project-a','project-b'],'Same-column choices use OR');
-assert.deepEqual(match({5:[]}),[],'Selecting no people matches nothing');
-assert.deepEqual(match({5:['Synthetic candidate without tasks']}),[],'Candidate selection does not fabricate assignments');
-assert.deepEqual(match({5:['待指定']}),['empty']);
-assert.deepEqual(match({5:{kind:'text',operator:'equals',value:names.later}}),['project-a']);
-assert.deepEqual(match({5:{kind:'text',operator:'contains',value:'later'}}),['project-a']);
-assert.deepEqual(match({5:{kind:'text',operator:'notContains',value:'later'}}),['project-b','empty'],'Excluding a person cannot match another owner on the same project');
-assert.deepEqual(match({5:{kind:'text',operator:'notEquals',value:names.later}}),['project-b','empty']);
-assert.deepEqual(match({5:[names.later],0:['Another customer']}),[],'Different columns use AND');
-assert.deepEqual(match({5:[names.later],6:{kind:'date',operator:'between',value:'2026-11-05',to:'2026-11-07'},2:{kind:'text',operator:'contains',value:'progress'}}),['project-a'],'Dates and text conditions remain available alongside people');
-assert.deepEqual(match({5:[names.later],6:{kind:'date',operator:'after',value:'2026-11-07'}}),[]);
+assert.deepEqual(match({4:[names.later]}),['project-a'],'An owner on a non-earliest task is independently selectable');
+assert.deepEqual(match({4:[names.first,names.former]}),['project-a','project-b'],'Same-column choices use OR');
+assert.deepEqual(match({4:[]}),[],'Selecting no people matches nothing');
+assert.deepEqual(match({4:['Synthetic candidate without tasks']}),[],'Candidate selection does not fabricate assignments');
+assert.deepEqual(match({4:['待指定']}),['empty']);
+assert.deepEqual(match({4:{kind:'text',operator:'equals',value:names.later}}),['project-a']);
+assert.deepEqual(match({4:{kind:'text',operator:'contains',value:'later'}}),['project-a']);
+assert.deepEqual(match({4:{kind:'text',operator:'notContains',value:'later'}}),['project-b','empty'],'Excluding a person cannot match another owner on the same project');
+assert.deepEqual(match({4:{kind:'text',operator:'notEquals',value:names.later}}),['project-b','empty']);
+assert.deepEqual(match({4:[names.later],0:['Another customer']}),[],'Different columns use AND');
+assert.deepEqual(match({4:[names.later],5:{kind:'date',operator:'between',value:'2026-11-05',to:'2026-11-07'},2:{kind:'text',operator:'contains',value:'progress'}}),['project-a'],'Dates and text conditions remain available alongside people');
+assert.deepEqual(match({4:[names.later],5:{kind:'date',operator:'after',value:'2026-11-07'}}),[]);
 assert.deepEqual(match({}),['project-a','project-b','empty'],'Clearing all conditions restores the authorized list');
 
 const candidates=[names.first,names.later,'Synthetic candidate without tasks'];
-const options=projectListFilterValues(rows,5,candidates);
+const options=projectListFilterValues(rows,4,candidates);
 assert(options.includes('Synthetic candidate without tasks'));
 assert(options.includes(names.former),'Historical assignees remain selectable without becoming assignable candidates');
 assert(options.includes('待指定'));
@@ -58,9 +58,9 @@ assert(!options.includes(names.first+'、'+names.later),'People appear individua
 assert.equal(options.filter(value=>value===names.later).length,1);
 assert(!options.includes('Synthetic unauthorized person'),'Only supplied authorized candidates and rows contribute options');
 assert.deepEqual(projectListFilterValues(rows,0,candidates),['Synthetic customer'],'Candidate people do not enter other columns');
-assert.deepEqual(projectListFilterValues([],5,['Synthetic candidate without tasks']),['Synthetic candidate without tasks'],'Candidates can be filtered even in an empty list');
+assert.deepEqual(projectListFilterValues([],4,['Synthetic candidate without tasks']),['Synthetic candidate without tasks'],'Candidates can be filtered even in an empty list');
 const manyRows=Array.from({length:160},(_,index)=>row('synthetic-'+index,[index===159?names.later:names.first]));
-assert.deepEqual(manyRows.filter(item=>matchesProjectListFilters(item,{5:[names.later]})).slice(0,20).map(item=>item.id),['synthetic-159'],'Filtering the complete input precedes any page slice');
+assert.deepEqual(manyRows.filter(item=>matchesProjectListFilters(item,{4:[names.later]})).slice(0,20).map(item=>item.id),['synthetic-159'],'Filtering the complete input precedes any page slice');
 
 // Exercise the real list state and CPTable prop forwarding with synthetic records.
 const stubs={
@@ -84,23 +84,25 @@ function render(){globalThis.__projectListFilterHooks=hooks;hooks.index=0;const 
 try{
  let table=render();
  assert.equal(table.rows.length,2);
- assert.equal(table.rows[0][11],names.first+'、'+names.later);
- assert(table.filterModel.values(11).includes(names.later));
- table.filterModel.setFilter(11,[names.later]);table=render();assert.equal(table.rows.length,1);
+ assert(!table.headers.includes('负责部门')&&!table.headers.includes('项目状态'),'The two removed columns must not remain in the list or its filter controls');
+ assert.equal(table.headers.length,11);
+ assert.equal(table.rows[0][9],names.first+'、'+names.later);
+ assert(table.filterModel.values(9).includes(names.later));
+ table.filterModel.setFilter(9,[names.later]);table=render();assert.equal(table.rows.length,1);
  table.filterModel.clearFilters();table=render();
- find(table.rows[0][12],node=>node.type==='button'&&node.props.children==='指派待办').props.onClick();assert.equal(assignedProject,'project-a');
- assert.equal(table.rows[0][5],names.first+'、'+names.later,'The visible cell includes the later task owner');
+ find(table.rows[0][10],node=>node.type==='button'&&node.props.children==='指派待办').props.onClick();assert.equal(assignedProject,'project-a');
+ assert.equal(table.rows[0][4],names.first+'、'+names.later,'The visible cell includes the later task owner');
  assert.equal(table.filterModel.total,2);
- assert(table.filterModel.values(5).includes('Synthetic candidate without tasks'));
- table.filterModel.setFilter(5,[names.later]);table=render();
+ assert(table.filterModel.values(4).includes('Synthetic candidate without tasks'));
+ table.filterModel.setFilter(4,[names.later]);table=render();
  assert.equal(table.rows.length,1);assert.equal(table.rows[0][0],'customer-a');assert.equal(table.filterModel.total,2);
  table.filterModel.setFilter(0,['customer-b']);table=render();assert.equal(table.rows.length,0);
  table.filterModel.setFilter(0,null);table=render();assert.equal(table.rows.length,1);
- table.filterModel.setFilter(5,['Synthetic candidate without tasks']);table=render();assert.equal(table.rows.length,0);
- assert(table.filterModel.values(5).includes(names.later),'Filter options stay based on the complete authorized input');
+ table.filterModel.setFilter(4,['Synthetic candidate without tasks']);table=render();assert.equal(table.rows.length,0);
+ assert(table.filterModel.values(4).includes(names.later),'Filter options stay based on the complete authorized input');
  table.filterModel.clearFilters();table=render();assert.equal(table.rows.length,2);
  assert.equal(JSON.stringify(tasks),original);
- props.tasks=[];table=render();assert.equal(table.rows[0][5],'尚未安排下一步');assert.equal(table.rows[0][11],names.first+'、'+names.later,'Project responsibility survives an empty task list');
+ props.tasks=[];table=render();assert.equal(table.rows[0][4],'尚未安排下一步');assert.equal(table.rows[0][9],names.first+'、'+names.later,'Project responsibility survives an empty task list');
 }finally{
  if(originalHooks)Object.defineProperty(globalThis,'__projectListFilterHooks',originalHooks);else delete globalThis.__projectListFilterHooks;
 }

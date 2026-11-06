@@ -34,6 +34,11 @@ async function api(route,body){
  const result=await response.json();assert.equal(response.status,200,route+': '+JSON.stringify(result));return result;
 }
 const workspace=(action,body)=>api('workspace/'+action,body);
+async function rowCell(row,header){
+ const headers=await row.locator('xpath=ancestor::table').getByRole('columnheader').allTextContents();
+ const index=headers.findIndex(text=>text.trim()===header);assert(index>=0,'Missing column '+header);
+ return row.locator('td').nth(index).innerText();
+}
 function records(){const db=new DatabaseSync(path.join(dir,'workspace.sqlite'),{readOnly:true});try{return db.prepare('SELECT id,data FROM records ORDER BY id').all();}finally{db.close();}}
 try{
  await eventually(async()=>assert((await fetch(origin+'/health')).ok));
@@ -103,9 +108,9 @@ try{
  pass('新增待办可以选择并保存内部管理员型跟进人，外部人员不在候选中');
  await page.getByRole('button',{name:'关闭项目窗口',exact:true}).click();
  await eventually(async()=>assert.match(await rowA.innerText(),new RegExp(members.b.name)));
- assert.match(await rowA.locator('td').nth(3).innerText(),/合成较早待办/);
- assert.match(await rowA.locator('td').nth(5).innerText(),new RegExp(members.a.name));
- assert.match(await rowA.locator('td').nth(5).innerText(),new RegExp(members.b.name));
+ assert.match(await rowCell(rowA,'下一步事项'),/合成较早待办/);
+ assert.match(await rowCell(rowA,'事项跟进人'),new RegExp(members.a.name));
+ assert.match(await rowCell(rowA,'事项跟进人'),new RegExp(members.b.name));
  const beforeFilters=records();
  await selectFilter('事项跟进人',[members.b.name]);await expectCodes(['SYN-A']);
  assert.match(await board.locator('.excel-filter-status').innerText(),/已筛选 1 \/ 2 条/);

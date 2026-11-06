@@ -56,15 +56,35 @@ async function columnHandle(wrapper,header){
  return wrapper.getByRole('separator').nth(index);
 }
 async function columnWidth(wrapper,header){return Number(await (await columnHandle(wrapper,header)).getAttribute('aria-valuenow'));}
+async function reachableColumnHandle(wrapper,header){
+ await wrapper.scrollIntoViewIfNeeded();
+ await wrapper.locator(':scope > .cp-table-scroll').evaluate(node=>node.scrollTop=0);
+ const handle=await columnHandle(wrapper,header);
+ if(!await handle.evaluate(node=>getComputedStyle(node.closest('th')).position==='sticky'))await handle.scrollIntoViewIfNeeded();
+ assert(await handle.evaluate(node=>{const r=node.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===node;}),'Resize handle must remain reachable, including on frozen columns');
+ return handle;
+}
+async function gridGeometry(wrapper){return wrapper.locator('table').evaluate(table=>{
+ const rect=cell=>{const r=cell.getBoundingClientRect();return {x:r.x,right:r.right,width:r.width};};
+ const header=Array.from(table.tHead.rows[0].cells).map(rect);
+ const row=Array.from(table.querySelectorAll('tbody:not([data-excel-ui]) tr')).find(row=>row.cells.length===header.length&&getComputedStyle(row).display!=='none');
+ return {header,cells:row?Array.from(row.cells).map(rect):[]};
+});}
+async function assertGridAligned(wrapper){
+ const geometry=await gridGeometry(wrapper);assert.equal(geometry.cells.length,geometry.header.length);
+ for(let i=0;i<geometry.header.length;i++)for(const edge of ['x','right','width'])assert(Math.abs(geometry.header[i][edge]-geometry.cells[i][edge])<=1,`Table header/body column ${i+1} ${edge} must align`);
+ return geometry;
+}
 async function dragColumn(page,wrapper,header,distance=90){
- const handle=await columnHandle(wrapper,header);await handle.scrollIntoViewIfNeeded();
+ const handle=await reachableColumnHandle(wrapper,header);
  const before=Number(await handle.getAttribute('aria-valuenow')),box=await handle.boundingBox();assert(box);
  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+distance,box.y+box.height/2,{steps:8});await page.mouse.up();
  await eventually(async()=>assert((await columnWidth(wrapper,header))>=before+distance-3,'Dragging must increase the actual saved column width'));
+ await assertGridAligned(wrapper);
  return {before,after:await columnWidth(wrapper,header)};
 }
 async function restoreColumn(wrapper,header,expected){
- const handle=await columnHandle(wrapper,header);await handle.scrollIntoViewIfNeeded();await handle.dblclick();
+ const handle=await reachableColumnHandle(wrapper,header);await handle.dblclick();
  await eventually(async()=>assert(Math.abs(await columnWidth(wrapper,header)-expected)<3,'Double-click must restore the default column width'));
 }
 
@@ -106,9 +126,12 @@ try{
  assert.equal(await page.locator('.cp-project-dialog').count(),0,'Maintenance save must return to the same list without opening a full project page');
  assert.equal(await cell(singleRow,'事项跟进人'),'尚未安排下一步');
  assert.equal(await cell(singleRow,'下一步事项'),'尚未安排下一步');
- assert.equal(await cell(singleRow,'项目状态'),'进行中');
+ const listHeaders=(await board.getByRole('columnheader').allTextContents()).map(text=>text.trim());
+ assert(!listHeaders.includes('负责部门'),'Department is maintained in the task editor, not repeated in the project list');
+ assert(!listHeaders.includes('项目状态'),'Project status is maintained in the project form, not repeated in the project list');
+ assert.equal((await workspace('customer-project-data')).projects.find(row=>row.id===single.id).status,'active','Hiding the list status column must preserve the stored project status');
  assert.equal(await cell(singleRow,'开发阶段'),'待建立开发轮次');
- pass('维护项目选择客服后清单显示项目责任人；没有任务准确显示尚未安排下一步，项目状态与开发阶段分开');
+ pass('维护项目选择客服后清单显示项目责任人；无任务显示尚未安排下一步，清单隐藏负责部门与项目状态但保留原状态');
 
  const originalScope=await capturePreservation(dir);
  const listWidths=board.locator('.customer-project-table-scroll');
@@ -116,6 +139,8 @@ try{
  await filterProjects(page,board,[single.title+' '+single.code]);
  await eventually(async()=>assert.equal(await multipleRow.count(),0));
  assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'Filtering must not reset the resized project column');
+ await listWidths.locator(':scope > .cp-table-scroll').evaluate(node=>node.scrollLeft=0);
+ const beforeHorizontal=await assertGridAligned(listWidths);
  const right=board.getByRole('button',{name:'项目清单向右移动',exact:true});
  for(let move=0;move<30;move++){
   const remaining=await listWidths.locator(':scope > .cp-table-scroll').evaluate(node=>node.scrollWidth-node.clientWidth-node.scrollLeft);
@@ -128,6 +153,9 @@ try{
  assert(actionBox&&listBox&&actionBox.x>=listBox.x&&actionBox.x+actionBox.width<=listBox.x+listBox.width+1,'The top horizontal controls must reveal the rightmost assignment action');
  const rail=listWidths.locator('.cp-project-scroll-rail'),viewport=listWidths.locator(':scope > .cp-table-scroll');
  assert(Math.abs(await rail.evaluate(node=>node.scrollLeft)-await viewport.evaluate(node=>node.scrollLeft))<2,'Top and table horizontal offsets must remain synchronized');
+ const afterHorizontal=await assertGridAligned(listWidths),horizontalOffset=await viewport.evaluate(node=>node.scrollLeft);assert(horizontalOffset>0);
+ for(let i=0;i<afterHorizontal.header.length;i++)for(const section of ['header','cells'])assert(Math.abs(afterHorizontal[section][i].x-beforeHorizontal[section][i].x+(i<2?0:horizontalOffset))<=1,`Horizontal scrolling must freeze customer/project and move column ${i+1}`);
+ await page.screenshot({path:path.join(dir,'project-frozen-columns.png'),fullPage:true});
  await singleRow.getByRole('button',{name:'记录进展',exact:true}).click();
  const progressForm=page.getByRole('dialog',{name:'记录项目进展',exact:true});
  await assertBoardRemains(board);
@@ -211,7 +239,7 @@ try{
  assert.equal(await columnWidth(listWidths,'项目'),listColumn.after,'A browser reload must retain the saved project-column width');
  // A reload may calculate a new natural default after progress text changes. Restore and
  // record that default on this mount before checking later cross-table isolation/reset.
- const reloadedListHandle=await columnHandle(listWidths,'项目');await reloadedListHandle.scrollIntoViewIfNeeded();await reloadedListHandle.dblclick();
+ const reloadedListHandle=await reachableColumnHandle(listWidths,'项目');await reloadedListHandle.dblclick();
  listColumn=await dragColumn(page,listWidths,'项目');
  const completed=(await workspace('project-collaboration-data?projectId='+single.id)).tasks.find(row=>row.id===assigned.id);
  assert.equal(completed.result,'合成验收：资料已核对完成。');assert.equal(completed.history.at(-1).action,'complete');
@@ -258,7 +286,7 @@ try{
  await restoreColumn(related,'跟进事项 / 下一步',relatedColumn.before);
  await history.getByRole('button',{name:'关闭项目窗口',exact:true}).click();await history.waitFor({state:'hidden'});
  await restoreColumn(listWidths,'项目',listColumn.before);
- pass('项目清单、进展和关联客户跟进三表可独立拖宽、记忆和恢复；顶部横滚与表格同步，筛选后宽度保持');
+ pass('三表表头内容框线对齐，可独立拖宽、记忆和恢复；清单横滚冻结客户与项目，末列可达，筛选后宽度保持');
  pass('项目历史仅在弹窗展示；进展表左右留白，历史沟通入口保留原双审事项且无重复待办');
 
  await page.goto(origin+'/customer-projects?projectId='+single.id+'&customerId='+customer.id+'&tab=progress');await history.waitFor();
