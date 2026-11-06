@@ -10,7 +10,8 @@ export function projectListExtraFollowers<T extends Pick<Member,'id'|'active'|'r
 }
 
 export const projectListOwnerColumn=5;
-export type ProjectListFilterRow={values:unknown[];ownerNames:string[]};
+export const projectListServiceColumn=11;
+export type ProjectListFilterRow={values:unknown[];ownerNames:string[];serviceNames?:string[]};
 type FollowupTask={id?:string;projectId?:string;ownerId?:string;dueDate?:string;status?:string};
 const unique=(values:string[])=>[...new Set(values.map(normalizeExcelValue))].sort((a,b)=>a.localeCompare(b,'zh-CN',{numeric:true}));
 
@@ -20,7 +21,7 @@ export function projectListPendingTasks<T extends FollowupTask>(tasks:T[],projec
 }
 
 export function projectListOwnerNames(tasks:FollowupTask[],memberName:(id:string)=>string):string[]{
- return tasks.length?[...new Set(tasks.map(task=>task.ownerId?memberName(task.ownerId):'待指定'))]:['待指定'];
+ return tasks.length?[...new Set(tasks.map(task=>task.ownerId?memberName(task.ownerId):'待指派'))]:['尚未安排下一步'];
 }
 
 function matchesOwners(names:string[],filter:ExcelColumnFilter):boolean{
@@ -31,10 +32,10 @@ function matchesOwners(names:string[],filter:ExcelColumnFilter):boolean{
 }
 
 export function matchesProjectListFilters(row:ProjectListFilterRow,filters:ExcelFilters):boolean{
- return Object.entries(filters).every(([column,filter])=>Number(column)===projectListOwnerColumn?matchesOwners(row.ownerNames,filter):matchesExcelColumn(row.values[Number(column)],filter));
+ return Object.entries(filters).every(([column,filter])=>Number(column)===projectListOwnerColumn?matchesOwners(row.ownerNames,filter):Number(column)===projectListServiceColumn?matchesOwners(row.serviceNames||[],filter):matchesExcelColumn(row.values[Number(column)],filter));
 }
 
 /** Unassigned candidates remain selectable with zero matches; no records are fabricated. */
 export function projectListFilterValues(rows:ProjectListFilterRow[],column:number,followupNames:string[]):string[]{
- return column===projectListOwnerColumn?unique([...followupNames.filter(name=>normalizeExcelValue(name)),...rows.flatMap(row=>row.ownerNames)]):unique(rows.map(row=>normalizeExcelValue(row.values[column])));
+ return column===projectListOwnerColumn?unique([...followupNames.filter(name=>normalizeExcelValue(name)),...rows.flatMap(row=>row.ownerNames)]):column===projectListServiceColumn?unique(rows.flatMap(row=>row.serviceNames||[])):unique(rows.map(row=>normalizeExcelValue(row.values[column])));
 }

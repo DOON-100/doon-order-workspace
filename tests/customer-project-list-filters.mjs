@@ -29,8 +29,8 @@ assert.deepEqual(pending.map(task=>task.id),['first','later','same-owner']);
 assert.equal(JSON.stringify(tasks),original,'Reading and sorting never edits task records');
 const ownerNames=projectListOwnerNames(pending,id=>names[id]);
 assert.deepEqual(ownerNames,[names.first,names.later],'All unfinished task owners are shown once, including a later task');
-assert.deepEqual(projectListOwnerNames([],id=>names[id]),['待指定']);
-assert.deepEqual(projectListOwnerNames([{ownerId:'first'},{}],id=>names[id]),[names.first,'待指定']);
+assert.deepEqual(projectListOwnerNames([],id=>names[id]),['尚未安排下一步']);
+assert.deepEqual(projectListOwnerNames([{ownerId:'first'},{}],id=>names[id]),[names.first,'待指派']);
 
 const row=(id,owners,customer='Synthetic customer',dueDate='2026-11-06')=>({id,ownerNames:owners,values:[customer,id,'Original progress','Earliest task','客服',owners.join('、'),dueDate,'进行中','Synthetic team','记录 / 指派']});
 const rows=[row('project-a',ownerNames),row('project-b',[names.former]),row('empty',['待指定'])];
@@ -77,12 +77,18 @@ const uiBundle=await build({entryPoints:['app/simple-customer-projects.tsx'],bun
 const {SimpleCustomerProjects}=await import('data:text/javascript;base64,'+Buffer.from(uiBundle.outputFiles[0].text).toString('base64'));
 const originalHooks=Object.getOwnPropertyDescriptor(globalThis,'__projectListFilterHooks');
 const hooks={index:0,slots:[]};
-const props={projects:[{id:'project-a',customerId:'customer-a',title:'Synthetic A',code:'SYN-A',teamId:'team-a'},{id:'project-b',customerId:'customer-b',title:'Synthetic B',code:'SYN-B',teamId:'team-a'}],tasks,communications:[],teams:[{id:'team-a',name:'Synthetic team'}],followupMembers:candidates.map((name,index)=>({id:'candidate-'+index,name})),customerName:id=>id,memberName:id=>names[id],statusFor:()=>'进行中',onOpen(){},busy:false};
+let assignedProject='';
+const props={onAssign:id=>{assignedProject=id;},projects:[{salesMemberId:'first',serviceMemberIds:['first','later'],canAssignCollaboration:true,id:'project-a',customerId:'customer-a',title:'Synthetic A',code:'SYN-A',teamId:'team-a'},{id:'project-b',customerId:'customer-b',title:'Synthetic B',code:'SYN-B',teamId:'team-a'}],tasks,communications:[],teams:[{id:'team-a',name:'Synthetic team'}],followupMembers:candidates.map((name,index)=>({id:'candidate-'+index,name})),customerName:id=>id,memberName:id=>names[id],statusFor:()=>'进行中',onOpen(){},busy:false};
 function find(node,predicate){if(!node)return;if(Array.isArray(node)){for(const child of node){const result=find(child,predicate);if(result)return result;}return;}if(typeof node==='object'){if(predicate(node))return node;return find(node.props?.children,predicate);}}
 function render(){globalThis.__projectListFilterHooks=hooks;hooks.index=0;const tree=SimpleCustomerProjects(props);const table=find(tree,node=>node.type?.name==='CPTable');assert(table);const forwarded=find(table.type(table.props),node=>node.type==='excel-table');assert.equal(forwarded.props.filterModel,table.props.filterModel,'CPTable forwards the same model to the shared Excel controls');return table.props;}
 try{
  let table=render();
  assert.equal(table.rows.length,2);
+ assert.equal(table.rows[0][11],names.first+'、'+names.later);
+ assert(table.filterModel.values(11).includes(names.later));
+ table.filterModel.setFilter(11,[names.later]);table=render();assert.equal(table.rows.length,1);
+ table.filterModel.clearFilters();table=render();
+ find(table.rows[0][12],node=>node.type==='button'&&node.props.children==='指派待办').props.onClick();assert.equal(assignedProject,'project-a');
  assert.equal(table.rows[0][5],names.first+'、'+names.later,'The visible cell includes the later task owner');
  assert.equal(table.filterModel.total,2);
  assert(table.filterModel.values(5).includes('Synthetic candidate without tasks'));
@@ -94,6 +100,7 @@ try{
  assert(table.filterModel.values(5).includes(names.later),'Filter options stay based on the complete authorized input');
  table.filterModel.clearFilters();table=render();assert.equal(table.rows.length,2);
  assert.equal(JSON.stringify(tasks),original);
+ props.tasks=[];table=render();assert.equal(table.rows[0][5],'尚未安排下一步');assert.equal(table.rows[0][11],names.first+'、'+names.later,'Project responsibility survives an empty task list');
 }finally{
  if(originalHooks)Object.defineProperty(globalThis,'__projectListFilterHooks',originalHooks);else delete globalThis.__projectListFilterHooks;
 }

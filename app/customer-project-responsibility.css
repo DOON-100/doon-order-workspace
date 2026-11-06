@@ -1,0 +1,10 @@
+.cp-simple-workspace{width:calc(100% - 24px);max-width:1560px;margin-inline:auto}
+.scp-board .cp-table-scroll{margin:0 18px 18px;border:1px solid #dbe3dd;border-radius:8px}
+.scp-project-cell{min-width:180px;max-width:260px}
+.scp-project-cell .cp-sub{font-size:12px;line-height:1.7;margin-top:8px}
+.scp-board .cp-table th:last-child,.scp-board .cp-table td:last-child{position:sticky;right:0;min-width:130px;max-width:190px;background:#fff;box-shadow:-4px 0 8px #173e300c;z-index:1}
+.scp-board .cp-table th:last-child{background:#edf3ef;z-index:2}
+.scp-board .cp-table td:last-child .cp-row-actions{align-items:stretch;flex-direction:column;min-width:110px}
+.scp-board .cp-table td:last-child .cp-muted{white-space:normal;max-width:150px}
+@media(max-width:900px){.cp-simple-workspace{width:100%}}
+@media(max-width:550px){.scp-board .cp-table-scroll{margin:0 12px 12px}}

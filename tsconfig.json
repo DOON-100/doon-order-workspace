@@ -46,6 +46,7 @@
     "examples",
     "outputs",
     "test-output",
+    "private-data-tools",
     "lan-dist",
     "lan-data"
   ]

@@ -3,6 +3,8 @@ import {all,newId,now,strictDate,type Entity,type Member,type State} from './dom
 import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
 import {projectAccess,type CustomerProject} from './customer-projects';
+import {customerProjectPersonalWork} from './customer-project-personal';
+import {projectCollaborationAssignment} from './project-collaboration-assignment';
 import {collaborationTaskKind,collaborationStepKeys,collaborationDepartments,collaborationTaskOpen,eligibleCollaborationOwner,collaborationTaskProject,collaborationProjectWritable,canAssignProjectCollaboration,canReadProjectCollaboration,projectCollaborationTaskDto,type ProjectCollaborationTask,type ProjectCollaborationEvent,type ProjectCollaborationFeed} from './project-collaboration';
 
 const id=z.string().trim().min(1).max(160),text=(max:number)=>z.string().trim().max(max).default(''),token=z.string().uuid(),version=z.number().int().nonnegative();
@@ -49,7 +51,7 @@ export function projectCollaborationGet(action:string,req:Request,s:State,m:Memb
  else tasks=tasks.filter(task=>{const parent=collaborationTaskProject(s,task);return !!parent&&(task.ownerId===m.id||task.status==='done'&&!task.acknowledgedAt&&canAssignProjectCollaboration(s,m,parent));});
  const canAssign=!!project&&canAssignProjectCollaboration(s,m,project);
  const result:ProjectCollaborationFeed={tasks:tasks.map(task=>projectCollaborationTaskDto(s,m,task)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)||a.id.localeCompare(b.id)),members:canAssign?(all(s,'member') as Member[]).filter(eligibleCollaborationOwner).map(owner=>({id:owner.id,name:owner.name,role:owner.role})):[],canAssign};
- return json({...result,writeContract:'project-collaboration-version-token-v1'});
+ return json({...result,...(project?{assignment:projectCollaborationAssignment(s,m,project)}:!taskId?{personalProjectWork:customerProjectPersonalWork(s,m)}:{}),writeContract:'project-collaboration-version-token-v1'});
 }
 
 export async function projectCollaborationPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
