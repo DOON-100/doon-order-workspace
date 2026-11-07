@@ -13,11 +13,14 @@ import React,{StrictMode,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {CPTable} from './app/customer-project-ui';
 import {CustomerProjectTableScroll} from './app/customer-project-table-scroll';
+import {SimpleCustomerProjects} from './app/simple-customer-projects';
 import './app/customer-projects.css';
 import './app/customer-project-responsibility.css';
 const headers=${JSON.stringify(headers)}, widths=${JSON.stringify(defaults)};
 const rows=Array.from({length:40},(_,i)=>headers.map((_,j)=>j===0?(i%2?'组乙':'组甲'):j===1?(i%3?'短项目 '+i:'项目名称明显长于表头，含型号 SYNTHETIC-PROJECT-'+i):j===2?(i%2?'简短记录':'合成进展内容需要自动换行，验证长短内容使用同一套列宽和框线，不能使表头单独扩张。'):j===10?<button>末列操作 {i}</button>:'合成 '+i+' / '+j));
 const targets=rows.map((_,i)=>i===0?{collection:'synthetic',recordId:'synthetic-0'}:null);
+const projects=Array.from({length:95},(_,i)=>({id:'project-'+i,title:'合成项目 '+String(i).padStart(3,'0'),code:'SYN-'+String(i).padStart(3,'0'),customerId:i===94?'last':i%2?'b':'a',teamId:'synthetic-team',salesMemberId:i%2?'owner-b':'owner-a',serviceMemberIds:['service'],canWrite:true,canAssignCollaboration:true}));
+function ProjectFixture(){const [scope,setScope]=useState('all');return <main className="cp-workspace cp-simple-workspace"><button onClick={()=>setScope(value=>value==='all'?'b':'all')}>切换合成客户范围</button><SimpleCustomerProjects projects={scope==='all'?projects:projects.filter(project=>project.customerId==='b')} communications={[]} tasks={[]} teams={[{id:'synthetic-team',name:'合成组'}]} customerName={id=>({a:'合成客户甲',b:'合成客户乙',last:'末批客户'}[id]||id)} memberName={id=>({service:'合成客服','owner-a':'业务甲','owner-b':'业务乙'}[id]||id)} statusFor={()=>'开发中'} onOpen={()=>{}} onAssign={()=>{}} onEdit={()=>{}} onProgress={()=>{}} onTasks={()=>{}} preferenceKey="synthetic-progressive" busy={false}/></main>}
 function Fixture(){const [version,setVersion]=useState(0);return <main className="cp-workspace">
  <button onClick={()=>setVersion(v=>v+1)}>重新渲染 {version}</button>
  <section className="scp-board"><CustomerProjectTableScroll storageKey="synthetic-frozen" label="项目清单" defaultWidths={widths} frozenColumns={2}><CPTable headers={headers} rows={rows} recordTargets={targets}/></CustomerProjectTableScroll></section>
@@ -25,7 +28,7 @@ function Fixture(){const [version,setVersion]=useState(0);return <main className
  <section className="cp-section"><CustomerProjectTableScroll storageKey="synthetic-small" label="关联客户跟进" defaultWidths={[220,220]}><CPTable headers={headers.slice(0,2)} rows={rows.slice(0,2).map(row=>row.slice(0,2))}/></CustomerProjectTableScroll></section>
  <section className="scp-board"><CustomerProjectTableScroll storageKey="synthetic-empty" label="空清单" defaultWidths={widths} frozenColumns={2}><CPTable headers={headers} rows={[]} empty="合成空清单"/></CustomerProjectTableScroll></section>
 </main>}
-createRoot(document.getElementById('root')).render(<StrictMode><Fixture/></StrictMode>);`,loader:'tsx',resolveDir:process.cwd()},bundle:true,platform:'browser',format:'esm',write:false,outdir:'test-output/project-scroll-fixture',alias:{'@':process.cwd()},plugins:[{name:'synthetic-followup',setup(b){b.onResolve({filter:/business-followup-panel$/},()=>({path:'slot',namespace:'synthetic'}));b.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:'export function BusinessFollowupSlot(){return "合成附件关联行";}'}));}}]});
+createRoot(document.getElementById('root')).render(<StrictMode>{location.search.includes('projects')?<ProjectFixture/>:<Fixture/>}</StrictMode>);`,loader:'tsx',resolveDir:process.cwd()},bundle:true,platform:'browser',format:'esm',write:false,outdir:'test-output/project-scroll-fixture',alias:{'@':process.cwd()},plugins:[{name:'synthetic-followup',setup(b){b.onResolve({filter:/business-followup-panel$/},()=>({path:'slot',namespace:'synthetic'}));b.onLoad({filter:/.*/,namespace:'synthetic'},()=>({contents:'export function BusinessFollowupSlot(){return "合成附件关联行";}'}));}}]});
 const js=built.outputFiles.find(file=>file.path.endsWith('.js')).text,css=built.outputFiles.find(file=>file.path.endsWith('.css')).text;
 const html='<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/fixture.css"><style>body{margin:0;padding:12px;box-sizing:border-box}*{box-sizing:border-box}main{max-width:100%;min-width:0}.cp-section{margin-top:18px}</style><div id="root"></div><script type="module" src="/fixture.js"></script>';
 const server=http.createServer((req,res)=>{res.setHeader('Content-Type',req.url==='/fixture.js'?'text/javascript':req.url==='/fixture.css'?'text/css':'text/html');res.end(req.url==='/fixture.js'?js:req.url==='/fixture.css'?css:html);});
@@ -35,6 +38,7 @@ const {chromium}=await import(process.env.DOON_PLAYWRIGHT_MODULE?pathToFileURL(p
 const eventually=async check=>{let last;for(let i=0;i<100;i++){try{return await check();}catch(e){last=e;await new Promise(resolve=>setTimeout(resolve,25));}}throw last;};
 const near=(actual,expected,message)=>assert(Math.abs(actual-expected)<=1,`${message}: ${actual} != ${expected}`);
 const viewport=wrapper=>wrapper.locator(':scope > .cp-table-scroll');
+const revealHeader=wrapper=>wrapper.evaluate(node=>node.scrollIntoView({block:'start'}));
 const width=(wrapper,index)=>wrapper.getByRole('separator').nth(index).getAttribute('aria-valuenow').then(Number);
 async function geometry(wrapper){return wrapper.locator('table').evaluate(table=>{
  const rect=cell=>{const r=cell.getBoundingClientRect();return {x:r.x,right:r.right,width:r.width,top:r.top,bottom:r.bottom,position:getComputedStyle(cell).position};};
@@ -54,7 +58,7 @@ async function scrollTo(wrapper,left,top=0){
 }
 async function drag(page,wrapper,index,distance){
  // Reveal the wrapper, not the unscrolled layout position of a sticky cell.
- await wrapper.scrollIntoViewIfNeeded();await viewport(wrapper).evaluate(node=>node.scrollTop=0);
+ await revealHeader(wrapper);await viewport(wrapper).evaluate(node=>node.scrollTop=0);
  const handle=wrapper.getByRole('separator').nth(index),before=await width(wrapper,index),box=await handle.boundingBox();assert(box);
  assert(await handle.evaluate(node=>{const r=node.getBoundingClientRect();return document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)===node;}),'Column handle must be actually reachable');
  await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();await page.mouse.move(box.x+box.width/2+distance,box.y+box.height/2,{steps:6});await page.mouse.up();
@@ -66,25 +70,27 @@ async function assertLayers(wrapper){
  const result=await viewport(wrapper).evaluate(view=>{
   const table=view.querySelector('table'),heads=Array.from(table.tHead.rows[0].cells),vr=view.getBoundingClientRect(),hr=table.tHead.getBoundingClientRect();
   const dataRows=Array.from(table.querySelectorAll('tbody:not([data-excel-ui]) > tr')).filter(row=>row.cells.length===heads.length);
-  const row=dataRows.find(row=>{const r=row.getBoundingClientRect();return r.top>=hr.bottom+2&&r.bottom<vr.bottom-2;});
+  const row=dataRows.find(row=>{const r=row.getBoundingClientRect();return r.top>=hr.bottom+2&&r.bottom<Math.min(vr.bottom,innerHeight)-2;});
   const sample=cell=>{const r=cell.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {covered:hit?.closest('th,td')!==cell,background:getComputedStyle(cell).backgroundColor};};
   const secondRight=heads[1].getBoundingClientRect().right;
   const movingHead=heads.find((cell,index)=>{const r=cell.getBoundingClientRect();return index>=2&&r.right>secondRight+25&&r.left<vr.right-25;});
   const moving=()=>{const r=movingHead.getBoundingClientRect(),x=Math.max(r.x+5,secondRight+10),y=r.y+r.height/2;return document.elementFromPoint(x,y)?.closest('th')===movingHead;};
   return {top:vr.top,headerTop:hr.top,heads:heads.slice(0,2).map(sample),body:row?Array.from(row.cells).slice(0,2).map(sample):[],movingHeaderVisible:!!movingHead&&moving()};
  });
- near(result.top,result.headerTop,'Header stays vertically pinned');assert.equal(result.body.length,2,'Layer test must have fully visible body cells');
+ near(result.top,result.headerTop,'Header starts with the naturally expanded table');assert.equal(result.body.length,2,'Layer test must have fully visible body cells');
  for(const sample of [...result.heads,...result.body]){assert.equal(sample.covered,false,'Frozen header/body cell must be above sliding content');assert(!['transparent','rgba(0, 0, 0, 0)'].includes(sample.background),'Frozen cells require an opaque background');}
- assert(result.movingHeaderVisible,'Nonfrozen visible header must remain above vertically scrolling cells');
+ assert(result.movingHeaderVisible,'Nonfrozen visible header remains reachable after horizontal movement');
 }
-async function filterCustomer(page,wrapper,value){
- await wrapper.getByRole('button',{name:'筛选客户',exact:true}).click();
- const popup=page.getByRole('dialog',{name:'筛选客户',exact:true});
+async function filterColumn(page,wrapper,label,value,condition='equals'){
+ await revealHeader(wrapper);
+ await wrapper.getByRole('button',{name:'筛选'+label,exact:true}).click();
+ const popup=page.getByRole('dialog',{name:'筛选'+label,exact:true});
  await popup.getByRole('button',{name:'按条件筛选',exact:true}).click();
- await popup.getByLabel('筛选客户条件',{exact:true}).selectOption('equals');
- await popup.getByLabel('筛选客户起始值',{exact:true}).fill(value);
+ await popup.getByLabel('筛选'+label+'条件',{exact:true}).selectOption(condition);
+ await popup.getByLabel('筛选'+label+'起始值',{exact:true}).fill(value);
  await popup.getByRole('button',{name:'确定',exact:true}).click();
 }
+const filterCustomer=(page,wrapper,value)=>filterColumn(page,wrapper,'客户',value);
 let browser,page,artifacts;
 try{
  browser=await chromium.launch({headless:true,...(process.env.DOON_CHROMIUM_PATH?{executablePath:process.env.DOON_CHROMIUM_PATH}:{channel:process.env.DOON_BROWSER_CHANNEL||'msedge'})});
@@ -124,13 +130,14 @@ try{
  await page.getByRole('button',{name:'重新渲染 0'}).click();
  await eventually(async()=>assert.equal(await wrapper.getByRole('separator').count(),headers.length));
  assert.equal(await width(wrapper,0),first);assert.equal(await width(wrapper,1),second);await assertAligned(wrapper);
- await scrollTo(wrapper,240,220);await assertLayers(wrapper);
- assert.equal(await viewport(wrapper).evaluate(node=>node.clientHeight<=570),true);
+ await revealHeader(wrapper);await scrollTo(wrapper,240,220);await assertLayers(wrapper);
+ for(const current of [wrapper,plain,small])assert(await viewport(current).evaluate(node=>getComputedStyle(node).maxHeight==='none'&&node.scrollHeight<=node.clientHeight+1),'Project, progress and related tables expand without an inner vertical scrollbar');
+ assert(await viewport(wrapper).evaluate(node=>node.clientHeight>innerHeight),'Long table expands beyond the browser height');
  const companions=await wrapper.locator('.business-followup-record-row td').evaluateAll(cells=>cells.map(cell=>({span:cell.colSpan,position:getComputedStyle(cell).position})));
  assert.deepEqual(companions,[{span:headers.length,position:'static'}],'Associated full-width rows must not be frozen');
  await empty.scrollIntoViewIfNeeded();await scrollTo(empty,250);
  assert.equal(await empty.locator('tbody td[colspan]').evaluate(cell=>getComputedStyle(cell).position),'static','Initial empty table spanning cell must not be frozen');
- console.log('PASS dragging either frozen column updates offsets; vertical/horizontal intersections stay opaque and clickable; spanning rows are not frozen');
+ console.log('PASS dragging frozen columns updates offsets; expanded tables have no inner vertical scrolling; spanning rows are not frozen');
 
  await wrapper.scrollIntoViewIfNeeded();await scrollTo(wrapper,240);
  await filterCustomer(page,wrapper,'组甲');
@@ -145,7 +152,7 @@ try{
  await assertAligned(wrapper);
  await page.reload();await wrapper.getByRole('separator').first().waitFor();
  assert.equal(await width(wrapper,0),first);assert.equal(await width(wrapper,1),second);await assertAligned(wrapper);
- await scrollTo(wrapper,250,220);await assertLayers(wrapper);await scrollTo(wrapper,250);
+ await revealHeader(wrapper);await scrollTo(wrapper,250,220);await assertLayers(wrapper);await scrollTo(wrapper,250);
  const firstHandle=wrapper.getByRole('separator').nth(0),secondHandle=wrapper.getByRole('separator').nth(1);
  await firstHandle.focus();await page.keyboard.press('Home');await eventually(async()=>assert.equal(await width(wrapper,0),defaults[0]));
  near((await geometry(wrapper)).header[1].x,(await geometry(wrapper)).header[0].right,'Reset first width updates frozen offsets');
@@ -155,12 +162,84 @@ try{
  await page.setViewportSize({width:420,height:780});await wrapper.scrollIntoViewIfNeeded();
  await eventually(async()=>{assert(await wrapper.locator('.cp-project-scroll-tools').isVisible());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));});
  await scrollTo(wrapper,1e6);await assertAligned(wrapper);
- await page.setViewportSize({width:900,height:950});await wrapper.scrollIntoViewIfNeeded();await scrollTo(wrapper,420,180);await assertLayers(wrapper);
+ await page.setViewportSize({width:900,height:950});await revealHeader(wrapper);await scrollTo(wrapper,420,180);await assertLayers(wrapper);
  await fs.mkdir('test-output',{recursive:true});artifacts=await fs.mkdtemp(path.resolve('test-output/customer-project-scroll-'));
  await page.screenshot({path:path.join(artifacts,'frozen-columns.png'),fullPage:false});
+ console.log('PASS Excel filtering and zero results, per-table saved widths, keyboard/default reset and responsive containment');
+
+ await page.goto('http://127.0.0.1:'+port+'/?projects');
+ const projectRows=wrapper.getByRole('button',{name:/^修改项目 · 合成项目/}),sentinel=page.locator('.scp-load-more');
+ await eventually(async()=>assert.equal(await projectRows.count(),30,'First render has one batch'));
+ assert.match(await sentinel.textContent(),/已显示 30 \/ 95 个项目/);
+ assert(await viewport(wrapper).evaluate(node=>node.scrollHeight<=node.clientHeight+1&&node.clientHeight>innerHeight),'Real project table expands to fit the current batch');
+ const progressiveFirst=await drag(page,wrapper,0,40);
+ await scrollTo(wrapper,260);
+ const beforeAppend=await geometry(wrapper),firstNames=await projectRows.allTextContents();
+ await page.mouse.move(600,650);await page.mouse.wheel(0,1100);
+ await eventually(async()=>assert(await page.evaluate(()=>scrollY>500),'Wheel over table scrolls the page'));
+ assert.equal(await viewport(wrapper).evaluate(node=>node.scrollTop),0,'Table does not capture vertical scrolling');
+ const toolPosition=await wrapper.locator('.cp-project-scroll-tools').evaluate(node=>{const r=node.getBoundingClientRect();return {top:r.top,bottom:r.bottom};});
+ near(toolPosition.top,0,'Horizontal controls remain at the viewport top in the middle of the page');
+ assert(toolPosition.bottom<950,'Horizontal controls remain in view');
+ const oldLeft=await viewport(wrapper).evaluate(node=>node.scrollLeft);
+ await wrapper.getByRole('button',{name:'项目清单向右移动',exact:true}).click();
+ await eventually(async()=>assert(await viewport(wrapper).evaluate(node=>node.scrollLeft)>oldLeft,'Sticky controls still scroll horizontally in the middle of the page'));
+ for(const count of [60,90,95]){
+  await sentinel.evaluate(node=>node.scrollIntoView({block:'end'}));
+  await eventually(async()=>assert.equal(await projectRows.count(),count,'Scrolling near the bottom appends the next project batch'));
+  assert.equal(await width(wrapper,0),progressiveFirst,'Column width survives appended records');
+  assert(await viewport(wrapper).evaluate(node=>node.scrollHeight<=node.clientHeight+1),'Appending records grows the table instead of creating vertical scroll');
+ }
+ assert.deepEqual((await projectRows.allTextContents()).slice(0,30),firstNames,'Existing rows are retained while later rows append');
+ const allNames=await projectRows.allTextContents();assert.equal(new Set(allNames).size,95,'Every project appears exactly once');
+ assert.match(allNames.at(-1),/合成项目 094/);assert.match(await sentinel.textContent(),/已显示 95 \/ 95 个项目 · 已显示全部/);
+ assert.equal(await sentinel.getByRole('button',{name:'加载更多项目'}).count(),0,'Finished list has no further loading action');
+ await revealHeader(wrapper);await scrollTo(wrapper,260);
+ const afterAppend=await assertAligned(wrapper);
+ for(let index=0;index<2;index++)near(afterAppend.header[index].x,beforeAppend.header[index].x,'Frozen columns keep their offsets after append');
+ await assertLayers(wrapper);
+ await page.screenshot({path:path.join(artifacts,'progressive-project-list.png'),fullPage:false});
+ console.log('PASS real project list appends 30/60/90/95 records on page scroll; sticky horizontal tools, widths and frozen columns survive');
+
+ await page.reload();await eventually(async()=>assert.equal(await projectRows.count(),30));
+ await wrapper.getByRole('button',{name:'筛选客户',exact:true}).click();
+ const customerPopup=page.getByRole('dialog',{name:'筛选客户',exact:true});
+ assert(await customerPopup.getByRole('checkbox',{name:'末批客户',exact:true}).isVisible(),'Filter candidates include customers beyond the rendered batch');
+ await customerPopup.getByRole('button',{name:'取消',exact:true}).click();
+ await filterCustomer(page,wrapper,'末批客户');
+ await eventually(async()=>assert.equal(await projectRows.count(),1));
+ assert.match(await projectRows.first().textContent(),/合成项目 094/,'Filtering finds the final project without scrolling through earlier batches');
+ assert.match(await wrapper.locator('.excel-filter-status').textContent(),/已筛选 1 \/ 95 条/);
+ await filterCustomer(page,wrapper,'合成客户甲');
+ await eventually(async()=>assert.equal(await projectRows.count(),30));
+ assert.match(await sentinel.textContent(),/已显示 30 \/ 47 个项目/);
+ assert.match(await wrapper.locator('.excel-filter-status').textContent(),/已筛选 47 \/ 95 条/,'Filter count reflects all authorized matches, not the rendered batch');
+ await filterColumn(page,wrapper,'项目','092','contains');
+ await eventually(async()=>assert.equal(await projectRows.count(),1));
+ assert.match(await projectRows.first().textContent(),/合成项目 092/,'Combined filtering finds a match outside the first batch');
+ await filterCustomer(page,wrapper,'合成客户乙');
+ await eventually(async()=>assert.equal(await projectRows.count(),0));
+ assert.match(await wrapper.locator('.excel-filter-status').textContent(),/没有匹配记录.*已筛选 0 \/ 95 条/);
+ await wrapper.getByRole('button',{name:'清除全部筛选',exact:true}).click();
+ await eventually(async()=>assert.equal(await projectRows.count(),30,'Clear filters resets the rendered batch'));
+ assert.match(await sentinel.textContent(),/已显示 30 \/ 95 个项目/);
+ assert.equal(await width(wrapper,0),progressiveFirst,'Filter changes preserve saved column widths');
+ await sentinel.evaluate(node=>node.scrollIntoView({block:'end'}));
+ await eventually(async()=>assert.equal(await projectRows.count(),60));
+ await page.getByRole('button',{name:'切换合成客户范围',exact:true}).click();
+ await eventually(async()=>assert.equal(await projectRows.count(),30,'Customer scope resets to the first batch'));
+ assert.match(await sentinel.textContent(),/已显示 30 \/ 47 个项目/);
+ assert(await wrapper.locator('tbody:not([data-excel-ui]) tr td:first-child').evaluateAll(cells=>cells.every(cell=>cell.textContent==='合成客户乙')),'Changed customer scope never retains previous customer rows');
+ console.log('PASS full-list filter candidates, last-batch matches, combined/zero filters, clearing and customer scope reset');
+
+ await page.addInitScript(()=>{window.IntersectionObserver=undefined;});
+ await page.goto('http://127.0.0.1:'+port+'/?projects&fallback');
+ await eventually(async()=>assert.equal(await projectRows.count(),30));
+ await sentinel.getByRole('button',{name:'加载更多项目',exact:true}).click();
+ await eventually(async()=>assert.equal(await projectRows.count(),60,'Manual loading works when IntersectionObserver is unavailable'));
  assert.deepEqual(errors,[]);
- console.log('PASS Excel filtering and zero results, per-table saved widths, keyboard/default reset, responsive containment and sticky-header layering');
- console.log(JSON.stringify({passed:3,port,syntheticOnly:true,artifacts}));
+ console.log('PASS explicit load-more fallback without IntersectionObserver');
+ console.log(JSON.stringify({passed:6,port,syntheticOnly:true,artifacts}));
 }catch(error){
  if(page){await fs.mkdir('test-output',{recursive:true});artifacts||=await fs.mkdtemp(path.resolve('test-output/customer-project-scroll-'));await page.screenshot({path:path.join(artifacts,'failure.png'),fullPage:true}).catch(()=>{});console.error('Synthetic screenshots: '+artifacts);}
  throw error;
