@@ -81,3 +81,5 @@
 .ed-delete-summary dt{color:#687d72}.ed-delete-summary dd{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
 .ed-delete-reason{display:grid;gap:6px;font-size:13px}
 .ed-delete-reason input{width:100%;border:1px solid #ccd9d5;border-radius:6px;padding:9px 11px}
+
+.ed-customer-cell .ed-detail-link{display:block;color:#246b51;text-decoration:underline;text-underline-offset:3px;margin-bottom:7px;cursor:pointer;font-size:12px}.ed-detail-link:disabled{color:#7a8780;cursor:default}.ed-record-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 20px}.ed-record-detail-grid>div{border-bottom:1px solid #e1e8e4;padding:7px 0}.ed-record-detail-grid dt{font-size:12px;font-weight:600;color:#577064}.ed-record-detail-grid dd{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}.ed-record-detail h3,.ed-record-detail h4{font-weight:600;margin:10px 0}@media(max-width:600px){.ed-record-detail-grid{grid-template-columns:1fr}}

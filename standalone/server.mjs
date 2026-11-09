@@ -74,7 +74,7 @@ const supplierAuth=new Set(['session','login','logout','password']);
 const supplierActions=new Set(['data','file','accept','progress','promise','exception','shipment','rework-confirm','attachment'].map(a=>'finished-supplier-'+a));
 const addresses=Object.values(os.networkInterfaces()).flat().filter(a=>a?.family==='IPv4'&&!a.internal&&/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(a.address)).map(a=>a.address);
 const hosts=new Set((reviewMode?['localhost','127.0.0.1','[::1]']:['localhost','127.0.0.1',os.hostname().toLowerCase(),...addresses]).map(h=>h+':'+port));
-const security={'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"};
+const security={'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY','Referrer-Policy':'no-referrer','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-src 'self' blob:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"};
 // Fingerprinted build assets never change in place. Share their gzip result across requests.
 const immutableGzip=new Map();
 const cliReleaseDir=process.env.DOON_CLI_RELEASE_DIR?path.resolve(process.env.DOON_CLI_RELEASE_DIR):null;

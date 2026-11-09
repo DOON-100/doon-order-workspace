@@ -34,6 +34,10 @@ try{
  assert.equal((await ok('/api/cli-update/history',undefined,adminCookie)).data.events.length,2);assert.equal((await ok('/api/workspace/read-version',undefined,adminCookie)).data.revision,updateRevision);pass('CLI更新仅登录员工可下载，账号与版本审计留痕，篡改包拒绝且不记成功下载');
  const version=await ok('/api/workspace/read-version',undefined,adminCookie),read=await ok('/api/workspace/data',undefined,adminCookie);assert.equal(String(version.data.revision),read.res.headers.get('X-Workspace-Revision'));
  const document=await request('/'),html=await document.text(),asset=html.match(/src="([^\"]+\.js)"/)[1];assert.equal(document.headers.get('cache-control'),'no-store');
+ const pagePolicy=new Map((document.headers.get('content-security-policy')||'').split(';').map(rule=>rule.trim().split(/\s+/)).filter(rule=>rule[0]).map(([directive,...sources])=>[directive,sources]));
+ assert.deepEqual(pagePolicy.get('frame-src'),["'self'",'blob:'],'Authorized original PDFs use same-origin or fetched blob frames');
+ assert.deepEqual(pagePolicy.get('script-src'),["'self'"]);assert.deepEqual(pagePolicy.get('object-src'),["'none'"]);assert.deepEqual(pagePolicy.get('frame-ancestors'),["'none'"]);assert.equal(document.headers.get('x-frame-options'),'DENY');
+ pass('页面允许同源及已鉴权原件blob PDF预览，外部框架、脚本来源和被嵌入限制保持');
  const brand=await request('/brand/doon-eyewear-manufacturing.jpg');assert.match(brand.headers.get('cache-control'),/private.*max-age=3600/);await brand.arrayBuffer();
  const plainAsset=await request(asset,undefined,'',{'Accept-Encoding':'identity'}),plainBytes=Buffer.from(await plainAsset.arrayBuffer());
  const zippedAsset=await request(asset,undefined,'',{'Accept-Encoding':'gzip'}),zippedBytes=Buffer.from(await zippedAsset.arrayBuffer());

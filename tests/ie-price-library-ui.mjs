@@ -14,12 +14,13 @@ const previousWindow=globalThis.window;globalThis.window={confirm:()=>false};
 const modules={
  react:`const H=globalThis.__iePriceLibraryUi;export function useState(initial){const i=H.index++;if(!H.slots[i])H.slots[i]={value:typeof initial==='function'?initial():initial};return [H.slots[i].value,v=>{H.slots[i].value=typeof v==='function'?v(H.slots[i].value):v}]}export function useRef(initial){const i=H.index++;return H.slots[i]||(H.slots[i]={current:initial})}export function useEffect(fn,deps){const i=H.index++,old=H.slots[i];if(!old||!deps||deps.some((v,j)=>!Object.is(v,old.deps?.[j]))){H.slots[i]={deps,cleanup:old?.cleanup};H.effects.push(()=>{H.slots[i].cleanup?.();H.slots[i].cleanup=fn()})}}export const useMemo=fn=>fn();export const useCallback=fn=>fn;`,
  button:`export const Button='button';`,
+ dialog:`export function Dialog({open,children}){return open?<div role="dialog">{children}</div>:null}export function DialogContent({children}){return <section>{children}</section>}export const DialogHeader='header',DialogTitle='h2',DialogDescription='p';`,
  table:`export const ExcelTable='table';`,
  evidence:`export function IeSupplierEvidencePanel(){return null}`,
  team:`export async function businessTeamFetch(url,options){const h=globalThis.__iePriceLibraryUi;h.calls.push({url,options});return {ok:true,json:async()=>h.response}}export async function downloadBusinessTeamFile(){throw Error('No network permitted in synthetic test')}`,
 };
 const outfile=path.join(output,'ui.mjs');
-await build({entryPoints:['app/ie-price-library-panel.tsx'],outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},jsx:'automatic',loader:{'.css':'empty'},plugins:[{name:'synthetic-ui',setup(b){for(const [re,name] of [[/^react$/,'react'],[/components\/ui\/button$/,'button'],[/^\.\/excel-table$/,'table'],[/^\.\/business-team-client$/,'team'],[/^\.\/ie-supplier-evidence-panel$/,'evidence']])b.onResolve({filter:re},()=>({path:name,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:modules[a.path],loader:'jsx'}));}}]});
+await build({entryPoints:['app/ie-price-library-panel.tsx'],outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},jsx:'automatic',loader:{'.css':'empty'},plugins:[{name:'synthetic-ui',setup(b){for(const [re,name] of [[/^react$/,'react'],[/components\/ui\/button$/,'button'],[/components\/ui\/dialog$/,'dialog'],[/^\.\/excel-table$/,'table'],[/^\.\/business-team-client$/,'team'],[/^\.\/ie-supplier-evidence-panel$/,'evidence']])b.onResolve({filter:re},()=>({path:name,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:modules[a.path],loader:'jsx',resolveDir:process.cwd()}));}}]});
 const {IePriceLibraryPanel}=await import(pathToFileURL(outfile).href);
 const catalog=[{id:'synthetic-price',version:1,category:'process',name:'合成工序',supplier:'合成供应商',specification:'合成规格',unit:'副',basePrice:0,standardSeconds:30,priceSource:'合成来源',effectiveDate:'2026-11-09',active:true,currency:'CNY',taxBasis:'exclusive',taxRate:0,frameType:'合成架型',processType:'合成类别',color:'合成颜色',notes:'合成备注'}];
 const callbacks={onDirtyChange:v=>H.dirty.push(v),onSaved:async()=>{H.saved++},onError:cause=>H.errors.push(cause)};
@@ -33,6 +34,7 @@ const inputFor=label=>nodes(field(label)).find(n=>n.type==='input');
 const tick=()=>new Promise(resolve=>setTimeout(resolve,0));
 try{
  let html=render();assert(html.includes('合成供应商'));assert(html.includes('标准秒数'));assert(!button('＋ 新增价格 / 工艺'));assert(!button('修改'));assert(!html.includes('上传供应商报价表 / 标准人工单价表'));assert.equal(H.calls.length,0);
+ button('查看详情').props.onClick({currentTarget:{focus(){}}});html=render();assert(html.includes('role="dialog"'));assert(html.includes('合成来源'));assert(html.includes('查看此目录版本的完整资料'));assert(!button('修改'));assert.equal(H.calls.length,0,'只读查看不发送写入请求');button('关闭详情').props.onClick();html=render();assert(!html.includes('role="dialog"'));
  canEdit=true;html=render();button('＋ 新增价格 / 工艺').props.onClick();html=render();assert(html.includes('新增价格 / 工艺'));assert.equal(H.dirty.at(-1),true);
  const basePrice=nodes().find(n=>n.type==='input'&&n.props['aria-label']==='目录基价');basePrice.props.onChange({target:{value:'0'}});html=render();assert.equal(nodes().find(n=>n.type==='input'&&n.props['aria-label']==='目录基价').props.value,'0');
  button('关闭编辑').props.onClick();html=render();assert(html.includes('新增价格 / 工艺'),'拒绝放弃草稿时应保留编辑');
