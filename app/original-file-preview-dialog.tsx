@@ -1,9 +1,10 @@
 'use client';
 import {useEffect,useState} from 'react';
 import {Button} from '@/components/ui/button';
+import {PdfOriginalPreview} from './pdf-original-preview';
 import {Dialog,DialogContent,DialogDescription,DialogTitle} from '@/components/ui/dialog';
 import './ie-supplier-evidence-preview.css';
-export type OriginalFilePreview={filename:string;contentType:string;url:string;loading:boolean;mediaLoading:boolean;error:string};
+export type OriginalFilePreview={blob?:Blob;filename:string;contentType:string;url:string;loading:boolean;mediaLoading:boolean;error:string};
 export function OriginalFilePreviewDialog({title,preview,details,note,onClose,onRetry,onDownload,onMediaLoaded,onMediaError,returnFocus,downloadDisabled=false}:{title:string;preview:OriginalFilePreview;details:{label:string;value:string}[];note?:string;onClose:()=>void;onRetry:()=>void;onDownload:()=>void;onMediaLoaded:()=>void;onMediaError:()=>void;returnFocus:()=>void;downloadDisabled?:boolean}){
  const [zoom,setZoom]=useState(1);useEffect(()=>setZoom(1),[preview.filename]);
  return <Dialog open onOpenChange={open=>{if(!open)onClose();}}><DialogContent className="ieq-original-dialog" showCloseButton={false} onCloseAutoFocus={event=>{event.preventDefault();returnFocus();}}>
@@ -13,7 +14,7 @@ export function OriginalFilePreviewDialog({title,preview,details,note,onClose,on
    <div className="ieq-original-stage" aria-busy={preview.loading||preview.mediaLoading}>
     {(preview.loading||preview.url&&preview.mediaLoading)&&<p className="ieq-original-progress" role="status">正在加载报价原件…</p>}
     {preview.error&&<div className="ieq-original-load-error" role="alert"><p>{preview.error}</p><Button type="button" variant="outline" onClick={onRetry}>重新加载原件</Button><Button type="button" variant="outline" onClick={onDownload}>下载原件查看</Button></div>}
-    {preview.url&&!preview.error&&(preview.contentType==='application/pdf'?<iframe title={preview.filename+' PDF 原件'} src={preview.url} onLoad={onMediaLoaded} onError={onMediaError}/>:<div className={'ieq-original-image-plane'+(zoom===1?' fit':'')} style={zoom===1?undefined:{width:`${zoom*100}%`,height:`${zoom*100}%`}}><img src={preview.url} alt={preview.filename} onLoad={onMediaLoaded} onError={onMediaError}/></div>)}
+    {preview.url&&!preview.error&&(preview.contentType==='application/pdf'?<PdfOriginalPreview key={preview.url} blob={preview.blob} filename={preview.filename} onLoaded={onMediaLoaded} onError={onMediaError}/>:<div className={'ieq-original-image-plane'+(zoom===1?' fit':'')} style={zoom===1?undefined:{width:`${zoom*100}%`,height:`${zoom*100}%`}}><img src={preview.url} alt={preview.filename} onLoad={onMediaLoaded} onError={onMediaError}/></div>)}
    </div>
   </section><aside className="ieq-original-information"><h3>原件资料</h3><dl>{details.map(({label,value})=><div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>{note&&<p>{note}</p>}</aside></div>
  </DialogContent></Dialog>;

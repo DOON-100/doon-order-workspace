@@ -115,6 +115,7 @@ const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await 
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(ieHarness);
 const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass});
 const {testIeQuoteGrid}=await import('./ie-quote-grid-cases.mjs');await testIeQuoteGrid({pass:pass});
+const {testIeQuoteDraftImport}=await import('./ie-quote-draft-import-cases.mjs');await testIeQuoteDraftImport({pass:pass});
 const {testIeMaterialNames}=await import('./ie-material-names-cases.mjs');await testIeMaterialNames({pass});
 const {testIeQuoteNotifications}=await import('./ie-quote-notification-cases.mjs');await testIeQuoteNotifications(ieHarness);
 const {testCustomerQuoteReview}=await import('./customer-quote-review-cases.mjs');await testCustomerQuoteReview({ok,call,state,admin,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
@@ -196,4 +197,5 @@ execFileSync(process.execPath,['tests/fixed-schedule.mjs'],{stdio:'inherit',wind
 execFileSync(process.execPath,['tests/outsourcing-catalog-cases.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/outsourcing-workbook-cases.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/metal-outsourcing-cases.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/pdf-original-preview.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
