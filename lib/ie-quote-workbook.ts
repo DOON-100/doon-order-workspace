@@ -49,7 +49,7 @@ function cellsOf(sheetXml: string, strings: string[]) {
 }
 
 /** Validate ZIP metadata before inflation; reject encrypted/ZIP64/duplicate/path traversal entries. */
-function readArchive(bytes: Uint8Array) {
+export function readIeWorkbookArchive(bytes: Uint8Array) {
   if (bytes.length < 22 || bytes.length > IE_TEMPLATE_MAX_BYTES) fail('原版模板须为不超过 12 MB 的 .xlsx 文件');
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   let end = -1;
@@ -87,7 +87,7 @@ function readArchive(bytes: Uint8Array) {
 const layoutXml = (sheet: string) => sheet.replace(/<hyperlinks\b[^>]*>[\s\S]*?<\/hyperlinks>/g, '').replace(/<legacyDrawing\b[^>]*\/>/g, '').replace(/<sheetData\b[^>]*>[\s\S]*?<\/sheetData>/, data => data.replace(excelCell, match => { const a = attrs(match.slice(0, match.indexOf('>') + 1)); return a.s ? `<c r="${a.r}" s="${a.s}"/>` : ''; }));
 
 async function inspectArchive(bytes: Uint8Array) {
-  const entries = readArchive(bytes), workbook = textEntry(entries, 'xl/workbook.xml'), relationships = textEntry(entries, 'xl/_rels/workbook.xml.rels');
+  const entries = readIeWorkbookArchive(bytes), workbook = textEntry(entries, 'xl/workbook.xml'), relationships = textEntry(entries, 'xl/_rels/workbook.xml.rels');
   const blockers: string[] = [];
   if (/macroEnabled|vbaProject|activeX|oleObject/i.test(textEntry(entries, '[Content_Types].xml'))) blockers.push('模板含宏或嵌入程序类型，不支持导出');
   const strings = entries['xl/sharedStrings.xml'] ? [...strFromU8(entries['xl/sharedStrings.xml']).matchAll(/<si\b[^>]*>([\s\S]*?)<\/si>/g)].map(m => textContent(m[1])) : [];

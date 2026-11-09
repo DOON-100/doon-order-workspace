@@ -7,6 +7,9 @@ import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notific
 import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
 import {ieAttachmentGet,ieAttachmentPost} from './ie-quote-attachment-api';
 import {ieHandoffGet,ieHandoffPost} from './ie-quote-handoff-api';
+import {ieCatalogInput,publicIeCatalog,ieCatalogIsCnyExclusive} from './ie-price-catalog';
+import {iePriceImportGet,iePriceImportPost} from './ie-price-import-api';
+import {ieSupplierEvidenceGet,ieSupplierEvidencePost,requireIeSupplierEvidence} from './ie-supplier-evidence';
 import {validateIeMaterialNameReferences,latestIeMaterialNameCatalog,materialPartChecklist} from './ie-material-names';
 import {canConfigureIeQuotes,canFillIeQuote,canReadIeAccount,canReadIeQuote,canUseIeQuotes,ieCapabilities,iePolicyInput,iePolicyMember,ieQuotePolicy,isIeApprover,isIeEngineeringMember,publicIePolicy,type IeQuotePolicy} from './ie-quote-access';
 import {calculateIeQuote,canReviewIeQuote,currentIeQuote,ieQuoteInput,ieQuoteIssues,ieQuotePreparedByIds,ieQuoteReviewRouting,ieQuoteVersion,ieProcessSchema,ieNumericValue,latestReleasedIeVersion,publicIeQuote,type IeCatalog,type IeQuote,type IeQuoteFields,type IeQuoteRevision,type IeTooling} from './ie-quotes';
@@ -30,6 +33,7 @@ function validateCatalog(s:State,fields:IeQuoteFields){
   if(!row.catalogId&&!row.catalogVersion)continue;
   const entries=all(s,'ie_quote_catalog_revision').filter(r=>r.catalogId===row.catalogId&&r.version===row.catalogVersion),c=entries.length===1?entries[0].snapshot as IeCatalog:null;
   if(!c||c.category!==(category==='outsourcing'?(row as IeQuoteFields['lines'][number]['outsourcing'][number]).category:category))throw new AppError('引用的工艺 / 基价版本无效，请重新选择价格依据。');
+  if(!ieCatalogIsCnyExclusive(c))throw new AppError('报价计算采用人民币未税价格，外币或含税目录报价须先核对换算后另建未税依据。');
   const exact=row.name===c.name&&row.priceSource===c.priceSource&&(category==='outsourcing'?(row as IeQuoteFields['lines'][number]['outsourcing'][number]).unitPrice===c.basePrice:(row as IeQuoteFields['lines'][number]['materials'][number]).basePrice===c.basePrice);
   if(!exact)throw new AppError('所选目录版本的名称、基价和依据不能被静默改写；要手动价请清除目录引用并写明依据。');
   if(category==='material'){const r=row as IeQuoteFields['lines'][number]['materials'][number];if(r.specification!==c.specification||r.unit!==c.unit)throw new AppError('材料规格或单位不符合所选目录快照。');}
@@ -39,6 +43,8 @@ function validateCatalog(s:State,fields:IeQuoteFields){
 function publicTooling(t:IeTooling){const {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy}=t;return {id,version,customerAccountId,name,reference,chargeStatus,evidence,updatedAt,updatedBy};}
 
 export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise<Response|null>{
+ const supplierEvidence=await ieSupplierEvidenceGet(action,url,s,m);if(supplierEvidence)return supplierEvidence;
+ const priceImport=await iePriceImportGet(action,url,s,m);if(priceImport)return priceImport;
  const handoff=ieHandoffGet(action,url,s,m);if(handoff)return handoff;
  const attachment=await ieAttachmentGet(action,url,s,m);if(attachment)return attachment;
  const memberMailbox=memberNotificationMailboxGet(action,s,m);if(memberMailbox)return memberMailbox;
@@ -51,17 +57,19 @@ export async function ieQuoteGet(action:string,url:URL,s:State,m:Member):Promise
   const q=ieQuoteVersion(s,quoteId,v),current=currentIeQuote(s,quoteId);if(!q||!current||current.customerAccountId!==q.customerAccountId||!canReadIeQuote(s,m,current)||!canReadIeQuote(s,m,q))throw new AppError('工程报价版本不存在或无权查看。',403);return json({quote:publicIeQuote(s,m,q)});
  }
  const customers=(all(s,'customer_account') as CustomerAccount[]).filter(a=>a.active&&canReadIeAccount(s,m,a)).map(({id,customer,customerCode})=>({id,customer,customerCode}));
- const includeInactive=url.searchParams.get('includeInactive')==='1';if(includeInactive&&!isIeEngineeringMember(s,m))throw new AppError('只有工程维护人员可查询已停用的基价和工艺预设。',403);
+ const includeInactive=url.searchParams.get('includeInactive')==='1';if(includeInactive&&!canFillIeQuote(s,m))throw new AppError('只有工程维护人员可查询已停用的基价和工艺预设。',403);
  const visibleCustomers=new Set(customers.map(a=>a.id));
  const toolingChargeSources=(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).flatMap(q=>{const released=latestReleasedIeVersion(s,q.id);return released&&released.customerAccountId===q.customerAccountId&&canReadIeQuote(s,m,released)&&released.tooling.some(t=>t.chargeMode==='charge')?[publicIeQuote(s,m,released)]:[];});
  return json({materialChecklist:materialPartChecklist(latestIeMaterialNameCatalog(s)),canUse:true,quotes:(all(s,'ie_quote') as IeQuote[]).filter(q=>canReadIeQuote(s,m,q)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)).map(q=>publicIeQuote(s,m,q)),customers,capabilities:ieCapabilities(s,m),policy:publicIePolicy(s,m),
  toolingChargeSources,
  toolingRegistry:(all(s,'ie_quote_tooling') as IeTooling[]).filter(t=>visibleCustomers.has(t.customerAccountId)).map(publicTooling),
- catalog:(all(s,'ie_quote_catalog') as IeCatalog[]).filter(c=>c.active||includeInactive).map(({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})=>({id,version,category,name,specification,unit,basePrice,standardSeconds,priceSource,effectiveDate,active})),
+ catalog:(all(s,'ie_quote_catalog') as IeCatalog[]).filter(c=>c.active||includeInactive).map(publicIeCatalog),
  processPresets:all(s,'ie_quote_process_preset').filter(p=>p.active||includeInactive).map(({id,version,name,description,processes,active,updatedAt,updatedBy})=>({id,version,name,description,processes,active,updatedAt,updatedBy})),
  });
 }
 export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
+ const supplierEvidence=await ieSupplierEvidencePost(action,req,s,m);if(supplierEvidence)return supplierEvidence;
+ const priceImport=await iePriceImportPost(action,req,s,m);if(priceImport)return priceImport;
  const handoff=await ieHandoffPost(action,req,s,m);if(handoff)return handoff;
  const attachment=await ieAttachmentPost(action,req,s,m);if(attachment)return attachment;
  const memberMailbox=await memberNotificationMailboxPost(action,req,s,m);if(memberMailbox)return memberMailbox;
@@ -124,17 +132,18 @@ async function saveTooling(req:Request,s:State,m:Member){
  await commit(s.revision,[t,{id:newId('ie_quote_tooling_revision'),kind:'ie_quote_tooling_revision',toolingId:t.id,version:t.version,snapshot:structuredClone(t)},audit(m,t,before||null,input.chargeStatus==='collected'?'登记模具实际收费凭证':'登记共用模具识别编号','IE 工程报价',t)]);return json({ok:true,tooling:publicTooling(t)});
 }
 async function saveCatalog(req:Request,s:State,m:Member){
- engineering(s,m);const input=parse(z.object({id:id.optional(),version:version.optional(),category:z.enum(['material','process','plating','general']),name:z.string().trim().min(1).max(240),specification:z.string().trim().max(1000),unit:z.string().trim().max(40),basePrice:ieNumericValue,standardSeconds:ieNumericValue.nullable(),priceSource:z.string().trim().min(1).max(1000),effectiveDate:z.string().refine(v=>{try{return !!v&&strictDate(v)===v;}catch{return false;}},'生效日期无效'),active:z.boolean()}).strict(),await req.json());
+ engineering(s,m);const input=parse(ieCatalogInput,await req.json());
  const before=input.id?all(s,'ie_quote_catalog').find(c=>c.id===input.id) as IeCatalog|undefined:undefined;if(input.id&&!before)throw new AppError('目录项目不存在。',404);if(before)current(before,input.version||0);else if(input.version)throw new AppError('新目录不能提供版本。');
- if(before&&before.category!==input.category)throw new AppError('已登记目录不能变更类别，请新建。');if(input.category==='process'&&input.standardSeconds===null)throw new AppError('标准工艺须填写秒工时，工时仅作工艺分析，不参与计价。');
- const c:IeCatalog={...input,id:before?.id||newId('ie_quote_catalog'),kind:'ie_quote_catalog',version:(before?.version||0)+1,updatedAt:now(),updatedBy:m.name};
+ if(before&&before.category!==input.category)throw new AppError('已登记目录不能变更类别，请新建。');
+ if(input.evidenceId)requireIeSupplierEvidence(s,m,input.evidenceId);
+ const c:IeCatalog={...before,...input,id:before?.id||newId('ie_quote_catalog'),kind:'ie_quote_catalog',version:(before?.version||0)+1,updatedAt:now(),updatedBy:m.name};
  await commit(s.revision,[c,{id:newId('ie_quote_catalog_revision'),kind:'ie_quote_catalog_revision',catalogId:c.id,version:c.version,snapshot:structuredClone(c)},audit(m,c,before||null,'维护工程报价基价及工艺目录','IE 工程报价',c)]);return json({ok:true,catalog:c});
 }
 async function saveProcessPreset(req:Request,s:State,m:Member){
  engineering(s,m);const input=parse(z.object({id:id.optional(),version:version.optional(),name:z.string().trim().min(1).max(240),description:z.string().trim().max(4000),processes:z.array(ieProcessSchema).min(1).max(300),active:z.boolean()}).strict(),await req.json());
  const before=input.id?all(s,'ie_quote_process_preset').find(p=>p.id===input.id):undefined;if(input.id&&!before)throw new AppError('工艺预设不存在。',404);if(before)current({version:before.version},input.version||0);else if(input.version)throw new AppError('新预设不能提供版本。');
  const ids=new Set(input.processes.map(p=>p.id));if(ids.size!==input.processes.length)throw new AppError('预设工序编号重复。');
- for(const p of input.processes){if(!p.name||(!p.notApplicable&&(p.basePrice===null||p.difficulty===null||p.standardSeconds===null||!p.priceSource))||(p.notApplicable&&!p.notes))throw new AppError('预设须包含工序名称、标准秒工时、基价、难度和依据；不适用须说明。');let next=p.parentId,seen=new Set([p.id]);while(next){if(!ids.has(next)||seen.has(next))throw new AppError('预设工序上级无效或形成循环。');seen.add(next);next=input.processes.find(v=>v.id===next)?.parentId||'';}}
+ for(const p of input.processes){if(!p.name||(!p.notApplicable&&(p.basePrice===null||p.difficulty===null||!p.priceSource))||(p.notApplicable&&!p.notes))throw new AppError('预设须包含工序名称、基价、难度和依据；标准秒工时选填，不适用须说明。');let next=p.parentId,seen=new Set([p.id]);while(next){if(!ids.has(next)||seen.has(next))throw new AppError('预设工序上级无效或形成循环。');seen.add(next);next=input.processes.find(v=>v.id===next)?.parentId||'';}}
  validateCatalog(s,{lines:[{materials:[],outsourcing:[],processes:input.processes}]} as unknown as IeQuoteFields);
  const preset={...input,id:before?.id||newId('ie_quote_process_preset'),kind:'ie_quote_process_preset',version:(before?.version||0)+1,updatedAt:now(),updatedBy:m.name};
  await commit(s.revision,[preset,{id:newId('ie_quote_process_preset_revision'),kind:'ie_quote_process_preset_revision',presetId:preset.id,version:preset.version,snapshot:structuredClone(preset)},audit(m,preset,before||null,'维护工艺流程预设','IE 工程报价',preset)]);return json({ok:true,preset});

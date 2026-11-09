@@ -7,6 +7,7 @@ import {ieAttachmentIssues,publicIeAttachments,type IeAttachmentRef} from './ie-
 import {calculateIeQuote,ieAdjustmentTargets} from './ie-quote-calculation';
 import {ieHandoffFields} from './ie-quote-handoffs';
 import {ieMaterialNameReference,validateIeMaterialNameReferences} from './ie-material-names';
+import type {IeCatalogMetadata} from './ie-price-catalog';
 export {calculateIeQuote} from './ie-quote-calculation';
 export {canReadIeQuote,readAccess,canFinalApproveIeSales,iePolicyMember,ieQuotePolicy} from './ie-quote-access';
 
@@ -33,7 +34,7 @@ export const ieQuoteInput=z.object({id:id.optional(),version:z.number().int().po
 export type IeQuoteFields=Omit<z.infer<typeof ieQuoteInput>,'id'|'version'>;
 export type IeQuoteLine=IeQuoteFields['lines'][number];
 export type IeTooling=Entity & {kind:'ie_quote_tooling';version:number;customerAccountId:string;name:string;reference:string;chargeStatus:'uncollected'|'collected';evidence:string;updatedAt:string;updatedBy:string;updatedById:string};
-export type IeCatalog=Entity & {kind:'ie_quote_catalog';version:number;category:'material'|'process'|'plating'|'general';name:string;specification:string;unit:string;basePrice:number;standardSeconds:number|null;priceSource:string;effectiveDate:string;active:boolean;updatedAt:string;updatedBy:string};
+export type IeCatalog=Entity & IeCatalogMetadata & {kind:'ie_quote_catalog';version:number;category:'material'|'process'|'plating'|'general';name:string;specification:string;unit:string;basePrice:number;standardSeconds:number|null;priceSource:string;effectiveDate:string;active:boolean;updatedAt:string;updatedBy:string};
 export type IeQuote=Entity & IeQuoteFields & {kind:'ie_quote';version:number;revision:number;status:'draft'|'submitted'|'returned'|'released';attachmentRefs?:IeAttachmentRef[];customerName:string;customerCode:string;preparedByIds:string[];policyVersion:number;requiredReviewMemberId:string;costs:IeQuoteCosts;createdAt:string;createdBy:string;createdById:string;updatedAt:string;updatedBy:string;updatedById:string;submittedAt?:string;submittedBy?:string;submittedById?:string;reviewedAt?:string;reviewedBy?:string;reviewedById?:string;reviewReason?:string};
 export type IeQuoteRevision=Entity & {kind:'ie_quote_revision';quoteId:string;version:number;revision:number;action:string;updatedAt:string;updatedBy:string;snapshot:IeQuote};
 export type IeQuoteCosts=ReturnType<typeof calculateIeQuote>;
