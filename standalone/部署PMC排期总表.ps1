@@ -1,4 +1,6 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $projectRoot
 $nodePath = 'C:\Program Files\nodejs\node.exe'
@@ -37,7 +39,7 @@ try {
     }
 }
 $local = Invoke-RestMethod -Uri 'http://127.0.0.1:8787/health' -TimeoutSec 5
-$page = Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.176:8787/pmc' -TimeoutSec 5
+$page = Invoke-WebRequest -UseBasicParsing -Uri ($lanOrigin + '/pmc') -TimeoutSec 5
 $record = [pscustomobject]@{ deployedAt=[DateTime]::UtcNow.ToString('o'); healthy=$local.ok; pmcStatus=[int]$page.StatusCode; backup=($backup|ConvertFrom-Json); rollback=$rollback; clientHtml=$page.Content }
 $record | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath 'test-output/pmc-deployment.json' -Encoding utf8
 $record | Select-Object deployedAt,healthy,pmcStatus,backup,rollback | ConvertTo-Json -Depth 4

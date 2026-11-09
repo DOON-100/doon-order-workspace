@@ -100,7 +100,7 @@ export async function createBackup({dataDir, keyFile, outputDir}) {
     await pipeline(createReadStream(plainArchive), cipher, createWriteStream(encrypted, {flags: 'a'}));
     await fs.appendFile(encrypted, cipher.getAuthTag());
     const bytes = (await fs.stat(encrypted)).size;
-    if (bytes > maxBytes) throw new Error('加密文件超过 95 MiB，请分卷后再上传到 GitHub');
+    if (bytes > maxBytes) throw new Error('加密文件超过单卷 95 MiB 上限，请分卷保存到受控私有存储');
     const manifest = {format: 'DOONBAK1', createdAt, algorithm: 'AES-256-GCM', compression: 'gzip', keyId: createHash('sha256').update(key).digest('hex').slice(0, 16), archive: {name: archiveName, bytes, sha256: await sha256(encrypted)}};
     await fs.writeFile(path.join(outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2));
     return manifest;
@@ -154,7 +154,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   }
   try {
     if (command === 'create') {
-      const outputDir = options.output || path.join(project, 'encrypted-backups', new Date().toISOString().replace(/[:.]/g, '-'));
+      const outputDir = options.output || path.join(project, 'private-data-tools', 'encrypted-backups', new Date().toISOString().replace(/[:.]/g, '-'));
       await fs.mkdir(path.dirname(outputDir), {recursive: true});
       const result = await createBackup({dataDir: options.data || path.join(project, 'lan-data'), keyFile: options.key || path.join(project, 'lan-data', 'backup-keys', 'repository-backup.key'), outputDir});
       console.log(JSON.stringify({outputDir: path.resolve(outputDir), ...result}, null, 2));

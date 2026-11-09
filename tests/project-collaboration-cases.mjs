@@ -39,6 +39,20 @@ export async function testProjectCollaboration({ok,call,pass,rawRecords,rawInser
  await rejected('project-collaboration-save',create(),users.outsider);
  pass('项目协作派单仅管理员、当前项目业务及指定客服负责；组长和其他客户协作人不自动获得派单权');
 
+ const originalProject=structuredClone(current(project.id)),originalViewer=structuredClone(current(mid('worker_viewer')));
+ try{
+  const multiple=(await data(users.sales_manager,'?projectId='+project.id)).assignment;
+  assert.deepEqual(multiple,{preferredOwnerIds:[mid('service_manager'),mid('clerk_manager')],defaultOwnerId:'',defaultDepartment:'service',unavailableReason:''});
+  rawUpdate({...originalViewer,personnelType:'external'});
+  rawUpdate({...originalProject,serviceMemberIds:[mid('service_manager'),mid('disabled'),mid('worker_supplier'),mid('worker_viewer'),mid('service_manager')]});
+  const unique=(await data(users.sales_manager,'?projectId='+project.id)).assignment;assert.deepEqual(unique.preferredOwnerIds,[mid('service_manager')]);assert.equal(unique.defaultOwnerId,mid('service_manager'));
+  rawUpdate({...originalProject,serviceMemberIds:undefined});const legacy=(await data(users.sales_manager,'?projectId='+project.id)).assignment;assert.equal(legacy.defaultOwnerId,mid('service_manager'));
+  rawUpdate({...originalProject,serviceMemberIds:[]});const cleared=(await data(users.sales_manager,'?projectId='+project.id)).assignment;assert.deepEqual(cleared.preferredOwnerIds,[]);assert.equal(cleared.defaultOwnerId,'');
+  const forbidden=(await data(users.leader,'?projectId='+project.id)).assignment;assert.deepEqual(forbidden.preferredOwnerIds,[]);assert.equal(forbidden.defaultOwnerId,'');assert.match(forbidden.unavailableReason,/仅项目业务主负责人/);
+  rawUpdate({...originalProject,status:'paused'});const paused=(await data(users.sales_manager,'?projectId='+project.id)).assignment;assert.equal(paused.defaultOwnerId,'');assert.match(paused.unavailableReason,/暂停/);
+ }finally{rawUpdate(originalProject);rawUpdate(originalViewer);}
+ pass('项目客服推荐仅用于预填：多名须选择、停用及外部账号不推荐，历史单人和显式清空保留原语义，无权及暂停原因明确');
+
  const workerTasks=new Map();
  for(const role of ['sales','clerk','pmc','production','finance','programmer','viewer']){
   const key='worker_'+role,body=create(key,{title:'合成跨部门-'+role,roundId:role==='clerk'?round.id:''}),task=(await save(body)).item;workerTasks.set(role,task);

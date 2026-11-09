@@ -1,0 +1,3 @@
+
+# Git hooks must remain executable shell scripts on Windows and Unix.
+.githooks/* text eol=lf

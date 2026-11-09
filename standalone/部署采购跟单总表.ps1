@@ -1,5 +1,7 @@
-param([Parameter(Mandatory=$true)][string]$Workbook,[Parameter(Mandatory=$true)][string]$SourceAsOf,[Parameter(Mandatory=$true)][string]$Expectations)
+﻿param([Parameter(Mandatory=$true)][string]$Workbook,[Parameter(Mandatory=$true)][string]$SourceAsOf,[Parameter(Mandatory=$true)][string]$Expectations)
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'lan-access-config.ps1')
+$lanOrigin = Resolve-DoonLanOrigin -Value $env:DOON_LAN_URL
 $env:DOON_IMPORT_EXPECTATIONS = (Resolve-Path -LiteralPath $Expectations).Path
 $projectRoot = Split-Path $PSScriptRoot -Parent
 Set-Location -LiteralPath $projectRoot
@@ -55,7 +57,7 @@ for ($i=0; $i -lt 20; $i++) {
     Start-Sleep -Milliseconds 500
 }
 if (-not $healthy) { throw '部署后健康检查未通过。' }
-$page = Invoke-WebRequest -UseBasicParsing -Uri 'http://192.168.1.176:8787/receiving' -TimeoutSec 10
+$page = Invoke-WebRequest -UseBasicParsing -Uri ($lanOrigin + '/receiving') -TimeoutSec 10
 $result = [pscustomobject]@{ deployedAt=[DateTime]::UtcNow.ToString('o'); healthy=$healthy; status=[int]$page.StatusCode; backup=($backup|ConvertFrom-Json); rollback=$rollback; clientHtml=$page.Content }
 $result | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath 'test-output/purchase-deployment.json' -Encoding utf8
 $result | Select-Object deployedAt,healthy,status,backup,rollback | ConvertTo-Json -Depth 4
