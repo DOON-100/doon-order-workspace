@@ -1,5 +1,6 @@
 /** Pure, shared arithmetic for the worksheet and server. Amounts are CNY per pair. */
-export type IeFormulaVersion='ie-cost-v2-line-loss'|'ie-cost-v3-excel'|'ie-cost-v4-manual'|'ie-cost-v5-material-checklist';
+export type IeFormulaVersion='ie-cost-v2-line-loss'|'ie-cost-v3-excel'|'ie-cost-v4-manual'|'ie-cost-v5-material-checklist'|'ie-cost-v6-source-excel';
+export type IeSourceFormula={version:'ie-source-excel-v1';sourceFilename:string;sourceSha256:string;costExchangeRateCnyPerUsd:number|null;quoteExchangeRateCnyPerUsd:number|null;finalExchangeRateCnyPerUsd:number|null;factoryMarkupRate:number|null;resultBasis:'source-C73-D73'};
 export type IeManualAdjustment={target:string;value:number;reason:string;sourceSignature:string};
 export type IeAdjustmentCell={target:string;label:string;automaticValue:number|null;effectiveValue:number|null;sourceSignature:string;adjustment?:IeManualAdjustment;stale:boolean;applied:boolean};
 export type IeLineAdjustmentKey='material'|'materialLoss'|'materialWithLoss'|'process'|'plating'|'outsourcing'|'outsourcingTotal'|'indirectLabor'|'rent'|'water'|'electricity'|'depreciation'|'supplies'|'indirect'|'laborTotal'|'productionCost'|'productionCostUsd'|'factoryPriceCny'|'factoryPriceUsd';
@@ -7,6 +8,8 @@ const targetPart=(value:string)=>encodeURIComponent(value);
 export const ieAdjustmentTargets={material:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:material:${targetPart(rowId)}:amount`,process:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:process:${targetPart(rowId)}:amount`,outsourcing:(lineId:string,rowId:string)=>`line:${targetPart(lineId)}:outsourcing:${targetPart(rowId)}:amount`,line:(lineId:string,key:IeLineAdjustmentKey)=>`line:${targetPart(lineId)}:${key}`,tooling:'toolingChargeCny'};
 export type IeCalculationInput={
  materialPricingMode?:'checklist';
+ calculationMode?:'standard'|'source-excel-v1';
+ sourceFormula?:IeSourceFormula;
  exchangeRateCnyPerUsd:number|null;
  lines:{id:string;model?:string;materials:{id?:string;name?:string;specification?:string;unit?:string;catalogId?:string;catalogVersion?:number|null;nameReference?:{catalogId:string;catalogVersion:number;entryId:string;nameUsage?:'part-v1'};priceSource?:string;basePrice:number|null;usage:number|null;coefficient:number|null;lossRate?:number;notApplicable:boolean}[];processes:{id?:string;name?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;basePrice:number|null;difficulty:number|null;usage?:number|null;notApplicable:boolean}[];outsourcing:{id?:string;name?:string;part?:string;catalogId?:string;catalogVersion?:number|null;priceSource?:string;category:'plating'|'general';unitPrice:number|null;usage?:number|null;notApplicable:boolean}[]}[];
  tooling:{id?:string;toolingId?:string;name?:string;lineIds?:string[];chargeMode:string;amount:number|null;chargeQuoteId?:string;chargeVersion?:number|null}[];
@@ -25,10 +28,13 @@ const sum=(values:number[])=>out(values.reduce((p,v)=>p+micro(v),BigInt(0)));
 const cents=(value:number)=>Number(div(micro(value),BigInt(10000)))/100;
 export {multiply as ieCostMultiply,sum as ieCostSum,cents as ieCostRoundCents};
 export function ieCalculationVersion(fields:IeCalculationInput):IeFormulaVersion{
+ // An explicit editable mode chooses the next calculation without mutating any saved snapshot.
+ if(fields.calculationMode==='source-excel-v1')return 'ie-cost-v6-source-excel';
+ if(fields.calculationMode==='standard')return fields.materialPricingMode==='checklist'?'ie-cost-v5-material-checklist':fields.manualAdjustments===undefined?'ie-cost-v3-excel':'ie-cost-v4-manual';
  // Saved snapshots retain their original rules. Presence of the editable
  // adjustment collection opts a new save into the manual-price rules.
  const saved=fields.costs?.formulaVersion;
- if(saved==='ie-cost-v2-line-loss'||saved==='ie-cost-v3-excel'||saved==='ie-cost-v4-manual'||saved==='ie-cost-v5-material-checklist')return saved;
+ if(saved==='ie-cost-v2-line-loss'||saved==='ie-cost-v3-excel'||saved==='ie-cost-v4-manual'||saved==='ie-cost-v5-material-checklist'||saved==='ie-cost-v6-source-excel')return saved;
  if(fields.materialPricingMode==='checklist')return 'ie-cost-v5-material-checklist';
  return fields.manualAdjustments===undefined?'ie-cost-v3-excel':'ie-cost-v4-manual';
 }
@@ -37,11 +43,13 @@ export function ieCalculationVersion(fields:IeCalculationInput):IeFormulaVersion
 function signature(value:unknown){const text=JSON.stringify(value);let a=2166136261,b=2246822519;for(let i=0;i<text.length;i++){const code=text.charCodeAt(i);a=Math.imul(a^code,16777619);b=Math.imul(b^code,3266489917);}return 'ie-adjust-v1:'+(a>>>0).toString(16).padStart(8,'0')+(b>>>0).toString(16).padStart(8,'0');}
 const completeSum=(values:(number|null)[])=>values.some(v=>v===null)?null:sum(values as number[]);
 export function calculateIeQuote(fields:IeCalculationInput){
- const formulaVersion=ieCalculationVersion(fields),excel=formulaVersion!=='ie-cost-v2-line-loss',checklist=formulaVersion==='ie-cost-v5-material-checklist',manual=checklist||formulaVersion==='ie-cost-v4-manual';
+ const formulaVersion=ieCalculationVersion(fields),excel=formulaVersion!=='ie-cost-v2-line-loss',sourceExcel=formulaVersion==='ie-cost-v6-source-excel',checklist=formulaVersion==='ie-cost-v5-material-checklist',manual=sourceExcel||checklist||formulaVersion==='ie-cost-v4-manual';
  const adjustmentCells:IeAdjustmentCell[]=[],warnings:string[]=[],tokens=new Map<string,unknown>();
+ const sourceFormula=sourceExcel?fields.sourceFormula:undefined,positive=(value:number|null|undefined):value is number=>typeof value==='number'&&Number.isFinite(value)&&value>0;
+ if(sourceExcel){warnings.push('已按原 Excel 公式生成工程报价，仍待 IE 工程师审核和修改；计算结果不表示已复核或已释放。');warnings.push('来源文件名与摘要为报价来源记录，不等同于服务器已核验原文件。');if(!sourceFormula||![sourceFormula.costExchangeRateCnyPerUsd,sourceFormula.quoteExchangeRateCnyPerUsd,sourceFormula.finalExchangeRateCnyPerUsd].every(positive)||sourceFormula.factoryMarkupRate===null)warnings.push('原表公式参数尚未填齐，相关币种报价暂不显示。');}
  const overrides=new Map((manual?fields.manualAdjustments||[]:[]).map(a=>[a.target,a]));
  const cell=(target:string,label:string,automaticValue:number|null,source:unknown,eligible=true)=>{
-  const sourceSignature=signature([target,automaticValue,source]),adjustment=overrides.get(target),stale=!!adjustment&&(!eligible||adjustment.sourceSignature!==sourceSignature),applied=!!adjustment&&!stale;
+  const sourceSignature=signature(sourceExcel?[formulaVersion,sourceFormula?.sourceSha256||'',target,automaticValue,source]:[target,automaticValue,source]),adjustment=overrides.get(target),stale=!!adjustment&&(!eligible||adjustment.sourceSignature!==sourceSignature),applied=!!adjustment&&!stale;
   const effectiveValue=applied?adjustment!.value:automaticValue;
   adjustmentCells.push({target,label,automaticValue,effectiveValue,sourceSignature,...(adjustment?{adjustment}:{}),stale,applied});
   tokens.set(target,[sourceSignature,effectiveValue,applied]);return effectiveValue;
@@ -49,16 +57,17 @@ export function calculateIeQuote(fields:IeCalculationInput){
  const token=(target:string)=>tokens.get(target);
  const lines=fields.lines.map(l=>{
   const target=(key:IeLineAdjustmentKey)=>ieAdjustmentTargets.line(l.id,key),label=l.model||l.id;
+  if(sourceExcel){const missingMaterials=l.materials.filter(r=>!r.notApplicable&&(r.basePrice===null||r.usage===null||r.coefficient===null)).length,missingProcesses=l.processes.filter(r=>!r.notApplicable&&(r.basePrice===null||r.difficulty===null||r.usage===null)).length,missingOutsourcing=l.outsourcing.filter(r=>!r.notApplicable&&(r.unitPrice===null||r.usage===null)).length;if(missingMaterials||missingProcesses||missingOutsourcing)warnings.push(`${label}：材料 ${missingMaterials} 项、人工 ${missingProcesses} 项、外发 ${missingOutsourcing} 项含空白数值，已按原 Excel 公式以 0 参与计算；原字段仍保留空白供 IE 核对。`);}
   const lineCell=(key:IeLineAdjustmentKey,title:string,automatic:number|null,source:unknown)=>cell(target(key),label+' / '+title,automatic,source);
-  const materialRows=l.materials.map((r,i)=>{const t=ieAdjustmentTargets.material(l.id,r.id??String(i)),automatic=r.notApplicable?0:checklist?multiply([r.basePrice??0,r.usage??1,r.coefficient??1],2):r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient],excel?2:6);const source=[r.name,r.specification||'',r.unit||'',r.catalogId||'',r.catalogVersion??null,r.nameReference?[r.nameReference.catalogId,r.nameReference.catalogVersion,r.nameReference.entryId,...(r.nameReference.nameUsage?[r.nameReference.nameUsage]:[])]:null,r.priceSource,r.basePrice,r.usage,r.coefficient,r.notApplicable,...(checklist?['material-checklist']:[])];return {row:r,target:t,value:cell(t,label+' / 材料 '+(r.name||String(i+1))+' 金额',automatic,source,!r.notApplicable)};});
-  const processRows=l.processes.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.process(l.id,r.id??String(i)),automatic=r.notApplicable?0:r.basePrice===null||r.difficulty===null||usage===null?null:multiply([r.basePrice,r.difficulty,usage]);return {row:r,target:t,value:cell(t,label+' / 工序 '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.catalogId||'',r.catalogVersion??null,r.priceSource,r.basePrice,r.difficulty,usage,r.notApplicable],!r.notApplicable)};});
-  const outsourcingRows=l.outsourcing.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.outsourcing(l.id,r.id??String(i)),automatic=r.notApplicable?0:r.unitPrice===null||usage===null?null:multiply([r.unitPrice,usage]);return {row:r,target:t,value:cell(t,label+' / '+(r.category==='plating'?'电镀':'一般外发')+' '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.part||'',r.catalogId||'',r.catalogVersion??null,r.priceSource,r.category,r.unitPrice,usage,r.notApplicable],!r.notApplicable)};});
-  const material=lineCell('material','材料净额',l.materials.length?completeSum(materialRows.map(r=>r.value)):checklist?0:null,materialRows.map(r=>token(r.target)));
-  const process=lineCell('process','直接人工 / 工序',l.processes.length?completeSum(processRows.map(r=>r.value)):null,processRows.map(r=>token(r.target)));
-  const categoryRows=(category:'plating'|'general')=>outsourcingRows.filter(r=>r.row.category===category),categoryTotal=(category:'plating'|'general')=>{const rows=categoryRows(category);return rows.length?completeSum(rows.map(r=>r.value)):null;};
+  const materialRows=l.materials.map((r,i)=>{const t=ieAdjustmentTargets.material(l.id,r.id??String(i)),automatic=r.notApplicable?0:sourceExcel?multiply([r.basePrice??0,r.usage??0,r.coefficient??0],2):checklist?multiply([r.basePrice??0,r.usage??1,r.coefficient??1],2):r.basePrice===null||r.usage===null||r.coefficient===null?null:multiply([r.basePrice,r.usage,r.coefficient],excel?2:6);const source=[r.name,r.specification||'',r.unit||'',r.catalogId||'',r.catalogVersion??null,r.nameReference?[r.nameReference.catalogId,r.nameReference.catalogVersion,r.nameReference.entryId,...(r.nameReference.nameUsage?[r.nameReference.nameUsage]:[])]:null,r.priceSource,r.basePrice,r.usage,r.coefficient,r.notApplicable,...(checklist?['material-checklist']:[])];return {row:r,target:t,value:cell(t,label+' / 材料 '+(r.name||String(i+1))+' 金额',automatic,source,!r.notApplicable)};});
+  const processRows=l.processes.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.process(l.id,r.id??String(i)),automatic=r.notApplicable?0:sourceExcel?multiply([r.basePrice??0,r.difficulty??0,usage??0]):r.basePrice===null||r.difficulty===null||usage===null?null:multiply([r.basePrice,r.difficulty,usage]);return {row:r,target:t,value:cell(t,label+' / 工序 '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.catalogId||'',r.catalogVersion??null,r.priceSource,r.basePrice,r.difficulty,usage,r.notApplicable],!r.notApplicable)};});
+  const outsourcingRows=l.outsourcing.map((r,i)=>{const usage=r.usage===undefined?1:r.usage,t=ieAdjustmentTargets.outsourcing(l.id,r.id??String(i)),automatic=r.notApplicable?0:sourceExcel?multiply([r.unitPrice??0,usage??0]):r.unitPrice===null||usage===null?null:multiply([r.unitPrice,usage]);return {row:r,target:t,value:cell(t,label+' / '+(r.category==='plating'?'电镀':'一般外发')+' '+(r.name||String(i+1))+' 金额',automatic,[r.name,r.part||'',r.catalogId||'',r.catalogVersion??null,r.priceSource,r.category,r.unitPrice,usage,r.notApplicable],!r.notApplicable)};});
+  const material=lineCell('material','材料净额',l.materials.length?completeSum(materialRows.map(r=>r.value)):checklist||sourceExcel?0:null,materialRows.map(r=>token(r.target)));
+  const process=lineCell('process','直接人工 / 工序',l.processes.length?completeSum(processRows.map(r=>r.value)):sourceExcel?0:null,processRows.map(r=>token(r.target)));
+  const categoryRows=(category:'plating'|'general')=>outsourcingRows.filter(r=>r.row.category===category),categoryTotal=(category:'plating'|'general')=>{const rows=categoryRows(category);return rows.length?completeSum(rows.map(r=>r.value)):sourceExcel?0:null;};
   const plating=lineCell('plating','电镀',categoryTotal('plating'),categoryRows('plating').map(r=>token(r.target)));
   const outsourcing=lineCell('outsourcing','一般外发',categoryTotal('general'),categoryRows('general').map(r=>token(r.target)));
-  const rawLoss=l.materials.length?completeSum(materialRows.filter(r=>!r.row.notApplicable).map(({row:r,value})=>value===null?null:excel?multiply([value,r.lossRate??.1]):multiply([r.basePrice!,r.usage!,r.coefficient!,r.lossRate??.1]))):checklist?0:null;
+  const rawLoss=l.materials.length?completeSum(materialRows.filter(r=>!r.row.notApplicable).map(({row:r,value})=>value===null?null:excel?multiply([value,r.lossRate??.1]):multiply([r.basePrice!,r.usage!,r.coefficient!,r.lossRate??.1]))):checklist||sourceExcel?0:null;
   // Original Excel rounds each material line to cents, then the total material
   // loss to cents. Weighting each rounded line preserves individual extra loss.
   const materialLoss=lineCell('materialLoss','材料损耗额',rawLoss===null?null:excel?cents(rawLoss):rawLoss,materialRows.map(r=>[token(r.target),r.row.lossRate??.1,r.row.notApplicable]));
@@ -69,17 +78,32 @@ export function calculateIeQuote(fields:IeCalculationInput){
   const laborTotal=lineCell('laborTotal','直接人工及间接费合计',completeSum([process,indirect]),[token(target('process')),token(target('indirect'))]);
   const productionCost=lineCell('productionCost','生产成本 CNY',completeSum([materialWithLoss,outsourcingTotal,laborTotal]),[token(target('materialWithLoss')),token(target('outsourcingTotal')),token(target('laborTotal'))]);
   const converted=(value:number|null)=>value===null||!fields.exchangeRateCnyPerUsd?null:out(div(micro(value)*SCALE,micro(fields.exchangeRateCnyPerUsd)));
-  const productionCostUsd=lineCell('productionCostUsd','生产成本 USD',converted(productionCost),[token(target('productionCost')),fields.exchangeRateCnyPerUsd]);
-  const factoryPriceCny=lineCell('factoryPriceCny','IE 出厂价 CNY',productionCost===null?null:multiply([productionCost,1.3]),token(target('productionCost')));
+  const sourceRate=sourceFormula?.costExchangeRateCnyPerUsd;
+  const productionCostUsd=lineCell('productionCostUsd','生产成本 USD',sourceExcel?(productionCost===null||!positive(sourceRate)?null:out(micro(productionCost/sourceRate))):converted(productionCost),[token(target('productionCost')),sourceExcel?sourceRate:fields.exchangeRateCnyPerUsd]);
   const usdCostAdjusted=adjustmentCells.find(c=>c.target===target('productionCostUsd'))?.applied;
-  if(usdCostAdjusted&&adjustmentCells.find(c=>c.target===target('factoryPriceCny'))?.applied)warnings.push(label+'：CNY 出厂价和 USD 生产成本分别人工调整，USD 出厂价默认按人工 USD 成本 × 1.3；请审核两种币种口径。');
-  const factoryPriceUsd=lineCell('factoryPriceUsd','IE 出厂价 USD',usdCostAdjusted?(productionCostUsd===null?null:multiply([productionCostUsd,1.3])):converted(factoryPriceCny),usdCostAdjusted?[token(target('productionCostUsd')),1.3]:[token(target('factoryPriceCny')),fields.exchangeRateCnyPerUsd]);
-  return {lineId:l.id,material,materialLoss,materialWithLoss,process,plating,outsourcing,outsourcingTotal,indirectLabor,rent,water,electricity,depreciation,supplies,indirect,laborTotal,productionCost,productionCostUsd,factoryPriceCny,factoryPriceUsd};
+  let factoryPriceCny:number|null,factoryPriceUsd:number|null,sourceMarkupPriceCny:number|null=null;
+  if(sourceExcel){
+   const markup=sourceFormula?.factoryMarkupRate,quoteRate=sourceFormula?.quoteExchangeRateCnyPerUsd,finalRate=sourceFormula?.finalExchangeRateCnyPerUsd;
+   // I66, I67/C73 and D73 have no intermediate ROUND in the source workbook.
+   // Keep the unrounded USD expression for D73; only published output values use six decimals.
+   const markupRaw=productionCost===null||markup==null||!Number.isFinite(markup)||markup<0?null:productionCost*(1+markup),usdRaw=markupRaw===null||!positive(quoteRate)?null:markupRaw/quoteRate;
+   sourceMarkupPriceCny=markupRaw===null?null:out(micro(markupRaw));
+   factoryPriceUsd=lineCell('factoryPriceUsd','原表工厂价格 USD / C73',usdRaw===null?null:out(micro(usdRaw)),[token(target('productionCost')),markup,quoteRate]);
+   const usdAdjusted=adjustmentCells.find(c=>c.target===target('factoryPriceUsd'))?.applied,cnyBasis=usdAdjusted?factoryPriceUsd:usdRaw;
+   factoryPriceCny=lineCell('factoryPriceCny','原表工厂价格 CNY / D73',cnyBasis===null||!positive(finalRate)?null:out(micro(cnyBasis*finalRate)),[token(target('factoryPriceUsd')),usdAdjusted?null:usdRaw,finalRate]);
+   if(usdCostAdjusted)warnings.push(label+'：原表 H63 美元成本已人工调整；C73/D73 工厂价格仍按 H62 人民币成本和原表报价公式计算。');
+   if(usdAdjusted&&adjustmentCells.find(c=>c.target===target('factoryPriceCny'))?.applied)warnings.push(label+'：USD 与 CNY 工厂价格均有独立人工调整，请 IE 核对两种币种口径。');
+  }else{
+   factoryPriceCny=lineCell('factoryPriceCny','IE 出厂价 CNY',productionCost===null?null:multiply([productionCost,1.3]),token(target('productionCost')));
+   if(usdCostAdjusted&&adjustmentCells.find(c=>c.target===target('factoryPriceCny'))?.applied)warnings.push(label+'：CNY 出厂价和 USD 生产成本分别人工调整，USD 出厂价默认按人工 USD 成本 × 1.3；请审核两种币种口径。');
+   factoryPriceUsd=lineCell('factoryPriceUsd','IE 出厂价 USD',usdCostAdjusted?(productionCostUsd===null?null:multiply([productionCostUsd,1.3])):converted(factoryPriceCny),usdCostAdjusted?[token(target('productionCostUsd')),1.3]:[token(target('factoryPriceCny')),fields.exchangeRateCnyPerUsd]);
+  }
+  return {lineId:l.id,material,materialLoss,materialWithLoss,process,plating,outsourcing,outsourcingTotal,indirectLabor,rent,water,electricity,depreciation,supplies,indirect,laborTotal,productionCost,productionCostUsd,factoryPriceCny,factoryPriceUsd,...(sourceExcel?{sourceMarkupPriceCny}:{})};
  });
  const amounts=fields.tooling.filter(t=>t.chargeMode==='charge').map(t=>t.amount);
  // Review/print may add paid-receipt or source-quote descriptions. Those do not
  // change the charging instruction and must not silently invalidate its price.
  const toolingBasis=fields.tooling.map(t=>[t.id||'',t.toolingId||'',t.name||'',t.lineIds||[],t.chargeMode,t.amount,t.chargeQuoteId||'',t.chargeVersion??null]);
  const toolingChargeCny=cell(ieAdjustmentTargets.tooling,'整单一次性费用合计',completeSum(amounts),toolingBasis,fields.tooling.some(t=>t.chargeMode==='charge'));
- return {formulaVersion,materialLossRate:.1,factoryMultiplier:1.3,lines,toolingChargeCny,adjustmentCells,warnings};
+ return {formulaVersion,materialLossRate:.1,factoryMultiplier:sourceExcel&&sourceFormula?.factoryMarkupRate!=null?1+sourceFormula.factoryMarkupRate:1.3,lines,toolingChargeCny,adjustmentCells,warnings};
 }

@@ -45,11 +45,11 @@ export function canReviewIeQuote(s:State,m:Member,q:IeQuote){return isIeApprover
 export function ieQuoteIssues(s:State,q:IeQuoteFields & {attachmentRefs?:IeAttachmentRef[];costs?:{formulaVersion?:string}},ownId=''){
  const issues:string[]=ieAttachmentIssues(s,q,ownId),need=(condition:unknown,message:string)=>{if(!condition)issues.push(message);};
  const nameReferenceIssue=validateIeMaterialNameReferences(s,q);if(nameReferenceIssue)issues.push(nameReferenceIssue);
- const costs=calculateIeQuote(q),checklist=costs.formulaVersion==='ie-cost-v5-material-checklist',manualCells=new Map(costs.adjustmentCells.filter(c=>c.applied).map(c=>[c.target,c]));
+ const costs=calculateIeQuote(q),sourceExcel=costs.formulaVersion==='ie-cost-v6-source-excel',checklist=sourceExcel||costs.formulaVersion==='ie-cost-v5-material-checklist',manualCells=new Map(costs.adjustmentCells.filter(c=>c.applied).map(c=>[c.target,c]));
  for(const c of costs.adjustmentCells)if(c.stale)issues.push(c.label+'：计算依据已变动，须重新确认人工调整或恢复自动计算');
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId);need(account?.active,'客户档案不存在或已停用');
  need(q.quoteNo,'填写工程报价编号');need(q.quoteDate,'填写报价日期');need(q.validUntil,'填写报价有效期');need(!q.validUntil||!q.quoteDate||q.validUntil>=q.quoteDate,'有效期不能早于报价日期');need(q.batchId,'填写客户报价批次编号，用于跨款共用模具计费');
- need(q.exchangeRateCnyPerUsd!==null&&q.exchangeRateCnyPerUsd>0,'手填正数汇率（1 USD = x CNY）');need(q.exchangeRateDate,'填写汇率采集日期');need(q.exchangeRateSource,'填写汇率来源');
+ if(sourceExcel){const source=q.sourceFormula;need(source?.sourceFilename,'填写原 Excel 来源文件名');need(source?.sourceSha256,'填写原 Excel 来源 SHA-256 摘要');need(source&&source.costExchangeRateCnyPerUsd!==null&&source.costExchangeRateCnyPerUsd>0,'填写原表美元成本汇率 H63');need(source&&source.quoteExchangeRateCnyPerUsd!==null&&source.quoteExchangeRateCnyPerUsd>0,'填写原表美元报价汇率 I67 / C73');need(source&&source.finalExchangeRateCnyPerUsd!==null&&source.finalExchangeRateCnyPerUsd>0,'填写原表人民币工厂价换算汇率 D73');need(source?.factoryMarkupRate!==null&&source?.factoryMarkupRate!==undefined,'填写原表成本加价比例 I66');}else{need(q.exchangeRateCnyPerUsd!==null&&q.exchangeRateCnyPerUsd>0,'手填正数汇率（1 USD = x CNY）');need(q.exchangeRateDate,'填写汇率采集日期');need(q.exchangeRateSource,'填写汇率来源');}
  q.lines.forEach((l,index)=>{
   const prefix=`第 ${index+1} 款：`;for(const [value,label] of [[l.model,'工厂型号'],[l.color,'颜色 / 色号'],[l.drawingNo,'图纸编号'],[l.drawingRevision,'图纸版本'],[l.structureNotes,'结构分析'],[l.scopeNotes,'报价范围']] as const)need(value,prefix+'填写'+label);
   need(l.quantityMin&&l.quantityMax,prefix+'填写数量档上下限');need(l.quantityMin===null||l.quantityMax===null||l.quantityMax>=l.quantityMin,prefix+'数量档上限不能小于下限');
