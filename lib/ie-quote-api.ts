@@ -1,7 +1,10 @@
 import {adminPolicyInput,adminPolicyReplay,adminPolicyReceipt} from './admin-policy-write';
 import {z} from 'zod';
 import {all,newId,now,strictDate,type CustomerAccount,type Entity,type Member,type State} from './domain';
-import {AppError,audit,commit,json} from './store';
+import {AppError,audit,bucket,commit,json} from './store';
+import {sha} from './workbooks';
+import {readIeWorkbookArchive} from './ie-quote-workbook';
+import {activeIeOfflineConfirmation,canRegisterIeOfflineConfirmation,ieOfflineContentSnapshot,ieOfflineSourceAttachments,type IeOfflineConfirmation} from './ie-quote-offline-confirmation';
 import {ieWorkbookGet,ieWorkbookPost} from './ie-quote-workbook-api';
 import {ieQuoteNotificationGet,ieQuoteNotificationPost} from './ie-quote-notification-api';
 import {memberNotificationMailboxGet,memberNotificationMailboxPost} from './member-notification-mailboxes';
@@ -75,12 +78,28 @@ export async function ieQuotePost(action:string,req:Request,s:State,m:Member):Pr
  const memberMailbox=await memberNotificationMailboxPost(action,req,s,m);if(memberMailbox)return memberMailbox;
  const notification=await ieQuoteNotificationPost(action,req,s,m);if(notification)return notification;
  const workbook=await ieWorkbookPost(action,req,s,m);if(workbook)return workbook;
- if(!['ie-quote-save','ie-quote-submit','ie-quote-review','ie-quote-revise','ie-quote-policy','ie-quote-tooling-register','ie-quote-catalog-save','ie-quote-process-preset-save'].includes(action))return null;allowed(s,m);
+ if(!['ie-quote-save','ie-quote-submit','ie-quote-review','ie-quote-revise','ie-quote-offline-confirm','ie-quote-policy','ie-quote-tooling-register','ie-quote-catalog-save','ie-quote-process-preset-save'].includes(action))return null;allowed(s,m);
  if(action==='ie-quote-policy')return savePolicy(req,s,m);
  if(action==='ie-quote-tooling-register')return saveTooling(req,s,m);
  if(action==='ie-quote-catalog-save')return saveCatalog(req,s,m);
  if(action==='ie-quote-process-preset-save')return saveProcessPreset(req,s,m);
  configured(s);
+ if(action==='ie-quote-offline-confirm'){
+  const input=parse(change.extend({attachmentId:id,evidence:z.string().trim().min(1,'请填写线下主管确认依据').max(4000)}).strict(),await req.json()),before=quote(s,m,input.id);current(before,input.version);editable(s,m,before);
+  if(!canFillIeQuote(s,m)||!canConfigureIeQuotes(m)&&iePolicyMember(s,'engineer')?.id!==m.id)throw new AppError('只有管理员或已绑定工程主管可登记线下确认依据。',403);
+  const previous=activeIeOfflineConfirmation(s,before);
+  if(previous){if(previous.attachmentId===input.attachmentId&&previous.evidence===input.evidence)return json({ok:true,idempotent:true,quote:publicIeQuote(s,m,before)});throw new AppError('此版本已有线下确认登记；修改报价后请针对新版本重新登记。',409);}
+  if(!canRegisterIeOfflineConfirmation(s,m,before))throw new AppError('当前工程报价不能登记线下确认。',409);
+  if(all(s,'ie_quote_offline_confirmation').some(row=>row.quoteId===before.id&&row.quoteVersion===before.version))throw new AppError('此版本的线下确认记录无法核对，请联系管理员检查，不重复登记。',409);
+  const file=ieOfflineSourceAttachments(s,before).find(file=>file.id===input.attachmentId);if(!file)throw new AppError('请选择已上传到本报价且与来源摘要一致的 XLSX 原件。',409);
+  const object=await bucket().get(file.fileKey);if(!object)throw new AppError('确认依据原件暂不可用。',404);const bytes=await new Response(object.body).arrayBuffer();
+  if(bytes.byteLength!==file.size||await sha(bytes)!==file.sha256)throw new AppError('确认依据原件完整性校验未通过。',409);
+  let workbook:ReturnType<typeof readIeWorkbookArchive>;try{workbook=readIeWorkbookArchive(new Uint8Array(bytes));}catch{throw new AppError('确认依据须为可核验的 XLSX 工作簿原件。',409);}if(!workbook['xl/workbook.xml'])throw new AppError('确认依据不是有效 XLSX 工作簿。',409);
+  const costs=calculateIeQuote(before);if(costs.adjustmentCells.some(cell=>cell.stale)||costs.lines.some(line=>[line.productionCost,line.factoryPriceCny,line.factoryPriceUsd].some(value=>value===null||!Number.isFinite(value))))throw new AppError('先保存有效工厂报价，并核对已失效的人工调整后再登记线下确认。',409);
+  const contentSnapshot=ieOfflineContentSnapshot(before),row:IeOfflineConfirmation={id:newId('ie_quote_offline_confirmation'),kind:'ie_quote_offline_confirmation',quoteId:before.id,quoteVersion:before.version,customerAccountId:before.customerAccountId,contentSnapshot,contentSha256:await sha(contentSnapshot),attachmentId:file.id,attachmentSha256:file.sha256,confirmedRole:'engineering-supervisor',evidence:input.evidence,recordedAt:now(),recordedBy:m.name,recordedById:m.id};
+  await commit(s.revision,[row,audit(m,row,null,'登记线下工程主管已确认依据','IE 工程报价',{...row,contentSnapshot:undefined})]);
+  return json({ok:true,quote:publicIeQuote(mergeState(s,[row]),m,before)});
+ }
  if(action==='ie-quote-save'){
   engineering(s,m);const {id,version,...fields}=parse(ieQuoteInput,await req.json()),before=id?quote(s,m,id):null;
   if(before){editable(s,m,before);current(before,version!);if(before.customerAccountId!==fields.customerAccountId)throw new AppError('已保存工程报价不能改为其他客户；请为其他客户新建报价。');if(before.materialPricingMode==='checklist'&&fields.materialPricingMode!=='checklist')throw new AppError('此报价已使用材料清单规则，请刷新页面后保存，避免退回旧计价口径。',409);if(before.manualAdjustments?.length&&fields.manualAdjustments===undefined)throw new AppError('此报价包含人工调整，请刷新到支持人工调整的表格后保存，避免覆盖已确认的人工金额。',409);}

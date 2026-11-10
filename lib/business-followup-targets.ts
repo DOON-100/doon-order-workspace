@@ -37,6 +37,8 @@ import {arInvoiceLedgerGet} from './ar-invoice-ledger-api';
 import {arAttribution} from './ar-workspace';
 import {kingdeeSalesGet} from './kingdee-sales-api';
 import {processKinds} from './process-workspace';
+import {businessFollowupSourceIdentity as sourceIdentity} from './business-followup-scope';
+export {businessFollowupScopeIdentity} from './business-followup-scope';
 
 export type FollowupTargetKey={module:string;collection:string;recordId:string;sectionKey:string};
 export type FollowupTarget=FollowupTargetKey&{label:string;sectionLabel:string;canAppend:boolean};
@@ -72,19 +74,6 @@ function original(s:State,row:Row){const records=s.records.filter(item=>item.id=
 function label(row:Row){return [row.code||row.quoteNo||row.po||row.orderNo||row.number||row.sampleNo||row.drawingNo||row.documentNo,row.title||row.name||row.model||row.itemName||row.drawing||row.customer||row.description||row.reference||row.filename].filter(Boolean).join(' · ').slice(0,500)||String(row.id);}
 export function publicFollowupTarget(target:ResolvedFollowupTarget):FollowupTarget{const {module,collection,recordId,sectionKey,label,sectionLabel,canAppend}=target;return {module,collection,recordId,sectionKey,label,sectionLabel,canAppend};}
 export function followupTargetScope(target:ResolvedFollowupTarget){return {recordKind:target.recordKind,customerId:target.customerId,projectId:target.projectId,orderId:target.orderId,scopeIdentity:target.scopeIdentity};}
-// Legacy orders identify their customer by text. Include that identity and direct
-// source associations so a reassignment cannot expose earlier customer content.
-function sourceIdentity(s:State,row:Entity,seen=new Set<string>()):unknown{
- if(seen.has(row.id))return {id:row.id};const visited=new Set(seen);visited.add(row.id);
- const links:Record<string,unknown>={};for(const name of ['projectId','orderId','lineId','sourceOrderId','sourceId','recordId','taskId','quoteId','quoteLinkId'])if(row[name]){const parent=s.records.find(r=>r.id===row[name]);links[name]=parent&&visited.size<5?sourceIdentity(s,parent,visited):String(row[name]);}
- // Legacy procurement authorization joins the customer order number, which can
- // match several order lines. Freeze every matching source identity, not only
- // the first line, so changing ownership cannot transfer old evidence.
- if(row.kind==='purchase'&&row.customerOrder)links.customerOrders=all(s,'order').filter(order=>order.orderNo===row.customerOrder).sort((a,b)=>a.id.localeCompare(b.id)).map(order=>sourceIdentity(s,order,visited));
- const customerId=String(row.kind==='customer_account'?row.id:row.customerId||row.customerAccountId||'');
- return {id:row.id,kind:row.kind,customerId,...(!customerId?{customer:clean(row.customer).toLowerCase(),customerName:clean(row.customerName).toLowerCase(),customerCode:clean(row.customerCode).toLowerCase(),...(row.kind==='customer_project_followup'?{ownerId:clean(row.ownerId)}:{})}:{}),customerOrder:clean(row.customerOrder),teamId:clean(row.teamId),type:clean(row.type),channel:clean(row.channel),links};
-}
-
 /** The catalog only accepts rows already returned by the original scoped domain API. */
 export async function businessFollowupTargets(req:Request,s:State,m:Member,module:string,projectId='',targetRecordId=''){
  requireMember(s,m);const team=module==='ar-workspace'?(req.headers.get(businessTeamHeader)||'').trim():teamScope(req,s,m);if(team.length>160)throw new AppError('业务小组编号无效。');

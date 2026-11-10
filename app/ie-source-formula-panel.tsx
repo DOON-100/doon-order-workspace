@@ -2,6 +2,7 @@
 import type {ReactNode} from 'react';
 import {ExcelTable} from './excel-table';
 import type {Costs,Quote,SourceFormulaDraft} from './ie-quote-panel';
+import {IE_OFFLINE_CONFIRMED_LABEL,isIeOfflineConfirmed} from './ie-quote-confirmation';
 import './ie-source-formula.css';
 
 const price=(value:number|null|undefined)=>value==null||!Number.isFinite(value)?'待计算':value.toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -10,7 +11,7 @@ function Field({label,children}:{label:string;children:ReactNode}){return <label
 
 export function IeSourceFormulaPanel({quote,costs,editable,dirty,selectedLineId,onChange,onSelectLine}:{quote:Quote;costs:Costs|null;editable:boolean;dirty:boolean;selectedLineId?:string;onChange:(values:Partial<Quote>)=>void;onSelectLine:(id:string)=>void}){
  const source=quote.calculationMode==='source-excel-v1',formula=quote.sourceFormula||defaults();
- const reviewed=quote.status==='released';
+ const reviewed=quote.status==='released',offlineConfirmed=isIeOfflineConfirmed(quote,dirty),confirmationLabel=offlineConfirmed?IE_OFFLINE_CONFIRMED_LABEL:reviewed?'工程已复核':'待 IE 审核';
  const rateValues=[formula.costExchangeRateCnyPerUsd,formula.quoteExchangeRateCnyPerUsd,formula.finalExchangeRateCnyPerUsd].map(value=>value==null||value===''?null:Number(value));
  const uniformRate=rateValues.every(value=>value!==null&&value===rateValues[0])?rateValues[0]:null;
  const changeFormula=(values:Partial<SourceFormulaDraft>)=>onChange({sourceFormula:{...formula,...values},costs:undefined});
@@ -19,16 +20,16 @@ export function IeSourceFormulaPanel({quote,costs,editable,dirty,selectedLineId,
 
  return <section className="ieq-card ieq-source-formula" aria-label="源Excel公式报价">
   <div className="ieq-source-heading">
-   <div><h3>{source?(reviewed?'最终工厂报价':'最终工厂报价（待 IE 审核）'):'报价计算方式'}</h3><p>{source?(uniformRate!==null?'按原表公式，汇率已统一。IE 工程师可继续审核和修改。':'原保存版本的三条汇率尚未统一，填写统一汇率后保存重算。'):'可使用标准核价，或按原 Excel 公式先生成报价，再由 IE 审核和修改。'}</p></div>
+   <div><h3>{source?(offlineConfirmed||reviewed?'最终工厂报价':'最终工厂报价（待 IE 审核）'):'报价计算方式'}</h3><p>{source?(uniformRate!==null?offlineConfirmed?'按原表公式生成，工程主管已在线下确认当前版本。':'按原表公式，汇率已统一。IE 工程师可继续审核和修改。':'原保存版本的三条汇率尚未统一，填写统一汇率后保存重算。'):'可使用标准核价，或按原 Excel 公式先生成报价，再由 IE 审核和修改。'}</p></div>
    <fieldset disabled={!editable}><Field label="报价计算方式"><select aria-label="报价计算方式" value={source?'source-excel-v1':'standard'} onChange={event=>changeMode(event.target.value)}><option value="standard">标准核价</option><option value="source-excel-v1">按原 Excel 公式生成报价</option></select></Field></fieldset>
   </div>
   {source&&<>
-   <div className="ieq-source-status" role="status"><strong>{reviewed?'工程已复核':'待 IE 审核和修改'}</strong><span>{dirty?'保存后生成新版本，以下为当前填写值的计算结果。':'当前保存版本的系统计算结果。'}空白费用按原表公式作为 0 参与计算，原始空值与待核事项仍保留。</span></div>
+   <div className="ieq-source-status" role="status"><strong>{offlineConfirmed||reviewed?confirmationLabel:'待 IE 审核和修改'}</strong><span>{dirty?'保存后生成新版本，以下为当前填写值的计算结果。':'当前保存版本的系统计算结果。'}空白费用按原表公式作为 0 参与计算，原始空值与待核事项仍保留。</span></div>
    <ExcelTable className="ieq-source-result" aria-label="系统生成报价总表">
     <thead><tr><th>厂款 / 客款</th><th>生产成本 CNY / 副</th><th>成本加价后人民币 I66</th><th>最终报价 USD / 副 C73</th><th>最终报价 CNY / 副 D73</th><th>审核状态</th></tr></thead>
     <tbody>{quote.lines.map(line=>{const cost=costs?.lines.find(item=>item.lineId===line.id);return <tr key={line.id}>
      <td><button type="button" className="ieq-source-line-link" aria-pressed={selectedLineId===line.id} onClick={()=>onSelectLine(line.id)}>{line.model||'厂款待填写'}{line.customerModel?' / '+line.customerModel:''}</button></td>
-     <td>{price(cost?.productionCost)}</td><td>{price(cost?.sourceMarkupPriceCny)}</td><td>{price(cost?.factoryPriceUsd)}</td><td>{price(cost?.factoryPriceCny)}</td><td>{reviewed?'工程已复核':'待 IE 审核'}</td>
+     <td>{price(cost?.productionCost)}</td><td>{price(cost?.sourceMarkupPriceCny)}</td><td>{price(cost?.factoryPriceUsd)}</td><td>{price(cost?.factoryPriceCny)}</td><td>{confirmationLabel}</td>
     </tr>;})}</tbody>
    </ExcelTable>
    <details className="ieq-source-config" open>

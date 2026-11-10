@@ -116,6 +116,7 @@ const {testIeAttachmentsAndHandoff}=await import('./ie-quote-attachment-handoff-
 const {testCustomerQuoteIe}=await import('./customer-quote-ie-cases.mjs');await testCustomerQuoteIe(ieHarness);
 const {testIeQuoteWorkbookApi}=await import('./ie-quote-workbook-api-cases.mjs');await testIeQuoteWorkbookApi(ieHarness);
 const {testIeSourceFormulaApi}=await import('./ie-source-formula-api-cases.mjs');await testIeSourceFormulaApi(ieHarness);
+const {testIeOfflineConfirmation}=await import('./ie-offline-confirmation-api-cases.mjs');await testIeOfflineConfirmation(ieHarness);
 const {testIeQuoteChangeLog}=await import('./ie-quote-change-log-cases.mjs');await testIeQuoteChangeLog({pass});
 const {testIeQuoteGrid}=await import('./ie-quote-grid-cases.mjs');await testIeQuoteGrid({pass:pass});
 const {testIeQuoteDraftImport}=await import('./ie-quote-draft-import-cases.mjs');await testIeQuoteDraftImport({pass:pass});
@@ -203,4 +204,6 @@ execFileSync(process.execPath,['tests/metal-outsourcing-cases.mjs'],{stdio:'inhe
 execFileSync(process.execPath,['tests/pdf-original-preview.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/ie-source-formula.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/ie-source-formula-ui.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/ie-offline-confirmation-ui.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/ie-offline-confirmation-imports.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

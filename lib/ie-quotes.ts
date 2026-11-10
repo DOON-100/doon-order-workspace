@@ -7,6 +7,7 @@ import {calculateIeQuote,ieAdjustmentTargets} from './ie-quote-calculation';
 import {ieHandoffFields} from './ie-quote-handoffs';
 import {validateIeMaterialNameReferences} from './ie-material-names';
 import type {IeCatalogMetadata} from './ie-price-catalog';
+import {activeIeOfflineConfirmation,canRegisterIeOfflineConfirmation,publicIeOfflineConfirmation,publicIeOfflineSourceAttachments} from './ie-quote-offline-confirmation';
 export {calculateIeQuote} from './ie-quote-calculation';
 export {canReadIeQuote,readAccess,canFinalApproveIeSales,iePolicyMember,ieQuotePolicy} from './ie-quote-access';
 
@@ -85,7 +86,8 @@ export function publicIeQuote(s:State,m:Member,q:IeQuote){
  const routing=ieQuoteReviewRouting(s,q,m.id),submissionBlockReason=editable?routing.reason:'';
  const account=all(s,'customer_account').find(a=>a.id===q.customerAccountId) as CustomerAccount|undefined;
  const templateStatus=ieTemplateStatus(s,m,q),issues=ieQuoteIssues(s,q,q.id),costs=calculateIeQuote(q);
- return {...q,...ieHandoffFields(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings:costs.warnings,issues,...(editable&&q.materialPricingMode!=='checklist'?{checklistIssues:ieQuoteIssues(s,{...q,materialPricingMode:'checklist',costs:undefined},q.id)}:{}),templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable&&!!routing.reviewer,nextReviewMemberId:editable?routing.reviewer?.id||'':'',submissionBlockReason,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&canFillIeQuote(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
+ const offlineConfirmation=activeIeOfflineConfirmation(s,q),warnings=offlineConfirmation?costs.warnings.map(warning=>warning==='已按原 Excel 公式生成工程报价，仍待 IE 工程师审核和修改；计算结果不表示已复核或已释放。'?'工程主管已在线下确认；本记录为当前版本确认依据登记，不是线上复核签名。':warning):costs.warnings;
+ return {...q,...ieHandoffFields(s,m,q),offlineConfirmation:publicIeOfflineConfirmation(offlineConfirmation),offlineConfirmationAttachments:publicIeOfflineSourceAttachments(s,q),canRegisterOfflineConfirmation:!!latest&&canRegisterIeOfflineConfirmation(s,m,q),attachments:publicIeAttachments(s,q),costs,warnings,issues,...(editable&&q.materialPricingMode!=='checklist'?{checklistIssues:ieQuoteIssues(s,{...q,materialPricingMode:'checklist',costs:undefined},q.id)}:{}),templateStatus,canExportDraftWorkbook:canReadIeQuote(s,m,q),canExportWorkbook:templateStatus.verified&&!issues.length,canEdit:!!editable,canSubmit:!!editable&&!!routing.reviewer,nextReviewMemberId:editable?routing.reviewer?.id||'':'',submissionBlockReason,canReview:!!latest&&canReviewIeQuote(s,m,q),canRevise:!!latest&&q.status==='released'&&canFillIeQuote(s,m),canExport:canReadIeQuote(s,m,q),canHandoff:q.status==='released'&&!!account&&canMaintainCustomerQuoteAccount(s,m,account),
  history:(all(s,'ie_quote_revision') as IeQuoteRevision[]).filter(r=>r.quoteId===q.id&&canReadIeQuote(s,m,r.snapshot)).sort((a,b)=>b.version-a.version).map(({version,revision,action,updatedAt,updatedBy,snapshot})=>({version,revision,action,updatedAt,updatedBy,status:snapshot.status})),
  };
 }
