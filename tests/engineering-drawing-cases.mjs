@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,rawInsert}){
+ await import('./drawing-deadline.mjs');
  const token=()=>crypto.randomUUID(),users={},members={};
  for(const [name,role,departments] of [['engineer','clerk',['engineering']],['reviewer','clerk',['engineering_review']],['upstream','sales',[]],['outsider','sales',[]],['pmc','pmc',[]],['sameName','sales',[]],['viewer','viewer',[]]]){
   users[name]={userId:'drawing_user_'+name,email:'drawing_'+name+'@test.invalid',displayName:name,fullName:name,username:name==='engineer'?'dengkai':name==='reviewer'?'zhengzw':name};
@@ -23,6 +24,18 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  assert.deepEqual(rawRecords(),unchanged);
  await denied('drawing-data',undefined,null,401);
  let record=await save(payload,users.upstream);assert.equal(record.status,'待分配');assert.equal(record.revisionCount,null);
+ const due=(r)=>{if(!r.requestedDate)return '';const d=new Date(r.requestedDate+'T00:00:00Z');let days=r.drawingType==='新款画图'?7:3;while(days){d.setUTCDate(d.getUTCDate()+1);if(d.getUTCDay())days--;}return d.toISOString().slice(0,10);};
+ assert.equal(record.deadline,due(record));
+ let timed=await save({token:token(),tableEntry:true,customerCode:'SYN-DUE',drawingType:'新款画图',deadline:''});assert.equal(timed.requestedDate,'');assert.equal(timed.deadline,'');
+ timed=await save({id:timed.id,version:timed.version,requestedDate:'2026-11-10'});assert.equal(timed.deadline,due(timed));
+ const timedOriginal=structuredClone(rawRecords().find(r=>r.kind==='engineering_drawing_revision'&&r.recordId===timed.id));
+ timed=await save({id:timed.id,version:timed.version,deadline:'2099-01-01'});assert.equal(timed.deadline,'2099-01-01');
+ timed=await save({id:timed.id,version:timed.version,deadline:'2099-01-01',drawingNotes:'完整表单回传未改截止日期'});assert.equal(timed.deadline,due(timed));
+ timed=await save({id:timed.id,version:timed.version,drawingType:'配件图'});assert.equal(timed.deadline,due(timed));
+ timed=await save({id:timed.id,version:timed.version,deadline:''});assert.equal(timed.deadline,'');
+ timed=await save({id:timed.id,version:timed.version,assignee:'邓铠'});assert.equal(timed.deadline,due(timed));
+ assert.deepEqual(rawRecords().find(r=>r.id===timedOriginal.id),timedOriginal);
+ pass('截止日期按已写入的需求发出时间从次日计算，周一至周六7或3工作日，手工日期和清空优先，未填需求日期不生成截止日期');
  assert.equal((await save(payload,users.upstream)).id,record.id);await denied('drawing-save',{...payload,newCount:3},users.upstream,409);
  assert(!(await ok('drawing-data',undefined,users.sameName)).records.some(r=>r.id===record.id));
  for(const name of ['outsider','pmc','viewer']){assert(!(await ok('drawing-data',undefined,users[name])).records.some(r=>r.id===record.id));await denied('drawing-history?id='+record.id,undefined,users[name]);}

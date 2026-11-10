@@ -112,6 +112,8 @@ doon engineering drawings list --search SYN-001 --json
 
 `schema --type save` 的 `tableColumns` 给出全部13列的字段对应关系。字段为 `customerCode`、`drawingType`、`requestedDate`、`newCount`、`revisionCount`、`requester`、`modelNo`、`drawingNotes`、`assignee`、`deadline`、`completedDate`，状态符号使用 `sheetStatus`，审批使用下述独立动作。日期填 `YYYY-MM-DD`；数量空白为 `null`，零为 `0`；文字和日期可用空字符串表示清空。
 
+截止日期按已写入的需求发出时间计算，从该日期的次日开始计数：`新款画图`为7个工作日，其他类型为3个工作日；周一至周六计入，仅跳过周日，暂不扣除法定节假日。尚未填写需求发出时间时不生成截止日期。网页、CLI、审批与邮件更新使用同一规则。工程人员仍可手动修改截止日期：本次明确更改的 `deadline`（包括清空）优先。之后若再次保存且本次没有改截止日期，按当前需求发出时间和画图类型重算；修改需求发出时间或画图类型后同样重算。读取、重复新增请求、删除和历史原表导入不会重算已有截止日期，原始历史版本保持不变。
+
 修改时先 `form <id>` 取得当前版本，然后提交只包含 `id` 和待改字段的 JSON，例如：
 
 ```json

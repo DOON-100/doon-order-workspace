@@ -59,6 +59,8 @@ try{
  const token=randomUUID(),partial={tableEntry:true,customerCode:'SYN-CLI-001'};
  let created=await run(['save','--input',await input(partial),'--version','0','--request-id',token]);const id=created.record.id;
  assert.equal(created.record.requestedDate,'');assert.equal(created.record.tableEntry,true);assert.equal(created.record.customerCode,partial.customerCode);
+ assert.equal(created.record.deadline,'');
+ assert.equal((await webRows()).find(row=>row.id===id).deadline,'');
  assert.equal((await webRows()).find(row=>row.id===id).customerCode,partial.customerCode);
  assert.equal((await run(['save','--input',inputFile,'--version','0','--request-id',token])).record.id,id);assert.equal((await webRows()).length,1);
  await run(['save','--input',await input({...partial,customerCode:'DIFFERENT'}),'--version','0','--request-id',token],'other_engineer','CONFLICT');

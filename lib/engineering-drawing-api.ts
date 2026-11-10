@@ -5,7 +5,7 @@ import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
 import {isDrawingChangeType,planSopObligation} from './engineering-sop';
 import {drawingRequesters,validateDrawingRequester} from './drawing-requesters';
-
+import {drawingDeadline} from './drawing-deadline';
 import {assignedDrawingCustomer,assertDrawingLifecycle,buildImportedDrawings,canApproveDrawings,canCreateDrawings,canEditDrawingRequest,canManageDrawings,canReadDrawing,createDrawing,drawingCustomers,drawingDefaultFields,drawingExecutionFields,drawingFieldsSchema,drawingRequestFields,drawingRevision,drawingSaveSchema,publicDrawing,type DrawingEvent,type EngineeringDrawing} from './engineering-drawings';
 
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const r=schema.safeParse(value);if(!r.success)throw new AppError(r.error.issues.slice(0,4).map(i=>`${i.path.join('.')||'内容'}：${i.message}`).join('；'));return r.data;}
@@ -20,7 +20,8 @@ function account(s:State,m:Member,customerId:string){const c=all(s,'customer_acc
 function assignee(s:State,r:EngineeringDrawing){if(!r.assigneeId)return;const a=all(s,'member').find(a=>a.id===r.assigneeId) as Member|undefined;if(!a||!canManageDrawings(a))throw new AppError('画图人员必须是有效工程画图成员。');if(!r.assignee)r.assignee=a.name;}
 function pending(s:State,r:EngineeringDrawing){return all(s,'engineering_drawing_event').some(e=>e.recordId===r.id&&e.status==='pending');}
 async function isDrawingOwnerAccount(m:Member){const identity=await getChatGPTUser() as {userId?:string;username?:string}|null;return m.active&&!!identity?.userId&&m.userId===identity.userId&&['dengkai','zhengzw'].includes(identity.username||'');}
-function advance(r:EngineeringDrawing,m:Member){return {...r,version:r.version+1,updatedAt:now(),updatedBy:m.name};}
+function scheduledDeadline(r:Pick<EngineeringDrawing,'drawingType'|'requestedDate'>){return r.requestedDate?drawingDeadline(r.drawingType,r.requestedDate):'';}
+function advance(r:EngineeringDrawing,m:Member,recalculate=true){const at=now();return {...r,version:r.version+1,updatedAt:at,updatedBy:m.name,...(recalculate?{deadline:scheduledDeadline(r)}:{})};}
 function changed(a:unknown,b:unknown){return JSON.stringify(a)!==JSON.stringify(b);}
 /** Applying one accepted proposal to the editable fields consumes that event once
  * per field; it is not another instruction. A later genuine change still is. */
@@ -63,7 +64,7 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
   if(archived){if(archived.deletedBy!==m.id||archived.version!==input.version+1||archived.deleteReason!==input.reason)throw new AppError('这条记录已删除，请刷新核对。',409);return json({ok:true,id:input.id,deleted:true,idempotent:true,version:archived.version});}
   current(before,input.version);
 
-  const next=advance(before,m),deleted={...next,kind:'engineering_drawing_deleted',deletedAt:now(),deletedBy:m.id,deleteReason:input.reason};
+  const next=advance(before,m,false),deleted={...next,kind:'engineering_drawing_deleted',deletedAt:now(),deletedBy:m.id,deleteReason:input.reason};
   await commit(s.revision,[deleted,drawingRevision(next,m,'删除画图跟进记录：'+input.reason),audit(m,deleted,before,'删除画图跟进记录：'+input.reason,'工程画图工作台')]);
   return json({ok:true,id:input.id,deleted:true,version:deleted.version});
  }
@@ -158,6 +159,10 @@ async function save(s:State,m:Member,body:unknown){
  if(!before||fields.requester!==before.requester)await validateDrawingRequester(fields.requester);
  if(before&&fields.status==='历史待核对'&&before.status!=='历史待核对')throw new AppError('历史待核对仅用于原表迁移。');
  const r:EngineeringDrawing=before?{...advance(before,m),...fields}:createDrawing(fields,m);
+ // A deadline explicitly changed in this request wins, including a deliberate clear.
+ // An unchanged echo follows the written request date, counted from the next day.
+ const manualDeadline=Object.hasOwn(patch,'deadline')&&(before?fields.deadline!==before.deadline:!!fields.deadline);
+ if(!manualDeadline)r.deadline=scheduledDeadline(r);
  if(!before&&tableEntry)r.tableEntry=true;
  const assigneeChanged=!before||fields.assigneeId!==before.assigneeId||fields.assignee!==before.assignee;
  if(assigneeChanged)assignee(s,r);
@@ -187,6 +192,7 @@ async function emailIntake(s:State,m:Member,body:unknown){
  else{const c=account(s,m,input.request.customerId);if(!input.request.drawingType||!input.request.requestedDate||!input.request.requester)throw new AppError('邮件缺少画图类型、需求日期或需求者，请先人工补充。');
   await validateDrawingRequester(input.request.requester);
   r=createDrawing(drawingFieldsSchema.parse({...input.request,customerCode:input.request.customerCode||c.customerCode||c.customer}),m,{type:'email',messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId});
+  r.deadline=scheduledDeadline(r);
  }
  const event:DrawingEvent={id:eventId,kind:'engineering_drawing_event',recordId:r.id,customerId:r.customerId,messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId,sender:input.sender,subject:input.subject,receivedAt:input.receivedAt,request:input.request,fingerprint:digest,status:before?'pending':'created',reviewNote:'',actorId:m.id,createdAt:now()};
  const sopChanges=!before&&isDrawingChangeType(r.drawingType)?planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'邮件改图需求待明确SOP版本'},'change_instruction',event.id).updates:[];
