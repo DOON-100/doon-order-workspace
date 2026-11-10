@@ -1,0 +1,40 @@
+import {build} from 'esbuild';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import {pathToFileURL} from 'node:url';
+
+export async function testAcetateBom({pass}){
+ const out=path.resolve('test-output/acetate-'+process.pid);await fs.mkdir(out,{recursive:true});
+ const store=`export class AppError extends Error{constructor(m,status=400){super(m);this.status=status}};export const json=v=>Response.json(v);export const audit=(m,r,b,action)=>({id:crypto.randomUUID(),kind:'audit',actorId:m.id,targetId:r.id,action});export async function commit(revision,records){const s=globalThis.__acetateState;if(s.revision!==revision)throw new AppError('conflict',409);for(const r of records){const i=s.records.findIndex(x=>x.id===r.id);if(i<0)s.records.push(r);else s.records[i]=r;}s.revision++;}`;
+ const file=path.join(out,'api.mjs');await build({stdin:{contents:"export * from './lib/acetate-bom';export * from './lib/acetate-bom-api';",resolveDir:process.cwd(),loader:'ts'},outfile:file,bundle:true,format:'esm',platform:'node',packages:'external',plugins:[{name:'acetate-store',setup(b){b.onResolve({filter:/^\.\/store$/},()=>({path:'store',namespace:'acetate'}));b.onLoad({filter:/.*/,namespace:'acetate'},()=>({contents:store}));}}]});
+ const a=await import(pathToFileURL(file).href),near=(x,y)=>assert(Math.abs(x-y)<1e-10,`${x} != ${y}`);
+ const row=(id,part)=>({...a.newAcetateComponent(id,part),supplier:'Synthetic supplier',color:'TEST-01',materialCode:'TEST-AC',length:90,width:part==='frame'?34:6,thickness:4,stockLength:1000,stockWidth:200,trimLength:0,trimWidth:0,kerf:0,weightKg:1,pricePerKg:10});
+ const frame=row('frame','frame'),temple=row('temple','temple'),end={...row('end','endpiece'),length:20,width:10,quantity:4,basis:'blank'};
+ const fields={customerAccountId:'synthetic-customer',model:'SYNTHETIC-01',drawingRevision:'A',orderQuantity:1000,notes:'Synthetic fixture only',components:[frame,temple,end]};
+ const result=a.calculateAcetateBom(fields);assert.equal(result.issues.length,0);assert.deepEqual(result.components.map(r=>r.count),[50,200,1000]);assert.equal(result.materials.length,1);near(result.materials[0].standard,.034);near(result.totalKg,.034);near(result.totalCost,.34);assert.equal(result.materials[0].orderSheets,34);
+ const cnc=a.calculateAcetateComponent({...temple,process:'cnc'},1000);assert.equal(cnc.blankLength,100);assert.equal(cnc.blankWidth,16);
+ const blank=a.calculateAcetateComponent({...temple,basis:'blank'},1000);assert.equal(blank.blankLength,90);assert.equal(blank.blankWidth,6);
+ const stratified=a.calculateAcetateBom({...fields,components:[frame,temple,{...end,color:'TEST-02',thickness:6}]});assert.equal(stratified.materials.length,2);
+ const missing=a.calculateAcetateBom({...fields,components:[frame,{...temple,width:null},end]});assert(missing.issues.length);assert.equal(missing.materials[0].standard,null);assert.equal(missing.totalKg,null);
+ const noWeight=a.calculateAcetateBom({...fields,components:[frame,{...temple,weightKg:null},end]});assert.equal(noWeight.totalKg,null);assert.equal(noWeight.totalCost,null);
+ const stripe=a.calculateAcetateComponent({...frame,pattern:'stripe',rotation:'0',segmentLength:200,rawKerf:0},1000);assert.equal(stripe.count,50);assert(a.calculateAcetateComponent({...frame,pattern:'stripe',segmentLength:200,rawKerf:0},1000).issues.some(s=>s.includes('方向')));
+ assert(a.calculateAcetateComponent({...frame,stockWidth:160,blockWidth:165,blockLength:465,blockTrimWidth:0,blockTrimLength:0,rawKerf:0},1000).issues.length);
+ assert.equal(a.acetateComponentSchema.parse({...frame,thickness:40}).thickness,4);assert.equal(a.acetateComponentSchema.parse({...frame,thickness:'60'}).thickness,6);
+ near(a.calculateAcetateComponent({...frame,weightMode:'density',density:1.38},1000).weight,1.104);
+ assert(a.calculateAcetateComponent({...frame,length:1e-200},1000).issues.length);
+ pass('整副板材BOM：圈/脾/四件庄头逐层汇总，横竖排版、纹向、模具、40/60厚度、缺值不按零、订单独立取整');
+ const member=(id,role)=>({id,kind:'member',name:id,userId:id,email:id+'@test.invalid',role,active:true,customers:[]}),admin=member('test-admin','admin'),engineer=member('test-engineer','production'),reviewer=member('test-reviewer','production'),manager=member('test-manager','production'),outsider=member('test-outsider','viewer');
+ const preserved={id:'original-record',kind:'order',quantity:51,notes:'Synthetic existing record'};
+ globalThis.__acetateState={revision:1,records:[admin,engineer,reviewer,manager,outsider,preserved,{id:fields.customerAccountId,kind:'customer_account',customer:'Synthetic customer'},{id:'policy',kind:'ie_quote_policy',version:1,engineerMemberId:engineer.id,reviewerMemberId:reviewer.id,finalApproverMemberId:manager.id}]};
+ const state=()=>structuredClone(globalThis.__acetateState),snapshot=()=>JSON.stringify(globalThis.__acetateState),input=(over={})=>({version:0,token:crypto.randomUUID(),fields,...over});
+ const post=async(action,body,m=engineer,s=state())=>(await a.acetateBomPost(action,new Request('https://test.invalid/api',{method:'POST',body:JSON.stringify(body)}),s,m)).json();
+ const get=async(id='',m=engineer)=>(await a.acetateBomGet('acetate-boms',new URL('https://test.invalid/api'+(id?'?id='+id:'')),state(),m)).json();
+ const first=input(),saved=await post('acetate-bom-save',first),beforeRepeat=snapshot();assert.equal((await post('acetate-bom-save',first)).idempotent,true);assert.equal(snapshot(),beforeRepeat);let detail=await get(saved.id);assert.equal(detail.history.length,1);near(detail.record.result.totalKg,.034);
+ await post('acetate-bom-save',input({id:saved.id,version:1,fields:{...fields,notes:'Second synthetic revision'}}));detail=await get(saved.id);assert.equal(detail.history.length,2);assert.equal(detail.history[0].fields.notes,fields.notes);assert.equal(detail.record.version,2);
+ const deny=async(body,status,m=engineer)=>{const before=snapshot();await assert.rejects(()=>post('acetate-bom-save',body,m),e=>e.status===status);assert.equal(snapshot(),before);};
+ await deny(input({id:saved.id,version:1}),409);await deny(input(),403,outsider);await deny({...input(),result:{totalKg:0}},400);await deny(input({fields:{...fields,customerAccountId:'not-authorized'}}),403);await deny(input({fields:{...fields,components:[frame,frame]}}),400);assert.throws(()=>a.acetateBomGet('acetate-boms',new URL('https://test.invalid/api'),state(),outsider),e=>e.status===403);
+ const catalog={version:0,token:crypto.randomUUID(),sourceFilename:'synthetic.xlsx',sourceSha256:'b'.repeat(64),stocks:[{id:'stock',specification:'1000*200*4.0',originalSpecification:'1000*200*40',supplier:'Synthetic supplier',length:1000,width:200,thickness:40,usableLength:990,usableWidth:190,weightKg:1,source:'Synthetic!A1'}]};
+ await assert.rejects(()=>post('acetate-bom-catalog-import',catalog),e=>e.status===403);await post('acetate-bom-catalog-import',catalog,admin);assert.equal((await get()).catalog.stocks[0].thickness,4);assert.deepEqual(state().records.find(r=>r.id===preserved.id),preserved);
+ pass('板材BOM服务端：客户授权、拒绝越权与篡改、重复请求幂等、乐观锁、不可变历史、独立规格导入及旧记录保全');delete globalThis.__acetateState;
+}

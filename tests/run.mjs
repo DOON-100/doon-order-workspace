@@ -1,6 +1,7 @@
 // Exercises the actual API handlers against SQLite, including atomic batch guards.
 // Test identities are injected into this temporary bundle only, never into site code.
 import {build} from 'esbuild';
+import {testAcetateBom} from './acetate-bom-cases.mjs';
 import {DatabaseSync} from 'node:sqlite';
 import {AsyncLocalStorage} from 'node:async_hooks';
 import fs from 'node:fs/promises';
@@ -21,6 +22,7 @@ async function call(action,body,user=admin,method=body===undefined?'GET':'POST')
 async function ok(action,body,user=admin){const res=await call(action,body,user),result=await res.json();assert.equal(res.status,200,JSON.stringify(result));return result;}
 const state=()=>ok('data');
 const checks=[];function pass(name){checks.push(name);console.log('PASS '+name);}
+await testAcetateBom({pass});
 function workbook(rows){const book=XLSX.utils.book_new();XLSX.utils.book_append_sheet(book,XLSX.utils.json_to_sheet(rows),'订单');return XLSX.write(book,{type:'buffer',bookType:'xlsx'});}
 async function preview(rows,type='orders',user=admin,bytes){const f=new FormData();f.set('file',new File([bytes||workbook(rows)],type+'.xlsx'));f.set('type',type);const inspect=await ok('inspect',f,user);f.set('mapping',JSON.stringify(inspect.mapping));return ok('preview',f,user);}
 assert.equal((await call('data',undefined,null)).status,401);await ok('enroll',{});assert.equal((await call('data',undefined,clerk)).status,403);pass('匿名及未授权账号无法读取订单');

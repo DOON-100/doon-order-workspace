@@ -9,7 +9,7 @@ import {canVerifyProjectFinance,projectFinanceTotals,type ProjectCharge,type Pro
 export const businessTeamHeader='X-Workspace-Team';
 export const ungroupedBusinessTeam='__ungrouped';
 /** List responses only. Files, direct detail/history and mutations retain their own authorization. */
-const scopedActions=new Set(['data','service-data','customer-project-data','customer-project-followup-data','customer-quotes','customer-quote-completed','customer-quote-templates','customer-price-archive','customer-workflow-data','customer-workflow-tasks','customer-workflow-transfers','handoff-business-data','handoff-business-review-data','unified-communication-data','factory-orders','factory-order-templates','project-finance-data','drawing-data','sop-data','framework-channels','framework-notices','framework-finance-tasks','finished-supplier-data','pmc-data','purchase-data']);
+const scopedActions=new Set(['acetate-boms','data','service-data','customer-project-data','customer-project-followup-data','customer-quotes','customer-quote-completed','customer-quote-templates','customer-price-archive','customer-workflow-data','customer-workflow-tasks','customer-workflow-transfers','handoff-business-data','handoff-business-review-data','unified-communication-data','factory-orders','factory-order-templates','project-finance-data','drawing-data','sop-data','framework-channels','framework-notices','framework-finance-tasks','finished-supplier-data','pmc-data','purchase-data']);
 const ids=(value:unknown):string[]=>Array.isArray(value)?value.filter((id):id is string=>typeof id==='string'):[];
 const key=(value:unknown)=>clean(value).toLowerCase();
 type Row=Record<string,any>;

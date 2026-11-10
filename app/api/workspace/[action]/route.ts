@@ -27,6 +27,7 @@ import {canSeeSupplierPrice} from '@/lib/suppliers';
 import {customerQuoteGet,customerQuotePost} from '@/lib/customer-quote-api';
 import {ieQuoteGet,ieQuotePost} from '@/lib/ie-quote-api';
 import {ieMaterialNamesGet,ieMaterialNamesPost} from '@/lib/ie-material-names-api';
+import {acetateBomGet,acetateBomPost} from '@/lib/acetate-bom-api';
 import {canUseIeQuotes,canFinalApproveIeSales} from '@/lib/ie-quote-access';
 import {customerPriceArchiveGet,customerPriceArchivePost} from '@/lib/customer-price-archive-api';
 import {customerQuotePolicyPost} from '@/lib/customer-quote-policy-api';
@@ -117,6 +118,7 @@ function visibleWorkspaceAudit(s:State,m:Member,record:Entity,orderIds:Set<strin
   return parts.every(v=>v.kind==='service_record'?canReadServiceRecord(s,m,v):v.kind==='service_revision'?!!v.snapshot&&canReadServiceRecord(s,m,v.snapshot):!v.customerId||canReadServiceRecord(s,m,{...serviceRecord,customerId:v.customerId}));
  }
  if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('ie_quote')))return false;
+ if(parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('acetate_')))return false;
  if(parts.some(v=>v.kind==='member_notification_mailbox'))return m.role==='admin';
  if(!parts.some(v=>typeof v.kind==='string'&&v.kind.startsWith('customer_quote')))return broad(m)||orderIds.has(record.lineId);
  if(m.role==='admin')return true;
@@ -154,6 +156,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const materialNames=ieMaterialNamesGet(action,url,s,m);if(materialNames)return materialNames;
+ const acetate=acetateBomGet(action,url,s,m);if(acetate)return acetate;
  const ieQuotation=await ieQuoteGet(action,url,s,m);if(ieQuotation)return ieQuotation;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
  const service=await serviceWorkspaceGet(action,req,s,m);if(service)return service;
@@ -237,6 +240,7 @@ export async function POST(req:Request,ctx:Context){try{
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
  const materialNames=await ieMaterialNamesPost(action,req,s,m);if(materialNames)return materialNames;
+ const acetate=await acetateBomPost(action,req,s,m);if(acetate)return acetate;
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;
  const processWorkspace=await processWorkspacePost(action,req,s,m);if(processWorkspace)return processWorkspace;
