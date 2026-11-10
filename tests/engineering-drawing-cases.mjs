@@ -128,7 +128,7 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  assert.equal((await ok('drawing-import',imported)).imported,2);assert.equal((await ok('drawing-import',imported)).skipped,2);
  const historyRecords=rawRecords().filter(r=>r.kind==='engineering_drawing'&&r.source?.hash==='d'.repeat(64));assert.equal(historyRecords.length,2);
  assert.equal(historyRecords[0].status,'已完成');assert.equal(historyRecords[0].approval,'通过');assert.equal(historyRecords[0].newCount,null);assert.equal(historyRecords[1].status,'历史待核对');assert.equal(historyRecords[1].sheetStatus,'⌛️');assert.deepEqual(historyRecords[0].source.rawColumns,rawColumns);
- for(const name of ['upstream','reviewer','pmc'])assert(!(await ok('drawing-data',undefined,users[name])).records.some(r=>historyRecords.some(h=>h.id===r.id)));
+ for(const name of ['upstream','pmc'])assert(!(await ok('drawing-data',undefined,users[name])).records.some(r=>historyRecords.some(h=>h.id===r.id)));
  assert((await ok('drawing-data',undefined,users.engineer)).records.some(r=>r.id===historyRecords[0].id));
  await denied('drawing-import',imported,users.engineer);assert.equal((await call('drawing-delete',{id:record.id},users.engineer)).status,400);
  const engineerData=await ok('data',undefined,users.engineer);assert.equal(engineerData.orders.length,0);
@@ -139,32 +139,47 @@ export async function testEngineeringDrawings({ok,call,state,pass,rawRecords,raw
  const sharedRow=await save({...payload,customerId:sharedCustomer.id,token:token()},users.upstream);
  assert.equal((await get(sharedRow.id,users.sameName)).canEdit,true);assert.equal((await get(sharedRow.id,users.sameName)).canDelete,false);assert.equal((await remove(sharedRow,users.sameName)).status,403);
  let disposable=await save({...payload,token:token()},users.upstream);
- assert.equal((await get(disposable.id,users.upstream)).canDelete,true);
- for(const user of [users.outsider,users.pmc,users.reviewer,users.viewer])assert.equal((await remove(disposable,user)).status,403);
+ assert.equal((await get(disposable.id,users.upstream)).canDelete,false);
+ assert.equal((await get(disposable.id,users.reviewer)).canDelete,true);
+ assert.equal((await get(disposable.id)).canDelete,true);
+ for(const user of [users.outsider,users.pmc,users.upstream,users.viewer])assert.equal((await remove(disposable,user)).status,403);
  assert.equal((await remove(disposable,null)).status,401);
  assert.equal((await remove(disposable,users.engineer,{reason:''})).status,400);
  disposable=await save({id:disposable.id,version:disposable.version,drawingNotes:'合成待删除备注'});
  assert.equal((await remove({...disposable,version:disposable.version-1})).status,409);
  const preserved=structuredClone(rawRecords()),original=preserved.find(r=>r.id===disposable.id);
- assert.equal((await remove(disposable,users.upstream)).status,200);
+ assert.equal((await remove(disposable,users.reviewer)).status,200);
  assert.equal(await get(disposable.id),undefined);
- const archived=rawRecords().find(r=>r.id===disposable.id);assert.equal(archived.kind,'engineering_drawing_deleted');assert.equal(archived.version,disposable.version+1);assert.equal(archived.deletedBy,members.upstream.id);assert.equal(archived.drawingNotes,original.drawingNotes);
+ const archived=rawRecords().find(r=>r.id===disposable.id);assert.equal(archived.kind,'engineering_drawing_deleted');assert.equal(archived.version,disposable.version+1);assert.equal(archived.deletedBy,members.reviewer.id);assert.equal(archived.drawingNotes,original.drawingNotes);
  const persisted=new Map(rawRecords().map(r=>[r.id,r]));
  for(const old of preserved.filter(r=>r.id!==disposable.id))assert.deepEqual(persisted.get(old.id),old);
  const removedHistory=await ok('drawing-history?id='+disposable.id,undefined,users.upstream);assert(removedHistory.history.some(r=>r.action.startsWith('删除画图')));
- const deletionAudit=rawRecords().find(r=>r.kind==='audit'&&r.targetId===disposable.id&&r.action.startsWith('删除画图'));assert.deepEqual(deletionAudit.before,original);assert.equal(deletionAudit.actorId,members.upstream.id);
- const afterDelete=structuredClone(rawRecords());assert.equal((await remove(disposable,users.upstream)).status,200);assert.deepEqual(rawRecords(),afterDelete);
+ const deletionAudit=rawRecords().find(r=>r.kind==='audit'&&r.targetId===disposable.id&&r.action.startsWith('删除画图'));assert.deepEqual(deletionAudit.before,original);assert.equal(deletionAudit.actorId,members.reviewer.id);
+ const afterDelete=structuredClone(rawRecords());assert.equal((await remove(disposable,users.reviewer)).status,200);assert.deepEqual(rawRecords(),afterDelete);
  await denied('drawing-save',{id:disposable.id,version:archived.version,drawingNotes:'不能复活'},users.engineer);
  await denied('drawing-history?id='+disposable.id,undefined,users.outsider);
- assert.equal((await remove(disposable,users.upstream,{reason:'不同原因'})).status,409);
- assert.equal((await remove(historyRecords[0])).status,409);
- assert.equal((await remove(detailed)).status,409);
- assert.equal((await remove(await get(mailRecord.id))).status,409);
- assert.equal((await remove(await get(ordered[0].id))).status,409);
- assert.equal((await get(ordered[0].id)).canDelete,false);assert.match((await get(ordered[0].id)).deleteBlockedReason,/SOP/);
+ assert.equal((await remove(disposable,users.reviewer,{reason:'不同原因'})).status,409);
+ const sopBefore=await ok('sop-data',undefined,users.engineer);
+ for(const row of [historyRecords[0],detailed,await get(mailRecord.id),await get(ordered[0].id)]){
+  assert.equal((await get(row.id,users.reviewer)).canDelete,true);
+  assert.equal((await remove(row,users.reviewer)).status,200);
+ }
+ const sopAfter=await ok('sop-data',undefined,users.engineer);
+ assert.deepEqual(sopAfter.records.map(r=>r.id).sort(),sopBefore.records.map(r=>r.id).sort());
+ for(const row of sopBefore.records)assert.deepEqual((await ok('sop-history?id='+row.id,undefined,users.engineer)).history.length>0,true);
+ const adminDenied=await call('drawing-delete',{id:sharedRow.id,version:sharedRow.version,reason:'权限校验'});assert.equal(adminDenied.status,403);
+ for(const username of ['DENGKAI','邓铠','郑伟忠','']){
+  const identity={...users.engineer,username};assert.equal((await get(sharedRow.id,identity)).canDelete,false);assert.equal((await remove(sharedRow,identity)).status,403);
+ }
+ for(const [name,role] of [['impostor','admin'],['engineerOther','clerk']]){
+  const user={userId:'drawing_'+name,username:name,displayName:'邓铠',fullName:'邓铠',email:name+'@test.invalid'};
+  rawInsert({id:'drawing_member_'+name,kind:'member',userId:user.userId,name:'邓铠',role,departments:['engineering'],active:true,customers:[],createdAt:'2026-11-10T00:00:00Z'});
+  assert.equal((await get(sharedRow.id,user)).canDelete,false);assert.equal((await remove(sharedRow,user)).status,403);
+ }
+
  assert.equal((await remove(historyRecords[1])).status,200);assert.equal((await ok('drawing-import',imported)).skipped,2);assert.equal(await get(historyRecords[1].id),undefined);
  const raceTarget=await save({token:token(),tableEntry:true,customerCode:'SYN-DELETE-RACE'});
  const results=await Promise.all([remove(raceTarget),call('drawing-save',{id:raceTarget.id,version:raceTarget.version,drawingNotes:'并发修改'},users.engineer)]);
  assert.deepEqual(results.map(r=>r.status).sort(),[200,409]);
- pass('删除逐行校验权限和版本，保留原记录及历史审计、重试幂等；已审批或关联业务拒绝，导入及旧写入不能复活，删除与修改不能并发覆盖');
+ pass('删除逐行校验权限和版本，保留原记录及历史审计、重试幂等；仅两指定登录账号可删除所有状态且关联SOP仍可读，导入及旧写入不能复活，删除与修改不能并发覆盖');
 }

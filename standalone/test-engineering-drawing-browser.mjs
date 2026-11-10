@@ -147,6 +147,14 @@ try{
  assert.equal(JSON.stringify((await api('workspace/drawing-data')).records),preservedRecords);
  pass('画图权限读取失败立即隐藏旧表，重新核对后恢复且不写入原数据');
  const deleteFixture=(await api('workspace/drawing-save',{token:crypto.randomUUID(),tableEntry:true,customerCode:'SYN-DELETE',requestedDate:today,drawingNotes:'合成待删除需求'})).record;
+ assert.equal(deleteFixture.canDelete,false);
+ await page.getByRole('button',{name:'刷新',exact:true}).click();
+ assert.equal(await page.getByRole('button',{name:`删除画图记录 SYN-DELETE ${today}`,exact:true}).count(),0);
+ await api('auth/accounts',{username:'dengkai',name:'合成画图维护账号',role:'clerk',departments:['engineering'],password:'Synthetic-Drawing-Owner-2026!'});
+ await api('auth/login',{username:'dengkai',password:'Synthetic-Drawing-Owner-2026!'});
+ await api('auth/password',{currentPassword:'Synthetic-Drawing-Owner-2026!',password:'Synthetic-Drawing-Owner-Changed-2026!'});
+ const ownerSplit=cookie.indexOf('=');await context.addCookies([{name:cookie.slice(0,ownerSplit),value:cookie.slice(ownerSplit+1),url:origin,httpOnly:true,sameSite:'Strict'}]);
+ await page.reload();await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await page.locator('.ed-table').waitFor();
  await page.getByRole('button',{name:'刷新',exact:true}).click();await wrap.evaluate(el=>{el.scrollLeft=0;});
  const deleteButton=page.getByRole('button',{name:`删除画图记录 SYN-DELETE ${today}`,exact:true});await deleteButton.waitFor();
  await board();await page.locator('.etb-card').filter({hasText:'SYN-DELETE'}).waitFor();await page.getByRole('button',{name:'画图跟进表',exact:true}).click();await deleteButton.waitFor();

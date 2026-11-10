@@ -5,7 +5,7 @@ import {AppError,audit,commit,json} from './store';
 import {sha} from './workbooks';
 import {isDrawingChangeType,planSopObligation} from './engineering-sop';
 import {drawingRequesters,validateDrawingRequester} from './drawing-requesters';
-import {canDeleteDrawing,drawingDeleteBlockedReason} from './engineering-drawings';
+
 import {assignedDrawingCustomer,assertDrawingLifecycle,buildImportedDrawings,canApproveDrawings,canCreateDrawings,canEditDrawingRequest,canManageDrawings,canReadDrawing,createDrawing,drawingCustomers,drawingDefaultFields,drawingExecutionFields,drawingFieldsSchema,drawingRequestFields,drawingRevision,drawingSaveSchema,publicDrawing,type DrawingEvent,type EngineeringDrawing} from './engineering-drawings';
 
 function parse<T extends z.ZodTypeAny>(schema:T,value:unknown):z.output<T>{const r=schema.safeParse(value);if(!r.success)throw new AppError(r.error.issues.slice(0,4).map(i=>`${i.path.join('.')||'内容'}：${i.message}`).join('；'));return r.data;}
@@ -13,13 +13,13 @@ const id=z.string().trim().min(1).max(800),version=z.number().int().positive();
 const text=(max=3000)=>z.string().trim().max(max).default('');
 function stable(value:unknown):unknown{if(Array.isArray(value))return value.map(stable);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,stable(v)]));return value;}
 async function fingerprint(value:unknown){return sha(JSON.stringify(stable(value)));}
-function readable(s:State,m:Member,id:string,includeDeleted=false):EngineeringDrawing{const item=s.records.find(r=>r.id===id&&(r.kind==='engineering_drawing'||includeDeleted&&r.kind==='engineering_drawing_deleted')),r=item?{...item,kind:'engineering_drawing'} as EngineeringDrawing:undefined;if(!r||!canReadDrawing(s,m,r))throw new AppError('画图需求不存在或不在你的客户权限范围内。',403);return r;}
+function readable(s:State,m:Member,id:string,includeDeleted=false,allDrawings=false):EngineeringDrawing{const item=s.records.find(r=>r.id===id&&(r.kind==='engineering_drawing'||includeDeleted&&r.kind==='engineering_drawing_deleted')),r=item?{...item,kind:'engineering_drawing'} as EngineeringDrawing:undefined;if(!r||!allDrawings&&!canReadDrawing(s,m,r))throw new AppError('画图需求不存在或不在你的客户权限范围内。',403);return r;}
 function current(r:EngineeringDrawing,v:number|undefined){if(r.version!==v)throw new AppError('这条画图需求已被更新，请刷新核对后再保存；本次没有覆盖。',409);}
 function lifecycle(r:EngineeringDrawing){try{assertDrawingLifecycle(r);}catch(e){throw new AppError((e as Error).message);}}
 function account(s:State,m:Member,customerId:string){const c=all(s,'customer_account').find(c=>c.id===customerId) as CustomerAccount|undefined;if(!c?.active)throw new AppError('请选择有效客户责任档案。');if(!canManageDrawings(m)&&!assignedDrawingCustomer(m,c))throw new AppError('只能提交明确绑定给本人的客户需求。',403);return c;}
 function assignee(s:State,r:EngineeringDrawing){if(!r.assigneeId)return;const a=all(s,'member').find(a=>a.id===r.assigneeId) as Member|undefined;if(!a||!canManageDrawings(a))throw new AppError('画图人员必须是有效工程画图成员。');if(!r.assignee)r.assignee=a.name;}
 function pending(s:State,r:EngineeringDrawing){return all(s,'engineering_drawing_event').some(e=>e.recordId===r.id&&e.status==='pending');}
-async function canToggleDrawingApproval(m:Member){const identity=await getChatGPTUser() as {userId?:string;username?:string}|null;return m.active&&m.userId===identity?.userId&&['dengkai','zhengzw'].includes(identity?.username||'');}
+async function isDrawingOwnerAccount(m:Member){const identity=await getChatGPTUser() as {userId?:string;username?:string}|null;return m.active&&!!identity?.userId&&m.userId===identity.userId&&['dengkai','zhengzw'].includes(identity.username||'');}
 function advance(r:EngineeringDrawing,m:Member){return {...r,version:r.version+1,updatedAt:now(),updatedBy:m.name};}
 function changed(a:unknown,b:unknown){return JSON.stringify(a)!==JSON.stringify(b);}
 /** Applying one accepted proposal to the editable fields consumes that event once
@@ -34,21 +34,22 @@ function adoptedSopApplication(s:State,m:Member,before:EngineeringDrawing,r:Engi
  }
  return null;
 }
-async function persist(s:State,m:Member,r:EngineeringDrawing,before:EngineeringDrawing|null,action:string,extra:Entity[]=[]){await commit(s.revision,[r,drawingRevision(r,m,action),audit(m,r,before,action,'工程画图工作台'),...extra]);return json({ok:true,record:publicDrawing(s,m,r),item:publicDrawing(s,m,r)});}
+async function persist(s:State,m:Member,r:EngineeringDrawing,before:EngineeringDrawing|null,action:string,extra:Entity[]=[]){await commit(s.revision,[r,drawingRevision(r,m,action),audit(m,r,before,action,'工程画图工作台'),...extra]);return json({ok:true,record:publicDrawing(s,m,r,await isDrawingOwnerAccount(m)),item:publicDrawing(s,m,r,await isDrawingOwnerAccount(m))});}
 
 export async function engineeringDrawingGet(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
  if(!['drawing-data','drawing-history'].includes(action))return null;
  if(action==='drawing-data'){
-  const records=(all(s,'engineering_drawing') as EngineeringDrawing[]).filter(r=>canReadDrawing(s,m,r)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),ids=new Set(records.map(r=>r.id));
-  return json({records:records.map(r=>publicDrawing(s,m,r)),customers:drawingCustomers(s,m).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),
+  const owner=await isDrawingOwnerAccount(m);
+  const records=(all(s,'engineering_drawing') as EngineeringDrawing[]).filter(r=>owner||canReadDrawing(s,m,r)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),ids=new Set(records.map(r=>r.id));
+  return json({records:records.map(r=>publicDrawing(s,m,r,owner)),customers:drawingCustomers(s,m).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),
    members:(all(s,'member') as Member[]).filter(a=>canManageDrawings(a)||canApproveDrawings(a)).map(a=>({id:a.id,name:a.name,active:a.active,canManage:canManageDrawings(a),canApprove:canApproveDrawings(a)})),
    requesters:canCreateDrawings(s,m)||canApproveDrawings(m)?await drawingRequesters()||[]:[],
    events:all(s,'engineering_drawing_event').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    details:all(s,'engineering_drawing_detail').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
-   canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canToggleApproval:await canToggleDrawingApproval(m)});
+   canCreate:canCreateDrawings(s,m),canManage:canManageDrawings(m),canApprove:canApproveDrawings(m),canToggleApproval:await isDrawingOwnerAccount(m)});
  }
- const record=readable(s,m,new URL(req.url).searchParams.get('id')||'',true);
- return json({history:all(s,'engineering_drawing_revision').filter(r=>r.recordId===record.id&&r.snapshot&&canReadDrawing(s,m,r.snapshot)).sort((a,b)=>b.version-a.version),
+ const owner=await isDrawingOwnerAccount(m),record=readable(s,m,new URL(req.url).searchParams.get('id')||'',true,owner);
+ return json({history:all(s,'engineering_drawing_revision').filter(r=>r.recordId===record.id&&r.snapshot&&(owner||canReadDrawing(s,m,r.snapshot))).sort((a,b)=>b.version-a.version),
   events:all(s,'engineering_drawing_event').filter(e=>e.recordId===record.id&&e.customerId===record.customerId),details:all(s,'engineering_drawing_detail').filter(e=>e.recordId===record.id&&e.customerId===record.customerId)});
 }
 
@@ -56,12 +57,12 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
  if(!['drawing-save','drawing-delete','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
  if(action==='drawing-delete'){
   const input=parse(z.object({id,version,reason:z.string().trim().min(1).max(1000)}).strict(),await req.json());
-  const before=readable(s,m,input.id,true);
-  if(!canDeleteDrawing(s,m,before))throw new AppError('只有工程维护人员或有当前客户编辑权限的创建者可以删除。',403);
+  if(!await isDrawingOwnerAccount(m))throw new AppError('仅 dengkai 和 zhengzw 登录账号可以删除画图跟进记录。',403);
+  const before=readable(s,m,input.id,true,true);
   const archived=s.records.find(r=>r.id===input.id&&r.kind==='engineering_drawing_deleted');
   if(archived){if(archived.deletedBy!==m.id||archived.version!==input.version+1||archived.deleteReason!==input.reason)throw new AppError('这条记录已删除，请刷新核对。',409);return json({ok:true,id:input.id,deleted:true,idempotent:true,version:archived.version});}
   current(before,input.version);
-  const blocked=drawingDeleteBlockedReason(s,before);if(blocked)throw new AppError(blocked,409);
+
   const next=advance(before,m),deleted={...next,kind:'engineering_drawing_deleted',deletedAt:now(),deletedBy:m.id,deleteReason:input.reason};
   await commit(s.revision,[deleted,drawingRevision(next,m,'删除画图跟进记录：'+input.reason),audit(m,deleted,before,'删除画图跟进记录：'+input.reason,'工程画图工作台')]);
   return json({ok:true,id:input.id,deleted:true,version:deleted.version});
@@ -77,7 +78,7 @@ export async function engineeringDrawingPost(action:string,req:Request,s:State,m
  }
  if(action==='drawing-save')return save(s,m,await req.json());
  if(action==='drawing-approval-toggle'){
-  if(!await canToggleDrawingApproval(m))throw new AppError('仅 dengkai 和 zhengzw 登录账号可以勾选画图审批。',403);
+  if(!await isDrawingOwnerAccount(m))throw new AppError('仅 dengkai 和 zhengzw 登录账号可以勾选画图审批。',403);
   const input=parse(z.object({id,version,checked:z.boolean(),sheetStatus:z.enum(['⌛️','❗❗']).optional()}).strict(),await req.json()),before=readable(s,m,input.id);current(before,input.version);
   if((before.approval==='通过')===input.checked)throw new AppError('审批状态已变化，请刷新后核对。',409);
   if(input.checked){
@@ -135,7 +136,7 @@ async function save(s:State,m:Member,body:unknown){
  const fields=parse(drawingFieldsSchema,{...drawingDefaultFields(),...previous,...patch});
  if(!before&&tableEntry&&!['customerCode','drawingType','requestedDate','newCount','revisionCount','requester','modelNo','drawingNotes','assignee','deadline','completedDate'].some(k=>String(fields[k as keyof typeof fields]??'').trim())&&fields.sheetStatus!=='❗❗')throw new AppError('空白行无需保存，请先填写内容。');
  const mutationKey=!before?`drawing_create_${await fingerprint({actorId:m.id,token})}`:'',digest=!before?await fingerprint(tableEntry?{...patch,tableEntry:true}:patch):'';
- if(!before){const prior=s.records.find(e=>e.id===mutationKey);if(prior){if(prior.fingerprint!==digest)throw new AppError('操作标识已用于不同需求，请重新核对。',409);const record=readable(s,m,prior.recordId);return json({ok:true,idempotent:true,record:publicDrawing(s,m,record),item:publicDrawing(s,m,record)});}}
+ if(!before){const prior=s.records.find(e=>e.id===mutationKey);if(prior){if(prior.fingerprint!==digest)throw new AppError('操作标识已用于不同需求，请重新核对。',409);const record=readable(s,m,prior.recordId);return json({ok:true,idempotent:true,record:publicDrawing(s,m,record,await isDrawingOwnerAccount(m)),item:publicDrawing(s,m,record,await isDrawingOwnerAccount(m))});}}
  const defaults=drawingDefaultFields(),comparison=before||defaults;
  for(const key of Object.keys(patch)){
   if(!changed(fields[key as keyof typeof fields],comparison[key as keyof typeof comparison]))continue;
@@ -180,7 +181,7 @@ const emailSchema=z.object({messageId:z.string().trim().min(1).max(800),itemKey:
 async function emailIntake(s:State,m:Member,body:unknown){
  if(!canManageDrawings(m))throw new AppError('邮箱接入只允许已登录的工程授权账号或管理员；此接口不是公开 webhook。',403);
  const input=parse(emailSchema,body),eventId=`drawing_event_${await fingerprint({messageId:input.messageId,itemKey:input.itemKey})}`,digest=await fingerprint(input),prior=all(s,'engineering_drawing_event').find(e=>e.id===eventId);
- if(prior){if(prior.fingerprint!==digest)throw new AppError('相同邮件及明细标识已记录不同内容，请人工核对，禁止覆盖。',409);const record=readable(s,m,prior.recordId);return json({ok:true,idempotent:true,record:publicDrawing(s,m,record),event:prior});}
+ if(prior){if(prior.fingerprint!==digest)throw new AppError('相同邮件及明细标识已记录不同内容，请人工核对，禁止覆盖。',409);const record=readable(s,m,prior.recordId);return json({ok:true,idempotent:true,record:publicDrawing(s,m,record,await isDrawingOwnerAccount(m)),event:prior});}
  let before:EngineeringDrawing|null=null,r:EngineeringDrawing;
  if(input.recordId){before=readable(s,m,input.recordId);if(input.request.customerId!==before.customerId)throw new AppError('邮件变更的客户与关联需求不一致。');r=advance(before,m);}
  else{const c=account(s,m,input.request.customerId);if(!input.request.drawingType||!input.request.requestedDate||!input.request.requester)throw new AppError('邮件缺少画图类型、需求日期或需求者，请先人工补充。');
@@ -190,5 +191,5 @@ async function emailIntake(s:State,m:Member,body:unknown){
  const event:DrawingEvent={id:eventId,kind:'engineering_drawing_event',recordId:r.id,customerId:r.customerId,messageId:input.messageId,itemKey:input.itemKey,threadId:input.threadId,sender:input.sender,subject:input.subject,receivedAt:input.receivedAt,request:input.request,fingerprint:digest,status:before?'pending':'created',reviewNote:'',actorId:m.id,createdAt:now()};
  const sopChanges=!before&&isDrawingChangeType(r.drawingType)?planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'邮件改图需求待明确SOP版本'},'change_instruction',event.id).updates:[];
  await commit(s.revision,[r,drawingRevision(r,m,before?'收取邮件变更（待核对）':'邮件新画图需求'),event,audit(m,r,before,before?'收取邮件变更（待核对）':'邮件新画图需求','授权邮箱接入'),...sopChanges]);
- return json({ok:true,record:publicDrawing(s,m,r),event});
+ return json({ok:true,record:publicDrawing(s,m,r,await isDrawingOwnerAccount(m)),event});
 }
