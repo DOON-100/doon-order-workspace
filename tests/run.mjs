@@ -208,4 +208,7 @@ execFileSync(process.execPath,['tests/ie-source-formula.mjs'],{stdio:'inherit',w
 execFileSync(process.execPath,['tests/ie-source-formula-ui.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/ie-offline-confirmation-ui.mjs'],{stdio:'inherit',windowsHide:true});
 execFileSync(process.execPath,['tests/ie-offline-confirmation-imports.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/ie-quote-selection.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/ie-quote-documents-ui.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/ie-quote-originals-ui.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));

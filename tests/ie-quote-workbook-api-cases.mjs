@@ -22,6 +22,16 @@ export async function testIeQuoteWorkbookApi({ok,call,pass,rawRecords,rawInsert,
  const record=rawRecords().find(r=>r.kind==='ie_quote_template'&&r.quoteId===q.id);assert(record.sourceFileKey&&record.preparedFileKey&&record.sourceFileKey!==record.preparedFileKey);
  if(files){assert.deepEqual(new Uint8Array(files.get(record.sourceFileKey)),bytes);assert.notDeepEqual(new Uint8Array(files.get(record.preparedFileKey)),bytes);}
  q=(await ok(`ie-quote?id=${q.id}`,undefined,engineer)).quote;assert.equal(q.canExportWorkbook,true);
+ const readOnlyBefore=rawRecords().map(row=>JSON.stringify(row));
+ assert.equal(q.templateStatus.filename,'synthetic-template.xlsx');assert.equal(q.templateStatus.canDownloadSource,false);assert.equal(q.templateStatus.canDownloadPrepared,true);assert.equal(q.templateStatus.registeredQuoteVersion,record.quoteVersion);assert(!JSON.stringify(q.templateStatus).includes('FileKey'));
+ const sourceOriginal=await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=source`);assert.equal(sourceOriginal.status,200);assert.deepEqual(new Uint8Array(await sourceOriginal.arrayBuffer()),bytes);assert.equal(sourceOriginal.headers.get('cache-control'),'no-store');
+ const preparedOriginal=await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=prepared`,undefined,engineer);assert.equal(preparedOriginal.status,200);assert.deepEqual(new Uint8Array(await preparedOriginal.arrayBuffer()),new Uint8Array(files.get(record.preparedFileKey)));
+ assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=source`,undefined,engineer)).status,403);
+ assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=prepared`,undefined,outsiderUser)).status,403);
+ assert.equal((await call(`ie-quote-template-file?id=${q.id}&kind=prepared`,undefined,engineer)).status,400);
+ assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=unknown`,undefined,engineer)).status,400);
+ if(files){const original=files.get(record.sourceFileKey);files.set(record.sourceFileKey,new Uint8Array([9,8,7]).buffer);assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=source`)).status,409);files.delete(record.sourceFileKey);assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=source`)).status,404);files.set(record.sourceFileKey,original);}
+ assert.deepEqual(rawRecords().map(row=>JSON.stringify(row)),readOnlyBefore);
  const exported=await call(`ie-quote-export?id=${q.id}&version=${q.version}`,undefined,engineer);assert.equal(exported.status,200,await exported.clone().text());assert(exported.headers.get('content-type').includes('spreadsheetml'));const output=unzipSync(new Uint8Array(await exported.arrayBuffer()));
  const allXml=Object.entries(output).filter(([name])=>name.endsWith('.xml')).map(([,value])=>strFromU8(value)).join('\n');assert(!allXml.includes('OTHER-CUSTOMER-SECRET'));assert(!allXml.includes('OLD-CUSTOMER-PRICE'));assert(!allXml.includes('OLD-MATERIAL-DO-NOT-RETAIN'));assert(!output['xl/media/image2.png']);assert(output['xl/media/image1.png']);
  const complete=fields(q),incomplete=fields(q);incomplete.lines[0].materials[0].basePrice=null;incomplete.exchangeRateCnyPerUsd=null;incomplete.lines[0].materials[0].unit='';incomplete.lines[0].processes[0].standardSeconds=null;q=(await ok('ie-quote-save',incomplete,engineer)).quote;
@@ -35,6 +45,9 @@ export async function testIeQuoteWorkbookApi({ok,call,pass,rawRecords,rawInsert,
  assert.equal((await call('ie-quote-template-register',form(oldQuote))).status,409);
  fillCopy=await call(`ie-quote-draft-export?id=${q.id}&version=${q.version}`,undefined,engineer);assert.equal(fillCopy.status,200);assert.equal(fillCopy.headers.get('X-IE-Workbook-Mode'),'generic');assert(!Object.keys(unzipSync(new Uint8Array(await fillCopy.arrayBuffer()))).some(n=>n.includes('/media/')));
  fillCopy=await call(`ie-quote-draft-export?id=${q.id}&version=${oldVersion}`,undefined,engineer);assert.equal(fillCopy.status,200);assert.equal(fillCopy.headers.get('X-IE-Workbook-Mode'),'original');
+ assert.equal((await call(`ie-quote-template-file?id=${q.id}&version=${q.version}&kind=prepared`,undefined,engineer)).status,409);
+ const historicalTemplate=await call(`ie-quote-template-file?id=${q.id}&version=${oldVersion}&kind=prepared`,undefined,engineer);assert.equal(historicalTemplate.status,200);assert.deepEqual(new Uint8Array(await historicalTemplate.arrayBuffer()),new Uint8Array(files.get(record.preparedFileKey)));
+ pass('IE模板原件只读下载：源Excel仅管理员，打印副本按报价权限，明确历史版本与摘要校验；无版本、越权、缺件和篡改拒绝，读取不改记录');
  pass('IE 模板API：仅管理员明确映射注册，原件私存不变，错客户/款式拒绝，导出只含所选原版图片且清除历史，图纸改版和过期绑定均阻断');
  pass('IE 草稿Excel API：缺价/汇率仍可下载未审填报稿且不写记录，原版优先、无模板用干净通用格式；旧版可追溯，越权/无版本/篡改模板阻断，正式导出继续严格');
 }

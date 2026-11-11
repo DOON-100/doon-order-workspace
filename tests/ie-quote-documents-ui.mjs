@@ -40,4 +40,13 @@ try{
 
  mount({historical:true,quote:{...quote,canEdit:false}});assert.equal(nodes().some(n=>n.type==='input'&&n.props.type==='file'),false);open();await flush();assert.ok(dialog());assert.equal(errors.length,0);
  console.log('PASS authorized historical diagrams stay readable while upload controls remain absent');
+
+ mount();const selectedFile=new File(['synthetic original'],'synthetic-selected.png',{type:'image/png'});
+ nodes().find(n=>n.type==='input'&&n.props.type==='file').props.onChange({target:{files:[selectedFile]}});render();assert.equal(dirty.at(-1),true);
+ handler=()=>new Promise(resolve=>{complete=resolve;});open();const inactiveRequest=requests.at(-1),inactiveCreated=created.length;
+ props={...props,active:false};render();assert.equal(dialog(),undefined);assert.equal(inactiveRequest.options.signal.aborted,true);assert.equal(dirty.at(-1),true);assert.equal(nodes().find(n=>n.type==='fieldset'&&n.props.className==='ieq-document-upload').props.disabled,true);
+ complete(new Response(new Blob(['LATE HIDDEN ORIGINAL'],{type:'image/png'})));await flush();assert.equal(created.length,inactiveCreated);assert.equal(dialog(),undefined);
+ props={...props,active:true};render();assert.equal(dirty.at(-1),true);assert.equal(button('上传并保存').props.disabled,false);assert.equal(errors.length,0);
+ console.log('PASS inactive quote tabs withdraw and abort portals while preserving the pending upload selection for return');
+
 }finally{cleanup();URL.createObjectURL=create;URL.revokeObjectURL=revoke;delete globalThis.__ieDocumentHooks;delete globalThis.__ieDocumentFetch;delete globalThis.__ieDocumentTeam;}

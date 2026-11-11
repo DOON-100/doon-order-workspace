@@ -1,6 +1,7 @@
 import {z} from 'zod';
 import {all,newId,now,type Member,type State} from './domain';
-import {AppError,audit,bucket,commit,json} from './store';
+import {actor,AppError,audit,bucket,commit,json,snapshot} from './store';
+import {sha} from './workbooks';
 import {canConfigureIeQuotes,canReadIeQuote} from './ie-quote-access';
 import {calculateIeQuote,currentIeQuote,ieQuoteIssues,ieQuoteVersion,releasedIeSnapshot,type IeQuote} from './ie-quotes';
 import {ieQuoteTemplate,ieTemplateFingerprint,ieTemplateStatus,type IeQuoteTemplate} from './ie-quote-template';
@@ -22,9 +23,24 @@ export async function buildIeQuoteWorkbookAttachment(s:State,m:Member,q:IeQuote)
  }catch(e){if(e instanceof IeWorkbookError)throw new AppError(e.message,409);throw e;}
 }
 export async function ieWorkbookGet(action:string,url:URL,s:State,m:Member):Promise<Response|null>{
- if(!['ie-quote-template-status','ie-quote-export','ie-quote-draft-export'].includes(action))return null;
+ if(!['ie-quote-template-status','ie-quote-template-file','ie-quote-export','ie-quote-draft-export'].includes(action))return null;
  const q=quoted(s,m,url.searchParams.get('id')||'',Number(url.searchParams.get('version')));
  if(action==='ie-quote-template-status')return json({templateStatus:ieTemplateStatus(s,m,q)});
+ if(action==='ie-quote-template-file'){
+  const kind=url.searchParams.get('kind');if(kind!=='source'&&kind!=='prepared')throw new AppError('请选择源 Excel 原件或已整理打印副本。');
+  if(kind==='source'&&!canConfigureIeQuotes(m))throw new AppError('完整源 Excel 可能含其他客户和历史资料，仅管理员可下载。',403);
+  const template=ieQuoteTemplate(s,q);if(!template)throw new AppError('所选报价版本尚未绑定原 Excel 模板。',409);
+  const fileKey=kind==='source'?template.sourceFileKey:template.preparedFileKey,expected=kind==='source'?template.sourceSha256:template.preparedSha256;
+  const object=await bucket().get(fileKey);if(!object)throw new AppError('所选版本的 Excel 原件暂不可用。',404);
+  const bytes=await new Response(object.body).arrayBuffer();if(!bytes.byteLength||bytes.byteLength>IE_TEMPLATE_MAX_BYTES||await sha(bytes)!==expected)throw new AppError('Excel 原件完整性校验未通过。',409);
+  // A file read yields; membership, quote visibility and the exact template must
+  // still match before any potentially cross-customer source bytes are returned.
+  const fresh=await snapshot(),member=await actor(fresh),selected=quoted(fresh,member,q.id,q.version),latest=ieQuoteTemplate(fresh,selected);
+  if(member.id!==m.id||!latest||latest.id!==template.id||(kind==='source'?latest.sourceFileKey:latest.preparedFileKey)!==fileKey||(kind==='source'?latest.sourceSha256:latest.preparedSha256)!==expected)throw new AppError('登录或模板关联已变化，请重新读取所选版本。',409);
+  if(kind==='source'&&!canConfigureIeQuotes(member))throw new AppError('完整源 Excel 仅管理员可下载。',403);
+  const filename=safeFilename((kind==='source'?'源Excel原件_':'已整理打印副本_')+template.filename);
+  return new Response(bytes,{headers:{'Content-Type':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','Content-Disposition':`attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,'Content-Length':String(bytes.byteLength),'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; sandbox",'Referrer-Policy':'no-referrer'}});
+ }
  if(action==='ie-quote-draft-export'){
   const template=ieQuoteTemplate(s,q);let source:Parameters<typeof exportIeQuoteDraftWorkbook>[1]['template'];
   if(template){const object=await bucket().get(template.preparedFileKey);if(!object)throw new AppError('已登记的原版打印模板副本暂不可用，请恢复后再导出。',404);source={bytes:new Uint8Array(await new Response(object.body).arrayBuffer()),expectedSha256:template.preparedSha256,sheetBindings:template.sheetBindings};}
