@@ -12,7 +12,7 @@ export type DrawingSource={type:'manual'|'excel'|'email';filename?:string;sheet?
 export type EngineeringDrawing=Entity & {
  kind:'engineering_drawing';version:number;customerId:string;customerCode:string;drawingType:string;requestedDate:string;
  newCount:number|null;revisionCount:number|null;requester:string;modelNo:string;drawingNotes:string;assigneeId:string;assignee:string;
- deadline:string;completedDate:string;approval:DrawingApproval;status:DrawingStatus;upstreamDepartment:string;priority:'普通'|'紧急';
+ deadlineMode?:'auto'|'manual';deadline:string;completedDate:string;approval:DrawingApproval;status:DrawingStatus;upstreamDepartment:string;priority:'普通'|'紧急';
  requirement:string;downstream:string;deliveredDate:string;deliveryNote:string;source:DrawingSource;legacyNeedsReview:boolean;
  sheetStatus:'⌛️'|'❗❗';approvalNote:string;approvalBy:string;approvalAt:string;createdAt:string;updatedAt:string;updatedBy:string;createdBy:string;
 };
