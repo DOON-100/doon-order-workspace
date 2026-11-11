@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import {createHash} from 'node:crypto';
+import WebSocket,{WebSocketServer} from 'ws';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {createGateway} from '../integrations/chatwoot/gateway.mjs';
+const {createGateway}=await import(process.env.DOON_CHATWOOT_GATEWAY_MODULE||'../integrations/chatwoot/gateway.mjs');
 
 const listen=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',()=>resolve('http://127.0.0.1:'+server.address().port)));
 const close=server=>new Promise(resolve=>{server.closeAllConnections?.();server.close(resolve);});
@@ -13,11 +13,14 @@ const tokenA='a'.repeat(43),tokenB='b'.repeat(43);
 const user=id=>({username:'synthetic-'+id,personnelType:'internal',role:'sales',mustChange:false,identity:{id,name:'Synthetic '+id,email:id+'@test.invalid'}});
 const sessions=new Map([[tokenA,user('a')],[tokenB,user('b')]]),users=new Map(),sso=new Map();
 let sessionReads=0,upstreamFailed=false,middleFailed=false,publicOrigin,proxied,websocketCount=0;
+const receivedFrames=[];
 const middle=http.createServer((req,res)=>{sessionReads++;res.setHeader('Content-Type','application/json');res.statusCode=middleFailed?503:200;res.end(JSON.stringify({user:sessions.get((req.headers.cookie||'').split('=')[1])||null}));});
 const app=http.createServer(async(req,res)=>{
  let body='';for await(const chunk of req)body+=chunk;
  const data=body?JSON.parse(body):null;
  res.setHeader('Content-Type','application/json');
+ if(req.url.startsWith('/vite/assets/'))res.setHeader('Content-Type',req.url.includes('html-fallback')?'text/html':'application/javascript');
+ if(req.url.includes('asset-cookie'))res.setHeader('Set-Cookie','synthetic=only; Path=/');
  if(upstreamFailed){res.statusCode=503;return res.end('{}');}
  if(req.url.startsWith('/platform/'))assert.equal(req.headers.api_access_token,'synthetic-platform-token');
  if(req.url==='/platform/api/v1/users'&&req.method==='POST'){
@@ -34,7 +37,10 @@ const app=http.createServer(async(req,res)=>{
  }
  proxied={path:req.url,headers:req.headers};res.end(JSON.stringify({ok:true}));
 });
-app.on('upgrade',(req,socket)=>{websocketCount++;const accept=createHash('sha1').update(req.headers['sec-websocket-key']+'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');socket.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+'\r\n\r\n');socket.on('error',()=>{});socket.on('end',()=>socket.end());});
+const upstreamSockets=new WebSocketServer({noServer:true});
+app.on('upgrade',(req,socket,head)=>upstreamSockets.handleUpgrade(req,socket,head,ws=>{
+ websocketCount++;ws.on('error',()=>{});ws.on('message',bytes=>{receivedFrames.push(JSON.parse(bytes.toString()));ws.send(JSON.stringify({ack:receivedFrames.length}));});
+}));
 let gateway,passed=0;
 try{
  const middleOrigin=await listen(middle),appOrigin=await listen(app),reserved=http.createServer();publicOrigin=await listen(reserved);await close(reserved);
@@ -60,8 +66,22 @@ try{
  const before=sessionReads;assert.equal((await request('/api/v1/profile',{headers})).status,200);assert.equal((await request('/api/v1/profile',{headers})).status,200);assert.equal(sessionReads,before+2);passed++;
  sessions.set(tokenA,{...user('a'),role:'viewer'});assert.equal((await request('/api/v1/profile',{headers})).status,401);sessions.set(tokenA,user('a'));passed++;
  const other=await request('/chatwoot/enter',{headers:{Cookie:'doon_session='+tokenB}});assert.equal(other.status,302);assert.equal(users.size,2);passed++;
- const socket=await new Promise((resolve,reject)=>{const req=http.request(publicOrigin+'/cable?pubsub_token=synthetic-pubsub-1',{headers:{...headers,Origin:publicOrigin,Connection:'Upgrade',Upgrade:'websocket','Sec-WebSocket-Key':Buffer.alloc(16,1).toString('base64'),'Sec-WebSocket-Version':'13'}});req.on('upgrade',(_,value)=>resolve(value));req.on('response',response=>reject(Error('Upgrade rejected '+response.statusCode)));req.on('error',reject);req.end();});
- const disconnected=new Promise(resolve=>socket.on('close',resolve));socket.on('error',()=>{});sessions.delete(tokenA);await Promise.race([disconnected,new Promise((_,reject)=>setTimeout(()=>reject(Error('Revoked websocket stayed connected')),1500).unref())]);assert.equal(websocketCount,1);passed++;
+ assert.match((await request('/vite/assets/synthetic-12345678.js',{headers})).headers.get('cache-control'),/private.*immutable/);passed++;
+ for(const pathname of ['/vite/assets/unversioned.js','/vite/assets/html-fallback-12345678.js','/vite/assets/asset-cookie-12345678.js','/api/v1/profile','/app/accounts/17/dashboard','/rails/active_storage/synthetic'])assert.equal((await request(pathname,{headers})).headers.get('cache-control'),'no-store');passed++;
+ for(const pathname of ['/dashboard/images/onboarding/omnichannel-inbox.png','/dashboard/images/onboarding/teams.png','/dashboard/images/onboarding/canned-responses.png','/dashboard/images/onboarding/labels.png','/audio/dashboard/ding.mp3']){assert.equal((await request(pathname,{headers})).status,200);assert.equal(proxied.path,pathname);}passed++;
+ assert.equal((await request('/dashboard/images/onboarding/labels.png',{method:'POST',headers:{...headers,Origin:publicOrigin}})).status,403);passed++;
+ const connect=()=>new Promise((resolve,reject)=>{const ws=new WebSocket(publicOrigin.replace('http:','ws:')+'/cable',['actioncable-v1-json','actioncable-unsupported'],{headers:{...headers,Origin:publicOrigin}});ws.on('error',()=>{});ws.once('open',()=>resolve(ws));ws.once('error',reject);});
+ const identifier=JSON.stringify({channel:'RoomChannel',pubsub_token:'synthetic-pubsub-1',account_id:17,user_id:1});
+ const socket=await connect();const acknowledged=new Promise(resolve=>socket.once('message',resolve));const subscribe=JSON.stringify({command:'subscribe',identifier});socket.send(subscribe.slice(0,20),{fin:false});socket.send(subscribe.slice(20),{fin:true});await acknowledged;assert.equal(receivedFrames.at(-1).identifier,identifier);assert.equal(socket.protocol,'actioncable-v1-json');passed++;
+ const presenceAck=new Promise(resolve=>socket.once('message',resolve));socket.send(JSON.stringify({command:'message',identifier,data:JSON.stringify({action:'update_presence'})}));await presenceAck;assert.equal(receivedFrames.at(-1).command,'message');passed++;
+ for(const invalid of [{...JSON.parse(identifier),pubsub_token:'another-user-token'},{...JSON.parse(identifier),account_id:18},{...JSON.parse(identifier),user_id:2},{...JSON.parse(identifier),channel:'AnotherChannel'}]){
+  const rejected=await connect(),before=receivedFrames.length,closed=new Promise(resolve=>rejected.once('close',resolve));rejected.send(JSON.stringify({command:'subscribe',identifier:JSON.stringify(invalid)}));await Promise.race([closed,new Promise((_,reject)=>setTimeout(()=>reject(Error('Invalid subscription stayed connected')),1500).unref())]);assert.equal(receivedFrames.length,before);passed++;
+ }
+ for(const payload of [Buffer.from(subscribe),'{invalid json',JSON.stringify({command:'message',identifier,data:JSON.stringify({action:'another_action'})}),'x'.repeat(70000)]){
+  const rejected=await connect(),before=receivedFrames.length,closed=new Promise(resolve=>rejected.once('close',resolve));rejected.send(payload);await Promise.race([closed,new Promise((_,reject)=>setTimeout(()=>reject(Error('Invalid websocket payload stayed connected')),1500).unref())]);assert.equal(receivedFrames.length,before);passed++;
+ }
+ const disconnected=new Promise(resolve=>socket.on('close',resolve));sessions.delete(tokenA);await Promise.race([disconnected,new Promise((_,reject)=>setTimeout(()=>reject(Error('Revoked websocket stayed connected')),1500).unref())]);assert.ok(websocketCount>=1);passed++;
+ assert.equal((await request('/vite/assets/synthetic-12345678.js',{headers})).status,401);passed++;
  assert.equal((await request('/api/v1/profile',{headers})).status,401);passed++;
  sessions.set(tokenA,user('a'));await close(gateway);gateway=await createGateway(config);await new Promise(resolve=>gateway.listen(Number(new URL(publicOrigin).port),'127.0.0.1',resolve));assert.equal((await request('/chatwoot/enter')).status,302);assert.equal(users.size,2);assert.equal(Object.keys(JSON.parse(await readFile(path.join(root,'identities.json'),'utf8'))).length,2);passed++;
  upstreamFailed=true;assert.equal((await request('/chatwoot/enter')).status,503);passed++;

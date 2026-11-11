@@ -16,7 +16,7 @@
 
 网关在服务端申请并消费 Chatwoot 一次性登录凭据，将原生前端需要的会话信息写入 Cookie 后直接跳转原生工作区。浏览器地址不携带登录令牌，原生注册、密码登录和密码重置接口不向员工开放。
 
-每次页面/API 请求重新验证中台登录，成功鉴权结果不缓存；并发中的相同检查可合并。身份绑定同时包含当前会话、员工、角色及 Chatwoot 工作区。角色变化、账号停用、登录失效或鉴权服务异常均拒绝继续读取。WebSocket 连接建立时检查身份，存续时每 15 秒复核；撤销至断开存在该检查间隔，不能宣称实时零延迟撤销。
+每次网络页面/API 请求重新验证中台登录，成功鉴权结果不缓存；并发中的相同检查可合并。身份绑定同时包含当前会话、员工、角色及 Chatwoot 工作区。角色变化、账号停用、登录失效或鉴权服务异常均拒绝继续读取。WebSocket 按原生 ActionCable 协议，在订阅帧中校验 RoomChannel、员工、工作区与 pubsub token；不要求原生客户端在连接 URL 中传 token。只转发获授权订阅和原生 update_presence，拒绝跨身份订阅、二进制、异常或超大消息。连接建立时检查中台身份，存续时每 15 秒复核；撤销至断开存在该检查间隔，不能宣称实时零延迟撤销。
 
 试运行沿用一个空工作区，普通内部成员映射为 agent，中台管理员映射为 administrator。尚未接入真实渠道；收件箱、客户责任范围及共享会话权限应在接入真实业务之前独立设计和验收，不能将免登录通过视为消息权限已全面对应。
 
@@ -27,6 +27,16 @@
 3. `config/postgres.env` 仅含新实例的库名、用户名与随机密码；`config/redis.conf` 使用独立随机密码及持久化设置。
 4. 在新数据库完成迁移后，用 `bootstrap.rb` 初始化一个空工作区和 Platform App。它只允许空安装；输出凭据到指定私有文件，禁止覆盖已有初始化结果。
 5. `config/gateway.json` 包含 `publicOrigin`、`middleSessionUrl`、`chatwootOrigin`、`platformToken`、`bindingKey`、`accountId`、`stateDir` 和 `sessionCookieName`。服务端凭据只留在受限配置文件中。
+
+网关使用锁定的 `ws` 依赖解析原生 WebSocket 帧，不自行实现帧协议。先在仓库执行 `npm ci` 与 `node integrations/chatwoot/build-gateway.mjs`，将 `test-output/chatwoot-gateway/gateway.mjs` 及同目录 `ws-LICENSE.txt` 上传所选独立发布目录；部署的是包含依赖的 bundle，不能再直接把未打包源码放进纯 Node 镜像。替换只读绑定的网关文件后，仅重新创建 gateway 服务以更新挂载，不重启中台或 Agent。
+
+## 首屏资源与缓存
+
+原生界面的图标和样式资源较大。将 `vite-compression.conf` 仅包含在现有 Chatwoot `/vite/` 代理 location 内，执行 `nginx -t` 后热加载；不修改其他业务路径或跳过员工鉴权。它为 JS、CSS 和 SVG 启用 gzip，并保留 `Vary: Accept-Encoding`。
+
+原生入门图片使用 `/dashboard/images/`，提示音使用 `/audio/dashboard/`。核对既有路由后，将 `native-static-routes.conf` 中的两个 location 加入同一 HTTPS server，继续通过身份网关读取。不能将整个 `/dashboard/` 或中台的 `/assets/` 转发给 Chatwoot；网关拒绝这两类静态路径的写请求。
+
+仅 `/vite/assets/` 中带构建指纹的静态文件，在鉴权且上游成功、未设置 Cookie 时返回浏览器私有长期缓存。它们不包含员工会话或业务内容；未命中浏览器缓存的请求仍经网关鉴权。页面、API、附件、未带指纹的资源与鉴权失败继续使用 no-store，不能因此缓存业务响应或鉴权结果。
 
 试运行容器的内存上限合计约 1.6 GiB，数据库与 Redis 无宿主机端口；网关只绑定宿主机回环地址。该配置用于低并发验证，不能据此承诺正式容量。
 

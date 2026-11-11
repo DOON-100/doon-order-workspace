@@ -4,6 +4,7 @@ import {createHash,createHmac,randomBytes,timingSafeEqual} from 'node:crypto';
 import {mkdir,readFile,writeFile,rename} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
+import WebSocket,{WebSocketServer} from 'ws';
 
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const bindingName='doon_chatwoot_binding';
@@ -98,14 +99,18 @@ export async function createGateway(config){
   if(req.headers.uid&&req.headers.uid!==binding.email)throw fail(403,'Chatwoot 身份与当前中台账号不一致。');
   const account=url.pathname.match(/^\/(?:api\/v[12]|app)\/accounts\/([^/]+)/)?.[1];
   if(account&&account!==String(config.accountId))throw fail(403,'无权访问该 Chatwoot 工作区。');
-  if(url.pathname==='/cable'&&url.searchParams.get('pubsub_token')!==binding.pubsub)throw fail(403,'实时会话身份不一致。');
+  if(url.pathname==='/cable'&&url.searchParams.has('pubsub_token')&&url.searchParams.get('pubsub_token')!==binding.pubsub)throw fail(403,'实时会话身份不一致。');
  }
- function allowed(url){return /^\/(?:app(?:\/|$)|vite(?:\/|$)|packs(?:\/|$)|brand-assets(?:\/|$)|assets(?:\/|$)|api\/v[12](?:\/|$)|rails\/active_storage(?:\/|$)|cable$|auth\/(?:validate_token|sign_out)$)/.test(url.pathname);}
+ function allowed(url){return /^\/(?:app(?:\/|$)|vite(?:\/|$)|packs(?:\/|$)|brand-assets(?:\/|$)|dashboard\/images(?:\/|$)|audio\/dashboard(?:\/|$)|assets(?:\/|$)|api\/v[12](?:\/|$)|rails\/active_storage(?:\/|$)|cable$|auth\/(?:validate_token|sign_out)$)/.test(url.pathname);}
  function proxy(req,res){
   const options={hostname:upstream.hostname,port:upstream.port||80,path:req.url,method:req.method,headers:{...req.headers,host:origin.host,'x-forwarded-host':origin.host,'x-forwarded-proto':origin.protocol.slice(0,-1),cookie:(req.headers.cookie||'').split(';').filter(value=>!value.trim().startsWith(sessionCookieName+'=')&&!value.trim().startsWith(bindingName+'=')).join(';')}};
   delete options.headers['api_access_token'];delete options.headers.authorization;
   const target=(upstream.protocol==='https:'?https:http).request(options,response=>{
-   const output={...response.headers,'cache-control':'no-store','referrer-policy':'no-referrer'};
+   // Only fingerprinted, user-independent build assets may be cached. HTML,
+   // API responses, attachments and authorization failures remain no-store.
+   const staticType=/^(?:application\/(?:javascript|font-woff|x-font-woff)|text\/(?:javascript|css)|font\/woff2?|image\/(?:svg\+xml|png|webp|jpeg))(?:;|$)/.test(response.headers['content-type']||'');
+   const asset=['GET','HEAD'].includes(req.method)&&/^\/vite\/assets\/[\w.-]+-[\w-]{8,}\.(?:js|css|woff2?|svg|png|webp|jpg|jpeg)$/.test(new URL(req.url,origin).pathname)&&[200,304].includes(response.statusCode)&&staticType&&!response.headers['set-cookie'];
+   const output={...response.headers,'cache-control':asset?'private, max-age=31536000, immutable':'no-store','referrer-policy':'no-referrer'};
    if(output['set-cookie'])output['set-cookie']=output['set-cookie'].filter(value=>!value.startsWith(sessionCookieName+'=')&&!value.startsWith(bindingName+'='));
    if(output.location){try{const location=new URL(output.location,origin);if(location.origin!==origin.origin||location.pathname==='/app/login'||location.pathname==='/')output.location='/chatwoot/enter';}catch{output.location='/chatwoot/enter';}}
    res.writeHead(response.statusCode,output);response.pipe(res);
@@ -124,16 +129,41 @@ export async function createGateway(config){
   if(!binding){if(req.method==='GET'&&url.pathname.startsWith('/app'))return redirect(res,'/chatwoot/enter');throw fail(401,'请从邮箱页面重新进入 Chatwoot。');}
   if(req.method==='GET'&&url.pathname==='/chatwoot/session'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true}));}
   if(!allowed(url))throw fail(403,'该 Chatwoot 入口未开放。');
+  if(/^\/(?:dashboard\/images|audio\/dashboard)(?:\/|$)/.test(url.pathname)&&!['GET','HEAD'].includes(req.method))throw fail(403,'静态资源仅支持读取。');
   if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.headers.origin!==origin.origin)throw fail(403,'请求来源不正确。');
   checkScope(req,url,binding);proxy(req,res);
  }catch(error){errorResponse(req,res,error);}});
+ const websocketServer=new WebSocketServer({noServer:true,maxPayload:65536,perMessageDeflate:false,handleProtocols:protocols=>protocols.has('actioncable-v1-json')?'actioncable-v1-json':false});
+ server.on('close',()=>{for(const client of websocketServer.clients)client.terminate();websocketServer.close();});
  server.on('upgrade',async(req,socket,head)=>{try{
   if(req.headers.host!==origin.host||req.headers.origin!==origin.origin)throw fail(403,'Invalid origin');
   const url=new URL(req.url,origin);if(url.pathname!=='/cable')throw fail(403,'Invalid websocket path');
   const auth=await authenticate(req),binding=bound(req,auth);if(!binding)throw fail(401,'Session missing');checkScope(req,url,binding);
-  const target=http.request({hostname:upstream.hostname,port:upstream.port||80,path:req.url,headers:{...req.headers,host:origin.host,cookie:''}});
-  target.on('upgrade',(_,remote,remoteHead)=>{socket.write('HTTP/1.1 101 Switching Protocols\r\n'+Object.entries(_.headers).map(([key,value])=>key+': '+value).join('\r\n')+'\r\n\r\n');if(remoteHead.length)socket.write(remoteHead);if(head.length)remote.write(head);socket.pipe(remote).pipe(socket);let checking=false;const timer=setInterval(async()=>{if(checking)return;checking=true;try{const current=await authenticate(req);if(!bound(req,current))throw Error('Revoked');}catch{socket.destroy();remote.destroy();}finally{checking=false;}},config.websocketRecheckMs||15000);timer.unref();socket.on('close',()=>{clearInterval(timer);remote.destroy();});remote.on('close',()=>{clearInterval(timer);socket.destroy();});remote.on('error',()=>socket.destroy());socket.on('error',()=>remote.destroy());});
-  target.on('error',()=>socket.destroy());target.on('response',response=>{response.resume();socket.end('HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n');});target.end();
+  if(!(req.headers['sec-websocket-protocol']||'').split(',').map(value=>value.trim()).includes('actioncable-v1-json'))throw fail(403,'Unsupported websocket protocol');
+  websocketServer.handleUpgrade(req,socket,head,client=>{
+   const target=new URL('/cable',upstream);target.protocol=target.protocol==='https:'?'wss:':'ws:';
+   const remote=new WebSocket(target,'actioncable-v1-json',{headers:{Host:origin.host,Origin:origin.origin,'X-Forwarded-Proto':origin.protocol.slice(0,-1)},handshakeTimeout:8000,maxPayload:2*1024*1024,perMessageDeflate:false});
+   let subscription=null,queued=[],queuedBytes=0,checking=false;
+   const stop=()=>{clearInterval(timer);client.terminate();remote.terminate();};
+   const reject=()=>{client.close(1008,'Invalid subscription');remote.terminate();};
+   client.on('message',(bytes,binary)=>{try{
+    if(binary)throw Error('Text commands required');
+    const command=JSON.parse(bytes.toString()),identifier=JSON.parse(command.identifier);
+    // Native ActionCable carries identity in the subscription frame, not its URL.
+    if(!identifier||identifier.channel!=='RoomChannel'||identifier.pubsub_token!==binding.pubsub||String(identifier.account_id)!==String(binding.account)||String(identifier.user_id)!==String(binding.id)||Object.keys(identifier).some(key=>!['channel','pubsub_token','account_id','user_id'].includes(key)))throw Error('Identity mismatch');
+    if(command.command==='subscribe'){if(subscription&&subscription!==command.identifier)throw Error('Multiple subscriptions');subscription=command.identifier;}
+    else if(command.command==='unsubscribe'){if(subscription!==command.identifier)throw Error('Unknown subscription');subscription=null;}
+    else if(command.command==='message'){const data=JSON.parse(command.data);if(subscription!==command.identifier||data.action!=='update_presence'||Object.keys(data).some(key=>key!=='action'))throw Error('Unsupported action');}
+    else throw Error('Unsupported command');
+    if(remote.readyState===WebSocket.OPEN){if(remote.bufferedAmount>65536)throw Error('Backpressure');remote.send(bytes,{binary:false});}
+    else if(remote.readyState===WebSocket.CONNECTING){queuedBytes+=bytes.length;if(queuedBytes>65536)throw Error('Queue full');queued.push(bytes);}
+    else throw Error('Upstream closed');
+   }catch{reject();}});
+   remote.on('open',()=>{for(const bytes of queued)remote.send(bytes,{binary:false});queued=[];queuedBytes=0;});
+   remote.on('message',(bytes,binary)=>{if(client.readyState!==WebSocket.OPEN)return;if(client.bufferedAmount>2*1024*1024)return stop();client.send(bytes,{binary});});
+   const timer=setInterval(async()=>{if(checking)return;checking=true;try{const current=await authenticate(req);if(!bound(req,current))throw Error('Revoked');}catch{stop();}finally{checking=false;}},config.websocketRecheckMs||15000);timer.unref();
+   client.on('close',stop);remote.on('close',stop);client.on('error',stop);remote.on('error',stop);
+  });
  }catch{socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');}});
  return server;
 }

@@ -1,0 +1,11 @@
+import {build} from 'esbuild';
+import {mkdir,readFile,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('../..',import.meta.url));
+const output=path.resolve(process.env.DOON_CHATWOOT_BUILD_DIR||path.join(root,'test-output/chatwoot-gateway'));
+if(!output.startsWith(path.join(root,'test-output')+path.sep))throw Error('Gateway build must use an isolated test-output directory');
+await mkdir(output,{recursive:true});
+await build({entryPoints:[path.join(root,'integrations/chatwoot/gateway.mjs')],outfile:path.join(output,'gateway.mjs'),bundle:true,platform:'node',target:'node24',format:'esm',banner:{js:"import {createRequire as __doonRequire} from 'node:module';const require=__doonRequire(import.meta.url);"}});
+await writeFile(path.join(output,'ws-LICENSE.txt'),await readFile(path.join(root,'node_modules/ws/LICENSE')));
+console.log('Built standalone Chatwoot gateway with its locked WebSocket dependency.');
