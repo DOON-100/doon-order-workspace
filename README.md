@@ -145,3 +145,5 @@ node standalone/test-service-host.mjs
 后续改动按 `AGENTS.md` 完成检查后提交并推送到 `origin/main`；GitHub 同步不自动部署或重启正式服务。
 
 本机提交前保护：执行 `git config --local core.hooksPath .githooks` 后，Git 提交会先检查暂存路径；已有自定义钩子时先整合，不覆盖原检查。GitHub 上的轻量检查作为补充，不能撤回已经上传的内容，也不能替代内容审查。
+
+采购下的[板料清单](docs/acetate-materials.md)统一基础资料，并向整副BOM、中英内部订单提供版本化用料引用和颜色图。

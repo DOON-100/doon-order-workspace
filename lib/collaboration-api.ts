@@ -1,3 +1,6 @@
+import {appendAcetateAdoptions} from './acetate-material-export';
+import {resolveAcetateMaterial} from './acetate-materials-api';
+import {acetateMaterialReferenceSchema} from './acetate-materials';
 import {assertHandoffProductionGate} from './handoff-production-gate';
 import {z} from 'zod';
 import {all,broad,canRead,clean,newId,now,productTypeOf,strictDate,type CustomerAccount,type Entity,type Member,type Order,type State} from './domain';
@@ -83,7 +86,7 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
   const template=all(s,'collaboration_template').filter(t=>t.templateType==='factory-order'&&t.customer===orders[0].customer).at(-1);
   let bytes:ArrayBuffer|undefined;if(template){const f=await bucket().get(template.fileKey);if(!f)throw new AppError('内部订单模板文件缺失。');bytes=await new Response(f.body).arrayBuffer();}
   const reference=clean(new URL(req.url).searchParams.get('reference')||template?.reference);const projected=orders.map(o=>reference?{...o,extra:{...o.extra,'翻单参考':reference}}:o);
-  return download(factoryWorkbook(projected,latest,bytes),`中英内部订单_${safe(orders[0].orderNo)}_${safe(orders[0].customerPO)}.xlsx`);
+  return download(await appendAcetateAdoptions(factoryWorkbook(projected,latest,bytes),projected,latest),`中英内部订单_${safe(orders[0].orderNo)}_${safe(orders[0].customerPO)}.xlsx`);
  }
  if(action==='factory-order-templates'){if(!roles(m))throw new AppError('无权查看模板。',403);return json({templates:all(s,'collaboration_template').filter(t=>t.templateType==='factory-order'&&(broad(m)||m.customers.includes(t.customer))).map(t=>({customer:t.customer,filename:t.filename}))});}
  if(action==='factory-orders'){const ids=new Set((all(s,'order') as Order[]).filter(o=>canRead(m,o)).map(o=>o.id));return json({writeContract:'factory-order-version-token-v1',items:all(s,'factory_order').filter(v=>ids.has(v.lineId))});}
@@ -95,7 +98,7 @@ export async function collaborationGet(action:string,req:Request,s:State,m:Membe
   const response=download(makeWorkbook(rows,template.sheet||'金蝶订单导入',columns),`金蝶订单导入_${now().slice(0,10)}.xlsx`);response.headers.set('Vary',businessTeamHeader);return response;
  }
  if(action==='factory-order-export'){
-  if(!roles(m))throw new AppError('无权导出工厂内部订单。',403);const id=new URL(req.url).searchParams.get('id'),item=all(s,'factory_order').find(v=>v.id===id);if(!item)throw new AppError('内部订单版本不存在。',404);const o=orderFor(s,item.lineId);if(!canRead(m,o))throw new AppError('无权导出该订单。',403);const files=all(s,'attachment').filter(v=>v.lineId===o.id).map(v=>v.filename).join('、');const rows=[{'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'客款号':o.extra?.['客款号']||'','客色号':o.color,'客户英文原文':item.sourceEnglish,'工厂中文工艺':item.chineseProcess,'板料规格':item.materialSpec,'电镀规格':item.platingSpec,'镜片规格':item.lensSpec||o.lens,'数量':o.quantity,'交期':o.promisedDate||o.requestedDate,'特殊要求':o.specialRequirements||'','生产资料附件':files,'版本':`R${item.version}`,'状态':item.status,'客服确认':item.serviceConfirmedBy||'','PMC确认':item.pmcConfirmedBy||''}];return download(makeWorkbook(rows,'中英对照内部订单'),`工厂内部订单_${safe(o.orderNo)}_R${item.version}.xlsx`);
+  if(!roles(m))throw new AppError('无权导出工厂内部订单。',403);const id=new URL(req.url).searchParams.get('id'),item=all(s,'factory_order').find(v=>v.id===id);if(!item)throw new AppError('内部订单版本不存在。',404);const o=orderFor(s,item.lineId);if(!canRead(m,o))throw new AppError('无权导出该订单。',403);const files=all(s,'attachment').filter(v=>v.lineId===o.id).map(v=>v.filename).join('、');const rows=[{'客户':o.customer,'客户 PO':o.customerPO,'订单号':o.orderNo,'产品类型':productTypeOf(o),'图纸编号':o.drawing,'客款号':o.extra?.['客款号']||'','客色号':o.color,'客户英文原文':item.sourceEnglish,'工厂中文工艺':item.chineseProcess,'板料规格':item.materialSpec,'电镀规格':item.platingSpec,'镜片规格':item.lensSpec||o.lens,'数量':o.quantity,'交期':o.promisedDate||o.requestedDate,'特殊要求':o.specialRequirements||'','生产资料附件':files,'版本':`R${item.version}`,'状态':item.status,'客服确认':item.serviceConfirmedBy||'','PMC确认':item.pmcConfirmedBy||''}];return download(await appendAcetateAdoptions(makeWorkbook(rows,'中英对照内部订单'),[o],new Map([[o.id,item]])),`工厂内部订单_${safe(o.orderNo)}_R${item.version}.xlsx`);
  }
  return null;
 }
@@ -144,7 +147,7 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
    const prior=all(s,'factory_order').filter(v=>v.lineId===before?.id).sort((a,b)=>b.version-a.version)[0];
    if(r.orderVersion&&Number(r.orderVersion)!==before?.version||r.factoryVersion&&Number(r.factoryVersion)!==(prior?.version||0))throw new AppError(`第${r.index}行已过期，请重新导出。`,409);
    const o:Order=before||{id:newId('line'),kind:'order',version:1,createdAt:now(),updatedAt:now(),updatedBy:m.name,source:safe(file.name),orderNo:r.orderNo,customer:r.customer,customerPO:r.customerPO,drawing:r.drawing,color:r.color,lens:r.lens,quantity:r.quantity,batch:r.batch,requestedDate:r.requestedDate,ownerEmail:m.role==='sales'?m.email:'',salesName:m.role==='sales'?m.name:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:r.notes,sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:r.extra};
-   const item={id:newId('factory_order'),kind:'factory_order',lineId:o.id,version:(prior?.version||0)+1,priorId:prior?.id||'',sourceEnglish:r.sourceEnglish,chineseProcess:r.chineseProcess,materialSpec:r.materialSpec,platingSpec:r.platingSpec,lensSpec:r.lensSpec,materialImageConfirmed:false,status:'待客服确认',action:'draft',createdAt:now(),createdBy:m.name};
+   const item={id:newId('factory_order'),kind:'factory_order',lineId:o.id,version:(prior?.version||0)+1,priorId:prior?.id||'',sourceEnglish:r.sourceEnglish,chineseProcess:r.chineseProcess,materialSpec:r.materialSpec,...(prior?.materials?.length&&prior.materialSpec===r.materialSpec?{materials:prior.materials}:{}),platingSpec:r.platingSpec,lensSpec:r.lensSpec,materialImageConfirmed:false,status:'待客服确认',action:'draft',createdAt:now(),createdBy:m.name};
    return {index:r.index,order:o,item,expectedOrderVersion:before?.version||0,expectedFactoryVersion:prior?.version||0,isNew:!before};
   });const job={id:newId('factory_import'),kind:'factory_import',actorId:m.id,filename:safe(file.name),rows:parsed,status:'待确认',createdAt:now()};await commit(s.revision,[job]);return json({id:job.id,rows:parsed.map(r=>({index:r.index,orderNo:r.order.orderNo,drawing:r.order.drawing,color:r.order.color,quantity:r.order.quantity,sourceEnglish:r.item.sourceEnglish,chineseProcess:r.item.chineseProcess,status:r.isNew?'新增订单及草稿':'更新双语草稿'}))});
  }
@@ -206,7 +209,7 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
  }
  if(action==='factory-order-save'){
   if(!roles(m))throw new AppError('仅业务、客服、PMC 或管理员可维护内部订单。',403);
-  const input=z.object({lineId:z.string(),sourceEnglish:z.string().max(12000).default(''),chineseProcess:z.string().max(12000).default(''),materialSpec:z.string().max(4000).default(''),platingSpec:z.string().max(4000).default(''),lensSpec:z.string().max(4000).default(''),materialImageConfirmed:z.boolean().default(false),action:z.enum(['draft','service-confirm','pmc-confirm','release']),token:z.string().uuid().optional(),expectedVersion:z.number().int().nonnegative().optional(),orderVersion:z.number().int().positive().optional()}).parse(await req.json()),o=orderFor(s,input.lineId);
+  const input=z.object({materials:z.array(acetateMaterialReferenceSchema).max(40).optional(),lineId:z.string(),sourceEnglish:z.string().max(12000).default(''),chineseProcess:z.string().max(12000).default(''),materialSpec:z.string().max(4000).default(''),platingSpec:z.string().max(4000).default(''),lensSpec:z.string().max(4000).default(''),materialImageConfirmed:z.boolean().default(false),action:z.enum(['draft','service-confirm','pmc-confirm','release']),token:z.string().uuid().optional(),expectedVersion:z.number().int().nonnegative().optional(),orderVersion:z.number().int().positive().optional()}).parse(await req.json()),o=orderFor(s,input.lineId);
   if(!canRead(m,o))throw new AppError('该订单不在你的可见范围内。',403);
   // Legacy website saves remain compatible; protected callers provide all three fields.
   const {token,expectedVersion,orderVersion,...values}=input;
@@ -227,6 +230,13 @@ export async function collaborationPost(action:string,req:Request,s:State,m:Memb
   if(['pmc-confirm','release'].includes(input.action)&&needsBoard&&!input.materialImageConfirmed)throw new AppError('该产品需要 PMC 确认板料图片。');
   if(input.action==='release'&&before?.status!=='待下发工厂')throw new AppError('请先完成客服确认和 PMC 补图确认。');
   if(input.action==='release')assertHandoffProductionGate(s,m,o);
+  if(input.materials===undefined&&before?.materials?.length&&input.materialSpec!==before.materialSpec)throw new AppError('板料说明已改变，请在内部订单中核对或重新选择板料引用。',409);
+  if(input.materials===undefined&&before?.materials)values.materials=before.materials;
+  const materialIds=(refs:any[]=[])=>JSON.stringify(refs.map(r=>[r.catalogId,r.entryId,r.thickness,r.descriptionZh,r.part]));
+  const materialChanged=input.materials!==undefined&&materialIds(input.materials)!==materialIds(before?.materials);
+  if(materialChanged&&input.action==='release')throw new AppError('板料引用已变化，请重新完成PMC图片核对。');
+  if(materialChanged&&input.action!=='pmc-confirm')values.materialImageConfirmed=false;
+  if(input.materials){values.materials=await Promise.all(input.materials.map(async ref=>({...ref,snapshot:await resolveAcetateMaterial(s,m,ref)})));}
   const status=input.action==='draft'?'待客服确认':input.action==='service-confirm'?'待PMC补图':input.action==='pmc-confirm'?'待下发工厂':'已下发工厂',item={id:newId('factory_order'),kind:'factory_order',version:(before?.version||0)+1,priorId:before?.id||'',...values,status,serviceConfirmedBy:input.action==='service-confirm'?m.name:before?.serviceConfirmedBy||'',serviceConfirmedAt:input.action==='service-confirm'?now():before?.serviceConfirmedAt||'',pmcConfirmedBy:input.action==='pmc-confirm'?m.name:before?.pmcConfirmedBy||'',pmcConfirmedAt:input.action==='pmc-confirm'?now():before?.pmcConfirmedAt||'',releasedBy:input.action==='release'?m.name:'',releasedAt:input.action==='release'?now():'',createdAt:now(),createdBy:m.name};
   await commit(s.revision,[item,audit(m,item,before||null,'保存工厂内部订单',status),...(token?[{id:newId('factory_order_request'),kind:'factory_order_request',token,actorId:m.id,lineId:o.id,itemId:item.id,fingerprint,createdAt:now()}]:[])]);
   return json({ok:true,item});

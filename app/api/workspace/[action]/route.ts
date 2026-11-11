@@ -27,6 +27,7 @@ import {canSeeSupplierPrice} from '@/lib/suppliers';
 import {customerQuoteGet,customerQuotePost} from '@/lib/customer-quote-api';
 import {ieQuoteGet,ieQuotePost} from '@/lib/ie-quote-api';
 import {ieMaterialNamesGet,ieMaterialNamesPost} from '@/lib/ie-material-names-api';
+import {acetateMaterialsGet,acetateMaterialsPost} from '@/lib/acetate-materials-api';
 import {acetateBomGet,acetateBomPost} from '@/lib/acetate-bom-api';
 import {canUseIeQuotes,canFinalApproveIeSales} from '@/lib/ie-quote-access';
 import {customerPriceArchiveGet,customerPriceArchivePost} from '@/lib/customer-price-archive-api';
@@ -71,6 +72,9 @@ export const dynamic='force-dynamic';
 // and archive rows now make that tens of megabytes, so reads that only inspect
 // their own records declare the kinds they need and skip the rest.
 const scopedReadKinds:Record<string,readonly string[]>={
+ 'acetate-materials':['member','acetate_material_catalog'],
+ 'acetate-material-image':['member','acetate_material_catalog'],
+ 'acetate-material-original':['member','acetate_material_catalog'],
  'service-history':['member','service_record','service_revision','customer_account','customer_quote_access'],
  'kingdee-supplier-diagnostic':['member'],
  'outsourcing-workbooks':['member','outsourcing_workbook_archive'],
@@ -156,6 +160,7 @@ async function workspaceGet(req:Request,ctx:Context,s:State,m:Member){try{
  const projects=await customerProjectGet(action,req,s,m);if(projects)return projects;
  const historicalPrice=await customerPriceArchiveGet(action,req,s,m);if(historicalPrice)return historicalPrice;
  const materialNames=ieMaterialNamesGet(action,url,s,m);if(materialNames)return materialNames;
+ const materialLibrary=await acetateMaterialsGet(action,req,s,m);if(materialLibrary)return materialLibrary;
  const acetate=acetateBomGet(action,url,s,m);if(acetate)return acetate;
  const ieQuotation=await ieQuoteGet(action,url,s,m);if(ieQuotation)return ieQuotation;
  const quotation=await customerQuoteGet(action,req,s,m);if(quotation)return quotation;
@@ -240,6 +245,7 @@ export async function POST(req:Request,ctx:Context){try{
  const salesSources=await salesOrderSourcesPost(action,req,s,m);if(salesSources)return salesSources;
  const colorFields=await salesColorFieldsPost(action,req,s,m);if(colorFields)return colorFields;
  const materialNames=await ieMaterialNamesPost(action,req,s,m);if(materialNames)return materialNames;
+ const materialLibrary=await acetateMaterialsPost(action,req,s,m);if(materialLibrary)return materialLibrary;
  const acetate=await acetateBomPost(action,req,s,m);if(acetate)return acetate;
  const purchaseChange=await purchaseChangePost(action,req,s,m);if(purchaseChange)return purchaseChange;
  const processChange=await processChangePost(action,req,s,m);if(processChange)return processChange;

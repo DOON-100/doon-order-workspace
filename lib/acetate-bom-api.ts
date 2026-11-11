@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {resolveAcetateMaterial} from './acetate-materials-api';
 import {all,newId,now,type Entity,type Member,type State} from './domain';
 import {AppError,audit,commit,json} from './store';
 import {canFillIeQuote,canReadIeQuote,canUseIeQuotes} from './ie-quote-access';
@@ -29,6 +30,7 @@ export async function acetateBomPost(action:string,req:Request,s:State,m:Member)
  let record:Entity,before:Entity|null=null,versionRecord:Entity|null=null;
  if('stocks'in input){before=catalog(s);if((before?.version||0)!==input.version)throw new AppError('规格库版本已更新。',409);if(new Set(input.stocks.map(v=>v.id)).size!==input.stocks.length)throw new AppError('规格编号重复。');record={...input,id:newId('acetate_catalog'),kind:'acetate_bom_catalog',version:input.version+1,createdAt:now(),createdById:m.id};delete record.token;}
  else{before=input.id?all(s,'acetate_bom').find(r=>r.id===input.id)||null:null;if(input.id&&(!before||!readable(s,m,before)))throw new AppError('BOM不存在或无权修改。',403);if((before?.version||0)!==input.version)throw new AppError('BOM已被修改，请重新读取并核对。',409);if(before&&before.fields.customerAccountId!==input.fields.customerAccountId)throw new AppError('已保存BOM不能更换客户，请新建。');
+  for(const c of input.fields.components){if(c.materialReference){const snapshot=await resolveAcetateMaterial(s,m,c.materialReference);if(snapshot.selectedThickness!==c.thickness)throw new AppError('BOM厚度与采用的板料厚度不一致。');c.supplier=snapshot.supplier;c.color=snapshot.code;c.materialReference={...c.materialReference,snapshot};}}
   record={id:before?.id||newId('acetate_bom'),kind:'acetate_bom',version:input.version+1,fields:input.fields,result:calculateAcetateBom(input.fields),ruleVersion:ACETATE_RULE_VERSION,createdAt:before?.createdAt||now(),createdById:before?.createdById||m.id,updatedAt:now(),updatedById:m.id};
   versionRecord={...record,id:newId('acetate_version'),kind:'acetate_bom_version',bomId:record.id};
  }

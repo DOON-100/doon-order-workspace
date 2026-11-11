@@ -60,6 +60,7 @@ import {Mail,MessageCircle,MessagesSquare,BookOpen,Package,Truck,DraftingCompass
 import './handoff-shell.css';
 import {DocumentCenterPanel,ChannelPendingPanel} from './document-center-panel';
 import {UnifiedCommunicationPanel} from './unified-communication-panel';
+import {AcetateMaterialsPanel} from './acetate-materials-panel';
 import {FactoryOrderPanel} from './factory-order-panel';
 import {KingdeeSalesPanel} from './kingdee-sales-panel';
 import {CustomerQuotePanel} from './customer-quote-panel';
@@ -232,6 +233,7 @@ function Surface({identity,signInUrl,initialView='workbench',accountControls,Acc
  {view==='service-receivables'&&<ServiceWorkspacePanel data={data} openOrder={setSelected} onDirtyChange={setPmcDirty} initialContext={navigationContext} embedded initialQueue="receivable" allowedQueues={['receivable']} allowedTypes={['receivable']}/>}
  {view==='engineering-drawings'&&<EngineeringDepartmentPanel data={data} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
  {view==='customer-projects'&&<CustomerProjectPanel onClearProjectContext={clearProjectContext} assignmentIntent={projectAssignmentIntent} onAssignmentIntentConsumed={key=>setProjectAssignmentIntent(previous=>previous?.key===key?null:previous)} data={data} openOrder={setSelected} onOpenProjectInTeam={openProjectInTeam} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}
+ {view==='acetate-materials'&&<AcetateMaterialsPanel key={data.me.id+':'+data.me.role+':'+data.revision}/>}
  {view==='factory-orders'&&<FactoryOrderPanel data={data} act={action} busy={busy} onDirtyChange={setPmcDirty} initialContext={navigationContext} onNavigate={setView}/>}
  {view==='kingdee-sales'&&<KingdeeSalesPanel data={data} onDirtyChange={setPmcDirty} initialSourceId={navigationContext.recordId}/>}
  {view==='customers'&&<CustomerMasterPanel data={data} act={action} busy={busy} onNavigate={setView} onDirtyChange={setPmcDirty} initialContext={navigationContext}/>}

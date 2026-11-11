@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {acetateMaterialReferenceSchema} from './acetate-materials';
 
 export const ACETATE_RULE_VERSION='acetate-bom-20261110-v1';
 export const ACETATE_SUPPLIERS=[{name:'金余',url:'https://www.jinyuplastic.com/Col/Col1/Index.aspx'},{name:'华意',url:'https://www.mazzucchelli1849.it/'},{name:'怡亮',url:'https://www.la-es.com/it'},{name:'集美',url:'https://www.jimei123.com/'},{name:'山宗 / TAKIRON ROWLAND',url:'https://www.takiron-rowland.co.jp/'}] as const;
@@ -8,6 +9,7 @@ const text=z.string().trim().max(160);
 export const acetateComponentSchema=z.object({
  id:text.min(1),name:text.min(1),part:z.enum(['frame','temple','endpiece']),process:z.enum(['frame','punch','cnc','manual']),
  supplier:text,color:text,materialCode:text,stockId:text,stockSource:text.max(500),
+ materialReference:acetateMaterialReferenceSchema.optional(),
  length:number,width:number,thickness:z.preprocess(normalizeAcetateThickness,z.number().finite().positive().max(30).nullable()),quantity:number,
  basis:z.enum(['net','blank']),extraLength:number,extraWidth:number,reason:text.max(500),
  stockLength:number,stockWidth:number,trimLength:number,trimWidth:number,kerf:number,rawKerf:number,
