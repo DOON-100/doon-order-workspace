@@ -1,0 +1,99 @@
+name: doon-chatwoot
+x-app: &app
+  image: ${CHATWOOT_IMAGE:?Set the verified Chatwoot image ID}
+  pull_policy: never
+  env_file: ../config/chatwoot.env
+  volumes:
+    - ../data/storage:/app/storage
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+  restart: "on-failure:3"
+  cpus: 0.50
+  pids_limit: 160
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+services:
+  rails:
+    <<: *app
+    entrypoint: docker/entrypoints/rails.sh
+    command: [bundle, exec, rails, s, -p, "3000", -b, 0.0.0.0]
+    mem_limit: 768m
+    memswap_limit: 768m
+    healthcheck:
+      test: [CMD, ruby, -rnet/http, -e, "exit(Net::HTTP.get_response(URI('http://127.0.0.1:3000/api')).code.to_i < 500 ? 0 : 1)"]
+      start_period: 120s
+      interval: 30s
+      timeout: 8s
+      retries: 3
+  worker:
+    <<: *app
+    command: [bundle, exec, sidekiq, -C, config/sidekiq.yml]
+    mem_limit: 512m
+    memswap_limit: 512m
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set the verified pgvector image ID}
+    pull_policy: never
+    env_file: ../config/postgres.env
+    volumes:
+      - ../data/postgres:/var/lib/postgresql/data
+    command: [postgres, -c, shared_buffers=32MB, -c, max_connections=30, -c, work_mem=2MB, -c, maintenance_work_mem=32MB]
+    mem_limit: 192m
+    memswap_limit: 192m
+    cpus: 0.25
+    pids_limit: 80
+    restart: "on-failure:3"
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U chatwoot -d chatwoot"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  redis:
+    image: ${REDIS_IMAGE:?Set the verified Redis image ID}
+    pull_policy: never
+    command: [redis-server, /private/redis.conf]
+    volumes:
+      - ../config/redis.conf:/private/redis.conf:ro
+      - ../data/redis:/data
+    mem_limit: 64m
+    memswap_limit: 64m
+    cpus: 0.15
+    pids_limit: 40
+    restart: "on-failure:3"
+    healthcheck:
+      test: [CMD-SHELL, "REDISCLI_AUTH=$$(sed -n 's/^requirepass //p' /private/redis.conf) redis-cli ping | grep -qx PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  gateway:
+    image: ${GATEWAY_IMAGE:?Set the verified Node image ID}
+    pull_policy: never
+    command: [node, /code/gateway.mjs]
+    environment:
+      DOON_CHATWOOT_GATEWAY_CONFIG: /private/gateway.json
+    volumes:
+      - ./gateway.mjs:/code/gateway.mjs:ro
+      - ../config/gateway.json:/private/gateway.json:ro
+      - ../data/gateway:/state
+    ports:
+      - 127.0.0.1:${CHATWOOT_GATEWAY_PORT:-18900}:8080
+    mem_limit: 96m
+    memswap_limit: 96m
+    cpus: 0.15
+    pids_limit: 40
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: "on-failure:3"
+    depends_on:
+      rails: {condition: service_healthy}
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}

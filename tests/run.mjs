@@ -58,6 +58,7 @@ mes=await preview([{...mesRows[0],'良品数':25,'审批状态':'已撤销'}],'m
 const customerRes=await call('export',{type:'customer',filters:{}},sales);const customerBook=XLSX.read(await customerRes.arrayBuffer());const customerRows=XLSX.utils.sheet_to_json(customerBook.Sheets[customerBook.SheetNames[0]]);assert.equal(customerRows.length,1);assert.equal(customerRows[0]['客户'],'测试客户甲');assert(!Object.keys(customerRows[0]).some(k=>k.includes('内部')));assert.equal(customerRows[0]['已确认回复交期'],'2026-10-11');pass('客户报表执行客户权限，排除内部备注并使用已确认交期');
 const archived=(await ok('data',undefined,sales)).exports[0],salesMember=(await state()).members.find(m=>m.email===sales.email);await ok('member',{...salesMember,customers:[]});assert.equal((await call('file?id='+archived.id,undefined,sales)).status,403);pass('收回客户权限后不能下载历史导出绕过权限');
 execFileSync(process.execPath,['tests/payment-proof-inbox.mjs'],{stdio:'inherit',windowsHide:true});
+execFileSync(process.execPath,['tests/chatwoot-gateway.mjs'],{stdio:'inherit',windowsHide:true});
 await fs.writeFile('test-output/result.json',JSON.stringify({passed:checks.length,checks,at:new Date().toISOString()},null,2));
 console.log(`\n${checks.length} business checks passed.`);
 const parallelRow={...initial[1],'订单号':'TEST-PARALLEL'};const pendingA=await preview([parallelRow]),pendingB=await preview([parallelRow]);await ok('commit-import',{id:pendingA.id,selected:[2]});assert.equal((await call('commit-import',{id:pendingB.id,selected:[2]})).status,409);pass('两个待提交预览不能各自创建同一业务明细');
