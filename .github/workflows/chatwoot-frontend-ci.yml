@@ -1,0 +1,51 @@
+name: Chatwoot frontend build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: chatwoot-frontend-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  frontend:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: chatwoot/chatwoot
+          ref: caab07a8f00032d5205b5a5d7e2eb0ba2f3d2d82
+          path: chatwoot-v4.19.1
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.22.1'
+      - name: Verify locale loading and patch pinned source
+        run: |
+          node --test integrations/chatwoot/tests/locale-loader.test.mjs
+          node integrations/chatwoot/apply-frontend-patch.mjs "$GITHUB_WORKSPACE/chatwoot-v4.19.1" --apply
+      - name: Install locked Chatwoot build dependencies
+        run: |
+          npm install --global --ignore-scripts --no-audit --no-fund pnpm@10.2.0
+          pnpm --dir chatwoot-v4.19.1 install --frozen-lockfile --ignore-scripts --prod=false
+      - name: Build Chatwoot assets only
+        working-directory: chatwoot-v4.19.1
+        env:
+          RAILS_ENV: production
+          NODE_ENV: production
+          SECRET_KEY_BASE_DUMMY: '1'
+          SECRET_KEY_BASE: public-build-placeholder-no-runtime-credentials
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm exec vite build
+      - name: Verify and package frontend assets
+        run: node integrations/chatwoot/package-frontend.mjs "$GITHUB_WORKSPACE/chatwoot-v4.19.1" "$GITHUB_WORKSPACE/test-output/chatwoot-frontend-release"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: doon-chatwoot-frontend-${{ github.sha }}-${{ github.run_attempt }}
+          path: test-output/chatwoot-frontend-release/*
+          retention-days: 30
+          compression-level: 0
+          if-no-files-found: error
