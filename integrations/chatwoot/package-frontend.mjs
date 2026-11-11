@@ -20,12 +20,23 @@ walk(entry[0]);let initialBytes=0,initialGzipBytes=0,maxInitialJsBytes=0;
 for(const name of initial){const file=path.resolve(publicDir,name);if(!file.startsWith(publicDir+path.sep))throw Error('Invalid asset path');const bytes=await readFile(file);initialBytes+=bytes.length;initialGzipBytes+=gzipSync(bytes,{level:4}).length;if(name.endsWith('.js'))maxInitialJsBytes=Math.max(maxInitialJsBytes,bytes.length);}
 console.log(JSON.stringify({initialCodeBytes:initialBytes,initialCodeGzipBytes:initialGzipBytes,maxInitialJsBytes,referencedNonCodeAssets:referencedAssets.size}));
 if(maxInitialJsBytes>5*1024*1024||initialGzipBytes>4*1024*1024)throw Error('Initial JS/CSS language bundle is still too large');
-const original=execFileSync('git',['show','HEAD:app/javascript/dashboard/i18n/index.js'],{cwd:source,encoding:'utf8'});
-const languages=[...original.matchAll(/from '\.\/locale\/([^']+)'/g)].map(match=>match[1]);
-for(const locale of languages.filter(locale=>!['en','zh_CN'].includes(locale)))if(!Object.entries(manifest).some(([key,row])=>(row.src||key).endsWith('/locale/'+locale+'/index.js')&&row.isDynamicEntry))throw Error('Missing lazy language pack: '+locale);
+const languages=['en','zh_CN'],found=new Map(['dashboard','widget','survey'].map(app=>[app,new Set()]));
+for(const filename of await readdir(path.join(publicDir,'assets'))){
+ if(!filename.endsWith('.js.map'))continue;
+ const map=JSON.parse(await readFile(path.join(publicDir,'assets',filename),'utf8'));
+ for(const name of map.sources||[]){
+  const match=name.match(/\/(dashboard|widget|survey)\/i18n\/locale\/([^/.]+)(?:\/|\.json$)/);
+  if(!match)continue;
+  if(!languages.includes(match[2]))throw Error('Unexpected bundled language: '+match[2]);
+  found.get(match[1]).add(match[2]);
+ }
+}
+for(const [app,locales] of found)if(languages.some(locale=>!locales.has(locale)))throw Error('Missing language source map evidence for '+app);
 const files={};
 async function inventory(folder){for(const item of await readdir(folder)){const file=path.join(folder,item),stat=await lstat(file);if(stat.isDirectory())await inventory(file);else{if(!stat.isFile()||stat.isSymbolicLink())throw Error('Unexpected generated asset');const bytes=await readFile(file);files[path.relative(publicDir,file).split(path.sep).join('/') ]={bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex')};}}}
 await inventory(publicDir);await mkdir(output,{recursive:true});
-const archive='chatwoot-v4.19.1-lazy-locales.tar.gz';execFileSync('tar',['-czf',path.join(output,archive),'-C',path.join(source,'public'),'vite']);
-const report={format:'doon-chatwoot-frontend-v1',upstream,patchCommit:process.env.GITHUB_SHA||null,runId:process.env.GITHUB_RUN_ID||null,archive,archiveSha256:createHash('sha256').update(await readFile(path.join(output,archive))).digest('hex'),initialCodeBytes:initialBytes,initialCodeGzipBytes:initialGzipBytes,maxInitialJsBytes,referencedNonCodeAssets:referencedAssets.size,languages:languages.length,lazyLanguages:languages.length-2,files};
+const runtimePath='app/helpers/application_helper.rb',runtimeBytes=await readFile(path.join(source,runtimePath));
+const runtimeFiles={[runtimePath]:{bytes:runtimeBytes.length,sha256:createHash('sha256').update(runtimeBytes).digest('hex')}};
+const archive='chatwoot-v4.19.1-zh-en.tar.gz';execFileSync('tar',['-czf',path.join(output,archive),'-C',path.join(source,'public'),'vite','-C',source,runtimePath]);
+const report={format:'doon-chatwoot-frontend-v2',upstream,patchCommit:process.env.GITHUB_SHA||null,runId:process.env.GITHUB_RUN_ID||null,archive,archiveSha256:createHash('sha256').update(await readFile(path.join(output,archive))).digest('hex'),initialCodeBytes:initialBytes,initialCodeGzipBytes:initialGzipBytes,maxInitialJsBytes,referencedNonCodeAssets:referencedAssets.size,languages,lazyLanguages:0,otherLanguagePacksBuilt:false,runtimeFiles,files};
 await writeFile(path.join(output,'frontend-release.json'),JSON.stringify(report,null,2));console.log(JSON.stringify({...report,files:Object.keys(files).length}));

@@ -32,6 +32,8 @@
 
 ## 首屏资源与缓存
 
+当前定制版本只提供简体中文和英文。`apply-frontend-patch.mjs` 在固定版本源码上限制 dashboard、widget、survey 的语言导入，并将原生语言选择项限制为这两种；已有其他语言偏好的记录不改写，界面回退英文。独立的 `Chatwoot frontend build` CI 校验构建 source map 中没有其他 UI 语言包，输出资源与语言选择 helper 的哈希清单。发布仅更新 Chatwoot 镜像，不需要重新构建或发布中台。
+
 原生界面的图标和样式资源较大。将 `vite-compression.conf` 仅包含在现有 Chatwoot `/vite/` 代理 location 内，执行 `nginx -t` 后热加载；不修改其他业务路径或跳过员工鉴权。它为 JS、CSS 和 SVG 启用 gzip，并保留 `Vary: Accept-Encoding`。
 
 原生入门图片使用 `/dashboard/images/`，提示音使用 `/audio/dashboard/`。核对既有路由后，将 `native-static-routes.conf` 中的两个 location 加入同一 HTTPS server，继续通过身份网关读取。不能将整个 `/dashboard/` 或中台的 `/assets/` 转发给 Chatwoot；网关拒绝这两类静态路径的写请求。
