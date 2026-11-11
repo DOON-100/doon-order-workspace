@@ -136,6 +136,27 @@ const child=spawn(process.execPath,[path.join(runtime,'server.mjs')],{env:{...en
 let logs='';child.stderr.on('data',b=>logs+=b);let exited=false;const done=new Promise(resolve=>child.once('exit',()=>{exited=true;resolve();}));
 function snapshot(){const db=new DatabaseSync(path.join(env.DOON_DATA_DIR,'workspace.sqlite'),{readOnly:true});try{return {records:db.prepare("SELECT id,kind,data FROM records WHERE kind!='auth_event' ORDER BY id").all(),revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get().revision};}finally{db.close();}}
 let capacity;let checks=0;const pass=()=>checks++;const testedCommands=[];
+// Fast CI runners can exceed the real server's auth budgets during this large
+// synthetic suite. Pace requests before sending them; never retry business writes
+// or relax production limits. Cover helpers that use the default global fetch too.
+const originalFetch=globalThis.fetch,authWindows=new Map();
+globalThis.fetch=async(input,init)=>{
+  const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);
+  if(url.origin===origin&&url.pathname.startsWith('/api/auth/')){
+    const headers=new Headers(init?.headers??(input instanceof Request?input.headers:undefined));
+    const cookie=headers.get('cookie'),method=String(init?.method??(input instanceof Request?input.method:'GET')).toUpperCase();
+    const key=url.pathname==='/api/auth/session'&&method==='GET'&&cookie?'session:'+cookie:'auth-ip',limit=key==='auth-ip'?35:400;
+    for(;;){
+      const now=performance.now();let window=authWindows.get(key);
+      if(!window||now>=window.until){window={count:0,until:now+61000};authWindows.set(key,window);}
+      if(window.count<limit){window.count++;break;}
+      await new Promise(resolve=>setTimeout(resolve,Math.ceil(window.until-now)));
+    }
+  }
+  const response=await originalFetch(input,init);
+  if(url.origin===origin&&response.status===429)console.error('Synthetic request rate limited:',url.pathname);
+  return response;
+};
 try{
   let ready=false;for(let i=0;i<80;i++){try{if((await fetch(origin+'/health')).ok){ready=true;break;}}catch{}await new Promise(r=>setTimeout(r,100));}assert(ready,'Native server starts');
   const services={};
@@ -560,6 +581,7 @@ try{
   await fs.writeFile(path.join(runtime,'disable.mjs'),`import {db} from './runtime.mjs';const a=db.prepare("SELECT member_id FROM local_accounts WHERE username='sales_b'").get(),row=JSON.parse(db.prepare('SELECT data FROM records WHERE id=?').get(a.member_id).data);db.prepare('UPDATE records SET data=? WHERE id=?').run(JSON.stringify({...row,active:false}),a.member_id);db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();db.close();`);
   execFileSync(process.execPath,[path.join(runtime,'disable.mjs')],{env,windowsHide:true,stdio:'pipe'});await assert.rejects(b.execute('projects','list'),{code:'AUTH_REQUIRED'});assert.equal(await services.sales_b.state.hasSession(),false);pass();
 }catch(error){console.error(logs.slice(-2000));throw error;}finally{
+  globalThis.fetch=originalFetch;
   if(!exited)child.kill();await done;
   const base=path.resolve(root,'test-output'),target=path.resolve(dir);
   if(path.dirname(target)!==base||!path.basename(target).startsWith('cli-test-'))throw Error('Refusing cleanup outside the generated test directory');
