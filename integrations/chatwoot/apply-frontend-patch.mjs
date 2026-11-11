@@ -8,8 +8,9 @@ if(!process.argv[2]||path.basename(source)!=='chatwoot-v4.19.1')throw Error('Spe
 const base='caab07a8f00032d5205b5a5d7e2eb0ba2f3d2d82';
 if(execFileSync('git',['rev-parse','HEAD'],{cwd:source,encoding:'utf8'}).trim()!==base)throw Error('Expected the pinned official source commit');
 const indexPath='app/javascript/dashboard/i18n/index.js',appPath='app/javascript/dashboard/App.vue';
-const original=filename=>execFileSync('git',['show','HEAD:'+filename],{cwd:source,encoding:'utf8'});
-const index=await readFile(path.join(source,indexPath),'utf8'),app=await readFile(path.join(source,appPath),'utf8');
+const normalize=text=>text.replace(/\r\n/g,'\n');
+const original=filename=>normalize(execFileSync('git',['show','HEAD:'+filename],{cwd:source,encoding:'utf8'}));
+const index=normalize(await readFile(path.join(source,indexPath),'utf8')),app=normalize(await readFile(path.join(source,appPath),'utf8'));
 if(index!==original(indexPath)||app!==original(appPath))throw Error('Source already has changes; review before applying the patch');
 const helper=await readFile(fileURLToPath(new URL('./frontend/locale-loader.mjs',import.meta.url)));
 const localePaths=[...index.matchAll(/^import\s+\w+\s+from\s+'(\.\/locale\/[^']+)';$/gm)].map(match=>match[1]);
