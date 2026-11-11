@@ -10,4 +10,7 @@ result = ActiveRecord::Base.transaction do
   { accountId: account.id, platformToken: app.access_token.token }
 end
 File.open(output, File::WRONLY | File::CREAT | File::EXCL, 0o600) { |file| file.write(JSON.generate(result)) }
+# Programmatic setup replaces the native first-run signup wizard. Do not enroll
+# employees in Chatwoot's installer or subscribe the installation to updates.
+::Redis::Alfred.delete(::Redis::Alfred::CHATWOOT_INSTALLATION_ONBOARDING)
 puts JSON.generate({ ok: true, account_created: true, employee_users_created: 0 })
