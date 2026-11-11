@@ -24,7 +24,14 @@ const languages=['en','zh_CN'],found=new Map(['dashboard','widget','survey'].map
 for(const filename of await readdir(path.join(publicDir,'assets'))){
  if(!filename.endsWith('.js.map'))continue;
  const map=JSON.parse(await readFile(path.join(publicDir,'assets',filename),'utf8'));
- for(const name of map.sources||[]){
+ for(const [index,name] of (map.sources||[]).entries()){
+  const entry=name.match(/\/(dashboard|widget|survey)\/i18n\/index\.js$/);
+  if(entry){
+   // Vite inlines JSON modules without their own source map entries.
+   const imports=[...(map.sourcesContent?.[index]||'').matchAll(/from '\.\/locale\/([^'.]+)(?:\.json)?'/g)].map(match=>match[1]);
+   if(imports.length!==2||languages.some(locale=>!imports.includes(locale)))throw Error('Unexpected language imports for '+entry[1]);
+   for(const locale of imports)found.get(entry[1]).add(locale);
+  }
   const match=name.match(/\/(dashboard|widget|survey)\/i18n\/locale\/([^/.]+)(?:\/|\.json$)/);
   if(!match)continue;
   if(!languages.includes(match[2]))throw Error('Unexpected bundled language: '+match[2]);
