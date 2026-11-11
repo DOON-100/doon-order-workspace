@@ -139,19 +139,18 @@ let capacity;let checks=0;const pass=()=>checks++;const testedCommands=[];
 // Fast CI runners can exceed the real server's auth budgets during this large
 // synthetic suite. Pace requests before sending them; never retry business writes
 // or relax production limits. Cover helpers that use the default global fetch too.
-const originalFetch=globalThis.fetch,authWindows=new Map();
+const originalFetch=globalThis.fetch,nextAuthRequest=new Map();
 globalThis.fetch=async(input,init)=>{
   const url=new URL(typeof input==='string'||input instanceof URL?input:input.url);
   if(url.origin===origin&&url.pathname.startsWith('/api/auth/')){
     const headers=new Headers(init?.headers??(input instanceof Request?input.headers:undefined));
     const cookie=headers.get('cookie'),method=String(init?.method??(input instanceof Request?input.method:'GET')).toUpperCase();
-    const key=url.pathname==='/api/auth/session'&&method==='GET'&&cookie?'session:'+cookie:'auth-ip',limit=key==='auth-ip'?35:400;
-    for(;;){
-      const now=performance.now();let window=authWindows.get(key);
-      if(!window||now>=window.until){window={count:0,until:now+61000};authWindows.set(key,window);}
-      if(window.count<limit){window.count++;break;}
-      await new Promise(resolve=>setTimeout(resolve,Math.ceil(window.until-now)));
-    }
+    const key=url.pathname==='/api/auth/session'&&method==='GET'&&cookie?'session:'+cookie:'auth-ip';
+    // Spread requests continuously so a minute-boundary pause cannot consume
+    // the client's request timeout (50 IP / 480 session reads per minute).
+    const now=performance.now(),at=Math.max(now,nextAuthRequest.get(key)??0);
+    nextAuthRequest.set(key,at+(key==='auth-ip'?1200:125));
+    if(at>now)await new Promise(resolve=>setTimeout(resolve,Math.ceil(at-now)));
   }
   const response=await originalFetch(input,init);
   if(url.origin===origin&&response.status===429)console.error('Synthetic request rate limited:',url.pathname);
