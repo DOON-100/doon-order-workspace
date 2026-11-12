@@ -1,0 +1,9 @@
+data/
+bin/
+obj/
+*.sqlite*
+*.db*
+*.xlsx
+*.xlsm
+*.zip
+*.exe
