@@ -1,0 +1,11 @@
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {mkdir} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const exec=promisify(execFile),root=fileURLToPath(new URL('../..',import.meta.url));
+const output=path.join(root,'test-output/gmail-desktop-connector');
+await mkdir(output,{recursive:true});
+await exec(process.execPath,[path.join(root,'integrations/chatwoot/build-gateway.mjs')],{cwd:root});
+await exec('tar',['-czf',path.join(output,'server-addon.tar.gz'),'-C',path.join(root,'integrations/gmail-desktop-connector'),'chatwoot','-C',path.join(root,'test-output/chatwoot-gateway'),'gateway.mjs','ws-LICENSE.txt']);
+console.log('Packaged scoped Chatwoot Gmail addon; no runtime data or credentials included.');

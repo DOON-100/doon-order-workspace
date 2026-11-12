@@ -5,6 +5,7 @@ import {mkdir,readFile,writeFile,rename} from 'node:fs/promises';
 import path from 'node:path';
 import {pathToFileURL} from 'node:url';
 import WebSocket,{WebSocketServer} from 'ws';
+import {gmailUi} from '../gmail-desktop-connector/dashboard-ui.mjs';
 
 const digest=value=>createHash('sha256').update(value).digest('hex');
 const bindingName='doon_chatwoot_binding';
@@ -102,9 +103,11 @@ export async function createGateway(config){
   if(url.pathname==='/cable'&&url.searchParams.has('pubsub_token')&&url.searchParams.get('pubsub_token')!==binding.pubsub)throw fail(403,'实时会话身份不一致。');
  }
  function allowed(url){return /^\/(?:app(?:\/|$)|vite(?:\/|$)|packs(?:\/|$)|brand-assets(?:\/|$)|dashboard\/images(?:\/|$)|audio\/dashboard(?:\/|$)|assets(?:\/|$)|api\/v[12](?:\/|$)|rails\/active_storage(?:\/|$)|cable$|auth\/(?:validate_token|sign_out)$)/.test(url.pathname);}
- function proxy(req,res){
+ function proxy(req,res,gmailKey=null){
   const options={hostname:upstream.hostname,port:upstream.port||80,path:req.url,method:req.method,headers:{...req.headers,host:origin.host,'x-forwarded-host':origin.host,'x-forwarded-proto':origin.protocol.slice(0,-1),cookie:(req.headers.cookie||'').split(';').filter(value=>!value.trim().startsWith(sessionCookieName+'=')&&!value.trim().startsWith(bindingName+'=')).join(';')}};
   delete options.headers['api_access_token'];delete options.headers.authorization;
+  delete options.headers['x-doon-gmail-key'];
+  if(gmailKey){options.headers['x-doon-gmail-key']=gmailKey;delete options.headers.cookie;}
   const target=(upstream.protocol==='https:'?https:http).request(options,response=>{
    // Only fingerprinted, user-independent build assets may be cached. HTML,
    // API responses, attachments and authorization failures remain no-store.
@@ -122,16 +125,31 @@ export async function createGateway(config){
   if(/%2f|%5c|%2e|\\/i.test(req.url.split('?')[0])||/(?:^|\/)\.{1,2}(?:\/|$)/.test(req.url.split('?')[0]))throw fail(400,'请求路径不正确。');
   if(req.headers.host!==origin.host)throw fail(400,'访问地址不正确。');
   if(req.method==='GET'&&url.pathname==='/chatwoot/health'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true,service:'doon-chatwoot-gateway'}));}
+  if(url.pathname.startsWith('/chatwoot/gmail-bridge/')){
+   if(!config.gmailConnectorTokenSha256||!/^[a-f0-9]{64}$/.test(config.gmailConnectorTokenSha256))throw fail(404,'本机 Gmail 连接器尚未启用。');
+   const key=(req.headers.authorization||'').match(/^Bearer ([-\w]{43})$/)?.[1]||'';
+   if(!key||!timingSafeEqual(Buffer.from(digest(key)),Buffer.from(config.gmailConnectorTokenSha256)))throw fail(401,'连接器凭据无效。');
+   if(req.method!=='POST'||url.search||!/^\/chatwoot\/gmail-bridge\/v1\/(?:register|heartbeat|ingest|missing|claim|complete|defer|uncertain)$/.test(url.pathname))throw fail(403,'该连接器操作未开放。');
+   if(req.headers.origin||!/^application\/json(?:;|$)/i.test(req.headers['content-type']||'')||Number(req.headers['content-length']||0)>72*1024*1024)throw fail(400,'连接器请求格式不正确。');
+   return proxy(req,res,key);
+  }
   const auth=await authenticate(req);
   if(req.method==='GET'&&url.pathname==='/chatwoot/status'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({enabled:true}));}
   if(req.method==='GET'&&(['/chatwoot','/chatwoot/','/chatwoot/enter'].includes(url.pathname)||/^\/app\/(?:login(?:\/|$)|auth(?:\/|$))/.test(url.pathname)))return await enter(req,res,auth);
   const binding=bound(req,auth);
   if(!binding){if(req.method==='GET'&&url.pathname.startsWith('/app'))return redirect(res,'/chatwoot/enter');throw fail(401,'请从邮箱页面重新进入 Chatwoot。');}
   if(req.method==='GET'&&url.pathname==='/chatwoot/session'){res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({ok:true}));}
+  if(req.method==='GET'&&url.pathname==='/chatwoot/gmail-ui.js'&&config.gmailConnectorTokenSha256){res.writeHead(200,{'Content-Type':'application/javascript; charset=utf-8'});return res.end(gmailUi);}
   if(!allowed(url))throw fail(403,'该 Chatwoot 入口未开放。');
   if(/^\/(?:dashboard\/images|audio\/dashboard)(?:\/|$)/.test(url.pathname)&&!['GET','HEAD'].includes(req.method))throw fail(403,'静态资源仅支持读取。');
   if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.headers.origin!==origin.origin)throw fail(403,'请求来源不正确。');
-  checkScope(req,url,binding);proxy(req,res);
+  checkScope(req,url,binding);
+  if(config.gmailBlobScopeToken&&['GET','HEAD'].includes(req.method)&&url.pathname.startsWith('/rails/active_storage/')){
+   const scope=await fetch(new URL('/doon-gmail-internal/blob-scope',upstream),{method:'POST',headers:{'Content-Type':'application/json','X-Doon-Gmail-Gateway':config.gmailBlobScopeToken},body:JSON.stringify({path:url.pathname,user_id:binding.id}),signal:AbortSignal.timeout(8000),redirect:'error'});
+   if(!scope.ok)throw fail(503,'暂时无法验证 Gmail 原件权限。');
+   if(!(await scope.json()).allowed)throw fail(403,'当前账号无权查看该 Gmail 原件。');
+  }
+  proxy(req,res);
  }catch(error){errorResponse(req,res,error);}});
  const websocketServer=new WebSocketServer({noServer:true,maxPayload:65536,perMessageDeflate:false,handleProtocols:protocols=>protocols.has('actioncable-v1-json')?'actioncable-v1-json':false});
  server.on('close',()=>{for(const client of websocketServer.clients)client.terminate();websocketServer.close();});

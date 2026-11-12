@@ -1,0 +1,9 @@
+{
+  "name": "doon-gmail-desktop-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {"node": ">=24.13.0"},
+  "scripts": {"start": "node cli.mjs run", "test": "node --test test/*.test.mjs"},
+  "dependencies": {"google-auth-library": "11.3.4"}
+}

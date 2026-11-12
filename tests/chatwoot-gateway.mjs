@@ -3,6 +3,7 @@ import http from 'node:http';
 import WebSocket,{WebSocketServer} from 'ws';
 import {mkdtemp,rm,readFile} from 'node:fs/promises';
 import os from 'node:os';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 const {createGateway}=await import(process.env.DOON_CHATWOOT_GATEWAY_MODULE||'../integrations/chatwoot/gateway.mjs');
 
@@ -22,6 +23,7 @@ const app=http.createServer(async(req,res)=>{
  if(req.url.startsWith('/vite/assets/'))res.setHeader('Content-Type',req.url.includes('html-fallback')?'text/html':'application/javascript');
  if(req.url.includes('asset-cookie'))res.setHeader('Set-Cookie','synthetic=only; Path=/');
  if(upstreamFailed){res.statusCode=503;return res.end('{}');}
+ if(req.url==='/doon-gmail-internal/blob-scope'){assert.equal(req.headers['x-doon-gmail-gateway'],'g'.repeat(43));return res.end(JSON.stringify({allowed:data.user_id===1}));}
  if(req.url.startsWith('/platform/'))assert.equal(req.headers.api_access_token,'synthetic-platform-token');
  if(req.url==='/platform/api/v1/users'&&req.method==='POST'){
   assert.notEqual(data.password,'synthetic-middle-password');
@@ -89,5 +91,21 @@ try{
  assert.equal((await request('/chatwoot/enter')).status,401);passed++;
  assert.equal((await request('/chatwoot/enter',{headers:{Cookie:'doon_employee_session='+tokenA}})).status,302);passed++;
  assert.equal((await request('/chatwoot/enter',{headers:{Cookie:'doon_employee_cli_session='+tokenA}})).status,401);passed++;
+ await close(gateway);const connectorKey='c'.repeat(43);
+ gateway=await createGateway({...config,gmailConnectorTokenSha256:createHash('sha256').update(connectorKey).digest('hex'),gmailBlobScopeToken:'g'.repeat(43)});
+ await new Promise(resolve=>gateway.listen(Number(new URL(publicOrigin).port),'127.0.0.1',resolve));
+ const connectorHeaders={Cookie:'',Authorization:'Bearer '+connectorKey,'Content-Type':'application/json'};
+ assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);passed++;
+ assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{method:'POST',headers:connectorHeaders,body:'{}'})).status,200);
+ assert.equal(proxied.headers['x-doon-gmail-key'],connectorKey);assert.equal(proxied.headers.cookie,undefined);assert.equal(proxied.headers.authorization,undefined);passed++;
+ for(const endpoint of ['/chatwoot/gmail-bridge/v1/claim?token=unsafe','/chatwoot/gmail-bridge/v1/../../api/v1/profile','/api/v1/profile'])assert.notEqual((await request(endpoint,{method:'POST',headers:connectorHeaders,body:'{}'})).status,200);passed++;
+ assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{method:'POST',headers:{...connectorHeaders,Origin:publicOrigin},body:'{}'})).status,400);passed++;
+ assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{headers:connectorHeaders})).status,403);passed++;
+ const signed=await request('/chatwoot/enter');const uiCookies=signed.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+ assert.equal((await request('/chatwoot/gmail-ui.js',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);passed++;
+ assert.equal((await request('/api/v1/profile',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies,'x-doon-gmail-key':connectorKey}})).status,200);assert.equal(proxied.headers['x-doon-gmail-key'],undefined);passed++;
+ assert.equal((await request('/rails/active_storage/blobs/redirect/synthetic/original.eml',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);passed++;
+ const anotherEntry=await request('/chatwoot/enter',{headers:{Cookie:'doon_session='+tokenB}}),anotherCookies=anotherEntry.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+ assert.equal((await request('/rails/active_storage/blobs/redirect/synthetic/original.eml',{headers:{Cookie:'doon_session='+tokenB+'; '+anotherCookies}})).status,403);passed++;
  console.log('Chatwoot gateway: '+passed+' synthetic checks passed');
 }finally{if(gateway)await close(gateway);await close(app);await close(middle);await rm(root,{recursive:true,force:true});}
