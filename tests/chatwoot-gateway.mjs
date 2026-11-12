@@ -92,7 +92,7 @@ try{
  assert.equal((await request('/chatwoot/enter',{headers:{Cookie:'doon_employee_session='+tokenA}})).status,302);passed++;
  assert.equal((await request('/chatwoot/enter',{headers:{Cookie:'doon_employee_cli_session='+tokenA}})).status,401);passed++;
  await close(gateway);const connectorKey='c'.repeat(43);
- gateway=await createGateway({...config,gmailConnectorTokenSha256:createHash('sha256').update(connectorKey).digest('hex'),gmailBlobScopeToken:'g'.repeat(43)});
+ gateway=await createGateway({...config,gmailConnectorTokenSha256:createHash('sha256').update(connectorKey).digest('hex'),gmailBlobScopeToken:'g'.repeat(43),gmailPrivateAccountId:18,gmailOwnerUserId:1});
  await new Promise(resolve=>gateway.listen(Number(new URL(publicOrigin).port),'127.0.0.1',resolve));
  const connectorHeaders={Cookie:'',Authorization:'Bearer '+connectorKey,'Content-Type':'application/json'};
  assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'})).status,401);passed++;
@@ -102,10 +102,15 @@ try{
  assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{method:'POST',headers:{...connectorHeaders,Origin:publicOrigin},body:'{}'})).status,400);passed++;
  assert.equal((await request('/chatwoot/gmail-bridge/v1/claim',{headers:connectorHeaders})).status,403);passed++;
  const signed=await request('/chatwoot/enter');const uiCookies=signed.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+ assert.equal(signed.headers.get('location'),'/app/accounts/18/dashboard');passed++;
  assert.equal((await request('/chatwoot/gmail-ui.js',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);passed++;
  assert.equal((await request('/api/v1/profile',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies,'x-doon-gmail-key':connectorKey}})).status,200);assert.equal(proxied.headers['x-doon-gmail-key'],undefined);passed++;
  assert.equal((await request('/rails/active_storage/blobs/redirect/synthetic/original.eml',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);passed++;
  const anotherEntry=await request('/chatwoot/enter',{headers:{Cookie:'doon_session='+tokenB}}),anotherCookies=anotherEntry.headers.getSetCookie().map(v=>v.split(';')[0]).join('; ');
+ assert.equal(anotherEntry.headers.get('location'),'/app/accounts/17/dashboard');passed++;
+ assert.equal((await request('/api/v1/accounts/18/contacts',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);
+ assert.equal((await request('/api/v1/accounts/17/inboxes',{headers:{Cookie:'doon_session='+tokenA+'; '+uiCookies}})).status,200);
+ assert.equal((await request('/api/v1/accounts/18/contacts',{headers:{Cookie:'doon_session='+tokenB+'; '+anotherCookies}})).status,403);passed++;
  assert.equal((await request('/rails/active_storage/blobs/redirect/synthetic/original.eml',{headers:{Cookie:'doon_session='+tokenB+'; '+anotherCookies}})).status,403);passed++;
  console.log('Chatwoot gateway: '+passed+' synthetic checks passed');
 }finally{if(gateway)await close(gateway);await close(app);await close(middle);await rm(root,{recursive:true,force:true});}

@@ -6,7 +6,7 @@ Windows 本机通过 Gmail API 收发邮件；独立 Chatwoot 容器显示原生
 
 - 首次导入最近 30 天的邮件，包含已发送和已归档邮件，不导入草稿；Gmail 默认列表不含垃圾邮件和垃圾箱。
 - 保存固定的初始时间范围、分页位置和 Gmail history ID。电脑重连后补同步；history 过期时重新核对固定范围和已同步邮件，按 Gmail message ID 去重。确认 Chatwoot 收到消息后才推进位置。
-- 新建独立 Email 收件箱，默认只加入本人。普通员工不获得收件箱权限；同工作区管理员仍能查看。Google 网页授权只在首次接入或重新授权时出现。
+- 个人邮箱使用独立 Chatwoot 工作区和 Email 收件箱，默认只加入本人，隔离会话及工作区级联系人列表；原工作区仍可切换进入。普通员工不获得新工作区权限；若主动增设该工作区管理员，对方也能查看。Google 网页授权只在首次接入或重新授权时出现。
 - 在 Chatwoot 原生编辑器发新邮件、回复、添加附件。服务器只渲染 MIME 并排队，电脑通过 Gmail API 发送；Google 返回成功后才显示已发送。原生 `progress` 状态表示等待发送。
 - 本人打开会话会排队标为已读；标为未读会移回未读；这个 Gmail 收件箱的“已解决”对应归档，“重新打开”对应移回收件箱。浮动状态栏提供明确的 Gmail 操作按钮。
 - 状态操作针对点击时已同步的邮件 ID；离线期间新到的邮件不会被旧的已读/归档操作误处理。Gmail 的逐封状态汇总为 Chatwoot 会话的未读/归档状态，两个产品的概念并不完全相同。
@@ -34,9 +34,9 @@ OAuth 客户端类型为“桌面应用”，开启 Gmail API，并请求 `https
 
 ## Chatwoot 适配
 
-基线：Chatwoot v4.19.1。`chatwoot/doon_gmail.rb` 以独立 initializer 挂载到 Rails 和 worker，只接管新收件箱；`schema.sql` 只新增 `doon_gmail_*` 表。不得覆盖已有数据库、收件箱或联系人。邮箱与现有 Email channel 冲突时注册会拒绝，不能覆盖旧配置。
+基线：Chatwoot v4.19.1。`chatwoot/doon_gmail.rb` 以独立 initializer 挂载到 Rails 和 worker，只接管新收件箱；`schema.sql` 只新增 `doon_gmail_*` 表。不得覆盖已有数据库、收件箱或联系人。邮箱与现有 Email channel 冲突时，为新通道生成独立的 `@connector.invalid` 内部标识，保留旧配置。该标识不用于收发，状态栏展示真实邮箱，发送 MIME 的身份仍是经 Google 授权的邮箱。
 
-服务端私有 `DOON_GMAIL_CONFIG` 文件包含已核实的 `account_id`、`user_id`、设备令牌 SHA-256 和附件鉴权令牌 SHA-256。网关私有配置增加 `gmailConnectorTokenSha256` 和独立 `gmailBlobScopeToken`。不在该文件配置 Google 凭据。撤销对应 Chatwoot 成员或设备令牌可阻止连接器继续接入。
+服务端私有 `DOON_GMAIL_CONFIG` 文件包含已核实的原 `account_id`、`user_id`、设备令牌 SHA-256、附件鉴权令牌 SHA-256；个人接入设置 `private_workspace: true`。网关私有配置增加 `gmailConnectorTokenSha256` 和独立 `gmailBlobScopeToken`，注册后按已核实结果设置 `gmailPrivateAccountId` 和 `gmailOwnerUserId`。网关只有该身份能进入新工作区，同时保留其原工作区访问。网页、API 和 WebSocket 都校验工作区范围。不在该文件配置 Google 凭据。撤销对应 Chatwoot 成员或设备令牌可阻止连接器继续接入。
 
 网关仅为设备开放 `POST /chatwoot/gmail-bridge/v1/{register,heartbeat,ingest,missing,claim,complete,defer,uncertain}`；浏览器请求仍校验中台登录。附件检查走仅内部可访问的独立鉴权接口，阻止非授权成员利用复制的 Gmail 附件链接读取原件。原有其他收件箱不套用 Gmail 操作语义。
 

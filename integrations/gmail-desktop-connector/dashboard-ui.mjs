@@ -18,6 +18,7 @@ export const gmailUi='('+function(){
    if(!data.enabled){panel?.remove();panel=null;return;}
    if(!panel){panel=element('aside','');panel.setAttribute('aria-label','Gmail 本机同步状态');panel.style.cssText='position:fixed;bottom:14px;right:18px;z-index:45;max-width:520px;border:1px solid #cad5e2;border-radius:8px;padding:10px 14px;background:#fff;color:#26364d;box-shadow:0 2px 12px #0002;font:13px/1.5 sans-serif';document.body.append(panel);}
    panel.replaceChildren(element('strong',data.online?'Gmail 本机连接器：在线':'Gmail 本机连接器：离线，等待电脑重连'));
+   panel.append(element('div','实际收发邮箱：'+data.email));
    if(!data.synced_at)panel.append(element('div','首次同步尚未完成；历史范围：最近 30 天。'));
    if(data.conversation){
     panel.append(element('div',`Gmail 状态：${data.unread?'未读':'已读'} · ${data.archived?'已归档':'在收件箱'}${data.pending?' · '+data.pending+' 项操作待完成':''}`));

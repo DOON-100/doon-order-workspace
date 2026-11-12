@@ -45,9 +45,14 @@ module DoonGmail
         end
         account = Account.find(config.fetch('account_id'))
         user = account.users.find(config.fetch('user_id'))
-        # Never attach to or change a pre-existing inbox with this address.
-        raise 'Address already belongs to an existing inbox' if Channel::Email.exists?(email: email)
-        channel = Channel::Email.create!(account: account, email: email, imap_enabled: false, smtp_enabled: false)
+        if config['private_workspace']
+          account = Account.create!(name: '个人 Gmail · 本机同步', locale: account.locale)
+          AccountUser.create!(account: account, user: user, role: :administrator)
+        end
+        # A native Email channel address is globally unique. Keep any existing
+        # channel intact; this adapter has its own internal routing identifier.
+        channel_email = Channel::Email.exists?(email: email) ? "doon-gmail-#{SecureRandom.hex(16)}@connector.invalid" : email
+        channel = Channel::Email.create!(account: account, email: channel_email, imap_enabled: false, smtp_enabled: false)
         inbox = account.inboxes.create!(name: '个人 Gmail · 本机同步', channel: channel, enable_auto_assignment: false)
         inbox.inbox_members.create!(user: user)
         Link.create!(id: 1, account_id: account.id, user_id: user.id, inbox_id: inbox.id, email: email.downcase)
@@ -230,6 +235,11 @@ module DoonGmail
       return if content_attributes['doon_gmail_id'].present?
       super
     end
+    def set_conversation_activity
+      return super unless DoonGmail.bound?(inbox_id)
+      latest = conversation.messages.chat.maximum(:created_at) || created_at
+      conversation.update_columns(last_activity_at: latest, updated_at: Time.current)
+    end
   end
   module ConversationActions
     def update_last_seen
@@ -267,7 +277,7 @@ module DoonGmail
     rescue_from StandardError, with: :safe_error
     def register
       l = DoonGmail.register(params.require(:email).to_s.downcase)
-      render json: { inbox_id: l.inbox_id }
+      render json: { inbox_id: l.inbox_id, account_id: l.account_id }
     end
     def heartbeat
       updates = { heartbeat_at: Time.current }; updates[:synced_at] = Time.current if params[:synced]
@@ -351,7 +361,7 @@ module DoonGmail
       conversation = params[:conversation].present? ? Current.account.conversations.find_by(display_id: params[:conversation], inbox_id: l.inbox_id) : nil
       jobs = conversation ? Job.where(link_id: 1, conversation_id: conversation.id).where.not(state: 'done') : Job.none
       maps = conversation ? MessageMap.where(link_id: 1, conversation_id: conversation.id, missing: false).to_a : []
-      render json: { enabled: true, online: l.heartbeat_at && l.heartbeat_at > 60.seconds.ago, synced_at: l.synced_at,
+      render json: { enabled: true, email: l.email, online: l.heartbeat_at && l.heartbeat_at > 60.seconds.ago, synced_at: l.synced_at,
                      inbox_id: l.inbox_id, conversation: conversation&.display_id, owner: Current.user.id == l.user_id,
                      pending: jobs.count, uncertain: jobs.where(state: 'uncertain').count,
                      attachment_notes: conversation && conversation.messages.where("content_attributes ? 'doon_gmail_attachment_note'").exists?,

@@ -26,6 +26,8 @@ export async function createGateway(config){
  try{identities=JSON.parse(await readFile(statePath,'utf8'));}catch(error){if(error.code!=='ENOENT')throw error;}
  const sessionCookieName=config.sessionCookieName||'doon_session';
  const inFlight=new Map();
+ if((config.gmailPrivateAccountId||config.gmailOwnerUserId)&&(!Number.isSafeInteger(config.gmailPrivateAccountId)||config.gmailPrivateAccountId<1||!Number.isSafeInteger(config.gmailOwnerUserId)||config.gmailOwnerUserId<1))throw Error('Invalid Gmail workspace scope');
+ function accountsFor(user){return identities[String(user.identity.id)]?.id===config.gmailOwnerUserId&&config.gmailPrivateAccountId?[config.accountId,config.gmailPrivateAccountId]:[config.accountId];}
  let serial=Promise.resolve();
  const lock=fn=>{const operation=serial.then(fn);serial=operation.catch(()=>{});return operation;};
  async function persist(){const temp=statePath+'.'+randomBytes(8).toString('hex');await writeFile(temp,JSON.stringify(identities),{mode:0o600,flag:'wx'});await rename(temp,statePath);}
@@ -70,7 +72,7 @@ export async function createGateway(config){
   if(parts.length!==2)return null;
   const expected=createHmac('sha256',config.bindingKey).update(parts[0]).digest('base64url');
   if(parts[1].length!==expected.length||!timingSafeEqual(Buffer.from(parts[1]),Buffer.from(expected)))return null;
-  try{const binding=JSON.parse(Buffer.from(parts[0],'base64url'));const identity=identities[String(auth.user.identity.id)];return binding.session===auth.key&&binding.member===String(auth.user.identity.id)&&binding.role===auth.user.role&&binding.id===identity?.id&&binding.account===config.accountId&&binding.expires>Date.now()?{...binding,email:identity.email}:null;}catch{return null;}
+  try{const binding=JSON.parse(Buffer.from(parts[0],'base64url'));const identity=identities[String(auth.user.identity.id)],accounts=accountsFor(auth.user);return binding.session===auth.key&&binding.member===String(auth.user.identity.id)&&binding.role===auth.user.role&&binding.id===identity?.id&&binding.account===accounts.at(-1)&&JSON.stringify(binding.accounts||[binding.account])===JSON.stringify(accounts)&&binding.expires>Date.now()?{...binding,accounts,email:identity.email}:null;}catch{return null;}
  }
  function cookie(name,value,httpOnly=false,maxAge=43200){return name+'='+encodeURIComponent(value)+'; Path=/; SameSite=Strict; Max-Age='+maxAge+(origin.protocol==='https:'?'; Secure':'')+(httpOnly?'; HttpOnly':'');}
  function headers(res){res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');res.setHeader('X-Content-Type-Options','nosniff');}
@@ -92,14 +94,15 @@ export async function createGateway(config){
   if(payload.data?.id!==identity.id||credentials.uid!==identity.email||!credentials['access-token']||!credentials.client||!/^\d+$/.test(credentials.expiry||''))throw fail(503,'Chatwoot 登录身份校验失败。');
   const pubsub=payload.data.pubsub_token;
   if(typeof pubsub!=='string'||!pubsub)throw fail(503,'Chatwoot 实时会话校验失败。');
-  const binding=sign({member:String(auth.user.identity.id),role:auth.user.role,id:identity.id,account:config.accountId,session:auth.key,pubsub,expires:Date.now()+12*3600000});
+  const accounts=accountsFor(auth.user),account=accounts.at(-1);
+  const binding=sign({member:String(auth.user.identity.id),role:auth.user.role,id:identity.id,account,accounts,session:auth.key,pubsub,expires:Date.now()+12*3600000});
   res.setHeader('Set-Cookie',[cookie(bindingName,binding,true),cookie(credentialName,JSON.stringify(credentials))]);
-  redirect(res,'/app/accounts/'+config.accountId+'/dashboard');
+  redirect(res,'/app/accounts/'+account+'/dashboard');
  }
  function checkScope(req,url,binding){
   if(req.headers.uid&&req.headers.uid!==binding.email)throw fail(403,'Chatwoot 身份与当前中台账号不一致。');
   const account=url.pathname.match(/^\/(?:api\/v[12]|app)\/accounts\/([^/]+)/)?.[1];
-  if(account&&account!==String(config.accountId))throw fail(403,'无权访问该 Chatwoot 工作区。');
+  if(account&&!binding.accounts.includes(Number(account)))throw fail(403,'无权访问该 Chatwoot 工作区。');
   if(url.pathname==='/cable'&&url.searchParams.has('pubsub_token')&&url.searchParams.get('pubsub_token')!==binding.pubsub)throw fail(403,'实时会话身份不一致。');
  }
  function allowed(url){return /^\/(?:app(?:\/|$)|vite(?:\/|$)|packs(?:\/|$)|brand-assets(?:\/|$)|dashboard\/images(?:\/|$)|audio\/dashboard(?:\/|$)|assets(?:\/|$)|api\/v[12](?:\/|$)|rails\/active_storage(?:\/|$)|cable$|auth\/(?:validate_token|sign_out)$)/.test(url.pathname);}
@@ -168,7 +171,7 @@ export async function createGateway(config){
     if(binary)throw Error('Text commands required');
     const command=JSON.parse(bytes.toString()),identifier=JSON.parse(command.identifier);
     // Native ActionCable carries identity in the subscription frame, not its URL.
-    if(!identifier||identifier.channel!=='RoomChannel'||identifier.pubsub_token!==binding.pubsub||String(identifier.account_id)!==String(binding.account)||String(identifier.user_id)!==String(binding.id)||Object.keys(identifier).some(key=>!['channel','pubsub_token','account_id','user_id'].includes(key)))throw Error('Identity mismatch');
+    if(!identifier||identifier.channel!=='RoomChannel'||identifier.pubsub_token!==binding.pubsub||!binding.accounts.includes(Number(identifier.account_id))||String(identifier.user_id)!==String(binding.id)||Object.keys(identifier).some(key=>!['channel','pubsub_token','account_id','user_id'].includes(key)))throw Error('Identity mismatch');
     if(command.command==='subscribe'){if(subscription&&subscription!==command.identifier)throw Error('Multiple subscriptions');subscription=command.identifier;}
     else if(command.command==='unsubscribe'){if(subscription!==command.identifier)throw Error('Unknown subscription');subscription=null;}
     else if(command.command==='message'){const data=JSON.parse(command.data);if(subscription!==command.identifier||data.action!=='update_presence'||Object.keys(data).some(key=>key!=='action'))throw Error('Unsupported action');}
