@@ -30,7 +30,7 @@ OAuth 客户端类型为“桌面应用”，开启 Gmail API，并请求 `https
 
 私有连接文件由维护人员通过可信通道配置，含 `origin`、独立 43 字符设备 `token`、证书 `fingerprint`。它只能访问固定的连接器接口，不能访问任意 Chatwoot API。文件、Google 客户端 JSON、邮件、SQLite 和运行日志均不应提交到仓库。导入后连接配置也存入 DPAPI。默认私有目录为 `%LOCALAPPDATA%\Doon\GmailConnector`，含加密凭据、仅保存 ID/状态的 SQLite、运行锁及日志。
 
-生成独立客户端：从仓库根目录运行 `node integrations/gmail-desktop-connector/package-client.mjs`。包输出到被忽略的 `test-output/gmail-desktop-connector/client`。用 `install-windows.ps1 -SourceDirectory <该目录> -NodePath <node.exe>` 安装到当前 Windows 用户专属目录，保留版本和校验值，增加独立启动快捷方式；`-NoStartup` 可跳过登录启动。安装不负责授权，不改已有 Windows 服务。
+生成独立客户端：从仓库根目录运行 `node integrations/gmail-desktop-connector/package-client.mjs`。包输出到被忽略的 `test-output/gmail-desktop-connector/client`。用 `install-windows.ps1 -SourceDirectory <该目录> -NodePath <node.exe>` 安装到当前 Windows 用户专属目录，保留版本和校验值，并注册独立的当前用户登录任务（不提权、不设运行时限）；系统不允许注册任务时使用当前用户启动快捷方式。`-NoStartup` 可跳过登录启动。开始菜单增加状态和重新授权入口。安装不负责授权，不改已有 Windows 服务或其他调度任务。
 
 ## Chatwoot 适配
 
