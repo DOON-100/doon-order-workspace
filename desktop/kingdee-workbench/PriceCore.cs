@@ -55,12 +55,13 @@ namespace DoonPanelPreview {
   }
  }
  public sealed class PriceRow {
+  public string Category="",Board="",PlatingColor="",MaterialCode="";public bool BoardIsCode;
   public string Lens{get;set;} public string RawPrice{get;set;} public string Id{get;set;} public string Customer{get;set;} public string Drawing{get;set;} public string Model{get;set;} public string Sku{get;set;} public string Color{get;set;} public string Kind{get;set;} public string Unit{get;set;} public string Currency{get;set;} public string BasePrice{get;set;} public string Plating{get;set;} public string Moq{get;set;} public string UnitPrice{get;set;} public string Quantity{get;set;} public string Pi{get;set;} public string Po{get;set;} public string Sheet{get;set;} public int Row{get;set;} public string File{get;set;} public string Hash{get;set;} public string Status{get;set;} public string Notes{get;set;} public string Evidence{get;set;} public string PriceCell{get;set;} public string RawDrawing{get;set;} public string RawModel{get;set;} public string Formula{get;set;}
  }
  public sealed class ParsedFile {public List<PriceRow> Rows=new List<PriceRow>();public List<string> Skipped=new List<string>(); public string Hash="";public byte[] Bytes;public string Name="";}
  public static class PriceParser {
   public const string Version="invoice-prices-v1";
-  public static readonly JavaScriptSerializer Json=new JavaScriptSerializer {MaxJsonLength=8*1024*1024};
+  public static readonly JavaScriptSerializer Json=new JavaScriptSerializer {MaxJsonLength=64*1024*1024};
   public static string Hash(byte[] data){using(var sha=SHA256.Create())return BitConverter.ToString(sha.ComputeHash(data)).Replace("-","").ToLowerInvariant();}
   public static string Key(string s){return Regex.Replace((s??"").Normalize(NormalizationForm.FormKC),@"[\s\u200B\uFEFF]+","").ToUpperInvariant();}
   public static string DrawingKey(string s){var first=(s??"").Split(new[]{'\r','\n'},StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()??"";return Regex.Replace(Key(first),@"-(?:AC\+TI|TI\+AC|AC|TI|SS|SUN)$","");}
@@ -77,7 +78,8 @@ namespace DoonPanelPreview {
     for(int r=1;r<=Math.Min(sheet.LastRow,60);r++){var hh=new Dictionary<int,string>();for(int c=1;c<=120;c++){string t=Head(sheet.Get(r,c).Value);if(t!="")hh[c]=t;}if(hh.Values.Any(t=>t.StartsWith("DRAWING")||t.Contains("图纸编号"))&&hh.Values.Any(t=>t=="MODEL"||t.StartsWith("MODEL款号")||t=="款号")){header=r;headers=hh;break;}}
     if(headers==null){parsed.Skipped.Add(sheet.Name+"：非订单明细表");continue;}
     int drawing=Find(headers,t=>t.StartsWith("DRAWING")||t.Contains("图纸编号")),model=Find(headers,t=>t=="MODEL"||t.StartsWith("MODEL款号")||t=="款号"),color=Find(headers,t=>t=="COLOURWAY"||t=="COLORWAY"||t=="COLOURNAME"||t=="COLORNAME"||t=="色号"||t=="COLORNO."),sku=Find(headers,t=>t=="SKU"),price=Find(headers,t=>t=="FRAMEPRICE"||t=="UNITPRICE"||t=="单价"),plating=Find(headers,t=>t.StartsWith("EXTRAPLATINGCOST")),moq=Find(headers,t=>t.StartsWith("PRICEFORNOTREACHMOQ")),qty=Find(headers,t=>t.StartsWith("ORDERQTY")||t=="QUANTITY"||t=="数量"),sampleQty=Find(headers,t=>t.StartsWith("SAMPLEQTY")||t=="样办数量"),unit=Find(headers,t=>t=="UNIT"||t=="单位"),remark=Find(headers,t=>t.StartsWith("REMARK")||t=="备注"),total=Find(headers,t=>t=="ITEMNET"||t=="TOTAL");
-    int lens=Find(headers,t=>t=="LENS"||t=="LENSDESCRIPTION"||t=="LENSCOLOR"||t=="LENSCOLOUR"||t=="镜片"||t=="镜片描述"||t=="镜片颜色");
+    int lens=Find(headers,t=>t.StartsWith("LENS")||t=="镜片"||t=="镜片描述"||t=="镜片颜色");
+    int category=Find(headers,t=>t=="TYPE"||t=="TYPE材质"||t=="镜架材质"||t=="成品类别"),board=Find(headers,t=>t.StartsWith("ACETATEFRONT/RIM")||t=="板料编码"),platingColor=Find(headers,t=>t.StartsWith("PLATINGCOLOUR")||t.StartsWith("PLATINGCOLOR")||t=="电镀色"),materialCode=Find(headers,t=>t=="物料编码"||t=="MATERIALCODE");
     if(color==0){parsed.Skipped.Add(sheet.Name+"：缺少明确色号列");continue;}
     string pi=HeaderValue(sheet,header,@"^PI/ORDERCONFIRMATIONNO\.?$|^PI(NO|NUMBER)\.?$|^INVOICENO\.?$|^单据编号$|^生产单号$|^内部订单号$"),po=HeaderValue(sheet,header,@"^CUSTOMERPONO\.?$|^客户订单号$"),explicitCustomer=HeaderValue(sheet,header,@"^CUSTOMER(CODE|NO\.?|NUMBER)$|^客户(编码|编号|代码)$");
     var customers=new HashSet<string>();foreach(string text in new[]{pi,po})foreach(Match m in Regex.Matches(Key(text),@"(?<![A-Z0-9])\d{4}-(C\d+)(?=-)"))customers.Add(m.Groups[1].Value);if(Regex.IsMatch(Key(explicitCustomer),@"^C\d+$"))customers.Add(Key(explicitCustomer));string customer=customers.Count==1?customers.First():"";
@@ -94,12 +96,12 @@ namespace DoonPanelPreview {
      if(ec.Value!=""&&!ex.HasValue)issues.Add("电镀加价非数值");if(ac.Value!=""&&!mq.HasValue)issues.Add("起订量加价非数值");if(ex<0||mq<0)issues.Add("负附加费");
      string fmt=pc.Format.ToUpperInvariant();string currency=Regex.IsMatch(fmt,@"US\$|USD")?"USD":Regex.IsMatch(fmt,@"CNY|RMB|￥|¥")?"CNY":Regex.IsMatch(fmt,@"EUR|€")?"EUR":"";if(currency=="")issues.Add("币种待核对");
      string d=DrawingKey(dc.Value),mkey=Key(mc.Value),ckey=Key(cc.Value);if(d=="")issues.Add("缺图纸号");if(mkey=="")issues.Add("缺客款号");if(dc.Formula!=""||mc.Formula!=""||cc.Formula!=""||qc.Formula!=""||(unit>0&&sheet.Get(r,unit).Formula!="")||(sku>0&&sheet.Get(r,sku).Formula!="")||(lens>0&&sheet.Get(r,lens).Formula!=""))issues.Add("识别字段含公式待核对");
-     decimal? effective=bp.HasValue?bp+(ex??0)+(mq??0):null;
+     if(new[]{category,board,platingColor,materialCode}.Any(c=>c>0&&sheet.Get(r,c).Formula!=""))issues.Add("识别字段含公式待核对"); decimal? effective=bp.HasValue?bp+(ex??0)+(mq??0):null;
      string u=unit>0?Key(sheet.Get(r,unit).Value):"";if(u=="")issues.Add("缺单位");
      if(mq>0)issues.Add("含起订量附加费，按单核对");
      if(ex>0||mq>0){string form=Key(tc.Formula).Replace("$","");var referenced=Regex.Matches(form,@"[A-Z]+[1-9][0-9]*").Cast<Match>().Select(x=>x.Value).ToList();if((ex>0&&!referenced.Contains(ec.Address))||(mq>0&&!referenced.Contains(ac.Address)))issues.Add("附加费与原金额公式不一致");}
      string notes=remark>0?sheet.Get(r,remark).Value:"";
-     parsed.Rows.Add(new PriceRow{Lens=lens>0?sheet.Get(r,lens).Value:"",RawPrice=pc.Value,Id=Hash(Encoding.UTF8.GetBytes(parsed.Hash+"\n"+sheet.Name+"\n"+r)),Customer=customer,Drawing=d,Model=mkey,Sku=sku>0?Key(sheet.Get(r,sku).Value):"",Color=ckey,Kind=kind,Unit=u,Currency=currency,BasePrice=Num(bp),Plating=Num(ex),Moq=Num(mq),UnitPrice=Num(effective),Quantity=qc.Value,Pi=pi,Po=po,Sheet=sheet.Name,Row=r,File=filename,Hash=parsed.Hash,Status=issues.Count==0?"可匹配":string.Join("；",issues.Distinct()),Notes=notes,Evidence="图纸 "+dc.Address+"；款号 "+mc.Address+"；色号 "+cc.Address+"；单价 "+pc.Address+"；加价 "+ec.Address+"；MOQ "+ac.Address,PriceCell=pc.Address,RawDrawing=dc.Value,RawModel=mc.Value,Formula=pc.Formula!=""?pc.Formula:tc.Formula});
+     parsed.Rows.Add(new PriceRow{Category=category>0?sheet.Get(r,category).Value:"",Board=board>0?sheet.Get(r,board).Value:"",BoardIsCode=board>0&&headers[board]=="板料编码",PlatingColor=platingColor>0?sheet.Get(r,platingColor).Value:"",MaterialCode=materialCode>0?sheet.Get(r,materialCode).Value:"",Lens=lens>0?sheet.Get(r,lens).Value:"",RawPrice=pc.Value,Id=Hash(Encoding.UTF8.GetBytes(parsed.Hash+"\n"+sheet.Name+"\n"+r)),Customer=customer,Drawing=d,Model=mkey,Sku=sku>0?Key(sheet.Get(r,sku).Value):"",Color=ckey,Kind=kind,Unit=u,Currency=currency,BasePrice=Num(bp),Plating=Num(ex),Moq=Num(mq),UnitPrice=Num(effective),Quantity=qc.Value,Pi=pi,Po=po,Sheet=sheet.Name,Row=r,File=filename,Hash=parsed.Hash,Status=issues.Count==0?"可匹配":string.Join("；",issues.Distinct()),Notes=notes,Evidence="图纸 "+dc.Address+"；款号 "+mc.Address+"；色号 "+cc.Address+"；单价 "+pc.Address+"；加价 "+ec.Address+"；MOQ "+ac.Address,PriceCell=pc.Address,RawDrawing=dc.Value,RawModel=mc.Value,Formula=pc.Formula!=""?pc.Formula:tc.Formula});
     }
    }return parsed;
   }

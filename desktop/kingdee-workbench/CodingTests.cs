@@ -11,7 +11,7 @@ namespace DoonPanelPreview {
   static int count;static void Check(bool ok,string name){count++;if(!ok)throw new Exception("Coding test failed: "+name);}
   static readonly XNamespace N="http://schemas.openxmlformats.org/spreadsheetml/2006/main";
   static XElement Cell(string address,string value){return new XElement(N+"c",new XAttribute("r",address),new XAttribute("t","inlineStr"),new XElement(N+"is",new XElement(N+"t",value)));}
-  static byte[] Fixture(bool revision=false,bool invalid=false){using(var output=new MemoryStream()){using(var zip=new ZipArchive(output,ZipArchiveMode.Create,true)){
+  internal static byte[] Fixture(bool revision=false,bool invalid=false){using(var output=new MemoryStream()){using(var zip=new ZipArchive(output,ZipArchiveMode.Create,true)){
    Action<string,string> add=(path,xml)=>{using(var writer=new StreamWriter(zip.CreateEntry(path).Open(),new UTF8Encoding(false)))writer.Write(xml);};
    add("xl/workbook.xml","<workbook xmlns='"+N+"' xmlns:r='http://schemas.openxmlformats.org/officeDocument/2006/relationships'><sheets><sheet name='合成成品编码规则' sheetId='1' r:id='rId1'/><sheet name='合成半成品编码规则' sheetId='2' r:id='rId2'/></sheets></workbook>");
    add("xl/_rels/workbook.xml.rels","<Relationships xmlns='http://schemas.openxmlformats.org/package/2006/relationships'><Relationship Id='rId1' Target='worksheets/sheet1.xml'/><Relationship Id='rId2' Target='worksheets/sheet2.xml'/></Relationships>");
