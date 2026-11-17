@@ -2,7 +2,7 @@ import type {WriteField,WriteSchema} from './write-input.js';
 const text=(max=3000,required=false,min=0):WriteField=>({type:'string',max,required,min}),id=text(160,true,1),version:WriteField={type:'number',integer:true,min:0,required:true},positive={...version,min:1},hash={...text(64,true,64)},ids:WriteField={type:'array',items:id,max:100},selection:WriteField={type:'array',required:true,min:1,max:500,items:{type:'object',properties:{id,version:positive}}};
 export const workspaceSchemas:Record<string,WriteSchema>={
  comment:{lineId:id,orderVersion:positive,text:text(3000,true,1),dueDate:text(10)},task:{id,expectedVersion:version,expectedHash:hash,done:{type:'boolean',required:true}},
- owner:{orders:selection,email:text(254,true,1)},'owner-assign':{orders:selection,email:text(254,true,1),previewHash:hash},
+ owner:{orders:selection,username:text(32,true,1)},'owner-assign':{orders:selection,username:text(32,true,1),previewHash:hash},
  'orders-preview':{sheet:text(200),header:{type:'number',integer:true,min:1,max:1048576},mapping:{type:'json'}},
  'orders-commit':{id,selected:{type:'array',required:true,min:1,max:5000,items:{type:'number',integer:true,min:0}},reason:text(1000),offset:version,sourceHash:hash},
  'ledger-preview':{mode:{type:'string',required:true,enum:['active','archived']}},'ledger-commit':{id,offset:version,sourceHash:hash,rowsHash:hash},

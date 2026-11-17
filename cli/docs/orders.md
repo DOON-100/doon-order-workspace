@@ -90,3 +90,11 @@ doon service documents action --type submit --input action.json --version 1 --re
 当前服务端尚未核定“现销／赊销”的金蝶直接上传字段映射，真实上传保持受限；CLI没有绕过开关或协议缺口。上传/核查命令不是上线承诺，必须先查看`status`，结果不明使用原操作核查，不能换UUID或重复上传。W3验收在无金蝶凭据的本地合成服务中完成，未访问正式服务器或真实ERP。
 
 W3未增加普通订单跟进待办、普通订单附件及跨栏目维护入口；这些共用操作在W10补齐。图号更正及冻结按W4，排期按W5，出货与财务依据按W7/W8，不把当前命令数称为全站CRUD完成。
+
+## 跟单账号输入（CLI 0.44.0）
+
+单条订单修改使用 `{"id":"<lineId>","patch":{"ownerUsername":"Tina"}}`。`Tina`、`TINA`、`tina` 匹配同一登录账号；不接受邮箱、姓名或旧输入字段 `ownerEmail`。显式空字符串可清除负责人。
+
+批量分配先运行 `doon system workspace references --type owner --json` 查看成员的 `username`。预览文件为 `{"orders":[{"id":"<lineId>","version":3}],"username":"Tina"}`，使用 `preview --type owner`；提交使用相同选集和账号名，并增加预览返回的 `previewHash`，运行 `save --type owner-assign --request-id <uuid>`。旧输入字段 `email` 不再接受。批量入口仍只支持服务器允许的原表在制订单。
+
+CLI 从当前成员目录匹配账号后，才转换为服务器内部邮箱字段，并在提交后回读验证。仅识别服务器生成的 `账号名@doon.local` 成员标识；普通外部邮箱不按前缀猜账号，找不到、已停用或匹配不唯一均不提交。返回记录中的邮箱仍是只读身份关联信息，不能复制为新输入。网页、服务器接口和历史数据不变；此改动不补齐原表工序结构，也不改变订单生产状态。

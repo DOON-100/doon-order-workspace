@@ -7,11 +7,13 @@ import {ApiClient} from '../dist/client.js';
 import {version} from '../dist/catalog.js';
 import {store,session} from './helpers.mjs';
 
+const nextVersion=version.split('.').map((part,index)=>index===2?String(Number(part)+1):part).join('.');
+
 test('update check uses the employee session and a fixed HTTPS route',async()=>{
  const state=await store();await state.setup('https://employee.test',false);await state.saveSession(session('https://employee.test'));
- const release={format:'doon-cli-update-v1',version:'0.44.0',commit:'a'.repeat(40),file:'doon-cli-0.44.0-aaaaaaaaaaaa-windows-x64.zip',bytes:10,sha256:'b'.repeat(64),sourceDirty:false};
+ const release={format:'doon-cli-update-v1',version:nextVersion,commit:'a'.repeat(40),file:`doon-cli-${nextVersion}-aaaaaaaaaaaa-windows-x64.zip`,bytes:10,sha256:'b'.repeat(64),sourceDirty:false};
  const update=new UpdateService(state,async(url,options)=>{assert.equal(url,'https://employee.test/api/cli-update/latest');assert.equal(options.headers.Cookie,'doon_employee_session='+'X'.repeat(43));assert.equal(options.redirect,'manual');return Response.json(release);});
- assert.deepEqual(await update.check(),{installedVersion:version,latestVersion:'0.44.0',updateAvailable:true,commit:release.commit});
+ assert.deepEqual(await update.check(),{installedVersion:version,latestVersion:nextVersion,updateAvailable:true,commit:release.commit});
 });
 
 test('a progressing package download can exceed the old 30 second deadline', {timeout:45000}, async()=>{
