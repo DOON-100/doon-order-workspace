@@ -56,7 +56,7 @@ async function main() {
   if (!bytes || hash(bytes) !== expected) { bytes = await download(base + archiveName); if (hash(bytes) !== expected) throw Error('Node archive integrity mismatch'); await fs.writeFile(cached, bytes); }
   const runtimeRoot = path.join(work, 'runtime');
   const expand = path.join(work, 'expand.ps1');
-  await fs.writeFile(expand, "param([string]$Archive,[string]$Destination)\n$ErrorActionPreference='Stop'\nExpand-Archive -LiteralPath $Archive -DestinationPath $Destination\n");
+  await fs.writeFile(expand, "param([string]$Archive,[string]$Destination)\n$ErrorActionPreference='Stop'\n$env:PSModulePath=[IO.Path]::Combine($PSHOME,'Modules')\nExpand-Archive -LiteralPath $Archive -DestinationPath $Destination\n");
   run(powershell, ['-NoProfile', '-NonInteractive', '-File', expand, '-Archive', cached, '-Destination', runtimeRoot]);
   const runtime = path.join(runtimeRoot, `node-v${nodeVersion}-win-x64`);
   const stage = path.join(work, 'package'); await fs.mkdir(stage);
@@ -88,7 +88,7 @@ async function main() {
   const name = `doon-cli-${pkg.version}-${commit.slice(0,12)}${sourceDirty ? '-dev' : ''}-windows-x64.zip`;
   const zip = path.join(work, name), extracted = path.join(work, 'extracted');
   const compress = path.join(work, 'compress.ps1');
-  await fs.writeFile(compress, "param([string]$Stage,[string]$Archive)\n$ErrorActionPreference='Stop'\nCompress-Archive -Path (Join-Path $Stage '*') -DestinationPath $Archive\n");
+  await fs.writeFile(compress, "param([string]$Stage,[string]$Archive)\n$ErrorActionPreference='Stop'\n$env:PSModulePath=[IO.Path]::Combine($PSHOME,'Modules')\nCompress-Archive -Path (Join-Path $Stage '*') -DestinationPath $Archive\n");
   run(powershell, ['-NoProfile', '-NonInteractive', '-File', compress, '-Stage', stage, '-Archive', zip]);
   run(powershell, ['-NoProfile', '-NonInteractive', '-File', expand, '-Archive', zip, '-Destination', extracted]);
   if (JSON.stringify(await inventory(extracted)) !== JSON.stringify(manifest.files)) throw Error('Extracted package integrity mismatch');
