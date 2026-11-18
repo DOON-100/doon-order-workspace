@@ -18,6 +18,38 @@ function current(r:EngineeringDrawing,v:number|undefined){if(r.version!==v)throw
 function lifecycle(r:EngineeringDrawing){try{assertDrawingLifecycle(r);}catch(e){throw new AppError((e as Error).message);}}
 function account(s:State,m:Member,customerId:string){const c=all(s,'customer_account').find(c=>c.id===customerId) as CustomerAccount|undefined;if(!c?.active)throw new AppError('请选择有效客户责任档案。');if(!canManageDrawings(m)&&!assignedDrawingCustomer(m,c))throw new AppError('只能提交明确绑定给本人的客户需求。',403);return c;}
 function assignableMember(a:Member){return a.active&&personnelTypeOf(a)==='internal'&&!!a.name.trim();}
+const personName=(value:string)=>value.normalize('NFKC').trim().replace(/\s+/g,' ');
+function assignmentRoster(s:State){return [
+ ...['邓铠','郑忠伟','黄智翔','杨林峰'].map((name,index)=>{
+  const matches=(all(s,'member') as Member[]).filter(member=>assignableMember(member)&&member.name.trim()===name);
+  return {id:matches.length===1?matches[0].id:`drawing_default_${index}`,name};
+ }),
+ ...all(s,'engineering_drawing_person').filter(a=>a.active!==false).map(a=>({id:a.id,name:String(a.name),custom:true,version:Number(a.version)||1})),
+];}
+async function selectedAssignees(s:State,m:Member,r:EngineeringDrawing,before:EngineeringDrawing|null){
+ const roster=assignmentRoster(s),added:Entity[]=[],selected:{id:string;name:string}[]=[];
+ const previous=before?.assignees?.length?before.assignees:before?.assignee?[{id:before.assigneeId,name:before.assignee}]:[];
+ for(const entry of r.assignees||[]){
+  let option=entry.id?roster.find(a=>a.id===entry.id):undefined;
+  // A row keeps its own assignment snapshots, including retired or legacy names.
+  if(!option&&previous.some(p=>p.id===entry.id&&p.name===entry.name))option={...entry};
+  if(entry.id&&!option)throw new AppError('画图人员已停用或不存在，请刷新后重新选择。');
+  if(option&&entry.name!==option.name)throw new AppError('人员姓名已变更或不匹配，请刷新后重新选择。',409);
+  if(!option){
+   const name=personName(entry.name);
+   if(!name||name.length>40||/[\p{Cc}\p{Cf}、,，;；/\\]/u.test(entry.name))throw new AppError('请填写一个有效姓名（最多40字），多人请分别添加。');
+   const matches=roster.filter(a=>personName(a.name)===name);
+   if(matches.length>1)throw new AppError('有多个同名人员，请从名单中明确选择。');
+   option=matches[0];
+   if(!option){option={id:`drawing_person_${await sha(name)}`,name};roster.push(option);const prior=all(s,'engineering_drawing_person').find(a=>a.id===option!.id);added.push({...prior,...option,kind:'engineering_drawing_person',active:true,version:(Number(prior?.version)||0)+1,createdAt:prior?.createdAt||now(),createdBy:prior?.createdBy||m.id,updatedAt:now(),updatedBy:m.id});}
+  }
+  if(!selected.some(a=>a.id===option.id))selected.push({id:option.id,name:option.name});
+ }
+ r.assignees=selected;r.assignee=selected.map(a=>a.name).join('、');
+ if(r.assignee.length>500)throw new AppError('选择的人员姓名过长，请减少人数。');
+ r.assigneeId=selected.length===1&&all(s,'member').some(a=>a.id===selected[0].id)?selected[0].id:'';
+ return added;
+}
 async function canAssignAllDrawingMembers(m:Member){const identity=await getChatGPTUser() as {userId?:string;username?:string}|null;return canManageDrawings(m)&&!!identity?.userId&&m.userId===identity.userId&&identity.username==='dengkai';}
 function assignee(s:State,r:EngineeringDrawing,allMembers=false){
  if(!r.assigneeId)return;
@@ -52,7 +84,7 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
   const records=(all(s,'engineering_drawing') as EngineeringDrawing[]).filter(r=>owner||canReadDrawing(s,m,r)).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)),ids=new Set(records.map(r=>r.id));
   return json({records:records.map(r=>publicDrawing(s,m,r,owner)),customers:drawingCustomers(s,m).map(c=>({id:c.id,customer:c.customer,customerCode:c.customerCode,active:c.active})),
    members:(all(s,'member') as Member[]).filter(a=>canManageDrawings(a)||canApproveDrawings(a)).map(a=>({id:a.id,name:a.name,active:a.active,canManage:canManageDrawings(a),canApprove:canApproveDrawings(a)})),
-   ...(allAssignments?{assignmentMembers:(all(s,'member') as Member[]).filter(assignableMember).map(a=>({id:a.id,name:a.name.trim()})).sort((a,b)=>a.name.localeCompare(b.name,'zh-CN')||a.id.localeCompare(b.id))}:{}),
+   ...(allAssignments?{assignmentMembers:assignmentRoster(s)}:{}),
    requesters:canCreateDrawings(s,m)||canApproveDrawings(m)?await drawingRequesters()||[]:[],
    events:all(s,'engineering_drawing_event').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
    details:all(s,'engineering_drawing_detail').filter(e=>ids.has(e.recordId)&&e.customerId===records.find(r=>r.id===e.recordId)?.customerId),
@@ -64,7 +96,18 @@ export async function engineeringDrawingGet(action:string,req:Request,s:State,m:
 }
 
 export async function engineeringDrawingPost(action:string,req:Request,s:State,m:Member):Promise<Response|null>{
- if(!['drawing-save','drawing-delete','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
+ if(!['drawing-save','drawing-person-delete','drawing-delete','drawing-review','drawing-approval-toggle','drawing-event-review','drawing-detail-add','drawing-email-intake','drawing-import'].includes(action))return null;
+ if(action==='drawing-person-delete'){
+  if(!await canAssignAllDrawingMembers(m))throw new AppError('仅邓铠账号可以删除自定义画图人员。',403);
+  const input=parse(z.object({id,version}).strict(),await req.json()),before=all(s,'engineering_drawing_person').find(a=>a.id===input.id);
+  if(!before)throw new AppError('只能删除手动添加的姓名，默认人员不能删除。',400);
+  const priorVersion=Number(before.version)||1;
+  if(before.active===false&&priorVersion===input.version+1&&before.deletedBy===m.id)return json({ok:true,deleted:true,id:before.id});
+  if(before.active===false||priorVersion!==input.version)throw new AppError('人员选项已更新，请刷新后重试。',409);
+  const next={...before,active:false,version:priorVersion+1,deletedAt:now(),deletedBy:m.id};
+  await commit(s.revision,[next,audit(m,next,before,'删除自定义画图人员选项','工程画图工作台')]);
+  return json({ok:true,deleted:true,id:before.id});
+ }
  if(action==='drawing-delete'){
   const input=parse(z.object({id,version,reason:z.string().trim().min(1).max(1000)}).strict(),await req.json());
   if(!await isDrawingOwnerAccount(m))throw new AppError('仅 dengkai 和 zhengzw 登录账号可以删除画图跟进记录。',403);
@@ -176,9 +219,28 @@ async function save(s:State,m:Member,body:unknown){
  const basisChanged=!before||r.requestedDate!==before.requestedDate||r.drawingType!==before.drawingType;
  if(r.deadlineMode==='auto'&&basisChanged)r.deadline=scheduledDeadline(r);
  if(!before&&tableEntry)r.tableEntry=true;
+ const assignmentUpdates:Entity[]=[];
+ const hasSelection=Object.hasOwn(patch,'assignees'),selectionChanged=changed(fields.assignees,before?.assignees||[]);
  const assigneeChanged=!before||fields.assigneeId!==before.assigneeId||fields.assignee!==before.assignee;
- if(assigneeChanged)assignee(s,r,await canAssignAllDrawingMembers(m));
- const approvalSensitive=['drawingType','newCount','revisionCount','requirement','modelNo','drawingNotes','assigneeId','assignee','completedDate'];
+ if(hasSelection&&(selectionChanged||assigneeChanged||before&&!before.assignees?.length&&!!before.assignee)){
+  if(!await canAssignAllDrawingMembers(m))throw new AppError('仅邓铠账号可以多选画图人员或添加姓名。',403);
+  assignmentUpdates.push(...await selectedAssignees(s,m,r,before));
+  if(before){
+   const old=before.assignees?.length?before.assignees:before.assignee?[{id:before.assigneeId,name:before.assignee}]:[];
+   const samePeople=old.length===r.assignees!.length&&old.every(p=>r.assignees!.some(next=>next.name===p.name&&(next.id===p.id||(!before.assignees?.length&&!p.id))));
+   if(samePeople){
+    r.assignee=before.assignee;r.assigneeId=before.assigneeId;
+    if(before.assignees)r.assignees=before.assignees;else delete r.assignees;
+    assignmentUpdates.length=0;
+   }
+  }
+ }else if(assigneeChanged){assignee(s,r,await canAssignAllDrawingMembers(m));r.assignees=[];}
+ if(before&&!before.assignees&&!r.assignees?.length)delete r.assignees;
+ if(before&&hasSelection&&Object.keys(patch).every(key=>['assignee','assigneeId','assignees'].includes(key))&&r.assignee===before.assignee&&r.assigneeId===before.assigneeId&&!changed(r.assignees||[],before.assignees||[])){
+  const record=publicDrawing(s,m,before,await isDrawingOwnerAccount(m));
+  return json({ok:true,record,item:record});
+ }
+ const approvalSensitive=['drawingType','newCount','revisionCount','requirement','modelNo','drawingNotes','assigneeId','assignee','assignees','completedDate'];
  if(before?.approval==='通过'&&approvalSensitive.some(k=>changed(r[k],before[k]))){r.approval='待审核';r.approvalAt='';r.approvalBy='';r.approvalNote='';if(['已完成','已交接'].includes(r.status))r.status='待审核';r.deliveredDate='';r.deliveryNote='';}
  if(r.status==='已交接'&&pending(s,r))throw new AppError('邮件变更尚未核对，不能交接。',409);
  if(r.status!=='历史待核对'){
@@ -187,7 +249,7 @@ async function save(s:State,m:Member,body:unknown){
   if(!r.legacyNeedsReview||executionChanged)lifecycle(r);
   if(executionChanged)r.legacyNeedsReview=false;
  }
- const extra:Entity[]=mutationKey?[{id:mutationKey,kind:'engineering_drawing_mutation',recordId:r.id,actorId:m.id,fingerprint:digest,createdAt:now()}]:[];
+ const extra:Entity[]=[...assignmentUpdates,...(mutationKey?[{id:mutationKey,kind:'engineering_drawing_mutation',recordId:r.id,actorId:m.id,fingerprint:digest,createdAt:now()}]:[])];
  const newlyBoundTableRow=before?.tableEntry&&!before.customerId&&!!r.customerId;
  if(isDrawingChangeType(r.drawingType)&&r.customerId&&(!before||newlyBoundTableRow||['drawingType','requirement'].some(k=>changed(r[k],before[k])))){const applied=before?adoptedSopApplication(s,m,before,r):null;extra.push(...(applied||planSopObligation(s,m,r,{modelNo:r.modelNo,targetVersion:'',requirement:r.requirement||'改图需求待明确SOP版本'},'change_instruction').updates));}
  return persist(s,m,r,before,before?'更新工程画图跟进':'新建画图需求',extra);

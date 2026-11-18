@@ -69,6 +69,10 @@ export async function frameworkOffboardingInventory(s:State,member:Member):Promi
   }else if(['customer_project_followup','customer_project_communication','customer_project_followup_mail'].includes(r.kind)){if(r.kind!=='customer_project_communication'||r.nextAction||r.dueDate)await add(r,'ownerId','当前跟进责任','前期开发',business);}
   else if(r.kind==='customer_project_sample')await add(r,'ownerId','样品制作负责人','前期开发',['pmc','production']);
   else if(r.kind==='engineering_drawing'){
+   if(r.assignees?.length){
+    for(let index=0;index<r.assignees.length;index++)await add(r,`assignees.${index}.id`,'画图执行人','工程',engineering);
+    continue;
+   }
    await add(r,'assigneeId','画图执行人','工程',engineering);if(!r.assigneeId)await add(r,'assignee','历史画图执行人','工程',engineering,'name');
   }else if(r.kind==='order'){
    await add(r,'ownerEmail','订单负责人','订单',business,'email');await add(r,'salesName','负责销售','订单',sales,'name');await add(r,'serviceName','负责客服','订单',service,'name');await add(r,'pmcName','负责PMC','订单',pmc,'name');
@@ -126,7 +130,13 @@ function finalTransfers(s:State,m:Member,p:OffboardingPlan,source:Member):Entity
  const at=now(),changed=new Map<string,Entity>(),beforeById=new Map<string,Entity>(),pick=(id:string)=>{if(!changed.has(id)){const before=s.records.find(r=>r.id===id);if(!before)throw new AppError('原责任不存在，须重新编制清单。',409);beforeById.set(id,before);changed.set(id,structuredClone(before));}return changed.get(id)!;};
  const accepted=p.items.every(i=>i.recipientId&&i.acceptedBy===i.recipientId&&i.acceptedAt&&!i.blocker&&i.mode!=='manual');if(!accepted)throw new AppError('每项责任必须由指定接收人本人确认，阻塞项须先处理。',409);
  for(const i of p.items){const target=all(s,'member').find(x=>x.id===i.recipientId) as Member|undefined;if(!target||!frameworkOffboardingCandidate(s,source,i,target))throw new AppError('接收人状态或权限已变化，须重核交接。',403);const r=pick(i.recordId);
-  if(i.mode==='delegate'){r.continuityMemberId=target.id;r.grants={...r.grants,[target.id]:{view:true,draft:true,send:false}};delete r.grants[source.id];}
+  if(r.kind==='engineering_drawing'&&i.field.startsWith('assignees.')){
+   const people=(r as EngineeringDrawing).assignees!;
+   const transferred=people.map(person=>person.id===source.id?{id:target.id,name:target.name}:person);
+   r.assignees=transferred.filter((person,index)=>transferred.findIndex(p=>p.id===person.id&&p.name===person.name)===index);
+   r.assignee=r.assignees.map((p:{name:string})=>p.name).join('、');
+   r.assigneeId=r.assignees.length===1?target.id:'';
+  }else if(i.mode==='delegate'){r.continuityMemberId=target.id;r.grants={...r.grants,[target.id]:{view:true,draft:true,send:false}};delete r.grants[source.id];}
   else if(i.mode==='ids')setValue(r,i.field,[...new Set(r.kind==='customer_account'?[...(value(r,i.field)||[]),target.id]:(value(r,i.field)||[]).map((id:string)=>id===source.id?target.id:id))]);
   else setValue(r,i.field,i.mode==='name'?target.name:i.mode==='email'?target.email:target.id);
   if(r.kind==='customer_account'){

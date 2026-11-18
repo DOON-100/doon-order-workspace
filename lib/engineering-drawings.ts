@@ -5,13 +5,14 @@ export const drawingStatuses=['待分配','画图中','待审核','已完成','�
 export const drawingApprovals=['待审核','通过','退回'] as const;
 export const drawingOriginalColumns=['状态','客户编号','画图类型','需求发出时间','新款数量','改图数量','需求者','款号','画图备注','画图人员','截止日期','完成日期','老郑审批确认'] as const;
 export const drawingRequestFields=['customerId','customerCode','drawingType','requestedDate','newCount','revisionCount','requester','upstreamDepartment','priority','requirement'] as const;
-export const drawingExecutionFields=['status','sheetStatus','modelNo','drawingNotes','assigneeId','assignee','deadline','completedDate','downstream','deliveredDate','deliveryNote'] as const;
+export const drawingExecutionFields=['status','sheetStatus','modelNo','drawingNotes','assigneeId','assignee','assignees','deadline','completedDate','downstream','deliveredDate','deliveryNote'] as const;
+export type DrawingAssignee={id:string;name:string};
 export type DrawingStatus=typeof drawingStatuses[number];
 export type DrawingApproval=typeof drawingApprovals[number];
 export type DrawingSource={type:'manual'|'excel'|'email';filename?:string;sheet?:string;hash?:string;row?:number;rawColumns?:Record<string,string|number>;messageId?:string;itemKey?:string;threadId?:string};
 export type EngineeringDrawing=Entity & {
  kind:'engineering_drawing';version:number;customerId:string;customerCode:string;drawingType:string;requestedDate:string;
- newCount:number|null;revisionCount:number|null;requester:string;modelNo:string;drawingNotes:string;assigneeId:string;assignee:string;
+ newCount:number|null;revisionCount:number|null;requester:string;modelNo:string;drawingNotes:string;assigneeId:string;assignee:string;assignees?:DrawingAssignee[];
  deadlineMode?:'auto'|'manual';deadline:string;completedDate:string;approval:DrawingApproval;status:DrawingStatus;upstreamDepartment:string;priority:'普通'|'紧急';
  requirement:string;downstream:string;deliveredDate:string;deliveryNote:string;source:DrawingSource;legacyNeedsReview:boolean;
  sheetStatus:'⌛️'|'❗❗';approvalNote:string;approvalBy:string;approvalAt:string;createdAt:string;updatedAt:string;updatedBy:string;createdBy:string;
@@ -24,7 +25,7 @@ const day=z.string().trim().default('').superRefine((value,ctx)=>{if(!value)retu
 const count=z.number().int().min(0).max(100000).nullable().default(null);
 export const drawingFieldsSchema=z.object({
  customerId:txt(160),customerCode:txt(160),drawingType:txt(120),requestedDate:day,newCount:count,revisionCount:count,requester:txt(160),
- modelNo:txt(3000),drawingNotes:txt(12000),assigneeId:txt(160),assignee:txt(500),deadline:day,completedDate:day,
+ modelNo:txt(3000),drawingNotes:txt(12000),assigneeId:txt(160),assignee:txt(500),assignees:z.array(z.object({id:txt(160),name:z.string().trim().min(1).max(160)}).strict()).max(20).default([]),deadline:day,completedDate:day,
  approval:z.enum(drawingApprovals).default('待审核'),status:z.enum(drawingStatuses).default('待分配'),sheetStatus:z.enum(['⌛️','❗❗']).default('⌛️'),upstreamDepartment:txt(120),
  priority:z.enum(['普通','紧急']).default('普通'),requirement:txt(16000),downstream:txt(160),deliveredDate:day,deliveryNote:txt(6000),
 }).strict();
