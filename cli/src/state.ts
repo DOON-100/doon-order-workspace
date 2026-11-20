@@ -57,7 +57,7 @@ async function dpapi(text: string, decrypt: boolean): Promise<string> {
   const result = await new Promise<string>((resolve, reject) => {
     const child = spawn(binary, ['-NoProfile', '-NonInteractive', '-Command', script], {windowsHide: true, stdio: ['pipe', 'pipe', 'ignore']});
     let output = '';
-    const timer = setTimeout(() => child.kill(), 10000);
+    const timer = setTimeout(() => child.kill(), 30000);
     child.stdout.on('data', chunk => { output += chunk.toString(); if (output.length > 65536) child.kill(); });
     child.stdin.on('error', () => {});
     child.on('error', () => reject(new CliError('CREDENTIAL_STORE_FAILED', '无法使用 Windows 加密凭据存储。', 3)));

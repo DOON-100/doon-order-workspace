@@ -15,6 +15,8 @@ const root=await fs.mkdtemp(path.join(repo,'test-output','data-tools-relocated-'
 const buildDir=path.join(root,'build');
 await fs.mkdir(buildDir);
 await fs.copyFile(path.join(repo,'standalone/runtime.mjs'),path.join(buildDir,'runtime.mjs'));
+await fs.copyFile(path.join(repo,'standalone/ie-mail.mjs'),path.join(buildDir,'ie-mail.mjs'));
+await fs.copyFile(path.join(repo,'standalone/personnel.mjs'),path.join(buildDir,'personnel.mjs'));
 await build({entryPoints:[path.join(repo,'app/api/workspace/[action]/route.ts')],outfile:path.join(buildDir,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':repo},plugins:[{name:'relocated-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 
 const at='2026-01-01T00:00:00.000Z';

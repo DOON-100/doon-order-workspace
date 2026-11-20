@@ -11,6 +11,8 @@ await fs.mkdir('test-output',{recursive:true});
 const root=await fs.mkdtemp(path.resolve('test-output/quote-access-config-')),buildDir=path.join(root,'build'),dataDir=path.join(root,'data');
 await fs.mkdir(buildDir);await fs.mkdir(path.join(dataDir,'files'),{recursive:true});
 await fs.copyFile('standalone/runtime.mjs',path.join(buildDir,'runtime.mjs'));
+await fs.copyFile('standalone/ie-mail.mjs',path.join(buildDir,'ie-mail.mjs'));
+await fs.copyFile('standalone/personnel.mjs',path.join(buildDir,'personnel.mjs'));
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.join(buildDir,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'standalone-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 const dbPath=path.join(dataDir,'workspace.sqlite'),db=new DatabaseSync(dbPath);
 db.exec("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT NOT NULL,data TEXT NOT NULL);CREATE TABLE workspace_revision(id TEXT PRIMARY KEY,revision INTEGER NOT NULL);INSERT INTO workspace_revision VALUES('main',1);CREATE TABLE local_accounts(id TEXT PRIMARY KEY,username TEXT UNIQUE NOT NULL,member_id TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,must_change INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL)");

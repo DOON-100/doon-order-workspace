@@ -47,7 +47,9 @@ test('Windows updates serialize installs, survive inherited module paths and pre
   const hash=createHash('sha256').update(await fs.readFile(archive)).digest('hex');
   return {source,manifest,target:path.join(programs,version+'-'+manifest.commit.slice(0,12)),args:['-File',launcher,'-Updater',path.join(old,'update.ps1'),'-Archive',archive,'-Hash',hash,'-Version',version,'-Commit',manifest.commit]};
  }
- const next=await pack('0.44.0');
+ const nextVersion=version.split('.').map(Number); nextVersion[1]++; nextVersion[2]=0;
+ const newerVersion=[...nextVersion]; newerVersion[1]++;
+ const next=await pack(nextVersion.join('.'));
  const lockScript=path.join(directory,'hold-lock.ps1');
  await fs.writeFile(lockScript,"param([string]$Path)\n$ErrorActionPreference='Stop'\n$Lock=[IO.File]::Open($Path,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)\ntry{[Console]::WriteLine('LOCKED');[Console]::ReadLine()|Out-Null}finally{$Lock.Dispose()}\n");
  const holder=run(['-File',lockScript,'-Path',path.join(install,'.install.lock')]);
@@ -61,13 +63,13 @@ test('Windows updates serialize installs, survive inherited module paths and pre
  assert.deepEqual(await inventory(next.target),next.manifest.files);
  assert.deepEqual((await fs.readdir(programs)).sort(),[path.basename(old),path.basename(next.target)].sort());
  const repeat=await run(next.args).done;assert.equal(repeat.code,0,repeat.output);
- const newer=await pack('0.45.0'),updated=await run(newer.args).done;assert.equal(updated.code,0,updated.output);
+ const newer=await pack(newerVersion.join('.')),updated=await run(newer.args).done;assert.equal(updated.code,0,updated.output);
  const stale=await run(next.args).done;assert.notEqual(stale.code,0);assert.match(stale.output,/newer CLI was installed/);
- assert.match(await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8'),/0\.45\.0-aaaaaaaaaaaa/);
+ assert((await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8')).includes(newer.manifest.version+'-aaaaaaaaaaaa'));
  // An explicit manual rollback remains supported and uses the same install lock.
  const rollback=await run(['-File',path.join(next.source,'install.ps1'),'-InstallRoot',install,'-SkipPathUpdate']).done;
  assert.equal(rollback.code,0,rollback.output);
- assert.match(await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8'),/0\.44\.0-aaaaaaaaaaaa/);
+ assert((await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8')).includes(next.manifest.version+'-aaaaaaaaaaaa'));
  for(const [name,value]of Object.entries(state))assert.equal(await fs.readFile(path.join(install,name),'utf8'),value);
  assert.deepEqual(await inventory(next.target),next.manifest.files);
  assert.deepEqual(await inventory(newer.target),newer.manifest.files);
@@ -102,7 +104,7 @@ console.log(JSON.stringify(await new UpdateService(state).install()));
   assert.deepEqual(JSON.parse(result.output),{updated:true,previousVersion:version,installedVersion:release.version,commit:release.commit,restartRequired:true});
   assert.deepEqual(requests.map(r=>r.path),['/api/cli-update/latest','/api/cli-update/package']);
   assert(requests.every(r=>r.cookie==='doon_session='+'X'.repeat(43)));
-  assert.match(await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8'),/0\.45\.0-aaaaaaaaaaaa/);
+  assert((await fs.readFile(path.join(install,'bin/doon.cmd'),'utf8')).includes(newer.manifest.version+'-aaaaaaaaaaaa'));
   for(const [name,value]of Object.entries(state))assert.equal(await fs.readFile(path.join(install,name),'utf8'),value);
  }finally{server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

@@ -16,6 +16,8 @@ const root=await fs.mkdtemp(path.join(repo,'test-output','data-tools-quote-'));
 const buildDir=path.join(root,'build'),dataDir=path.join(root,'data'),bundle=path.join(root,'private-bundle'),reports=path.join(root,'reports');
 await fs.mkdir(buildDir); await fs.mkdir(path.join(dataDir,'files'),{recursive:true}); await fs.mkdir(bundle); await fs.mkdir(reports);
 await fs.copyFile(path.join(repo,'standalone/runtime.mjs'),path.join(buildDir,'runtime.mjs'));
+await fs.copyFile(path.join(repo,'standalone/ie-mail.mjs'),path.join(buildDir,'ie-mail.mjs'));
+await fs.copyFile(path.join(repo,'standalone/personnel.mjs'),path.join(buildDir,'personnel.mjs'));
 await build({entryPoints:[path.join(repo,'app/api/workspace/[action]/route.ts')],outfile:path.join(buildDir,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':repo},plugins:[{name:'test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 const dbPath=path.join(dataDir,'workspace.sqlite');
 const owner={id:'member_TEST_owner',kind:'member',name:'TEST Owner',email:'owner@test.invalid',userId:'local_TEST_owner',role:'admin',active:true,owner:true,customers:[]};
