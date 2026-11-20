@@ -1,5 +1,6 @@
 import {DatabaseSync} from 'node:sqlite';import fs from 'node:fs/promises';import path from 'node:path';import assert from 'node:assert/strict';import {execFileSync} from 'node:child_process';
-const base=path.resolve('test-output'),dir=await fs.mkdtemp(path.join(base,'owner-migration-')),file=path.join(dir,'workspace.sqlite'),db=new DatabaseSync(file);
+const base=path.resolve('test-output');await fs.mkdir(base,{recursive:true});
+const dir=await fs.mkdtemp(path.join(base,'owner-migration-')),file=path.join(dir,'workspace.sqlite'),db=new DatabaseSync(file);
 try{
  db.exec("CREATE TABLE records(id TEXT PRIMARY KEY,kind TEXT,data TEXT);CREATE TABLE local_accounts(member_id TEXT,username TEXT);CREATE TABLE workspace_revision(id TEXT,revision INTEGER);INSERT INTO workspace_revision VALUES('main',7)");
  const member={id:'m',kind:'member',email:'different@example.invalid'};db.prepare('INSERT INTO records VALUES(?,?,?)').run('m','member',JSON.stringify(member));db.prepare('INSERT INTO local_accounts VALUES(?,?)').run('m','sample_login');
