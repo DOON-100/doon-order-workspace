@@ -4,7 +4,7 @@ XLSX.set_cptable(cptable);
 import {AppError} from './store';
 import {all,clean,email,fields,fieldLabels,normalizeField,businessKey,canRead,allowedFields,broad,mergeFields,newId,now,strictDate,type State,type Member,type Order,type Report,type PreviewRow} from './domain';
 import {isLedgerDrawingExtra,matchesOrderIdentity,sameOrderIdentity} from './order-identity';
-const aliases:Record<string,string[]>={orderNo:['订单号','销售订单号','订单编号'],customer:['客户','客户号','客户编号'],customerPO:['客户 PO','客户PO','客户订单号'],drawing:['图纸编号','图号','款号','产品'],color:['色号','L · 色号','圈色','颜色','颜色代码'],lens:['镜片类型','镜片'],productCode:['产品编码','物料编码','成品编码'],productType:['产品类型','品类'],specialRequirements:['特殊要求','客户特殊要求'],quantity:['订单数量','数量','订购数量'],requestedDate:['客户要求交期','客户交期','交货日期'],ownerEmail:['负责人邮箱'],batch:['交货批次'],stage:['计划阶段','生产状态'],plannedDate:['预计完工日'],shipDate:['预计可出货日'],promisedDate:['回复交期','承诺交期'],promiseConfirmed:['交期已确认'],notes:['内部跟进备注','备注'],customerNote:['对客备注'],arrangement:['分批交货安排'],sourceStatus:['订单来源状态']};
+const aliases:Record<string,string[]>={orderNo:['订单号','销售订单号','订单编号'],customer:['客户','客户号','客户编号'],customerPO:['客户 PO','客户PO','客户订单号'],drawing:['图纸编号','图号','款号','产品'],color:['色号','L · 色号','圈色','颜色','颜色代码'],lens:['镜片类型','镜片'],productCode:['产品编码','物料编码','成品编码'],productType:['产品类型','品类'],specialRequirements:['特殊要求','客户特殊要求'],quantity:['订单数量','数量','订购数量'],requestedDate:['客户要求交期','客户交期','交货日期'],ownerUsername:['负责人登录名'],batch:['交货批次'],stage:['计划阶段','生产状态'],plannedDate:['预计完工日'],shipDate:['预计可出货日'],promisedDate:['回复交期','承诺交期'],promiseConfirmed:['交期已确认'],notes:['内部跟进备注','备注'],customerNote:['对客备注'],arrangement:['分批交货安排'],sourceStatus:['订单来源状态']};
 export function openWorkbook(bytes:ArrayBuffer){
  if(bytes.byteLength>10*1024*1024)throw new AppError('文件超过 10 MB，请分批上传。');
  const data=new Uint8Array(bytes),dv=new DataView(bytes);let inflated=0,entries=0;
@@ -50,14 +50,14 @@ export async function previewOrders(s:State,m:Member,book:XLSX.WorkBook,sheetNam
   if(before&&!canRead(m,before))throw new Error('此明细不在你的授权范围内。');
   if(!before&&!broad(m)&&!(m.role==='sales'&&m.customers.includes(patch.customer)))throw new Error('新订单须由该客户的业务/客服、PMC 或管理员建立。');
   if(!before&&(!patch.customer||!Number.isInteger(patch.quantity)||patch.quantity<=0))throw new Error('新增明细必须有客户和大于零的订单数量。');
-  if(patch.ownerEmail&&!all(s,'member').some(u=>u.email===patch.ownerEmail&&u.active))throw new Error('负责人邮箱尚未加入成员，请先添加成员或留空。');
+  if(patch.ownerUsername&&!all(s,'member').some(u=>u.username===patch.ownerUsername&&u.active))throw new Error('负责人登录名尚未加入成员，请先添加成员或留空。');
   const baseExport=exportId?s.records.find(e=>e.id===exportId&&e.kind==='export'):undefined;
   const base=baseExport?.lines?.find((o:Order)=>o.id===before?.id);
   if(exportId&&!base)throw new Error('导出基线不存在或与明细不符，请重新导出。');
   if(before&&!rid&&!base&&!sameOrderIdentity(before,patch))throw new Error('此行使用已更正的旧图纸编号，请重新导出工作表；不能用旧图号新建或回退订单。');
   if(before&&!broad(m)){const allowed=allowedFields(m,before);for(const k of Object.keys(patch))if(JSON.stringify(patch[k])!==JSON.stringify((base||before as any)[k])&&!allowed.includes(k))throw new Error(`你无权修改${fieldLabels[k]}。`);}
   const extras:Record<string,string>=Object.fromEntries(headers.map((h,i)=>[h,clean(row.values[i])]).filter(([h,v])=>h&&v&&!Object.values(mapping).includes(h)&&!h.startsWith('_')));
-  let after:Order=before?{...before}:{id:newId('line'),kind:'order',version:0,createdAt:now(),updatedAt:now(),updatedBy:m.name,source:filename,orderNo:'',customer:'',customerPO:'',drawing:'',color:'',lens:'',batch:'',quantity:0,requestedDate:'',ownerEmail:m.role==='sales'?m.email:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:{}};
+  let after:Order=before?{...before}:{id:newId('line'),kind:'order',version:0,createdAt:now(),updatedAt:now(),updatedBy:m.name,source:filename,orderNo:'',customer:'',customerPO:'',drawing:'',color:'',lens:'',batch:'',quantity:0,requestedDate:'',ownerUsername:m.role==='sales'?m.username||'':'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:{}};
   let conflicts:string[]=[];
   if(before&&base){const merged=mergeFields(before,base,patch);after=merged.next;conflicts=merged.conflicts;for(const k of conflicts)(after as any)[k]=patch[k];}
   else{after={...after,...patch};if(before)conflicts=Object.keys(patch).filter(k=>JSON.stringify(patch[k])!==JSON.stringify((before as any)[k]));}

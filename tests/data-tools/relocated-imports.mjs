@@ -18,8 +18,8 @@ await fs.copyFile(path.join(repo,'standalone/runtime.mjs'),path.join(buildDir,'r
 await build({entryPoints:[path.join(repo,'app/api/workspace/[action]/route.ts')],outfile:path.join(buildDir,'workspace-api.mjs'),bundle:true,format:'esm',platform:'node',packages:'external',alias:{'@':repo},plugins:[{name:'relocated-test-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$|chatgpt-auth$/},()=>({path:'./runtime.mjs',external:true}));}}]});
 
 const at='2026-01-01T00:00:00.000Z';
-const owner={id:'member_TEST_owner',kind:'member',name:'TEST Owner',email:'owner@test.invalid',userId:'local_TEST_owner',role:'admin',active:true,owner:true,customers:[],createdAt:at};
-const sales={id:'member_TEST_sales',kind:'member',name:'TEST Sales',email:'sales@test.invalid',userId:'local_TEST_sales',role:'sales',active:true,owner:false,customers:[],createdAt:at};
+const owner={id:'member_TEST_owner',kind:'member',name:'TEST Owner',username:'owner',email:'owner@test.invalid',userId:'local_TEST_owner',role:'admin',active:true,owner:true,customers:[],createdAt:at};
+const sales={id:'member_TEST_sales',kind:'member',name:'TEST Sales',username:'sales',email:'sales@test.invalid',userId:'local_TEST_sales',role:'sales',active:true,owner:false,customers:[],createdAt:at};
 const preserved={id:'TEST_existing_history',kind:'audit',actorId:owner.id,action:'TEST history',createdAt:at};
 const sha=bytes=>createHash('sha256').update(bytes).digest('hex');
 let passed=0;
@@ -112,7 +112,7 @@ assert.equal(inspected[0].summary.detailRows,2);assert.equal(inspected[0].summar
 pass('relocated Python purchase inspection reports synthetic workbook totals without changing the workbook');
 
 const supplier={id:'supplier_TEST',kind:'supplier',name:'TEST Factory',active:true,version:1};
-const order={id:'order_TEST_outsource',kind:'order',version:1,createdAt:at,updatedAt:at,updatedBy:'TEST',source:'synthetic',orderNo:'TEST-ORDER-OUTSOURCE',customer:'TEST Customer',customerPO:'TEST-PO',drawing:'TEST-DRAWING',color:'TEST',lens:'白片',productType:'待确认',batch:'',quantity:100,requestedDate:'',plannedDate:'',promisedDate:'',promiseConfirmed:false,shipDate:'',ownerEmail:'',stage:'生产中',customerNote:'TEST original note',arrangement:'',notes:'TEST original order',sourceStatus:'正式订单',extra:{'TEST field':'TEST original'},lifecycle:'active',ledger:{columns:{A:supplier.name,W:'待确认',BF:'',BG:'',BH:''},sourceRow:1,sheet:'TEST',filename:'TEST-original.xlsx',sourceHash:'TEST source',issues:[],ownerName:'TEST',originalOutstanding:''}};
+const order={id:'order_TEST_outsource',kind:'order',version:1,createdAt:at,updatedAt:at,updatedBy:'TEST',source:'synthetic',orderNo:'TEST-ORDER-OUTSOURCE',customer:'TEST Customer',customerPO:'TEST-PO',drawing:'TEST-DRAWING',color:'TEST',lens:'白片',productType:'待确认',batch:'',quantity:100,requestedDate:'',plannedDate:'',promisedDate:'',promiseConfirmed:false,shipDate:'',ownerUsername:'',stage:'生产中',customerNote:'TEST original note',arrangement:'',notes:'TEST original order',sourceStatus:'正式订单',extra:{'TEST field':'TEST original'},lifecycle:'active',ledger:{columns:{A:supplier.name,W:'待确认',BF:'',BG:'',BH:''},sourceRow:1,sheet:'TEST',filename:'TEST-original.xlsx',sourceHash:'TEST source',issues:[],ownerName:'TEST',originalOutstanding:''}};
 const outsourcing=await fixture('outsourcing',[supplier,order]),outsourceBefore=await protect(outsourcing);
 const plan={format:'finished-outsourcing-pending-plan-v1',supplier:supplier.name,lines:[{lineId:order.id,orderVersion:1,quantity:100,productType:'成品',businessType:'finished_full_outsource',unit:'付',note:'TEST explicitly reviewed classification; preserve unknown opening quantities',confirmToken:randomUUID(),taskToken:randomUUID(),cutoffDate:'2026-01-01',dueDate:'',steps:[{id:'packing',label:'TEST packing'}]}]};
 const planPath=await writeJson(outsourcing,'plan.json',plan),planHash=sha(await fs.readFile(planPath));

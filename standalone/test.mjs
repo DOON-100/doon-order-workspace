@@ -85,7 +85,7 @@ try{
  let po=productionState.orders[0];await ok('/api/workspace/ledger-edit',{id:po.id,version:po.version,patch:{AG:'35',AL:'25'},reason:'生产管理核对'},productionCookie);
  po=(await ok('/api/workspace/data',undefined,productionCookie)).data.orders[0];await ok('/api/workspace/edit-order',{id:po.id,version:po.version,patch:{stage:'装配中',notes:'生产管理跟进'}},productionCookie);
  po=(await ok('/api/workspace/data',undefined,productionCookie)).data.orders[0];
- for(const patch of [{quantity:999},{ownerEmail:'clerk@doon.local'},{promisedDate:'2026-10-01'}])assert.equal((await request('/api/workspace/edit-order',{id:po.id,version:po.version,patch},productionCookie)).status,403);
+ for(const patch of [{quantity:999},{ownerUsername:'clerk'},{promisedDate:'2026-10-01'}])assert.equal((await request('/api/workspace/edit-order',{id:po.id,version:po.version,patch},productionCookie)).status,403);
  assert.equal((await request('/api/workspace/ledger-lifecycle',{id:po.id,version:po.version,mode:'archived',reason:'生产管理尝试结单',closedDate:'2026-09-14'},productionCookie)).status,403);
  assert.equal((await request('/api/workspace/ledger-preview',form,productionCookie)).status,403);
  assert.equal((await request('/api/auth/accounts',undefined,productionCookie)).status,403);

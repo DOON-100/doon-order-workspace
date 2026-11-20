@@ -16,10 +16,10 @@ const api=await import(pathToFileURL(path.resolve('test-output/framework-finance
 const put=r=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data').run(r.id,r.kind,JSON.stringify(r));
 const rows=()=>db.prepare('SELECT data FROM records ORDER BY id').all().map(r=>JSON.parse(r.data));
 const one=id=>rows().find(r=>r.id===id),state=()=>({revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get()?.revision||0,records:rows()}),uuid=()=>crypto.randomUUID();
-const member=(id,role,customers=[])=>({id,kind:'member',userId:id,name:'Synthetic '+id,email:id+'@example.invalid',active:true,role,customers,createdAt:'2026-10-01T00:00:00Z'});
+const member=(id,role,customers=[])=>({id,kind:'member',userId:id,name:'Synthetic '+id,username:id,email:id+'@example.invalid',active:true,role,customers,createdAt:'2026-10-01T00:00:00Z'});
 const admin=member('admin','admin'),sales=member('sales','sales',['SYN-1']),service=member('service','clerk',['SYN-1']),pmc=member('pmc','pmc'),other=member('other','sales',['SYN-2']),finance=member('finance','finance'),finance2=member('finance2','finance'),viewer=member('viewer','viewer',['SYN-1']);
 const c={id:'c1',kind:'customer_account',customer:'Synthetic one',customerCode:'SYN-1',active:true,salesMemberIds:[sales.id],serviceMemberIds:[service.id,pmc.id],salesName:sales.name,serviceName:service.name,version:1};
-const order={id:'order1',kind:'order',customer:'SYN-1',orderNo:'SYN-ORDER',customerPO:'SYN-PO',drawing:'SYN-SKU',quantity:30,color:'synthetic',lens:'clear',batch:'1',version:1,ownerEmail:sales.email};
+const order={id:'order1',kind:'order',customer:'SYN-1',orderNo:'SYN-ORDER',customerPO:'SYN-PO',drawing:'SYN-SKU',quantity:30,color:'synthetic',lens:'clear',batch:'1',version:1,ownerUsername:sales.username};
 const receivable={id:'r1',kind:'service_record',type:'receivable',customerId:'c1',orderId:order.id,title:'Synthetic receivable',status:'open',details:{currency:'USD',amountCents:30000},version:1};
 const receipt={id:'payment1',kind:'service_receipt',recordId:receivable.id,customerId:'c1',entryType:'payment',amountCents:3000};
 for(const r of [admin,sales,service,pmc,other,finance,finance2,viewer,c,order,receivable,receipt])put(r);

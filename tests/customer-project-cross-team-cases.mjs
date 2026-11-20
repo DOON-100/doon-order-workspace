@@ -5,11 +5,11 @@ import * as XLSX from 'xlsx';
 
 export async function testCustomerProjectCrossTeam({api,put,state,one,records,ok,denied,followup,uuid,admin}){
  const customerId='cross-customer',customerName='Synthetic shared customer';
- const salesA={id:'cross-sales-a',kind:'member',name:'Synthetic group A sales',email:'a@example.invalid',role:'sales',active:true,customers:[customerName]};
- const salesB={...salesA,id:'cross-sales-b',name:'Synthetic group B sales',email:'b@example.invalid'};
- const serviceA={...salesA,id:'cross-service-a',name:'Synthetic group A service',email:'sa@example.invalid'};
- const serviceB={...salesA,id:'cross-service-b',name:'Synthetic group B service',email:'sb@example.invalid'};
- const outsider={...salesA,id:'cross-outsider',name:'Synthetic unauthorized teammate',email:'none@example.invalid',customers:[]};
+ const salesA={id:'cross-sales-a',kind:'member',name:'Synthetic group A sales',username:'a',email:'a@example.invalid',role:'sales',active:true,customers:[customerName]};
+ const salesB={...salesA,id:'cross-sales-b',name:'Synthetic group B sales',username:'b',email:'b@example.invalid'};
+ const serviceA={...salesA,id:'cross-service-a',name:'Synthetic group A service',username:'sa',email:'sa@example.invalid'};
+ const serviceB={...salesA,id:'cross-service-b',name:'Synthetic group B service',username:'sb',email:'sb@example.invalid'};
+ const outsider={...salesA,id:'cross-outsider',name:'Synthetic unauthorized teammate',username:'none',email:'none@example.invalid',customers:[]};
  const customer={id:customerId,kind:'customer_account',customer:customerName,customerCode:'SYN-CROSS',salesName:salesA.name,serviceName:serviceA.name,salesMemberIds:[salesA.id,salesB.id],serviceMemberIds:[serviceA.id,serviceB.id],active:true,version:1};
  const teamA={id:'cross-team-a',kind:'customer_project_team',name:'Synthetic A',active:true,customerIds:[customerId],salesMemberIds:[salesA.id,outsider.id],leaderIds:[],serviceMemberIds:[serviceA.id]};
  const teamB={...teamA,id:'cross-team-b',name:'Synthetic B',salesMemberIds:[salesB.id],serviceMemberIds:[serviceB.id]};
@@ -68,7 +68,7 @@ export async function testCustomerProjectCrossTeam({api,put,state,one,records,ok
   XLSX.utils.book_append_sheet(book,sheet,'Synthetic order');
   const form=new FormData();form.set('file',new File([XLSX.write(book,{type:'array',bookType:'xlsx'})],'synthetic.xlsx'));form.set('customer',customerName);form.set('orderNo','SYN-'+actor.id);form.set('customerPO','PO-'+actor.id);
   const preview=await success(api.collaborationPost,'factory-order-table-preview',form,actor);await success(api.collaborationPost,'factory-order-table-commit',{id:preview.id},actor);
-  let order=records().find(r=>r.kind==='order'&&r.orderNo==='SYN-'+actor.id);assert.equal(order.ownerEmail,actor.email);assert.equal(order.salesName,actor.name);
+  let order=records().find(r=>r.kind==='order'&&r.orderNo==='SYN-'+actor.id);assert.equal(order.ownerUsername,actor.username);assert.equal(order.salesName,actor.name);
   order=(await success(api.collaborationPost,'workflow',{id:order.id,version:order.version,action:'submit-service'},actor)).item;assert.equal(order.salesName,actor.name);
   const service=actor===salesA?serviceA:serviceB;
   // Sales submission must leave service blank until the actual service handler takes over.
@@ -85,7 +85,7 @@ export async function testCustomerProjectCrossTeam({api,put,state,one,records,ok
   for(const row of [pi,drawing,production,{id:'handoff_business_production_review_policy',kind:'handoff_business_policy',version:1,drawingLeadMemberId:salesA.id,engineeringSupervisorMemberId:salesB.id},{id:prefix+'-lead',kind:'handoff_business_adoption_signature',sourceId:drawing.id,sourceVersion:1,policyVersion:1,reviewerRole:'drawing_lead',actorId:salesA.id,decision:'confirm'},{id:prefix+'-supervisor',kind:'handoff_business_adoption_signature',sourceId:drawing.id,sourceVersion:1,policyVersion:1,reviewerRole:'engineering_supervisor',actorId:salesB.id,decision:'confirm'},{id:prefix+'-receivable',kind:'service_record',type:'receivable',status:'active',customerId,orderId:order.id,details:{currency:'USD',amountCents:10000}},{id:prefix+'-receipt',kind:'service_receipt',recordId:prefix+'-receivable',entryType:'receipt',amountCents:3000,currency:'USD'}])put(row);
   const released=await success(api.collaborationPost,'factory-order-save',{...factory,action:'release'},admin);assert.equal(released.item.status,'已下发工厂');assert.equal(one(order.id).salesName,actor.name);assert.equal(one(order.id).serviceName,service.name);
  }
- const legacyOrder=records().find(r=>r.kind==='order'&&r.ownerEmail===salesB.email);
+ const legacyOrder=records().find(r=>r.kind==='order'&&r.ownerUsername===salesB.username);
  put({...legacyOrder,salesName:'',serviceName:''});
  const named=(await success(api.collaborationPost,'workflow',{id:legacyOrder.id,version:legacyOrder.version,action:'submit-service'},salesB)).item;assert.equal(named.salesName,salesB.name);
  const retained=(await success(api.collaborationPost,'workflow',{id:named.id,version:named.version,action:'submit-service'},salesA)).item;assert.equal(retained.salesName,salesB.name,'An existing order responsibility must not be rewritten');

@@ -50,11 +50,11 @@ export async function testKingdeePending({ok,call,api,identity,admin,rawRecords,
  assert.equal((await call('kingdee-pending-data?id=missing')).status,404);
  pass('后续同步生成完整独立快照，最新来源可读且旧快照和原文件完整保留');
 
- const prefix='synthetic_kingdee_pending_',readerUser={userId:prefix+'user',email:'pending-reader@test.invalid',displayName:'合成授权查看者'};
+ const prefix='synthetic_kingdee_pending_',readerUser={userId:prefix+'user',username:'pending-reader',email:'pending-reader@test.invalid',displayName:'合成授权查看者'};
  const reader={id:prefix+'member',kind:'member',...readerUser,name:readerUser.displayName,role:'viewer',customers:['PENDING-A'],orderScope:'assigned',active:true,createdAt:'2026-10-15T00:00:00Z'};
  const sampleOrder=rawRecords().find(row=>row.kind==='order');assert(sampleOrder);
  const account={id:prefix+'customer',kind:'customer_account',customer:'PENDING-A',customerCode:'PENDING-A',active:true,version:1};
- for(const row of [reader,{...sampleOrder,id:prefix+'order',orderNo:'SYN-PENDING-CUSTOMER-A',customer:'PENDING-A',ownerEmail:''},account,{id:prefix+'team',kind:'customer_project_team',name:'合成采购组',active:true,customerIds:[account.id],leaderIds:[],salesMemberIds:[],serviceMemberIds:[]}])rawInsert(row);
+ for(const row of [reader,{...sampleOrder,id:prefix+'order',orderNo:'SYN-PENDING-CUSTOMER-A',customer:'PENDING-A',ownerUsername:''},account,{id:prefix+'team',kind:'customer_project_team',name:'合成采购组',active:true,customerIds:[account.id],leaderIds:[],salesMemberIds:[],serviceMemberIds:[]}])rawInsert(row);
  const restricted=await ok('kingdee-pending-data',undefined,readerUser);assert.equal(restricted.canImport,false);assert.equal(restricted.snapshot.rows.length,2);assert.equal(restricted.snapshot.metadata.rowCount,2);assert.equal(restricted.snapshot.metadata.supplierCount,1);assert.equal(restricted.snapshot.metadata.scope,'authorized');assert.deepEqual(restricted.history,[]);assert(!restricted.snapshot.metadata.sourceFilter.includes('网页导出筛选核对'));
  assert.equal((await call('kingdee-pending-preview',form(),readerUser)).status,403);assert.equal((await call('kingdee-pending-commit',{id:job.id},readerUser)).status,403);assert.equal((await call('kingdee-pending-file?id='+snapshot.id,undefined,readerUser)).status,403);
  const teamRead=async(action,teamId)=>identity.run(admin,()=>api.GET(new Request('https://orders.test/api/workspace/'+action,{headers:{'X-Workspace-Team':teamId}}),{params:Promise.resolve({action:action.split('?')[0]})}));

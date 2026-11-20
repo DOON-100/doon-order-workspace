@@ -9,6 +9,7 @@ import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 import {execFileSync} from 'node:child_process';
+await import('./order-owner-migration.mjs');
 await fs.mkdir('test-output',{recursive:true});
 const db=new DatabaseSync(':memory:');
 for(const name of (await fs.readdir('drizzle')).filter(n=>n.endsWith('.sql')).sort())db.exec(await fs.readFile('drizzle/'+name,'utf8'));
@@ -18,7 +19,7 @@ globalThis.__testIdentity=identity;
 globalThis.__testEnv={DB:{prepare:sql=>new Statement(sql),batch:async statements=>{db.exec('BEGIN');try{const results=[];for(const s of statements)results.push(db.prepare(s.sql).run(...s.args));db.exec('COMMIT');return results;}catch(e){db.exec('ROLLBACK');throw e;}}},BUCKET:{put:async(key,bytes)=>files.set(key,bytes),get:async key=>files.has(key)?{body:files.get(key),json:async()=>JSON.parse(files.get(key))}:null}};
 await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:'test-output/api.mjs',bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},plugins:[{name:'test-only-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'cloudflare',namespace:'test'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return globalThis.__testIdentity.getStore()||null}':'export const env=globalThis.__testEnv;'}));}}]});
 const api=await import('../test-output/api.mjs');
-const admin={userId:'test_admin',email:'admin@test.invalid',displayName:'测试 PMC',fullName:'测试 PMC'},clerk={userId:'test_clerk',email:'clerk@test.invalid',displayName:'测试文员',fullName:'测试文员'},sales={userId:'test_sales',email:'sales@test.invalid',displayName:'测试客服',fullName:'测试客服'};
+const admin={userId:'test_admin',username:'admin',email:'admin@test.invalid',displayName:'测试 PMC',fullName:'测试 PMC'},clerk={userId:'test_clerk',username:'clerk',email:'clerk@test.invalid',displayName:'测试文员',fullName:'测试文员'},sales={userId:'test_sales',username:'sales',email:'sales@test.invalid',displayName:'测试客服',fullName:'测试客服'};
 async function call(action,body,user=admin,method=body===undefined?'GET':'POST'){return identity.run(user,()=>api[method==='HEAD'?'GET':method](new Request('https://orders.test/api/workspace/'+action,{method,headers:body instanceof FormData?{}:{'Content-Type':'application/json'},body:body===undefined?undefined:body instanceof FormData?body:JSON.stringify(body)}),{params:Promise.resolve({action:action.split('?')[0]})}));}
 async function ok(action,body,user=admin){const res=await call(action,body,user),result=await res.json();assert.equal(res.status,200,JSON.stringify(result));return result;}
 const state=()=>ok('data');
@@ -35,7 +36,7 @@ await ok('member',{name:'测试文员',email:clerk.email,role:'clerk',customers:
 await ok('member',{name:'测试客服',email:sales.email,role:'sales',customers:['测试客户甲'],active:true});await ok('enroll',{},sales);
 const {testMemberPersonnel}=await import('./member-personnel-cases.mjs');await testMemberPersonnel({ok,call,state,clerk,pass});
 const {testMemberNotificationMailboxes}=await import('./member-notification-mailbox-cases.mjs');await testMemberNotificationMailboxes({ok,call,pass,rawRecords:()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data)),rawInsert:record=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?)').run(record.id,record.kind,JSON.stringify(record))});
-const initial=[{'订单号':'TEST-001','客户':'测试客户甲','客户 PO':'PO-A','图纸编号':'DN-TEST-A','圈色':'C1','镜片类型':'白片','交货批次':'A','订单数量':100,'负责人邮箱':clerk.email,'客户要求交期':'2026-10-10','内部跟进备注':'内部信息不得对客导出'},{'订单号':'TEST-002','客户':'测试客户乙','图纸编号':'DN-TEST-B','圈色':'C2','镜片类型':'太阳片','订单数量':50,'客户要求交期':'2026-10-12'}];
+const initial=[{'订单号':'TEST-001','客户':'测试客户甲','客户 PO':'PO-A','图纸编号':'DN-TEST-A','圈色':'C1','镜片类型':'白片','交货批次':'A','订单数量':100,'负责人登录名':clerk.username,'客户要求交期':'2026-10-10','内部跟进备注':'内部信息不得对客导出'},{'订单号':'TEST-002','客户':'测试客户乙','图纸编号':'DN-TEST-B','圈色':'C2','镜片类型':'太阳片','订单数量':50,'客户要求交期':'2026-10-12'}];
 const job=await preview(initial);assert.equal(job.rows.filter(r=>r.status==='new').length,2);await ok('commit-import',{id:job.id,selected:[2,3]});
 await ok('commit-import',{id:job.id,selected:[2,3]});assert.equal((await state()).orders.length,2);const again=await preview(initial);assert(again.rows.every(r=>r.status==='skip'));pass('订单导入、重复提交与重复文件均不新增重复行');
 assert.equal((await ok('data',undefined,clerk)).orders.length,1);assert.equal((await ok('data',undefined,sales)).orders.length,1);let [lineA,lineB]=(await state()).orders;

@@ -29,6 +29,7 @@ export async function commitImport(body:unknown,s:State,m:Member){
   if((current?.version||0)!==r.expectedVersion)throw new AppError(`第 ${r.index} 行在预览后已被修改，请重新预览。已合并 ${offset} 条保留，本批未写入。`,409);
   if(importType==='mes'){if(!broad(m))throw new AppError('此操作需要 PMC 或管理员权限。',403);}
   else {
+   if(Object.hasOwn(r.after,'ownerEmail'))throw new AppError('该预览仍使用旧负责人字段，请重新预览后提交。',409);
    if(current?.lifecycle==='archived')throw new AppError('已归档订单不能通过工作表覆盖，请先恢复在制。',403);
    if(current&&(current.ledger||current.identityHistory?.length)&&r.after.drawing!==current.drawing)throw new AppError(`第 ${r.index} 行图纸编号不能通过工作表覆盖，请使用订单详情的“修改图纸编号”入口。`,409);
    if(current?.ledger&&(r.after.ledger?.columns?.J!==current.ledger.columns.J||[...new Set([...Object.keys(current.extra||{}),...Object.keys(r.after.extra||{})])].some(key=>isLedgerDrawingExtra(key)&&r.after.extra?.[key]!==current.extra?.[key])))throw new AppError(`第 ${r.index} 行原表 J 列已变化，请重新导出；工作表不能覆盖图纸编号。`,409);

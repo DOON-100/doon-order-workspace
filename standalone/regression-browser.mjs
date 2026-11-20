@@ -62,11 +62,11 @@ try{
  await sales.screenshot({path:path.join(root,'03-scoped-empty.png'),fullPage:true});pass('管理员收紧查看范围后立即生效，空表解释权限原因且不引导重复导入');
  // Binding must show the total already assigned, including after a partial batch or a repeated request.
  await api('auth/accounts',{username:'candy_binding',name:'Candy 绑定测试',role:'pmc',password:'Test-Candy-Initial!',customers:[]});
- const assignment={ownerName:'CANDY',email:'candy_binding@doon.local'};
+ const assignment={ownerName:'CANDY',username:'candy_binding'};
  const firstBatch=await api('workspace/ledger-assign',assignment);assert.deepEqual(firstBatch,{ok:true,count:30,total:614,bound:30,remaining:584});
  await admin.getByRole('button',{name:'成员与权限',exact:true}).click();await admin.reload();
  await admin.getByRole('combobox',{name:'原表跟单员绑定',exact:true}).click();await admin.getByRole('option',{name:'CANDY',exact:true}).click();
- await admin.getByRole('combobox',{name:'绑定登录账号',exact:true}).click();await admin.getByRole('option',{name:'Candy 绑定测试 · candy_binding@doon.local',exact:true}).click();
+ await admin.getByRole('combobox',{name:'绑定登录账号',exact:true}).click();await admin.getByRole('option',{name:'Candy 绑定测试 · candy_binding',exact:true}).click();
  const assignmentPanel=admin.locator('section').filter({has:admin.getByRole('heading',{name:'把原表跟单员绑定到登录账号',exact:true})});
  assert.match(await assignmentPanel.locator('[aria-label="跟单绑定统计"]').innerText(),/原表在制明细\s*614[\s\S]*已绑定该账号\s*30[\s\S]*待绑定 \/ 调整\s*584/);
  await admin.getByRole('button',{name:'绑定 584 条明细',exact:true}).click();await admin.getByRole('button',{name:'已全部绑定',exact:true}).waitFor({timeout:60000});
@@ -75,8 +75,8 @@ try{
  assert.match(await assignmentPanel.innerText(),/本次绑定 584 条/);
  await assignmentPanel.screenshot({path:path.join(root,'04-binding-complete.png')});
  const beforeRepeat=await (await adminContext.request.get(origin+'/api/workspace/data')).json();
- assert.equal(beforeRepeat.orders.filter(o=>o.ownerEmail===assignment.email).length,614);
- assert.equal(beforeRepeat.orders.filter(o=>o.ledger?.ownerName==='TINA'&&o.ownerEmail===assignment.email).length,0);
+ assert.equal(beforeRepeat.orders.filter(o=>o.ownerUsername===assignment.username).length,614);
+ assert.equal(beforeRepeat.orders.filter(o=>o.ledger?.ownerName==='TINA'&&o.ownerUsername===assignment.username).length,0);
  assert.deepEqual(await api('workspace/ledger-assign',assignment),{ok:true,count:0,total:614,bound:614,remaining:0});
  const afterRepeat=await (await adminContext.request.get(origin+'/api/workspace/data')).json();assert.equal(afterRepeat.revision,beforeRepeat.revision);assert.deepEqual(afterRepeat.orders,beforeRepeat.orders);
  const denied=await salesContext.request.post(origin+'/api/workspace/ledger-assign',{data:assignment,headers:{Origin:origin}});assert.equal(denied.status(),403);

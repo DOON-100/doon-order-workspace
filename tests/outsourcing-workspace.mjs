@@ -13,8 +13,8 @@ await fs.mkdir(output,{recursive:true});
 const outfile=path.join(output,'workspace.mjs');
 await build({stdin:{contents:"export * from './lib/outsourcing-workspace';export {supplierGet} from './lib/supplier-api';export {businessFollowupTargets,resolveBusinessFollowupTarget,followupTargetScope} from './lib/business-followup-targets';export {businessFollowupGet} from './lib/business-followup-api';export {LegacySupplierPanel} from './app/supplier-panel';export {ReceivingPanel} from './app/receiving-panel';",resolveDir:process.cwd(),loader:'tsx'},outfile,bundle:true,platform:'node',format:'esm',packages:'external',alias:{'@':process.cwd()},loader:{'.css':'empty'},plugins:[{name:'no-production-bindings',setup(b){b.onResolve({filter:/^cloudflare:workers$/},()=>({path:'env',namespace:'synthetic'}));b.onResolve({filter:/chatgpt-auth$/},()=>({path:'auth',namespace:'synthetic'}));b.onLoad({filter:/.*/,namespace:'synthetic'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return null}':'export const env={};'}));}}]});
 const api=await import(pathToFileURL(outfile).href);
-const member={id:'synthetic-member',kind:'member',email:'member@test.invalid',name:'合成成员',role:'admin',customers:[],departments:[],active:true,userId:'synthetic-user'};
-const order={id:'synthetic-order',kind:'order',orderNo:'SYNTHETIC-ORDER',customer:'合成客户',ownerEmail:member.email,drawing:'SYNTHETIC-DRAWING',color:'C1',lens:'',quantity:100,stage:'生产中',sourceStatus:'',extra:{},productType:'钛架',version:1};
+const member={id:'synthetic-member',kind:'member',username:'member',email:'member@test.invalid',name:'合成成员',role:'admin',customers:[],departments:[],active:true,userId:'synthetic-user'};
+const order={id:'synthetic-order',kind:'order',orderNo:'SYNTHETIC-ORDER',customer:'合成客户',ownerUsername:member.username,drawing:'SYNTHETIC-DRAWING',color:'C1',lens:'',quantity:100,stage:'生产中',sourceStatus:'',extra:{},productType:'钛架',version:1};
 const row=(id,process,lineId=order.id)=>({id,kind:'outsource',lineId,process,reference:id,supplier:'合成供应商',quantity:10,received:2,dueDate:'2099-12-31',status:'待回货',approvalStatus:'已审批',buyerEmail:member.email,actor:member.name,version:1});
 const sources=[row('SYNTHETIC-PLATING','plating'),row('SYNTHETIC-WELDING','welding'),row('SYNTHETIC-PLASTIC','cnc'),row('SYNTHETIC-UNKNOWN','historical-process')];
 const scopeCases=[['plating',['SYNTHETIC-PLATING']],['titanium',['SYNTHETIC-WELDING']],['plastic',['SYNTHETIC-PLASTIC']],['semifinished',['SYNTHETIC-WELDING','SYNTHETIC-PLASTIC']],['all',sources.map(row=>row.id)]];
@@ -49,7 +49,7 @@ for(const Component of [api.LegacySupplierPanel,api.ReceivingPanel]){
 }
 console.log('PASS Tracking and receiving workspaces isolate titanium, plastic and plating; legacy combined scopes remain complete.');
 
-const otherOrder={...order,id:'unreadable-order',orderNo:'UNREADABLE',customer:'其他客户',ownerEmail:'other@test.invalid'};
+const otherOrder={...order,id:'unreadable-order',orderNo:'UNREADABLE',customer:'其他客户',ownerUsername:'other'};
 const restricted={...member,role:'viewer'},state={revision:1,records:[order,otherOrder,...sources,row('SYNTHETIC-UNREADABLE','plating',otherOrder.id)]};
 async function exported(scope,user=restricted){
  const response=await api.supplierGet('supplier-export',new Request('https://synthetic.test/api/workspace/supplier-export'+(scope?'?scope='+scope:'')),state,user);

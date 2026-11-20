@@ -34,7 +34,7 @@ process.env.DOON_DATA_DIR=data;
 const runtime=await import(pathToFileURL(path.join(directories.cooperative,'runtime.mjs')).href),db=runtime.db;
 const token=Buffer.alloc(32,7).toString('base64url'),cookie='doon_session='+token;
 const member={id:'synthetic-member',kind:'member',userId:'synthetic-account',name:'Synthetic admin',email:'synthetic@example.invalid',role:'admin',active:true,owner:true,customers:[],departments:[],createdAt:'2026-01-01T00:00:00Z'};
-const order={id:'synthetic-order',kind:'order',orderNo:'SYNTHETIC',customer:'Synthetic customer',drawing:'Synthetic',color:'Synthetic',lens:'Synthetic',quantity:1,ownerEmail:member.email,version:1,createdAt:'2026-01-01T00:00:00Z'};
+const order={id:'synthetic-order',kind:'order',orderNo:'SYNTHETIC',customer:'Synthetic customer',drawing:'Synthetic',color:'Synthetic',lens:'Synthetic',quantity:1,ownerUsername:member.username,version:1,createdAt:'2026-01-01T00:00:00Z'};
 const put=db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)'),insert=row=>put.run(row.id,row.kind,JSON.stringify(row));
 db.exec('BEGIN');insert(member);insert(order);
 const auditCount=15651,exportCount=17,padding='x'.repeat(Math.ceil((119*1024*1024-exportCount*1024*1024)/auditCount));

@@ -11,7 +11,7 @@ import {eligibleCollaborationOwner,collaborationTaskKind} from './project-collab
 import {roles} from './domain';
 
 /** A plan is an inventory, not authorization to rewrite any original business record. */
-export type OffboardingItem={key:string;recordId:string;kind:string;field:string;label:string;category:string;customerId:string;projectId:string;orderId:string;version:number;sourceHash:string;mode:'id'|'ids'|'name'|'email'|'delegate'|'manual';roles:string[];requiresQuote:boolean;blocker:string;recipientId:string;acceptedBy:string;acceptedAt:string;acceptanceNote:string};
+export type OffboardingItem={key:string;recordId:string;kind:string;field:string;label:string;category:string;customerId:string;projectId:string;orderId:string;version:number;sourceHash:string;mode:'id'|'ids'|'name'|'email'|'username'|'delegate'|'manual';roles:string[];requiresQuote:boolean;blocker:string;recipientId:string;acceptedBy:string;acceptedAt:string;acceptanceNote:string};
 export type OffboardingPlan=Entity&{kind:'framework_offboarding_plan';version:number;memberId:string;memberName:string;memberRole:string;reason:string;status:'draft'|'cancelled'|'completed';items:OffboardingItem[];createdAt:string;createdById:string;updatedAt:string;updatedBy:string};
 export const frameworkOffboardingPolicy={recipientConfirmation:'recipient_self_confirmation_required',canFinalize:true,requireCompletedHandoverForDisable:true} as const;
 const id=z.string().trim().min(1).max(800),short=z.string().trim().max(3000),base={token:z.string().uuid(),id:id.optional(),expectedVersion:z.number().int().nonnegative()};
@@ -38,7 +38,7 @@ function recycledProjectRecord(s:State,record:Entity):boolean{
 export async function frameworkOffboardingInventory(s:State,member:Member):Promise<OffboardingItem[]>{
  const items:OffboardingItem[]=[];
  const add=async(r:Entity,field:string,label:string,category:string,roles:string[],mode:OffboardingItem['mode']='id',blocker='',requiresQuote=false)=>{
-  const v=value(r,field),matched=mode==='ids'?Array.isArray(v)&&v.includes(member.id):mode==='email'?sameName(v,member.email):mode==='name'?sameName(v,member.name):mode==='manual'?true:v===member.id;
+  const v=value(r,field),matched=mode==='ids'?Array.isArray(v)&&v.includes(member.id):mode==='username'?!!member.username&&v===member.username:mode==='email'?sameName(v,member.email):mode==='name'?sameName(v,member.name):mode==='manual'?true:v===member.id;
   if(!matched)return;
   if(mode==='name'&&all(s,'member').filter(m=>sameName(m.name,member.name)).length!==1)blocker='现有姓名对应多个账号，须先在原业务页核实为明确成员。';
   items.push({key:r.id+'::'+field,recordId:r.id,kind:r.kind,field,label:title(r)+' · '+label,category,customerId:r.customerId||(r.kind==='customer_account'?r.id:''),projectId:r.projectId||'',orderId:r.orderId||(r.kind==='order'?r.id:''),version:Number(r.version)||0,sourceHash:await hash(r),mode,roles,requiresQuote,blocker,recipientId:'',acceptedBy:'',acceptedAt:'',acceptanceNote:''});
@@ -75,7 +75,7 @@ export async function frameworkOffboardingInventory(s:State,member:Member):Promi
    }
    await add(r,'assigneeId','画图执行人','工程',engineering);if(!r.assigneeId)await add(r,'assignee','历史画图执行人','工程',engineering,'name');
   }else if(r.kind==='order'){
-   await add(r,'ownerEmail','订单负责人','订单',business,'email');await add(r,'salesName','负责销售','订单',sales,'name');await add(r,'serviceName','负责客服','订单',service,'name');await add(r,'pmcName','负责PMC','订单',pmc,'name');
+   await add(r,'ownerUsername','订单负责人','订单',business,'username');await add(r,'salesName','负责销售','订单',sales,'name');await add(r,'serviceName','负责客服','订单',service,'name');await add(r,'pmcName','负责PMC','订单',pmc,'name');
   }else if(r.kind==='handoff_business_source'){
    if(r.type==='production_order')await add(r,'fields.pmcId','生产单PMC','生产',pmc);
    if(r.type==='finance_request')await add(r,'fields.recipientId','财务请求接收人','财务',['finance']);
@@ -89,7 +89,7 @@ export async function frameworkOffboardingInventory(s:State,member:Member):Promi
  return items.sort((a,b)=>a.key.localeCompare(b.key));
 }
 export function frameworkOffboardingCandidate(s:State,source:Member,item:OffboardingItem,target:Member):boolean{
- if(!internal(target)||target.id===source.id||item.blocker||item.mode==='manual'||!item.roles.includes(target.role))return false;
+ if(!internal(target)||target.id===source.id||item.blocker||item.mode==='manual'||item.mode==='username'&&!target.username||!item.roles.includes(target.role))return false;
  if(item.requiresQuote&&!canUseCustomerQuotes(s,target))return false;
  if(item.kind==='engineering_drawing'&&!canManageDrawings(target))return false;
  if(item.kind===collaborationTaskKind&&!eligibleCollaborationOwner(target))return false;
@@ -138,7 +138,7 @@ function finalTransfers(s:State,m:Member,p:OffboardingPlan,source:Member):Entity
    r.assigneeId=r.assignees.length===1?target.id:'';
   }else if(i.mode==='delegate'){r.continuityMemberId=target.id;r.grants={...r.grants,[target.id]:{view:true,draft:true,send:false}};delete r.grants[source.id];}
   else if(i.mode==='ids')setValue(r,i.field,[...new Set(r.kind==='customer_account'?[...(value(r,i.field)||[]),target.id]:(value(r,i.field)||[]).map((id:string)=>id===source.id?target.id:id))]);
-  else setValue(r,i.field,i.mode==='name'?target.name:i.mode==='email'?target.email:target.id);
+  else setValue(r,i.field,i.mode==='name'?target.name:i.mode==='username'?target.username:i.mode==='email'?target.email:target.id);
   if(r.kind==='customer_account'){
    const side=i.field.startsWith('sales')?'sales':i.field.startsWith('service')?'service':'';
    if(side){const key=side+'MemberIds';r[key]=[...new Set([...(Array.isArray(r[key])?r[key]:[source.id]),target.id])];r[side+'Name']=target.name;}

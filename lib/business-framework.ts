@@ -119,8 +119,8 @@ export function buildFrameworkTodos(data:TodoData,projectData?:FrameworkProjectD
  }
  const dueLimit=new Date(Date.parse(today+'T00:00:00Z')+Math.min(90,Math.max(1,leadDays))*86400000).toISOString().slice(0,10);
  const orders=new Map(data.orders.filter(active).map(o=>[o.id,o]));
- const isMine=(o:Order)=>o.ownerEmail===data.me.email||data.me.customers.includes(o.customer);
- const owner=(o:Order)=>data.members.find(m=>m.email===o.ownerEmail)?.name||o.ledger?.ownerName||o.ownerEmail||'待分配';
+ const isMine=(o:Order)=>!!data.me.username&&o.ownerUsername===data.me.username||data.me.customers.includes(o.customer);
+ const owner=(o:Order)=>data.members.find(m=>m.username===o.ownerUsername)?.name||o.ledger?.ownerName||o.ownerUsername||'待分配';
  for(const c of data.comments){const o=orders.get(c.lineId);if(!o||c.done||!c.dueDate)continue;
   rows.push({id:'comment:'+c.id,recordId:c.id,orderId:o.id,tab:'followups',source:'订单跟进',title:text(c.text)||'订单跟进',customer:o.customer,reference:[o.orderNo,o.customerPO,o.drawing].filter(Boolean).join(' · '),owner:owner(o),date:validFrameworkDate(c.dueDate),dateLabel:'跟进日期',nextAction:'进入订单详情查看原跟进记录，核对后更新处理状态',status:'待跟进',view:'orders',mine:isMine(o),review:false,updatedAt:text(c.createdAt)});
  }

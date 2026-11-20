@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 // a database, a LAN URL, a real account or an employee-supplied workbook.
 export async function runServiceReadonlyPmcCases({ok,call,state,pass,rawRecords,rawInsert}){
  const clone=value=>structuredClone(value),before=clone(rawRecords());
- const user={userId:'synthetic_service_readonly_pmc',email:'synthetic_service_readonly_pmc@test.invalid',displayName:'合成客服PMC只读员',fullName:'合成客服PMC只读员'};
+ const user={userId:'synthetic_service_readonly_pmc',username:'synthetic_service_readonly_pmc',email:'synthetic_service_readonly_pmc@test.invalid',displayName:'合成客服PMC只读员',fullName:'合成客服PMC只读员'};
  const allDepartments=['pmc','titanium','outsourcing','plating','semifinished','plastic','finished'];
  await ok('member',{name:user.displayName,email:user.email,role:'sales',orderScope:'all',customers:['TEST-READONLY-PMC','TEST-READONLY-OTHER'],departments:allDepartments,active:true});
  await ok('enroll',{},user);
@@ -14,17 +14,17 @@ export async function runServiceReadonlyPmcCases({ok,call,state,pass,rawRecords,
  const aliasEntry=Object.entries(policy.aliasesByMember).find(([id,aliases])=>aliases.length&&members.some(m=>m.id===id&&m.active&&m.role==='sales'&&m.orderScope==='all')&&policy.memberIds.includes(id));
  assert(aliasEntry,'The earlier quote suite must provide a synthetic sales/all alias identity.');
  const aliasMember=members.find(m=>m.id===aliasEntry[0]),alias=aliasEntry[1][0];
- const aliasUser={userId:aliasMember.userId,email:aliasMember.email,displayName:aliasMember.name,fullName:aliasMember.name};
+ const aliasUser={userId:aliasMember.userId,username:aliasMember.username,email:aliasMember.email,displayName:aliasMember.name,fullName:aliasMember.name};
  const customer=async(name,code,serviceName,pmcName='')=>(await ok('customer-save',{customer:name,customerCode:code,salesName:'',serviceName,pmcName,active:true})).item;
  const mine=await customer('合成只读PMC本人客户','TEST-READONLY-PMC',user.displayName,user.displayName);
  const other=await customer('合成只读PMC他人客户','TEST-READONLY-OTHER','合成其他客服',user.displayName);
  const aliasAccount=await customer('合成只读PMC别名客户','',alias,aliasMember.name);
  const partial=await customer('合成只读PMC部分别名客户','TEST-READONLY-PARTIAL',alias+' EXTRA',aliasMember.name);
  const template=rawRecords().find(r=>r.kind==='order'&&r.ledger&&r.lifecycle!=='archived');assert(template);
- const order=(suffix,account,ownerEmail,customerValue=account.customer)=>({
+ const order=(suffix,account,ownerUsername,customerValue=account.customer)=>({
   ...clone(template),id:'synthetic_readonly_order_'+suffix,version:1,orderNo:'SYNTHETIC-READONLY-'+suffix,
   customer:customerValue,customerPO:'SYNTHETIC-PO',drawing:'SYNTHETIC-DRAWING',color:'TEST-COLOR',lens:'白片',
-  batch:'',quantity:100,ownerEmail,productType:'钛架',requestedDate:'2026-10-20',plannedDate:'2026-10-18',shipDate:'2026-10-19',
+  batch:'',quantity:100,ownerUsername,productType:'钛架',requestedDate:'2026-10-20',plannedDate:'2026-10-18',shipDate:'2026-10-19',
   notes:'合成测试历史备注',workflowStatus:'客服待审核',lifecycle:'active',closedDate:'',archiveReason:'',
   ledger:{...clone(template.ledger),columns:{...clone(template.ledger.columns),A:'度昂',C:customerValue,I:'SYNTHETIC-READONLY-'+suffix,J:'SYNTHETIC-DRAWING',L:'TEST-COLOR',M:'100',U:'2026-10-18',W:'钛架',AB:'合成测试历史备注',AC:'2026-10-10',BF:'10',BH:''}},
  });
@@ -55,7 +55,7 @@ export async function runServiceReadonlyPmcCases({ok,call,state,pass,rawRecords,
  await denied('pmc-round',{token:crypto.randomUUID(),lineIds:[ownOrder.id],scope:'合成只读测试',productionScope:'internal'});
  await denied('pmc-review',{roundId:'synthetic-denied-round',lineId:ownOrder.id,version:1,status:'done'});
  for(const patch of [{AC:'2026-10-21'},{AF:'2026-10-21'},{BH:'2026-10-21'},{BF:'90'},{AL:'90'},{BD:'90'}])await denied('ledger-edit',{id:ownOrder.id,version:1,patch,reason:'合成拒绝测试'});
- for(const patch of [{plannedDate:'2026-10-21'},{shipDate:'2026-10-21'},{stage:'生产中'},{ownerEmail:'admin@test.invalid'}])await denied('edit-order',{id:ownOrder.id,version:1,patch});
+ for(const patch of [{plannedDate:'2026-10-21'},{shipDate:'2026-10-21'},{stage:'生产中'},{ownerUsername:'admin'}])await denied('edit-order',{id:ownOrder.id,version:1,patch});
  for(const mode of ['archived','active'])await denied('ledger-lifecycle',{id:ownOrder.id,version:1,mode,reason:'合成拒绝结单',closedDate:'2026-10-21'});
  await denied('ledger-assign',{ownerName:'合成跟单员',email:user.email});
  for(const action of ['accept-pmc','save-pmc'])await denied('workflow',{id:ownOrder.id,version:1,action,productionStartDate:'2026-10-12',productionFinishDate:'2026-10-21',promisedDate:'2026-10-22'});

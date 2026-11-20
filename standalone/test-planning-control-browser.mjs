@@ -53,7 +53,7 @@ try{
  const at=new Date().toISOString();
  fixtureDb.exec('BEGIN');
  for(const suffix of ['A','B']){
-  const record={id:'synthetic_planning_order_'+suffix,kind:'order',version:1,createdAt:at,updatedAt:at,updatedBy:'合成测试',source:'synthetic-browser-fixture',orderNo:'SYN-PLAN-'+suffix,customer:'合成计划客户',customerPO:'SYN-PO-'+suffix,drawing:'SYN-DRAW-'+suffix,color:'C1',lens:'白片',batch:'A',quantity:100,unit:'副',requestedDate:'2026-11-30',ownerEmail:data.members.find(m=>m.id===memberId('owner')).email,stage:'生产中',plannedDate:'2026-11-20',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'原始测试记录必须保持字节一致',sourceStatus:'有效',extra:{}};
+  const record={id:'synthetic_planning_order_'+suffix,kind:'order',version:1,createdAt:at,updatedAt:at,updatedBy:'合成测试',source:'synthetic-browser-fixture',orderNo:'SYN-PLAN-'+suffix,customer:'合成计划客户',customerPO:'SYN-PO-'+suffix,drawing:'SYN-DRAW-'+suffix,color:'C1',lens:'白片',batch:'A',quantity:100,unit:'副',requestedDate:'2026-11-30',ownerUsername:data.members.find(m=>m.id===memberId('owner')).username,stage:'生产中',plannedDate:'2026-11-20',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'原始测试记录必须保持字节一致',sourceStatus:'有效',extra:{}};
   fixtureDb.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').run(record.id,record.kind,JSON.stringify(record));
  }
  fixtureDb.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();fixtureDb.exec('COMMIT');fixtureDb.close();

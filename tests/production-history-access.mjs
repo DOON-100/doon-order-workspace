@@ -20,15 +20,15 @@ try{
  const api=await import(pathToFileURL(path.join(dir,'api.mjs')).href);
  const insert=row=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').run(row.id,row.kind,JSON.stringify(row));
  const snapshot=()=>({rows:db.prepare('SELECT id,kind,data FROM records ORDER BY id').all(),revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get()});
- const member=(id,role,customers)=>({id,kind:'member',userId:id,name:'Synthetic '+id,email:id+'@example.invalid',role,active:true,orderScope:'assigned',customers,createdAt:'2026-10-28T00:00:00Z'});
+ const member=(id,role,customers)=>({id,kind:'member',userId:id,name:'Synthetic '+id,username:id,email:id+'@example.invalid',role,active:true,orderScope:'assigned',customers,createdAt:'2026-10-28T00:00:00Z'});
  const admin=member('history-admin','admin',[]),pmc=member('history-pmc','pmc',[]),salesA=member('history-sales-A','sales',['SYN-A']),salesB=member('history-sales-B','sales',['SYN-B']),finance=member('history-finance','finance',[]);
  [admin,pmc,salesA,salesB,finance].forEach(insert);
- const order=(id,customer)=>({id,kind:'order',version:1,customer,ownerEmail:'',orderNo:'SYN-SHARED',drawing:'SYN-DRAWING',color:'Black',lens:'Clear',quantity:100,extra:{},createdAt:'2026-10-28T00:00:00Z'});
+ const order=(id,customer)=>({id,kind:'order',version:1,customer,ownerUsername:'',orderNo:'SYN-SHARED',drawing:'SYN-DRAWING',color:'Black',lens:'Clear',quantity:100,extra:{},createdAt:'2026-10-28T00:00:00Z'});
  const orderA=order('history-order-A','SYN-A'),orderB=order('history-order-B','SYN-B');[orderA,orderB].forEach(insert);
  const report=(id,lineId)=>({id,kind:'report',lineId,version:1,orderNo:orderA.orderNo,drawing:orderA.drawing,color:orderA.color,lens:orderA.lens,quantity:73,workOrder:'SYN-WORK',approval:'已审批'});
  const old=report('history-report',orderB.id),current={...old,version:2,quantity:5},unlinked=report('history-unlinked','');
  [current,unlinked,{id:'history-audit-B',kind:'audit',targetId:current.id,before:old,after:current,action:'Synthetic MES import'}, {id:'history-audit-unlinked',kind:'audit',targetId:unlinked.id,before:null,after:unlinked,action:'Synthetic unlinked import'}].forEach(insert);
- const call=(action,actor,body)=>identity.run({userId:actor.userId,email:actor.email},()=>api[body===undefined?'GET':'POST'](new Request('https://synthetic.invalid/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})}),{params:Promise.resolve({action:action.split('?')[0]})}));
+ const call=(action,actor,body)=>identity.run({userId:actor.userId,username:actor.username,email:actor.email},()=>api[body===undefined?'GET':'POST'](new Request('https://synthetic.invalid/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},...(body===undefined?{}:{body:JSON.stringify(body)})}),{params:Promise.resolve({action:action.split('?')[0]})}));
  const ok=async(action,actor,body)=>{const response=await call(action,actor,body),data=await response.json();assert.equal(response.status,200,JSON.stringify(data));return data;};
  const history=(id,actor,type='report')=>ok('production-workspace-history?type='+type+'&id='+id,actor);
  const match=async(id,expectedVersion)=>ok('production-report-action',pmc,{type:'match',token:randomUUID(),reportId:id,lineId:orderA.id,expectedVersion,orderVersion:orderA.version,reason:'Synthetic exact identity reassociation'});

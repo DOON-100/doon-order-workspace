@@ -35,7 +35,7 @@ await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile,bundle:
  builder.onLoad({filter:/.*/,namespace:'business-followup-test'},args=>({contents:args.path==='auth'?'export async function getChatGPTUser(){return globalThis.__businessFollowupIdentity.getStore()||null}':'export const env=globalThis.__businessFollowupEnv;'}));
 }}]});
 const api=await import(pathToFileURL(outfile).href);
-const user=role=>({userId:'business_followup_'+role,email:'business-followup-'+role+'@test.invalid',displayName:'合成跟进'+role,fullName:'合成跟进'+role});
+const user=role=>({userId:'business_followup_'+role,username:'bf_'+role,email:'business-followup-'+role+'@test.invalid',displayName:'合成跟进'+role,fullName:'合成跟进'+role});
 const admin=user('admin');
 async function call(action,body,actor=admin,headers={}){
  const method=body===undefined?'GET':'POST',routeAction=action.split('?')[0];
@@ -76,7 +76,7 @@ teamB.customerIds.push(accountA.id);
 const project=(id,account,teamId,status='active')=>({id,kind:'customer_project',customerId:account.id,teamId,code:'SYN-'+id,title:'合成项目 '+id,description:'原需求原文\n保留',salesMemberId:'',serviceMemberId:'',serviceMemberIds:[],dueDate:'',status,version:1,createdAt:stamp,updatedAt:stamp,createdBy:'合成作者',updatedBy:'合成作者'});
 const projectA=project('bf_project_a',accountA,teamA.id),projectB=project('bf_project_b',accountB,teamB.id),projectOtherGroup=project('bf_project_other_group',accountA,teamB.id),archivedProject=project('bf_archived_project',accountA,teamA.id,'archived');
 const quotePolicy={id:'bf_quote_policy',kind:'customer_quote_access',memberIds:[sales.id,clerk.id],aliasesByMember:{},internalMemberIds:[]};
-const order=(id,account,owner)=>({id,kind:'order',version:1,customer:account.customerCode,orderNo:'SYN-'+id,customerPO:'SYN-PO',drawing:'SYN-DRAWING',color:'C1',lens:'白片',batch:'A',quantity:10,requestedDate:'',ownerEmail:owner.email,stage:'生产中',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'原订单内部备注',sourceStatus:'正式订单',extra:{},workflowStatus:'生产中',source:'synthetic',createdAt:stamp,updatedAt:stamp,updatedBy:'合成作者'});
+const order=(id,account,owner)=>({id,kind:'order',version:1,customer:account.customerCode,orderNo:'SYN-'+id,customerPO:'SYN-PO',drawing:'SYN-DRAWING',color:'C1',lens:'白片',batch:'A',quantity:10,requestedDate:'',ownerUsername:owner.username,stage:'生产中',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'原订单内部备注',sourceStatus:'正式订单',extra:{},workflowStatus:'生产中',source:'synthetic',createdAt:stamp,updatedAt:stamp,updatedBy:'合成作者'});
 const orderA=order('bf_order_a',accountA,user('sales')),orderB=order('bf_order_b',accountB,user('outsider'));
 const service=(id,account,type)=>({id,kind:'service_record',type,customerId:account.id,teamId:account.id===accountA.id?teamA.id:teamB.id,orderId:'',title:'合成客服 '+id,description:'原客服正文',status:'open',waitingFor:'none',dueDate:'',nextFollowUp:'',details:{currency:'USD',amountCents:100},version:1,createdAt:stamp,updatedAt:stamp,updatedBy:'合成作者'});
 const serviceA=service('bf_service_a',accountA,'followup'),shipmentA=service('bf_shipment_a',accountA,'shipment'),serviceB=service('bf_service_b',accountB,'followup');

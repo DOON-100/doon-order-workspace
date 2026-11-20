@@ -3,16 +3,16 @@ import assert from 'node:assert/strict';
 // Runs only in tests/run.mjs's in-memory database and injected identity context.
 export async function testProcessWorkspace({api,identity,admin,rawInsert,rawRecords,pass}){
  const prefix='synthetic_process_',id=name=>prefix+name,at='2026-10-18T00:00:00.000Z';
- const user=(name,role,extra={})=>({id:id(name),kind:'member',userId:id(name+'_user'),email:name+'@process.test.invalid',name:'Synthetic '+name,role,customers:[],active:true,createdAt:at,...extra});
+ const user=(name,role,extra={})=>({id:id(name),kind:'member',userId:id(name+'_user'),username:name,email:name+'@process.test.invalid',name:'Synthetic '+name,role,customers:[],active:true,createdAt:at,...extra});
  const sales=user('sales','sales'),other=user('other','sales'),broadSales=user('broad_sales','sales',{orderScope:'all'}),viewer=user('viewer','viewer'),programmer=user('programmer','programmer'),production=user('production','production'),pmc=user('pmc','pmc'),finance=user('finance','finance'),supplier=user('supplier','supplier'),finished=user('finished','clerk',{departments:['finished'],orderScope:'assigned'}),engineering=user('engineering','clerk',{departments:['engineering'],orderScope:'assigned'}),readonly=user('readonly','admin');
- const person=member=>({userId:member.userId,email:member.email,displayName:member.name,fullName:member.name});
+ const person=member=>({userId:member.userId,username:member.username,email:member.email,displayName:member.name,fullName:member.name});
  const customer=name=>({id:id('customer_'+name),kind:'customer_account',customer:'Synthetic process '+name,customerCode:'PROCESS-'+name,salesName:'',serviceName:'',pmcName:'',active:true,version:1,notes:'',createdAt:at,updatedAt:at,updatedBy:'test'});
  const a={...customer('A'),serviceMemberIds:[sales.id]},b={...customer('B'),serviceMemberIds:[other.id]},shared={...customer('Shared'),serviceMemberIds:[sales.id]},inactive={...customer('Inactive'),active:false};
  const singleOrderClerk=user('single_order_clerk','clerk',{departments:['finished'],orderScope:'assigned'});
  const baseOrder=rawRecords().find(row=>row.kind==='order');assert(baseOrder,'Earlier synthetic order fixture is required');
- const order=(name,account)=>({...baseOrder,id:id('order_'+name),orderNo:'PROCESS-'+name,customer:account.customerCode,ownerEmail:'',version:1});
+ const order=(name,account)=>({...baseOrder,id:id('order_'+name),orderNo:'PROCESS-'+name,customer:account.customerCode,ownerUsername:'',version:1});
  const oa=order('A',a),ob=order('B',b),os=order('Shared',shared),loose={...order('Loose',a),customer:'PROCESS-UNRESOLVED'};
- const ownedOrder={...oa,id:id('single_owned_order'),orderNo:'PROCESS-SINGLE-OWNED',ownerEmail:singleOrderClerk.email};
+ const ownedOrder={...oa,id:id('single_owned_order'),orderNo:'PROCESS-SINGLE-OWNED',ownerUsername:singleOrderClerk.username};
  for(const member of [sales,viewer,programmer,finished])member.customers=[a.customerCode,shared.customerCode];
  const t1={id:id('team_1'),kind:'customer_project_team',name:'Synthetic process team one',active:true,customerIds:[a.id,shared.id],leaderIds:[],salesMemberIds:[sales.id],serviceMemberIds:[]};
  const t2={...t1,id:id('team_2'),name:'Synthetic process team two',customerIds:[b.id,shared.id],salesMemberIds:[other.id]};

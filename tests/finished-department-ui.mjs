@@ -39,10 +39,10 @@ export async function testFinishedDepartmentUi({pass=name=>console.log('PASS '+n
  function text(n){if(n==null||typeof n==='boolean')return '';if(Array.isArray(n))return n.map(text).join('');if(typeof n==='string'||typeof n==='number')return String(n);return text(n.props?.children);}
  const button=label=>nodes().find(n=>n.type==='button'&&text(n)===label);
  const input=id=>nodes().find(n=>n.type==='input'&&n.props.id===id);
- const order=(id,factory='度昂',patch={})=>({id,kind:'order',version:4,source:'synthetic-ledger.xlsx',orderNo:id.toUpperCase(),customer:'合成客户',customerPO:'SYN-PO',drawing:'SYN-DRAWING',color:'SYN-C1',lens:'白片',quantity:100,ownerEmail:'synthetic-owner@test.invalid',sourceStatus:'',lifecycle:'active',extra:{},ledger:{sheet:'合成动态表',sourceRow:4,ownerName:'合成跟单员',columns:{A:factory,M:'100',BF:'100',BG:'2026-10-24',BI:'已核对合成收货凭据'}},...patch});
+ const order=(id,factory='度昂',patch={})=>({id,kind:'order',version:4,source:'synthetic-ledger.xlsx',orderNo:id.toUpperCase(),customer:'合成客户',customerPO:'SYN-PO',drawing:'SYN-DRAWING',color:'SYN-C1',lens:'白片',quantity:100,ownerUsername:'synthetic-owner',sourceStatus:'',lifecycle:'active',extra:{},ledger:{sheet:'合成动态表',sourceRow:4,ownerName:'合成跟单员',columns:{A:factory,M:'100',BF:'100',BG:'2026-10-24',BI:'已核对合成收货凭据'}},...patch});
  const internal=order('synthetic-internal'),external=Array.from({length:4},(_,i)=>order('synthetic-external-'+(i+1),'合成外发工厂'));
  const hidden=[order('synthetic-archived','合成外发工厂',{lifecycle:'archived'}),order('synthetic-cancelled','合成外发工厂',{sourceStatus:'已取消'}),order('synthetic-standard','度昂',{ledger:undefined})];
- const finished={id:'synthetic-finished-clerk',name:'合成成品文员',email:'synthetic-finished@test.invalid',role:'clerk',departments:['finished'],customers:[],active:true};
+ const finished={id:'synthetic-finished-clerk',name:'合成成品文员',username:'synthetic-finished',email:'synthetic-finished@test.invalid',role:'clerk',departments:['finished'],customers:[],active:true};
  const data={me:finished,orders:[internal,...external,...hidden],losses:[],reports:[]};
  let opened;
  const panel={data,openOrder:o=>{opened=o;}};

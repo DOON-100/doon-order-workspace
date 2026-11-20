@@ -4,7 +4,7 @@ import {build} from 'esbuild';
 // This suite is appended after the existing business suites. Every new identity,
 // customer, order and document here is synthetic; no production files are read.
 export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,rawInsert,rawUpdate}){
- const identity=(id,name)=>({userId:id,email:id+'@test.invalid',displayName:name,fullName:name});
+ const identity=(id,name)=>({userId:id,username:id,email:id+'@test.invalid',displayName:name,fullName:name});
  const assigned=identity('service_case_assigned','CRM合成负责员');
  const other=identity('service_case_other','CRM合成另一负责员');
  const broadSales=identity('service_case_broad','CRM合成全订单员');
@@ -64,7 +64,7 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  const aliasEntry=Object.entries(quotePolicy?.aliasesByMember||{}).find(([id,names])=>names.length&&memberList.some(member=>member.id===id&&member.role==='sales'&&member.active));
  assert(aliasEntry,'A synthetic configured sales alias is required from the preceding quotation suite.');
  const aliasMember=memberList.find(member=>member.id===aliasEntry[0]);
- const aliasUser={userId:aliasMember.userId,email:aliasMember.email,displayName:aliasMember.name,fullName:aliasMember.name};
+ const aliasUser={userId:aliasMember.userId,username:aliasMember.username,email:aliasMember.email,displayName:aliasMember.name,fullName:aliasMember.name};
  const aliasAccount=(await ok('customer-save',{customer:'CRM合成别名客户',customerCode:'TEST-CRM-ALIAS',salesName:'',serviceName:aliasEntry[1][0],pmcName:'',active:true})).item;
  assert((await list(aliasUser)).customers.some(customer=>customer.id===aliasAccount.id));
  const aliasRecord=(await save(draftFor(aliasAccount,{title:'合成别名客服跟进'}),aliasUser)).record;
@@ -105,7 +105,7 @@ export async function runServiceWorkspaceCases({ok,call,state,pass,rawRecords,ra
  await deny('service-save',base,403,clerk);
 
  const orderTemplate=rawRecords().find(record=>record.kind==='order');assert(orderTemplate);
- const orderFor=(id,customer)=>({...clone(orderTemplate),id,customer:customer.customer,orderNo:'SYNTHETIC-CRM-'+id,customerPO:'SYNTHETIC-PO',version:1,lifecycle:'active',ledger:undefined,ownerEmail:assigned.email});
+ const orderFor=(id,customer)=>({...clone(orderTemplate),id,customer:customer.customer,orderNo:'SYNTHETIC-CRM-'+id,customerPO:'SYNTHETIC-PO',version:1,lifecycle:'active',ledger:undefined,ownerUsername:assigned.username});
  const orderA=orderFor('service_synthetic_order_a',account),orderB=orderFor('service_synthetic_order_b',accountB);
  rawInsert(orderA);rawInsert(orderB);
  const protectedOrders=clone(rawRecords().filter(record=>record.kind==='order'));

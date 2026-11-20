@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 // Independent-entry coverage uses only this suite's synthetic customer records.
 export async function testCustomerProjectEntries({ok,call,state,pass,rawRecords,rawInsert}){
  const token=()=>crypto.randomUUID(),current=id=>rawRecords().find(row=>row.id===id);
- const users={};for(const key of ['writer','outsider']){const user={userId:'synthetic_entry_'+key,email:'synthetic-entry-'+key+'@test.invalid',displayName:'独立录入合成-'+key,fullName:'独立录入合成-'+key};await ok('member',{name:user.displayName,email:user.email,role:'clerk',customers:[],active:true});await ok('enroll',{},user);users[key]=user;}
+ const users={};for(const key of ['writer','outsider']){const user={userId:'synthetic_entry_'+key,username:'synthetic-entry-'+key,email:'synthetic-entry-'+key+'@test.invalid',displayName:'独立录入合成-'+key,fullName:'独立录入合成-'+key};await ok('member',{name:user.displayName,username:user.username,email:user.email,role:'clerk',customers:[],active:true});await ok('enroll',{},user);users[key]=user;}
  const member=(await state()).members.find(row=>row.email===users.writer.email);
  const customer=(await ok('customer-save',{customer:'独立录入合成客户',customerCode:'SYN-INDEPENDENT',salesName:'',serviceName:member.name,salesMemberIds:[],serviceMemberIds:[member.id],active:true})).item;
  const original=(await ok('customer-project-save',{token:token(),customerId:customer.id,title:'独立录入合成项目'})).item;
@@ -51,7 +51,7 @@ export async function testCustomerProjectEntries({ok,call,state,pass,rawRecords,
  pass('独立与正式轮次拒绝循环来源；寄样、反馈、图纸确认及轮次款色关联一致，缺省反馈轮次沿用样办');
 
  const editableRound=await create('round',{scope:[{itemId:created.item.id,quantity:10}]});
- const order={id:'synthetic_entry_formal_order',kind:'order',version:1,customer:customer.customerCode,orderNo:'SYN-ENTRY-ORDER',drawing:'SYN-ENTRY-DRAWING',color:'',lens:'',quantity:10,ownerEmail:users.writer.email,sourceStatus:'正式订单',workflowStatus:'PMC待接单',createdAt:'2026-10-13',updatedAt:'2026-10-13'};rawInsert(order);
+ const order={id:'synthetic_entry_formal_order',kind:'order',version:1,customer:customer.customerCode,orderNo:'SYN-ENTRY-ORDER',drawing:'SYN-ENTRY-DRAWING',color:'',lens:'',quantity:10,ownerUsername:users.writer.username,sourceStatus:'正式订单',workflowStatus:'PMC待接单',createdAt:'2026-10-13',updatedAt:'2026-10-13'};rawInsert(order);
  const released={...created.handover,id:'synthetic_entry_released_handover',independentEntry:false,roundId:editableRound.id,version:1,type:'bulk',scope:[{itemId:created.item.id,quantity:4}],orderLinks:[{itemId:created.item.id,orderId:order.id,quantity:4,orderVersion:1}],drawingIds:[],quoteLinkId:'',paymentSnapshot:{allowed:true,missing:[]}};rawInsert(released);
  const beforeRound=(await ok('customer-project-data',undefined,users.writer)).rounds.find(row=>row.id===editableRound.id);assert.equal(beforeRound.remainingScope[0].quantity,6);
  await create('handover',{roundId:editableRound.id,scope:[{itemId:created.item.id,quantity:25_000_000}],orderLinks:[{itemId:created.item.id,orderId:order.id,quantity:25_000_000}]});

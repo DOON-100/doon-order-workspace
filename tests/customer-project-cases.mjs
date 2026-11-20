@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawInsert,rawUpdate,admin}){
  const original=structuredClone(rawRecords()),token=()=>crypto.randomUUID(),current=id=>rawRecords().find(r=>r.id===id);
  const users={};for(const [key,role] of [['sales','sales'],['service','clerk'],['service2','sales'],['inactive','clerk'],['other','sales'],['pmc','pmc']]){
-  const user={userId:'synthetic_project_'+key,email:'synthetic-project-'+key+'@test.invalid',displayName:'合成项目-'+key,fullName:'合成项目-'+key};await ok('member',{name:user.displayName,email:user.email,role,orderScope:'all',customers:[],active:true});await ok('enroll',{},user);users[key]=user;
+  const user={userId:'synthetic_project_'+key,username:'project_'+key,email:'synthetic-project-'+key+'@test.invalid',displayName:'合成项目-'+key,fullName:'合成项目-'+key};await ok('member',{name:user.displayName,username:user.username,email:user.email,role,orderScope:'all',customers:[],active:true});await ok('enroll',{},user);users[key]=user;
  }
  const members=(await state()).members,mid=key=>members.find(m=>m.email===users[key].email).id;
  const customer=(await ok('customer-save',{customer:'合成项目客户甲',customerCode:'TEST-PROJECT-A',salesName:users.sales.displayName,serviceName:users.service.displayName,pmcName:users.pmc.displayName,salesMemberIds:[mid('sales')],serviceMemberIds:[mid('service'),mid('service2'),mid('inactive')],active:true})).item;
@@ -144,7 +144,7 @@ export async function testCustomerProjects({ok,call,state,pass,rawRecords,rawIns
  pass('样办内部权限、独立复期、实寄限额及签收不等于客批；改样新开轮次，已转原轮历史保留');
  const bulk=(await ok('customer-project-round-save',{token:token(),projectId:project.id,title:'B1大货',type:'bulk',scope:[{itemId:itemA.id,quantity:10}],requiredDrawingTypes:['2d'],requireQuote:false,requiredSampleIds:[sample.id],sampleGateStage:'order'},users.service)).item;
  await ok('project-payment-requirement',{token:token(),projectId:project.id,roundId:bulk.id,mode:'free',version:0,reason:'合成测试信用条件批准'});
- const order={id:'synthetic_project_bulk_order',kind:'order',version:1,customer:customer.customerCode,orderNo:'SYN-BULK-001',customerPO:'SYN-PO',drawing:itemA.drawing,color:itemA.color,lens:itemA.lens,batch:'',quantity:10,requestedDate:'2026-11-30',ownerEmail:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:{},createdAt:'2026-10-12',updatedAt:'2026-10-12'};rawInsert(order);
+ const order={id:'synthetic_project_bulk_order',kind:'order',version:1,customer:customer.customerCode,orderNo:'SYN-BULK-001',customerPO:'SYN-PO',drawing:itemA.drawing,color:itemA.color,lens:itemA.lens,batch:'',quantity:10,requestedDate:'2026-11-30',ownerUsername:'',stage:'待下达',plannedDate:'',shipDate:'',promisedDate:'',promiseConfirmed:false,customerNote:'',arrangement:'',notes:'',sourceStatus:'待正式订单确认',workflowStatus:'业务待提交',extra:{},createdAt:'2026-10-12',updatedAt:'2026-10-12'};rawInsert(order);
  const bulkPayload={token:token(),projectId:project.id,roundId:bulk.id,roundVersion:1,orderLinks:[{itemId:itemA.id,orderId:order.id,quantity:10,orderVersion:1}],drawingIds:[drawing.id]};
  await denied('customer-project-bulk-link',bulkPayload,users.service,400);
  await ok('customer-project-sample-feedback',{token:token(),projectId:project.id,sampleId:sample.id,itemId:itemA.id,decision:'approved',contact:'合成客户',date:'2026-10-27',evidence:'合成客户明确客批该样办'},users.service);

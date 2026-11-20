@@ -39,11 +39,11 @@ async function seed(target){
  CREATE TABLE local_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL);`);
  const salt='01020304050607080910111213141516',hash=`scrypt-v1$${salt}$${scryptSync(password,salt,64,{N:32768,r:8,p:3,maxmem:64*1024*1024}).toString('hex')}`;
  for(const [username,role,mustChange] of [['admin','admin',0],['viewer','viewer',0],['initial','sales',1]]){
-  const member={id:'member-'+username,kind:'member',userId:'account-'+username,email:username+'@example.invalid',name:'合成'+username,role,orderScope:role==='admin'?'all':'assigned',customers:[],departments:[],active:true,createdAt:at};
+  const member={id:'member-'+username,kind:'member',userId:'account-'+username,username:username,email:username+'@example.invalid',name:'合成'+username,role,orderScope:role==='admin'?'all':'assigned',customers:[],departments:[],active:true,createdAt:at};
   db.prepare('INSERT INTO records VALUES(?,?,?)').run(member.id,member.kind,JSON.stringify(member));
   db.prepare('INSERT INTO local_accounts VALUES(?,?,?,?,?,?)').run(member.userId,username,member.id,hash,mustChange,at);
  }
- const order={id:'order-1',kind:'order',version:1,orderNo:'SYN-ORDER',customer:'合成客户',drawing:'SYN-MODEL',quantity:1,ownerEmail:'admin@example.invalid',stage:'生产中',requestedDate:'',updatedAt:at};
+ const order={id:'order-1',kind:'order',version:1,orderNo:'SYN-ORDER',customer:'合成客户',drawing:'SYN-MODEL',quantity:1,ownerUsername:'admin',stage:'生产中',requestedDate:'',updatedAt:at};
  db.prepare('INSERT INTO records VALUES(?,?,?)').run(order.id,order.kind,JSON.stringify(order));
  db.prepare('INSERT INTO local_meta VALUES(?,?)').run('last_backup',JSON.stringify({at,integrity:'ok',folder:'synthetic-private-marker'}));
  db.prepare('INSERT INTO local_sessions VALUES(?,?,?,?)').run(productionDigest,'account-admin',Date.now()+3600000,Date.now());

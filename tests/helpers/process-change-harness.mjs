@@ -24,15 +24,15 @@ export async function createProcessChangeHarness(root=process.cwd()){
   b.onLoad({filter:/.*/,namespace:'synthetic'},args=>({contents:args.path==='env'?`export const env=globalThis.__processChangeHarnesses.get(${JSON.stringify(key)}).env`:`export async function getChatGPTUser(){return globalThis.__processChangeHarnesses.get(${JSON.stringify(key)}).identity.getStore()||null}`}));
  }}]});
  const api=await import(pathToFileURL(file).href),at='2026-10-20T00:00:00Z';
- const member=(id,role)=>({id,kind:'member',userId:id,email:id+'@example.invalid',name:id,role,active:true,customers:[],createdAt:at});
+ const member=(id,role)=>({id,kind:'member',userId:id,username:id,email:id+'@example.invalid',name:id,role,active:true,customers:[],createdAt:at});
  const admin=member('SYN-ADMIN','admin'),other=member('SYN-OTHER','admin'),viewer=member('SYN-VIEWER','viewer');
  const customer={id:'SYN-C',kind:'customer_account',customer:'SYN Customer',customerCode:'SYN-CODE',active:true,version:1,createdAt:at};
- const order={id:'SYN-O',kind:'order',version:1,customer:'SYN-CODE',orderNo:'SYN-ORDER',drawing:'SYN-DRAWING',ownerEmail:admin.email,quantity:10,extra:{},createdAt:at};
+ const order={id:'SYN-O',kind:'order',version:1,customer:'SYN-CODE',orderNo:'SYN-ORDER',drawing:'SYN-DRAWING',ownerUsername:admin.username,quantity:10,extra:{},createdAt:at};
  const put=row=>db.prepare('INSERT INTO records (id,kind,data) VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,kind=excluded.kind').run(row.id,row.kind,JSON.stringify(row));
  for(const row of [admin,other,viewer,customer,order,{id:'SYN-ATTACHMENT',kind:'attachment',lineId:order.id,fileKey:'SYN-ORIGINAL'}])put(row);
  const rows=()=>db.prepare('SELECT data FROM records ORDER BY id').all().map(row=>JSON.parse(row.data));
  async function request(action,body,user=admin,origin='https://synthetic.test'){
-  return identity.run(user?{userId:user.userId,email:user.email,displayName:user.name}:null,()=>api[body===undefined?'GET':'POST'](new Request('https://synthetic.test/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(origin?{Origin:origin}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}),{params:Promise.resolve({action:action.split('?')[0]})}));
+  return identity.run(user?{userId:user.userId,username:user.username,email:user.email,displayName:user.name}:null,()=>api[body===undefined?'GET':'POST'](new Request('https://synthetic.test/api/workspace/'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(origin?{Origin:origin}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})}),{params:Promise.resolve({action:action.split('?')[0]})}));
  }
  return{request,rows,put,admin,other,viewer,files,failTransaction(){fault=true;},async close(){db.close();globalThis.__processChangeHarnesses.delete(key);await fs.rm(directory,{recursive:true,force:true});}};
 }

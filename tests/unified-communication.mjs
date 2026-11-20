@@ -32,16 +32,16 @@ const put=r=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?) ON CONF
 const rows=()=>db.prepare('SELECT data FROM records ORDER BY id').all().map(r=>JSON.parse(r.data));
 const one=id=>rows().find(r=>r.id===id),revision=()=>db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get()?.revision||0;
 const state=()=>({revision:revision(),records:rows()}),uuid=()=>crypto.randomUUID();
-const member=(id,role,customers=[])=>({id,kind:'member',userId:id,name:'Synthetic '+id,email:id+'@example.invalid',active:true,role,customers,createdAt:'2026-10-01T00:00:00Z'});
+const member=(id,role,customers=[])=>({id,kind:'member',userId:id,name:'Synthetic '+id,username:id,email:id+'@example.invalid',active:true,role,customers,createdAt:'2026-10-01T00:00:00Z'});
 const admin=member('admin','admin'),alice=member('alice','sales',['TEST-1','TEST-2']),service=member('service','clerk',['TEST-1']),other=member('other','sales',['TEST-2']),pmc=member('pmc','pmc'),finance=member('finance','finance'),restricted=member('restricted','sales');
 const customer={id:'c1',kind:'customer_account',customer:'Synthetic customer one',customerCode:'TEST-1',active:true,salesMemberIds:['alice','restricted'],serviceMemberIds:['service','finance'],salesName:alice.name,serviceName:service.name,version:1};
 const project={id:'p1',kind:'customer_project',customerId:'c1',code:'P-1',title:'Synthetic project',salesMemberId:'alice',status:'active'};
-const order={id:'o1',kind:'order',customer:'TEST-1',orderNo:'SYN-1',drawing:'D-1',ownerEmail:alice.email,version:1,quantity:1,stage:'待下达',lifecycle:'active'};
+const order={id:'o1',kind:'order',customer:'TEST-1',orderNo:'SYN-1',drawing:'D-1',ownerUsername:alice.username,version:1,quantity:1,stage:'待下达',lifecycle:'active'};
 for(const r of [admin,alice,service,other,pmc,finance,restricted,customer,{...customer,id:'c2',customer:'Synthetic customer two',customerCode:'TEST-2',salesMemberIds:['other'],serviceMemberIds:[]},project,{...project,id:'p2',customerId:'c2'},order,{...order,id:'o2',customer:'TEST-2'}])put(r);
 async function call(action,body,who=alice,headers={}){
  const full=action.startsWith('unified-communication-')||['data','backup'].includes(action)?action:'unified-communication-'+action,method=body===undefined?'GET':'POST';
  const req=new Request('https://synthetic.invalid/api/workspace/'+full,{method,headers:{'Content-Type':'application/json',...headers},body:body===undefined?undefined:JSON.stringify(body)});
- return identity.run(who?{userId:who.userId,email:who.email}:null,async()=>{const res=await api[method](req,{params:Promise.resolve({action:full.split('?')[0]})});return {status:res.status,data:await res.json()};});
+ return identity.run(who?{userId:who.userId,username:who.username,email:who.email}:null,async()=>{const res=await api[method](req,{params:Promise.resolve({action:full.split('?')[0]})});return {status:res.status,data:await res.json()};});
 }
 async function ok(action,body,who,headers){const result=await call(action,body,who,headers);assert.equal(result.status,200,JSON.stringify(result));return result.data;}
 async function fail(action,body,status=403,who=alice,headers){const result=await call(action,body,who,headers);assert.equal(result.status,status,JSON.stringify(result));return result.data;}

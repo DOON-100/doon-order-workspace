@@ -53,6 +53,7 @@ export async function readSnapshot(kinds){
  try{return await readSnapshotBatches(kinds);}finally{if(bulk)releaseSnapshotReader();}
 }
 async function readSnapshotBatches(kinds){
+ const usernames=new Map(db.prepare('SELECT member_id,username FROM local_accounts').all().map(a=>[a.member_id,a.username]));
  const items=[];let cursor;
  const filter=kinds?'kind IN ('+kinds.map(()=>'?').join(',')+')':null;
  const first=db.prepare('SELECT CAST(rowid AS TEXT) AS cursor,data FROM records'+(filter?' WHERE '+filter:'')+' ORDER BY rowid LIMIT 64');
@@ -61,14 +62,15 @@ async function readSnapshotBatches(kinds){
   await yieldTurn();let count=0,bytes=0;
   // String cursors preserve negative, zero and full 64-bit SQLite rowids.
   for(const row of (cursor===undefined?first:next).iterate(...(kinds||[]),...(cursor===undefined?[]:[cursor]))){
-   items.push(JSON.parse(row.data));cursor=row.cursor;count++;bytes+=Buffer.byteLength(row.data);
+   const item=JSON.parse(row.data);if(item.kind==='member'&&usernames.has(item.id))item.username=usernames.get(item.id);
+   items.push(item);cursor=row.cursor;count++;bytes+=Buffer.byteLength(row.data);
    if(bytes>=1024*1024)break;
   }
   if(!count)return items;
  }
 }
 export function saveRecords(items){for(const item of items)db.prepare('INSERT INTO records VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind,data=excluded.data').run(item.id,item.kind,JSON.stringify(item));db.prepare("UPDATE workspace_revision SET revision=revision+1 WHERE id='main'").run();}
-export function memberFor(account){const row=account&&db.prepare("SELECT data FROM records WHERE id=? AND kind='member'").get(account.member_id);return row?JSON.parse(row.data):null;}
+export function memberFor(account){const row=account&&db.prepare("SELECT data FROM records WHERE id=? AND kind='member'").get(account.member_id);return row?{...JSON.parse(row.data),username:account.username}:null;}
 function drawingRequesters(){
  return db.prepare("SELECT a.id,a.username,r.data FROM local_accounts a JOIN records r ON r.id=a.member_id AND r.kind='member'").all()
   .filter(row=>{const member=JSON.parse(row.data);return member.active&&member.userId===row.id&&personnelTypeOf(member)==='internal';})

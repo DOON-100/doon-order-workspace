@@ -18,9 +18,9 @@ await build({entryPoints:['app/api/workspace/[action]/route.ts'],outfile:path.jo
 const api=await import(pathToFileURL(path.join(dir,'api.mjs')).href);
 const put=r=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?)').run(r.id,r.kind,JSON.stringify(r));
 const snapshot=()=>db.prepare('SELECT id,kind,data FROM records ORDER BY id').all();
-const members=['admin','pmc','production','clerk','sales','finance','programmer','viewer'].map(role=>({id:role,kind:'member',userId:role,name:'Synthetic '+role,email:role+'@example.invalid',role,active:true,orderScope:'all',customers:['SYNTH-1'],createdAt:'2026-10-01T00:00:00Z'}));
+const members=['admin','pmc','production','clerk','sales','finance','programmer','viewer'].map(role=>({id:role,kind:'member',userId:role,name:'Synthetic '+role,username:role,email:role+'@example.invalid',role,active:true,orderScope:'all',customers:['SYNTH-1'],createdAt:'2026-10-01T00:00:00Z'}));
 members.forEach(put);
-put({id:'synthetic-order',kind:'order',orderNo:'SYNTH-1',customer:'SYNTH-1',ownerEmail:'sales@example.invalid',drawing:'TEST',color:'TEST',lens:'TEST',quantity:10,version:1,extra:{unrecognizedHistoricalColumn:'Preserve exactly'},createdAt:'2026-10-01T00:00:00Z'});
+put({id:'synthetic-order',kind:'order',orderNo:'SYNTH-1',customer:'SYNTH-1',ownerUsername:'sales',drawing:'TEST',color:'TEST',lens:'TEST',quantity:10,version:1,extra:{unrecognizedHistoricalColumn:'Preserve exactly'},createdAt:'2026-10-01T00:00:00Z'});
 put({id:'synthetic-customer',kind:'customer_account',customer:'Synthetic customer',customerCode:'SYNTH-1',active:true,salesMemberIds:['sales'],serviceMemberIds:['clerk'],version:1});
 const prefixes=['handoff_business_','customer_workflow_','customer_shared_','framework_','unified_communication_'];
 for(const [index,prefix] of prefixes.entries()){
@@ -30,7 +30,7 @@ for(const [index,prefix] of prefixes.entries()){
 put({id:'audit-original-order',kind:'audit',lineId:'synthetic-order',targetId:'synthetic-order',action:'original-order-check',before:null,after:{kind:'order',id:'synthetic-order',quantity:10}});
 const before=snapshot();
 for(const member of members){
- const response=await identity.run({userId:member.userId,email:member.email},()=>api.GET(new Request('https://synthetic.invalid/api/workspace/data'),{params:Promise.resolve({action:'data'})}));
+ const response=await identity.run({userId:member.userId,username:member.username,email:member.email},()=>api.GET(new Request('https://synthetic.invalid/api/workspace/data'),{params:Promise.resolve({action:'data'})}));
  assert.equal(response.status,200,member.role);const body=await response.json();
  assert.equal(body.audits.some(a=>a.action==='synthetic-private'),false,member.role+' private audit leaked');
  assert.equal(JSON.stringify(body).includes('SYNTHETIC_PRIVATE_SENTINEL'),false,member.role+' private payload leaked');
@@ -49,7 +49,7 @@ for(let i=0;i<450;i++){
 for(let i=0;i<600;i++)put({id:'audit-hidden-tail-'+i,kind:'audit',lineId:'synthetic-order',targetId:'missing-framework-target',before:{kind:'framework_synthetic',body:'SYNTHETIC_PRIVATE_SENTINEL'}});
 const boundedBefore=snapshot(),expectedIds=visibleIds.slice(-250).reverse();
 for(const member of members){
- const response=await identity.run({userId:member.userId,email:member.email},()=>api.GET(new Request('https://synthetic.invalid/api/workspace/data'),{params:Promise.resolve({action:'data'})}));
+ const response=await identity.run({userId:member.userId,username:member.username,email:member.email},()=>api.GET(new Request('https://synthetic.invalid/api/workspace/data'),{params:Promise.resolve({action:'data'})}));
  assert.equal(response.status,200);const body=await response.json();
  assert.deepEqual(body.audits.map(row=>row.id),expectedIds,member.role+' must select the latest 250 visible records, not the latest 250 raw records');
  assert(!JSON.stringify(body).includes('SYNTHETIC_PRIVATE_SENTINEL'));

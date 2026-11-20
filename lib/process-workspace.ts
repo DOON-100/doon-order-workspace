@@ -129,7 +129,7 @@ export function canEditProcessRecord(s:State,m:Member,record:Pick<ProcessRecord,
  const account=all(s,'customer_account').find(row=>row.id===record.customerId) as CustomerAccount|undefined;
  if(account&&assignedServiceCustomer(s,m,account))return true;
  const order=all(s,'order').find(row=>row.id===record.orderId) as Order|undefined;
- return !!order&&(order.ownerEmail===m.email||m.customers.includes(order.customer));
+ return !!order&&(!!m.username&&order.ownerUsername===m.username||m.customers.includes(order.customer));
 }
 export function assertProcessCompletion(record:ProcessFields){
  const details=record.details;

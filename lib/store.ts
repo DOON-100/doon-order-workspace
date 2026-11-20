@@ -101,7 +101,8 @@ export async function enroll(s:State){
  const invited=members.find(m=>m.email===email(user.email)&&!m.userId&&m.active&&m.role!=='supplier');
  // The site is provisioned owner-private. Only that owner can perform initial enrollment.
  if(members.length&&!invited)throw new AppError('你的账号尚未获授权，请联系工作空间管理员。',403);
- const m:Member=invited?{...invited,userId:user.userId}:{id:newId('member'),kind:'member',email:email(user.email),name:user.displayName,role:'admin',customers:[],active:true,owner:true,userId:user.userId,createdAt:now()};
+ const username='username' in user&&typeof user.username==='string'?user.username:'';
+ const m:Member=invited?{...invited,userId:user.userId,username}:{id:newId('member'),kind:'member',email:email(user.email),username,name:user.displayName,role:'admin',customers:[],active:true,owner:true,userId:user.userId,createdAt:now()};
  await commit(s.revision,[m]);
 }
 export function audit(m:Member,target:Entity,before:unknown,action:string,source='网页',after:unknown=target):Entity{return {id:newId('audit'),kind:'audit',lineId:target.kind==='order'?target.id:target.lineId||'',targetId:target.id,action,actorId:m.id,actor:m.name,source,before,after,createdAt:now()};}

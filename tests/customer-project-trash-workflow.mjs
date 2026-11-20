@@ -75,7 +75,7 @@ console.log('PASS clearing/rebinding original followup and unlinking/relinking/i
 const bob={...alice,id:'bob',name:'Synthetic Bob'},context={customerId:customer.id,projectId:project.id,orderId:''};
 const message={...context,id:'original-communication',kind:'unified_communication',version:1,channel:'email',title:'Original communication',sourceText:'Original body',sourceReference:'Synthetic source',occurredAt:'2026-10-13',draftText:'Original draft',internalNote:'',status:'draft',updatedAt:'2026-10-13T00:00:00.000Z'};
 const drawing={...context,id:'original-business-drawing',kind:'handoff_business_source',type:'engineering_drawing',version:1,number:'SYNTH-DRAWING',status:'checked',fields:{versionLabel:'1',path:'synthetic drawing',drawingNumber:'SYNTH-DRAWING'},lines:[],sourceRefs:[],originRefs:[],sourceSnapshots:[],updatedAt:message.updatedAt};
-const ordinaryOrder={id:'ordinary-order',kind:'order',customer:customer.customer,ownerEmail:'synthetic@example.invalid',salesName:alice.name,orderNo:'SYNTH-ORDER',workflowStatus:'业务待提交',lifecycle:'active'};
+const ordinaryOrder={id:'ordinary-order',kind:'order',customer:customer.customer,ownerUsername:'synthetic',salesName:alice.name,orderNo:'SYNTH-ORDER',workflowStatus:'业务待提交',lifecycle:'active'};
 const added=[bob,message,drawing,ordinaryOrder,{id:api.productionReviewPolicyId,kind:'handoff_business_policy',version:1,drawingLeadMemberId:alice.id,engineeringSupervisorMemberId:admin.id}];
 s.records.push(...added);original.records.push(...structuredClone(added));
 assert.equal(api.communicationAccess(s,alice,context),true);assert.equal(api.communicationAccess(s,alice,context,true),false);

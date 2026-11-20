@@ -12,7 +12,7 @@ export function automaticDates(c:Record<string,string>){const max=(keys:string[]
 export function warehouse(o:Order):number|null{if(!o.ledger)return null;const v=o.ledger.columns.BF;return !v?0:countValue(v);}
 export function outstanding(o:Order){const n=warehouse(o);return n===null?null:o.quantity-n;}
 export function balance(o:Order,reports:Report[]){return o.ledger?outstanding(o):o.quantity-packed(o,reports);}
-export const ownerLabel=(o:Order)=>o.ledger?.ownerName||o.ownerEmail||'待分配';
+export const ownerLabel=(o:Order)=>o.ownerUsername||o.ledger?.ownerName||'待分配';
 export const active=(o:Order)=>o.lifecycle!=='archived'&&o.sourceStatus!=='已取消';
 export const promisedDue=(o:Order)=>o.plannedDate||o.requestedDate;
 export const overdue=(o:Order)=>active(o)&&(outstanding(o)??o.quantity)>0&&!!promisedDue(o)&&promisedDue(o)<today();
@@ -39,7 +39,7 @@ export function stageNumbers(o:Order,def:typeof stageDefs[number]){
  return {debt,wip:w===null||w<0?null:w,age:debt&&dateValue(c[def.start])?days(dateValue(c[def.start])):null,invalid:raw===null||(w!==null&&w<0)};
 }
 export function issues(o:Order){
- const a:string[]=[];if(!o.drawing)a.push('缺款号');if(!o.lens||o.lens==='-')a.push('镜片待核对');if(!o.ownerEmail)a.push('跟单账号未绑定');
+ const a:string[]=[];if(!o.drawing)a.push('缺款号');if(!o.lens||o.lens==='-')a.push('镜片待核对');if(!o.ownerUsername)a.push('跟单账号未绑定');
  if(o.quantity<0)a.push('原表负数调整');if(!o.quantity||!Number.isSafeInteger(o.quantity))a.push('订单数量待核对');
  if(!promisedDue(o)&&active(o))a.push('未排交期');if(overdue(o))a.push('交期逾期');
  if(o.ledger){const c=o.ledger.columns,n=outstanding(o),p=numeric(o.ledger.originalOutstanding);if(n===null)a.push('入仓数量无效');if(n!==null&&n<0&&o.quantity>=0)a.push('超量入仓');if(p!==null&&n!==null&&p!==n)a.push('原表欠数不一致');

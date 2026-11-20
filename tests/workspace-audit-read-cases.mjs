@@ -4,11 +4,11 @@ import assert from 'node:assert/strict';
 // authorization-before-limit rule and price-history redaction for each identity.
 export async function testWorkspaceAuditReads({ok,admin,rawInsert,rawRecords,pass}){
  const prefix='synthetic_audit_read_'+crypto.randomUUID(),id=name=>prefix+'_'+name;
- const reader={userId:id('reader_user'),email:id('reader')+'@example.invalid'};
- const member={id:id('reader'),kind:'member',userId:reader.userId,email:reader.email,name:'Synthetic audit reader',role:'clerk',active:true,orderScope:'assigned',customers:[id('own_customer_code')],createdAt:'2026-01-01T00:00:00Z'};
+ const reader={userId:id('reader_user'),username:'synthetic-audit-reader',email:id('reader')+'@example.invalid'};
+ const member={id:id('reader'),kind:'member',userId:reader.userId,username:reader.username,email:reader.email,name:'Synthetic audit reader',role:'clerk',active:true,orderScope:'assigned',customers:[id('own_customer_code')],createdAt:'2026-01-01T00:00:00Z'};
  rawInsert(member);
- const ownOrder={id:id('own_order'),kind:'order',customer:id('own_customer_code'),orderNo:id('own_order_no'),ownerEmail:reader.email,quantity:1,version:1,extra:{syntheticOriginal:'preserve exactly'}};
- const otherOrder={...ownOrder,id:id('other_order'),customer:id('other_customer_code'),orderNo:id('other_order_no'),ownerEmail:'other@example.invalid'};
+ const ownOrder={id:id('own_order'),kind:'order',customer:id('own_customer_code'),orderNo:id('own_order_no'),ownerUsername:reader.username,quantity:1,version:1,extra:{syntheticOriginal:'preserve exactly'}};
+ const otherOrder={...ownOrder,id:id('other_order'),customer:id('other_customer_code'),orderNo:id('other_order_no'),ownerUsername:'other'};
  rawInsert(ownOrder);rawInsert(otherOrder);
  const customer={id:id('customer'),kind:'customer_account',customer:'Synthetic audit customer',customerCode:ownOrder.customer,active:true,version:1,salesName:'Other synthetic owner',serviceName:member.name,salesMemberIds:[],serviceMemberIds:[member.id]};
  rawInsert(customer);

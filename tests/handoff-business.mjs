@@ -18,10 +18,10 @@ const put=r=>db.prepare('INSERT INTO records(id,kind,data) VALUES(?,?,?) ON CONF
 const rows=()=>db.prepare('SELECT data FROM records ORDER BY rowid').all().map(r=>JSON.parse(r.data));
 const state=()=>({revision:db.prepare("SELECT revision FROM workspace_revision WHERE id='main'").get().revision,records:rows()});
 const find=id=>rows().find(r=>r.id===id),uuid=()=>crypto.randomUUID();
-const member=(id,role,customers=[])=>({id,kind:'member',active:true,role,customers,name:'Synthetic '+id,email:id+'@example.invalid'});
+const member=(id,role,customers=[])=>({id,kind:'member',active:true,role,customers,name:'Synthetic '+id,username:id,email:id+'@example.invalid'});
 const sales=member('sales','sales',['TEST-C']),old=member('old','sales',['TEST-C']),service=member('service','clerk',['TEST-C']),other=member('other','sales',['OTHER']),admin=member('admin','admin'),lead=member('lead','clerk'),supervisor=member('supervisor','clerk');
 const customer={id:'c1',kind:'customer_account',customer:'Synthetic customer',customerCode:'TEST-C',active:true,salesMemberIds:['sales','old'],serviceMemberIds:['service'],salesName:sales.name,serviceName:service.name,version:1};
-const order={id:'o1',kind:'order',customer:'TEST-C',orderNo:'TEST-PO-1',customerPO:'PO-1',drawing:'STYLE-1',color:'A',lens:'CLEAR',batch:'1',quantity:100,ownerEmail:sales.email,stage:'待下达',version:1};
+const order={id:'o1',kind:'order',customer:'TEST-C',orderNo:'TEST-PO-1',customerPO:'PO-1',drawing:'STYLE-1',color:'A',lens:'CLEAR',batch:'1',quantity:100,ownerUsername:sales.username,stage:'待下达',version:1};
 for(const row of [sales,old,service,other,admin,lead,supervisor,customer,order,{...customer,id:'c2',customer:'Other synthetic',customerCode:'OTHER',salesMemberIds:['other'],serviceMemberIds:[]},{...order,id:'o2',customer:'OTHER'}])put(row);
 async function call(action,body,who=sales){const req=new Request('https://synthetic.invalid/api/workspace/handoff-business-'+action,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body)});try{const res=await api[body===undefined?'handoffBusinessGet':'handoffBusinessPost']('handoff-business-'+action.split('?')[0],req,state(),who);assert.ok(res);return {status:res.status,data:res.headers.get('content-type')?.includes('application/json')?await res.json():await res.text()};}catch(e){return {status:e.status||500,data:e.message};}}
 async function ok(action,body,who){const r=await call(action,body,who);assert.equal(r.status,200,JSON.stringify(r));return r.data;}
